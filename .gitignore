@@ -1,0 +1,44 @@
+/.phpunit.cache
+/bootstrap/ssr
+node_modules/
+dist/
+# Log files
+*.log
+
+# Public - Compiled files
+public/build/
+public/hot/
+public/hot
+public/storage/
+public/storage
+resources/js/helper/lang.json
+
+# Environment configuration files
+.env
+.env.backup
+
+# IDE files
+.vscode/
+
+/storage/*.key
+/storage/pail
+/resources/js/actions
+/resources/js/routes
+/resources/js/wayfinder
+/vendor
+.DS_Store
+.env
+.env.backup
+.env.production
+.phpactor.json
+.phpunit.result.cache
+Homestead.json
+Homestead.yaml
+npm-debug.log
+yarn-error.log
+/auth.json
+/.fleet
+/.idea
+/.nova
+/.vscode
+/.zed
