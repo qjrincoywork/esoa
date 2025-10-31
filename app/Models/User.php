@@ -62,23 +62,28 @@ class User extends Authenticatable
      *
      * @return HasOne The relationship between User and UserDetail models.
      */
-    public function user_detail(): HasOne {
+    public function user_detail(): HasOne
+    {
         return $this->hasOne(UserDetail::class);
     }
 
     public function getUsers(array $params)
     {
         // $users = auth()->user()->users()
+        // Pagination
+        // $page = $params['page'] ?? config('vc.default_start_page');
+        $perPage = $params['per_page'] ?? config('vc.default_pages');
         $users = self::when(isset($params['username']), function ($query) use ($params) {
-                $query->where('username', 'LIKE', '%' . $params['username'] . '%');
+            $query->where('username', 'LIKE', '%' . $params['username'] . '%');
+        })
+            ->when(isset($params['email']), function ($query) use ($params) {
+                $query->where('email', 'LIKE', '%' . $params['email'] . '%');
             })
             ->when(isset($params['is_active']), function ($query) use ($params) {
                 $query->where('is_active', $params['is_active']);
             })
             ->orderBy('created_at', 'desc')
-            ->paginate($params['per_page'] ?? config('vc.default_pages'));
-
-        dd(auth()->user(), config('vc.default_pages'), 'hit getUsers');
+            ->paginate($perPage);
 
         return $users;
     }

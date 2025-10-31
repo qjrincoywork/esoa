@@ -25,22 +25,23 @@ class UserController extends Controller
      *
      * @return void
      */
-    public function __construct(User $user) {
+    public function __construct(User $user)
+    {
         $this->user = $user;
     }
 
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(UserListRequest $request)
     {
-        $users = $this->user->getUsers([])->toArray();
+        $users = $this->user->getUsers($request->validated())->toArray();
+        // dd($users, 'hits');
         // dd($this->users->getUsers([])->toArray(), 'hits user');
-        dd('hits user index');
-        // return Inertia::render('users/Index', [
-        //     'users' => $this->user->getUsers([])->toArray()
-        //     // 'users' => $this->user->getUsers($request->validated())->toArray()
-        // ]);
+        return Inertia::render('users/Index', [
+            'users' => $users
+            // 'users' => $this->user->getUsers($request->validated())->toArray()
+        ]);
     }
 
     /**

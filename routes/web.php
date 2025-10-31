@@ -14,6 +14,9 @@ Route::get('/', function () {
         'canRegister' => Features::enabled(Features::registration()),
     ]);
 })->name('home');
+// Route::get('/', function () {
+//     return redirect('login');
+// });
 
 // Route::get('dashboard', function () {
 //     return Inertia::render('Dashboard');
