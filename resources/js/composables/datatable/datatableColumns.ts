@@ -17,7 +17,7 @@ export function createActionColumn(basePath: string) {
                 h(
                     'button',
                     {
-                        class: 'p-1 text-blue-600 hover:text-blue-800 transition-colors rounded',
+                        class: 'p-1 text-green-600 hover:text-green-800 transition-colors rounded',
                         title: 'View',
                         onClick: () => router.get(`${basePath}/${item.id}`)
                     },
@@ -28,7 +28,7 @@ export function createActionColumn(basePath: string) {
                 h(
                     'button',
                     {
-                        class: 'p-1 text-yellow-600 hover:text-yellow-800 transition-colors rounded',
+                        class: 'p-1 text-blue-600 hover:text-blue-800 transition-colors rounded',
                         title: 'Edit',
                         onClick: () => router.get(`${basePath}/${item.id}/edit`)
                     },
