@@ -10,7 +10,7 @@ import {
 } from '@tanstack/vue-table';
 
 import { Form, Head, Link, router, usePage } from '@inertiajs/vue3';
-import Modal from '@/Components/Modal.vue';
+import Modal from '@/components/Modal.vue';
 
 const selectionColor = 'var(--selection-color)'
 
@@ -679,7 +679,7 @@ watch(
                             </div>
                         </th>
 
-                        <th
+                        <th class="w-10 px-6 py-3"
                             v-for="header in table.getHeaderGroups()[0].headers"
                             :key="header.id"
                             :class="[

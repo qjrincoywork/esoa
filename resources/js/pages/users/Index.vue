@@ -6,6 +6,7 @@ import { createColumnHelper } from '@tanstack/vue-table';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import Datatable from '@/components/Datatable.vue';
+import { createActionColumn } from '@/composables/datatable/datatableColumns';
 
 
 type UsersPagination = {
@@ -35,6 +36,7 @@ const columns = [
   columnHelper.accessor('email', {
     header: 'Email',
   }),
+  createActionColumn('/users'),
 ]
 
 const breadcrumbItems: BreadcrumbItem[] = [
