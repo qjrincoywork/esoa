@@ -73,9 +73,9 @@ class User extends Authenticatable
         // Pagination
         // $page = $params['page'] ?? config('vc.default_start_page');
         $perPage = $params['per_page'] ?? config('vc.default_pages');
-        $users = self::when(isset($params['username']), function ($query) use ($params) {
-            $query->where('username', 'LIKE', '%' . $params['username'] . '%');
-        })
+        $result = self::when(isset($params['username']), function ($query) use ($params) {
+                $query->where('username', 'LIKE', '%' . $params['username'] . '%');
+            })
             ->when(isset($params['email']), function ($query) use ($params) {
                 $query->where('email', 'LIKE', '%' . $params['email'] . '%');
             })
@@ -85,6 +85,7 @@ class User extends Authenticatable
             ->orderBy('created_at', 'desc')
             ->paginate($perPage);
 
-        return $users;
+        // dd($result->toSql(), 'hits users');
+        return $result;
     }
 }

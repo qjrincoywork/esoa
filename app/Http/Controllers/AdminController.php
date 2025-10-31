@@ -72,10 +72,10 @@ class AdminController extends Controller
         // $editor->givePermissionTo(['dashboard', 'admin.index']);
         // $viewer->givePermissionTo(['dashboard']);
 
-        // $user = User::find(620); // or find your user manually
+        // $user = User::find(1); // or find your user manually //620-office//1-home
         // $user->assignRole('admin');
-        dd($permissions, 'hits');
-        dd($this->users->getUsers([])->toArray());
+        // dd($permissions, 'hits');
+        // dd($this->users->getUsers([])->toArray());
         // return Inertia::render('users/Index', [
         //     'users' => $this->users->getUsers([])->toArray()
         //     // 'users' => $this->users->getUsers($request->validated())->toArray()

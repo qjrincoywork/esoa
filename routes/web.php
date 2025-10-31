@@ -28,11 +28,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Only admins can access these
     Route::middleware(['role:admin'])->group(function () {
         Route::resource('admin', AdminController::class);
+        Route::resource('users', UserController::class);
     });
 
     // Only users can access these
-    Route::middleware(['role:admin'])->group(function () {
-        Route::resource('users', UserController::class);
+    Route::middleware(['role:users'])->group(function () {
     });
 });
 

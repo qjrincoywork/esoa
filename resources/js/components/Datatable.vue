@@ -518,7 +518,7 @@ watch(
                     </button>
                 </div>
 
-                <button
+                <!-- <button
                     v-if="enableExport"
                     :class="['btn-primary btn-sm inline-flex items-center gap-2', styles.focusRing]"
                     @click="exportToCSV">
@@ -530,7 +530,7 @@ watch(
                         aria-hidden="true"
                         v-html="icons.export"></svg>
                     Export CSV
-                </button>
+                </button> -->
             </nav>
         </header>
 
