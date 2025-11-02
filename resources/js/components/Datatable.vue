@@ -49,7 +49,8 @@ const props = defineProps({
     emptyMessage: { type: String, default: 'No data found' },
     emptyDescription: { type: String, default: 'Data will appear here' },
     exportFileName: { type: String, default: 'export' },
-    pageSizeOptions: { type: Array, default: () => [10, 25, 50, 'All'] },
+    pageSizeOptions: { type: Array, default: () => [10, 25, 50, 75] },
+    // pageSizeOptions: { type: Array, default: () => [10, 25, 50, 'All'] },
     defaultPageSize: { type: Number, default: 10 },
     loading: { type: Boolean, default: false },
     error: { type: String, default: '' },
@@ -186,7 +187,9 @@ const paginationEnd = computed(() => paginationInfo.value.end)
 const totalRows = computed(() => paginationInfo.value.total)
 const pageCount = computed(() => paginationInfo.value.pageCount)
 const isFirstPage = computed(() => currentPage.value <= 1)
-const isLastPage = computed(() => currentPage.value >= pageCount.value)
+const showPagination = computed(() => currentPage.value >= pageCount.value)
+// console.log(showPagination, paginationInfo.value, pageCount.value)
+// const isLastPage = computed(() => currentPage.value >= pageCount.value)
 
 const goToPage = pageNumber => {
     if (!isServerPagination.value) return

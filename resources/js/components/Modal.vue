@@ -4,10 +4,16 @@ import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue';
 const props = defineProps({
     show: Boolean,
     size: { type: String, default: 'md' },
-    closeOnClickOutside: { type: Boolean, default: true }
+    closeOnClickOutside: { type: Boolean, default: true },
+    modalTitle: { type: String, default: 'Modal Title' },
+    modalButtonLabel: { type: String, default: 'Submit' },
 })
 
-const emit = defineEmits(['close'])
+// const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'submit'])
+
+const close = () => emit('close')
+const submit = () => emit('submit')
 const modalPanel = ref(null)
 const closeButton = ref(null)
 const previouslyFocused = ref(null)

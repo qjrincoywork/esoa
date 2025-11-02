@@ -2,6 +2,22 @@ import { h } from 'vue';
 import { router } from '@inertiajs/vue3';
 import { createColumnHelper } from '@tanstack/vue-table';
 import { Eye, Pencil, Trash2 } from 'lucide-vue-next';
+import { useModal } from '@/composables/useModal';
+import UserCreateForm from '@/components/forms/users/CreateForm.vue';
+const { openModal } = useModal();
+
+const editUser = (user) => {
+  openModal({
+    modalTitle: `Edit ${user.username}`,
+    buttonText: 'Update',
+    component: UserCreateForm,
+    onSubmit: () => {
+      console.log('Updating user', user)
+      // Inertia.put(`/users/${user.id}`, updatedData)
+    },
+  })
+}
+
 
 const columnHelper = createColumnHelper<any>()
 
@@ -19,7 +35,8 @@ export function createActionColumn(basePath: string) {
                     {
                         class: 'p-1 text-green-600 hover:text-green-800 transition-colors rounded',
                         title: 'View',
-                        onClick: () => router.get(`${basePath}/${item.id}`)
+                        onClick: () => editUser(item)
+                        // onClick: () => router.get(`${basePath}/${item.id}`)
                     },
                     [h(Eye, { size: 18 })]
                 ),

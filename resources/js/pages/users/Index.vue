@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue';
+import { ref, onMounted, onBeforeUnmount, watch, computed } from 'vue';
 import { Head, router, usePage } from '@inertiajs/vue3';
 import { createColumnHelper } from '@tanstack/vue-table';
 
@@ -7,7 +7,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import Datatable from '@/components/Datatable.vue';
 import { createActionColumn } from '@/composables/datatable/datatableColumns';
-
+import Modal from '@/components/Modal.vue';
 
 type UsersPagination = {
     current_page: number
@@ -45,6 +45,7 @@ const breadcrumbItems: BreadcrumbItem[] = [
         href: 'users',
     },
 ];
+const showModal = ref(true)
 // Debounced data fetching for pagination changes
 const fetchTimeout = ref<number | null>(null)
 watch(
@@ -86,7 +87,7 @@ watch(
 <template>
     <AppLayout :breadcrumbs="breadcrumbItems">
         <Head title="User list" />
-        <div class="bg-[var(--color-surface)] rounded-xl shadow-sm border border-[var(--color-border)] p-6">
+        <div class="bg-[var(--color-surface)] shadow-sm border border-[var(--color-border)] p-6">
             <Datatable
                 :data="users.data"
                 :columns="columns"
@@ -99,4 +100,13 @@ watch(
             </Datatable>
         </div>
     </AppLayout>
+    <Modal
+        :visible="visible"
+        :modal-title="title"
+        :modal-button-label="buttonLabel"
+        @close="closeModal"
+        @submit="submitModal"
+        >
+        <component :is="contentComponent" v-if="contentComponent" />
+    </Modal>
 </template>
