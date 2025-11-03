@@ -20,9 +20,9 @@ const previouslyFocused = ref(null)
 const modalId = `modal-${Math.random().toString(36).substr(2, 9)}`
 const sizeClasses = {
     sm: 'w-full max-w-sm mx-2 sm:mx-4',
-    md: 'w-full max-w-md mx-2 sm:mx-4',
-    lg: 'w-full max-w-lg mx-2 sm:mx-4',
-    xl: 'w-full max-w-xl mx-2 sm:mx-4',
+    md: 'w-full max-w-md mx-2 sm:mx-6',
+    lg: 'w-full max-w-lg mx-2 sm:mx-8',
+    xl: 'w-full max-w-xl mx-2 sm:mx-12',
     '2xl': 'w-full max-w-2xl mx-2 sm:mx-4',
     '3xl': 'w-full max-w-3xl mx-2 sm:mx-4',
     '4xl': 'w-full max-w-4xl mx-2 sm:mx-4',
@@ -71,6 +71,8 @@ watch(
 
 onMounted(() => document.addEventListener('keydown', handleKeyDown))
 onUnmounted(() => document.removeEventListener('keydown', handleKeyDown))
+// console.log(sizeClasses[props.size]);
+// console.log(props.size);
 </script>
 
 <template>
@@ -91,6 +93,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeyDown))
                     tabindex="-1"
                     class="relative w-full rounded-xl bg-white dark:bg-gray-800 shadow-2xl flex flex-col max-h-[calc(100vh-1rem)] sm:max-h-[calc(100vh-2rem)] md:max-h-[calc(100vh-3rem)] ring-1 ring-black/5 dark:ring-white/5 overflow-visible"
                     :class="sizeClasses[size] || sizeClasses['md']">
+                    <!-- :class="props.size ?? 'sm'"> -->
                     <header
                         class="flex items-center justify-between px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-gray-700/50 flex-shrink-0">
                         <h2

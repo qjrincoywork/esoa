@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch, computed } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { Head, router, usePage } from '@inertiajs/vue3';
 import { createColumnHelper } from '@tanstack/vue-table';
 
@@ -7,7 +7,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import Datatable from '@/components/Datatable.vue';
 import { createActionColumn } from '@/composables/datatable/datatableColumns';
-import Modal from '@/components/Modal.vue';
+import { useUsers } from '@/composables/users';
 
 type UsersPagination = {
     current_page: number
@@ -19,7 +19,10 @@ type UsersPagination = {
 const page = usePage();
 const user = (page.props as any).auth.user as unknown;
 const users = computed(() => (page.props as any).users as UsersPagination);
-
+console.log(page.props);
+// const user_details = computed(() => (page.props as any).auth.user_details as unknown);
+const { editUser } = useUsers();
+// console.log(user_details);
 const columnHelper = createColumnHelper();
 const pagination = ref({
 	current_page: users.value.current_page,
@@ -36,7 +39,10 @@ const columns = [
   columnHelper.accessor('email', {
     header: 'Email',
   }),
-  createActionColumn('/users'),
+  createActionColumn({
+    basePath: '/users',
+    onEdit: editUser,
+  }),
 ]
 
 const breadcrumbItems: BreadcrumbItem[] = [
@@ -45,7 +51,6 @@ const breadcrumbItems: BreadcrumbItem[] = [
         href: 'users',
     },
 ];
-const showModal = ref(true)
 // Debounced data fetching for pagination changes
 const fetchTimeout = ref<number | null>(null)
 watch(
@@ -100,13 +105,4 @@ watch(
             </Datatable>
         </div>
     </AppLayout>
-    <Modal
-        :visible="visible"
-        :modal-title="title"
-        :modal-button-label="buttonLabel"
-        @close="closeModal"
-        @submit="submitModal"
-        >
-        <component :is="contentComponent" v-if="contentComponent" />
-    </Modal>
 </template>

@@ -2,75 +2,112 @@ import { h } from 'vue';
 import { router } from '@inertiajs/vue3';
 import { createColumnHelper } from '@tanstack/vue-table';
 import { Eye, Pencil, Trash2 } from 'lucide-vue-next';
-import { useModal } from '@/composables/useModal';
-import UserCreateForm from '@/components/forms/users/CreateForm.vue';
-const { openModal } = useModal();
-
-const editUser = (user) => {
-  openModal({
-    modalTitle: `Edit ${user.username}`,
-    buttonText: 'Update',
-    component: UserCreateForm,
-    onSubmit: () => {
-      console.log('Updating user', user)
-      // Inertia.put(`/users/${user.id}`, updatedData)
-    },
-  })
-}
-
 
 const columnHelper = createColumnHelper<any>()
 
-export function createActionColumn(basePath: string) {
+export interface ActionColumnOptions {
+    basePath: string;
+    onView?: (item: any) => void;
+    onEdit?: (item: any) => void;
+    onDelete?: (item: any) => void;
+    showView?: boolean;
+    showEdit?: boolean;
+    showDelete?: boolean;
+}
+
+export function createActionColumn(options: ActionColumnOptions | string) {
+    // Support both old API (string basePath) and new API (options object)
+    const opts: ActionColumnOptions = typeof options === 'string'
+        ? { basePath: options }
+        : options;
+
+    const {
+        basePath,
+        onView,
+        onEdit,
+        onDelete,
+        showView = true,
+        showEdit = true,
+        showDelete = true,
+    } = opts;
+
     return columnHelper.display({
         id: 'actions',
         header: 'Actions',
         cell: ({ row }) => {
-            const item = row.original as { id?: number | string }
+            const item = row.original as { id?: number | string };
+            const actions = [];
 
-            return h('div', { class: 'flex gap-2 items-center' }, [
-                // View Button
-                h(
-                    'button',
-                    {
-                        class: 'p-1 text-green-600 hover:text-green-800 transition-colors rounded',
-                        title: 'View',
-                        onClick: () => editUser(item)
-                        // onClick: () => router.get(`${basePath}/${item.id}`)
-                    },
-                    [h(Eye, { size: 18 })]
-                ),
+            // View Button
+            if (showView) {
+                actions.push(
+                    h(
+                        'button',
+                        {
+                            class: 'p-1 text-green-600 hover:text-green-800 transition-colors rounded',
+                            title: 'View',
+                            onClick: () => {
+                                if (onView) {
+                                    onView(item);
+                                } else {
+                                    router.get(`${basePath}/${item.id}`);
+                                }
+                            },
+                        },
+                        [h(Eye, { size: 18 })]
+                    )
+                );
+            }
 
-                // Edit Button
-                h(
-                    'button',
-                    {
-                        class: 'p-1 text-blue-600 hover:text-blue-800 transition-colors rounded',
-                        title: 'Edit',
-                        onClick: () => router.get(`${basePath}/${item.id}/edit`)
-                    },
-                    [h(Pencil, { size: 18 })]
-                ),
+            // Edit Button
+            if (showEdit) {
+                actions.push(
+                    h(
+                        'button',
+                        {
+                            class: 'p-1 text-blue-600 hover:text-blue-800 transition-colors rounded',
+                            title: 'Edit',
+                            onClick: () => {
+                                if (onEdit) {
+                                    onEdit(item);
+                                } else {
+                                    router.get(`${basePath}/${item.id}/edit`);
+                                }
+                            },
+                        },
+                        [h(Pencil, { size: 18 })]
+                    )
+                );
+            }
 
-                // Delete Button
-                h(
-                    'button',
-                    {
-                        class: 'p-1 text-red-600 hover:text-red-800 transition-colors rounded',
-                        title: 'Delete',
-                        onClick: () => {
-                            if (confirm('Are you sure you want to delete this item?')) {
-                                router.delete(`${basePath}/${item.id}`, {
-                                    preserveScroll: true
-                                })
-                            }
-                        }
-                    },
-                    [h(Trash2, { size: 18 })]
-                )
-            ])
-        }
-    })
+            // Delete Button
+            if (showDelete) {
+                actions.push(
+                    h(
+                        'button',
+                        {
+                            class: 'p-1 text-red-600 hover:text-red-800 transition-colors rounded',
+                            title: 'Delete',
+                            onClick: () => {
+                                if (onDelete) {
+                                    onDelete(item);
+                                } else {
+                                    if (confirm('Are you sure you want to delete this item?')) {
+                                        router.delete(`${basePath}/${item.id}`, {
+                                            preserveScroll: true,
+                                        });
+                                    }
+                                }
+                            },
+                        },
+                        [h(Trash2, { size: 18 })]
+                    )
+                );
+            }
+
+            return h('div', { class: 'flex gap-2 items-center' }, actions);
+        },
+    });
 }
 
 

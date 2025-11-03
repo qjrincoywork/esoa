@@ -57,12 +57,12 @@ class User extends Authenticatable
     }
 
     /**
-     * Method: user_detail
+     * Method: userDetail
      * This method defines the relationship between the User model and the UserDetail model.
      *
      * @return HasOne The relationship between User and UserDetail models.
      */
-    public function user_detail(): HasOne
+    public function userDetail(): HasOne
     {
         return $this->hasOne(UserDetail::class);
     }
@@ -82,9 +82,11 @@ class User extends Authenticatable
             ->when(isset($params['is_active']), function ($query) use ($params) {
                 $query->where('is_active', $params['is_active']);
             })
+            ->with('userDetail')
             ->orderBy('created_at', 'desc')
             ->paginate($perPage);
 
+        // dd($result, 'hits users');
         // dd($result->toSql(), 'hits users');
         return $result;
     }
