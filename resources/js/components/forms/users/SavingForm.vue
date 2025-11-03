@@ -66,18 +66,19 @@ const suffixes = props.suffixes;
             id="suffix"
             class="mt-1 block w-full"
             name="suffix_id"
+            :default-value="detail.suffix_id ? String(detail.suffix_id) : undefined"
         >
-          <SelectTrigger class="w-[580px]">
+          <SelectTrigger class="w-full">
               <SelectValue placeholder="Select a suffix" />
           </SelectTrigger>
-          <SelectContent class="w-[580px]">
+          <SelectContent class="w-full">
               <SelectGroup>
                   <SelectLabel>Suffix</SelectLabel>
                   <!--  Dynamically loop suffix items -->
                   <SelectItem
                           v-for="suffix in suffixes"
                           :key="suffix.id"
-                          :value="suffix.id"
+                          :value="String(suffix.id)"
                   >
                   {{ suffix.name }}
                   </SelectItem>
