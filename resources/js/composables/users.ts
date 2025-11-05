@@ -3,11 +3,7 @@ import { useAjax } from '@/composables/useAjax';
 import { ref } from 'vue';
 import { router } from '@inertiajs/vue3';
 import SavingForm from '@/components/forms/users/SavingForm.vue';
-const userEditForm = ref<HTMLFormElement | null>(null);
-// Expose the form reference to parent
-defineExpose({
-    userEditForm
-});
+let formApi: { getFormData: () => FormData | null } | null = null;
 
 export interface User {
     id?: number | string;
@@ -48,18 +44,19 @@ export function useUsers() {
                 componentProps: {
                     user: payload.user,
                     suffixes: payload.suffixes,
+                    onReady: (api: { getFormData: () => FormData | null }) => {
+                        formApi = api
+                    }
                 },
                 size: 'md',
                 onSubmit: () => {
-                    // const formEl = document.getElementById('user-edit-form') as HTMLFormElement | null;
-                    console.log(userEditForm);
-                    // const formEl = formComponent.userEditForm;
-                    // if (!formEl) return;
-                    // const formData = new FormData(formEl);
-                    // formData.append('_method', 'put');
-                    // router.post(`/users/${payload.user.id}`, formData, {
-                    //     preserveScroll: true,
-                    // });
+                    if (!formApi) return;
+                    const formData = formApi.getFormData();
+                    if (!formData) return;
+                    formData.append('_method', 'put');
+                    router.post(`/users/${payload.user.id}`, formData, {
+                        preserveScroll: true,
+                    });
                 }
             });
         } catch (error) {

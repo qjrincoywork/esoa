@@ -83,14 +83,6 @@ class UserController extends Controller
                 'suffixes' => $suffixes,
             ]);
         }
-
-        // Fallback to Inertia render for regular requests
-        // return Inertia::render('users/Index', [
-        //     'edit_user_payload' => [
-        //         'user' => $user,
-        //         'suffixes' => $suffixes,
-        //     ],
-        // ]);
     }
 
     /**
@@ -100,8 +92,8 @@ class UserController extends Controller
     {
         $user = $this->user->with('userDetail')->findOrFail($id);
 
-        dd($user, $request->all(), 'hits');
         $validated = $request->validate([
+            'id' => ['required', 'integer'],
             'username' => ['nullable','string','max:255'],
             'email' => ['nullable','email','max:255'],
             'first_name' => ['nullable','string','max:255'],

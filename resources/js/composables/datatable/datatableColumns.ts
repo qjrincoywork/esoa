@@ -44,6 +44,7 @@ export function createActionColumn(options: ActionColumnOptions | string) {
                     h(
                         'button',
                         {
+                            type: 'button',
                             class: 'p-1 text-green-600 hover:text-green-800 transition-colors rounded',
                             title: 'View',
                             onClick: () => {
@@ -65,6 +66,7 @@ export function createActionColumn(options: ActionColumnOptions | string) {
                     h(
                         'button',
                         {
+                            type: 'button',
                             class: 'p-1 text-blue-600 hover:text-blue-800 transition-colors rounded',
                             title: 'Edit',
                             onClick: () => {
@@ -86,6 +88,7 @@ export function createActionColumn(options: ActionColumnOptions | string) {
                     h(
                         'button',
                         {
+                            type: 'button',
                             class: 'p-1 text-red-600 hover:text-red-800 transition-colors rounded',
                             title: 'Delete',
                             onClick: () => {

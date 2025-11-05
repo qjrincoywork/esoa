@@ -1,30 +1,78 @@
-<script setup>
-import { ref, onMounted, computed } from 'vue';
+<script setup lang="ts">
+import { ref, onMounted, computed, defineExpose } from 'vue';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectContent, SelectGroup, SelectLabel, SelectItem, SelectValue } from '@/components/ui/select';
 
+type Suffix = { id: string | number; name: string }
+type UserDetail = {
+  first_name?: string
+  middle_name?: string
+  last_name?: string
+  suffix_id?: string | number
+  birthdate?: string
+  employee_no?: string
+}
+type UserBasic = {
+  id?: number
+  username?: string | number
+  email?: string | number
+  user_detail?: UserDetail
+  userDetail?: UserDetail
+}
+
 const props = defineProps({
   user: {
-    type: Object,
+    type: Object as unknown as () => UserBasic,
     required: true,
   },
   suffixes: {
-    type: Array,
+    type: Array as unknown as () => Suffix[],
     required: true,
     default: () => [],
+  },
+  onReady: {
+    type: Function as unknown as () => ((api: { getFormData: () => FormData | null; formRef: HTMLFormElement | null }) => void) | undefined,
+    required: false,
   },
 });
 
 // Prefer nested user_detail if present; fallback to user for backward compatibility
-const detail = computed(() => props.user?.user_detail ?? props.user?.userDetail ?? props.user ?? {});
+const user = computed<UserBasic>(() => props.user as UserBasic)
+const detail = computed<UserDetail>(() => (user.value?.user_detail ?? user.value?.userDetail ?? {}) as UserDetail)
 // const suffixes = computed(() => props.suffixes ?? {});
-const suffixes = props.suffixes;
-console.log(userEditForm);
+const suffixes = computed<Suffix[]>(() => props.suffixes as Suffix[]);
+
+// Expose a form ref so parent components can access without document.getElementById
+const userEditForm = ref<HTMLFormElement | null>(null)
+
+// Helper to extract FormData from this form (exposed to parent)
+function getFormData(): FormData | null {
+    if (!userEditForm.value) return null
+    return new FormData(userEditForm.value)
+}
+
+defineExpose({
+    userEditForm,
+    getFormData,
+})
+
+onMounted(() => {
+    if (typeof props.onReady === 'function') {
+        props.onReady({ getFormData, formRef: userEditForm.value })
+    }
+})
 </script>
 
 <template>
   <form ref="userEditForm" class="space-y-3">
+    <Input
+        id="id"
+        type="hidden"
+        class="mt-1 block w-full"
+        name="id"
+        :default-value="user.id"
+    />
     <div class="grid gap-2">
         <Label for="first_name">First Name</Label>
         <Input
