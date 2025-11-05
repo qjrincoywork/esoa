@@ -71,24 +71,26 @@ class UserController extends Controller
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit(string $id)
+    public function edit(string $id, Request $request)
     {
-        // dd(Suffix::select(['id', 'name'])->get()->toArray(), 'edit');
-        // 'suffixes' => Suffix::select(['id', 'name'])->get()->toArray(),
         $user = $this->user->with('userDetail')->findOrFail($id)->toArray();
         $suffixes = Suffix::select(['id', 'name'])->get()->toArray();
 
-        // Return a partial response that the page can use to open the modal
-        // return response()->json([
-        //     'user'=> $user,
-        //     'suffixes'=> $suffixes,
-        // ]);
-        return Inertia::render('users/Index', [
-            'edit_user_payload' => [
+        // Return JSON for AJAX requests (no URL change)
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
                 'user' => $user,
                 'suffixes' => $suffixes,
-            ],
-        ]);
+            ]);
+        }
+
+        // Fallback to Inertia render for regular requests
+        // return Inertia::render('users/Index', [
+        //     'edit_user_payload' => [
+        //         'user' => $user,
+        //         'suffixes' => $suffixes,
+        //     ],
+        // ]);
     }
 
     /**
@@ -98,6 +100,7 @@ class UserController extends Controller
     {
         $user = $this->user->with('userDetail')->findOrFail($id);
 
+        dd($user, $request->all(), 'hits');
         $validated = $request->validate([
             'username' => ['nullable','string','max:255'],
             'email' => ['nullable','email','max:255'],

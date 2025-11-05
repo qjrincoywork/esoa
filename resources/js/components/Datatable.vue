@@ -187,9 +187,8 @@ const paginationEnd = computed(() => paginationInfo.value.end)
 const totalRows = computed(() => paginationInfo.value.total)
 const pageCount = computed(() => paginationInfo.value.pageCount)
 const isFirstPage = computed(() => currentPage.value <= 1)
+const isLastPage = computed(() => currentPage.value >= pageCount.value)
 const showPagination = computed(() => currentPage.value >= pageCount.value)
-// console.log(showPagination, paginationInfo.value, pageCount.value)
-// const isLastPage = computed(() => currentPage.value >= pageCount.value)
 
 const goToPage = pageNumber => {
     if (!isServerPagination.value) return

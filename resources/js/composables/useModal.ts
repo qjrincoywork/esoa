@@ -1,4 +1,5 @@
-import { ref, type Component } from 'vue';
+import { ref, shallowRef, type Component } from 'vue';
+// import { ref, type Component, markRaw } from 'vue';
 import { router } from '@inertiajs/vue3';
 
 export type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
@@ -20,7 +21,8 @@ export interface ModalOptions {
 const visible = ref(false);
 const title = ref('');
 const buttonLabel = ref('');
-const contentComponent = ref<Component | null>(null);
+const contentComponent = shallowRef<Component | null>(null);
+// const contentComponent = ref(markRaw(Component)) 
 const componentProps = ref<Record<string, any>>({});
 const submitAction = ref<(() => void | Promise<void>) | null>(null);
 const submitUrl = ref<string | null>(null);

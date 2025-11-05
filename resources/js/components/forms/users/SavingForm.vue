@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectContent, SelectGroup, SelectLabel, SelectItem, SelectValue } from '@/components/ui/select';
@@ -20,10 +20,11 @@ const props = defineProps({
 const detail = computed(() => props.user?.user_detail ?? props.user?.userDetail ?? props.user ?? {});
 // const suffixes = computed(() => props.suffixes ?? {});
 const suffixes = props.suffixes;
+console.log(userEditForm);
 </script>
 
 <template>
-  <form id="user-edit-form" class="space-y-3">
+  <form ref="userEditForm" class="space-y-3">
     <div class="grid gap-2">
         <Label for="first_name">First Name</Label>
         <Input

@@ -19,10 +19,7 @@ type UsersPagination = {
 const page = usePage();
 const user = (page.props as any).auth.user as unknown;
 const users = computed(() => (page.props as any).users as UsersPagination);
-console.log(page.props);
-// const user_details = computed(() => (page.props as any).auth.user_details as unknown);
 const { editUser } = useUsers();
-// console.log(user_details);
 const columnHelper = createColumnHelper();
 const pagination = ref({
 	current_page: users.value.current_page,
