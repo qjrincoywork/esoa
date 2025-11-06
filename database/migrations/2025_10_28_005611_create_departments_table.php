@@ -13,8 +13,8 @@ return new class extends Migration
     {
         Schema::create('departments', function (Blueprint $table) {
             $table->id();
-            $table->string('name')->collation('SQL_Latin1_General_CP1_CS_AS');
-            $table->text('description')->nullable()->collation('SQL_Latin1_General_CP1_CS_AS');
+            $table->string('name');
+            $table->text('description')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });

@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Models\{ Suffix, User};
+use App\Models\{ Citizenship, CivilStatus, Department, Gender, Position, Suffix, User };
 use App\Http\Requests\{UserCreateRequest, UserDeleteRequest, UserListRequest, UserUpdateRequest};
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
+use Symfony\Component\HttpFoundation\Response;
 
 class UserController extends Controller
 {
@@ -75,12 +77,22 @@ class UserController extends Controller
     {
         $user = $this->user->with('userDetail')->findOrFail($id)->toArray();
         $suffixes = Suffix::select(['id', 'name'])->get()->toArray();
+        $genders = Gender::select(['id', 'name'])->get()->toArray();
+        $civil_statuses = CivilStatus::select(['id', 'name'])->get()->toArray();
+        $citizenships = Citizenship::select(['id', 'name'])->get()->toArray();
+        $departments = Department::select(['id', 'name'])->get()->toArray();
+        $positions = Position::select(['id', 'name'])->get()->toArray();
 
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'user' => $user,
                 'suffixes' => $suffixes,
+                'genders' => $genders,
+                'civil_statuses' => $civil_statuses,
+                'citizenships' => $citizenships,
+                'departments' => $departments,
+                'positions' => $positions,
             ]);
         }
     }
@@ -88,44 +100,63 @@ class UserController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, string $id)
+    public function update(UserUpdateRequest $request): JsonResponse
     {
-        $user = $this->user->with('userDetail')->findOrFail($id);
+        $validated = $request->validated();
 
-        $validated = $request->validate([
-            'id' => ['required', 'integer'],
-            'username' => ['nullable','string','max:255'],
-            'email' => ['nullable','email','max:255'],
-            'first_name' => ['nullable','string','max:255'],
-            'middle_name' => ['nullable','string','max:255'],
-            'last_name' => ['nullable','string','max:255'],
-            'birthdate' => ['nullable','date'],
-            'employee_no' => ['nullable','string','max:255'],
-            'suffix_id' => ['nullable','integer'],
-        ]);
+        DB::beginTransaction();
+
+        try {
+            $task = $this->user->saveUser($validated);
+
+            // Commit transaction
+            DB::commit();
+
+            return response()->json([
+                'message' => 'User Updated successfully'
+            ], Response::HTTP_OK);
+        } catch (\Exception $e) {
+            // Catch and handle any unexpected errors
+            DB::rollBack();
+
+            return response()->json(['message' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+        // dd($user, $validated);
+
+        // $validated = $request->validate([
+        //     'id' => ['required', 'integer'],
+        //     'username' => ['nullable','string','max:255'],
+        //     'email' => ['nullable','email','max:255'],
+        //     'first_name' => ['nullable','string','max:255'],
+        //     'middle_name' => ['nullable','string','max:255'],
+        //     'last_name' => ['nullable','string','max:255'],
+        //     'birthdate' => ['nullable','date'],
+        //     'employee_no' => ['nullable','string','max:255'],
+        //     // 'suffix_id' => ['nullable','integer'],
+        // ]);
 
         // Update user table fields
-        $user->fill(array_filter([
-            'username' => $validated['username'] ?? null,
-            'email' => $validated['email'] ?? null,
-        ], fn($v) => !is_null($v)));
-        $user->save();
+        // $user->fill(array_filter([
+        //     'username' => $validated['username'] ?? null,
+        //     'email' => $validated['email'] ?? null,
+        // ], fn($v) => !is_null($v)));
+        // $user->save();
 
-        // Update or create related detail
-        $detailData = array_filter([
-            'first_name' => $validated['first_name'] ?? null,
-            'middle_name' => $validated['middle_name'] ?? null,
-            'last_name' => $validated['last_name'] ?? null,
-            'birthdate' => $validated['birthdate'] ?? null,
-            'employee_no' => $validated['employee_no'] ?? null,
-            'suffix_id' => $validated['suffix_id'] ?? null,
-        ], fn($v) => !is_null($v));
+        // // Update or create related detail
+        // $detailData = array_filter([
+        //     'first_name' => $validated['first_name'] ?? null,
+        //     'middle_name' => $validated['middle_name'] ?? null,
+        //     'last_name' => $validated['last_name'] ?? null,
+        //     'birthdate' => $validated['birthdate'] ?? null,
+        //     'employee_no' => $validated['employee_no'] ?? null,
+        //     'suffix_id' => $validated['suffix_id'] ?? null,
+        // ], fn($v) => !is_null($v));
 
-        if (!empty($detailData)) {
-            $user->userDetail()->updateOrCreate(['user_id' => $user->id], $detailData);
-        }
+        // if (!empty($detailData)) {
+        //     $user->userDetail()->updateOrCreate(['user_id' => $user->id], $detailData);
+        // }
 
-        return redirect()->back()->with('success', 'User updated successfully.');
+        // return redirect()->back()->with('success', 'User updated successfully.');
     }
 
     /**

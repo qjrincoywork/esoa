@@ -28,7 +28,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Only admins can access these
     Route::middleware(['role:admin'])->group(function () {
         Route::resource('admin', AdminController::class);
-        Route::resource('users', UserController::class);
+        Route::prefix('users')->controller(UserController::class)->group(function () {
+            Route::get('/', 'index')->name('users.index');
+            Route::get('/{id}/edit', 'edit')->name('users.edit');
+            Route::post('/update', 'update')->name('users.update');
+        });
     });
 
     // Only users can access these

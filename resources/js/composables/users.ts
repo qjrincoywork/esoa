@@ -25,7 +25,15 @@ export function useUsers() {
     const editUser = async (user: User) => {
         try {
             // Make AJAX request without navigation using reusable composable
-            const response = await get<{ user: User; suffixes: Array<{ id: number | string; name: string }>; }>(
+            const response = await get<{
+                user: User;
+                suffixes: Array<{ id: number | string; name: string }>;
+                genders: Array<{ id: number | string; name: string }>;
+                civil_statuses: Array<{ id: number | string; name: string }>;
+                citizenships: Array<{ id: number | string; name: string }>;
+                departments: Array<{ id: number | string; name: string }>;
+                positions: Array<{ id: number | string; name: string }>;
+            }>(
                 `/users/${user.id}/edit`
             );
 
@@ -44,17 +52,23 @@ export function useUsers() {
                 componentProps: {
                     user: payload.user,
                     suffixes: payload.suffixes,
+                    genders: payload.genders,
+                    civil_statuses: payload.civil_statuses,
+                    citizenships: payload.citizenships,
+                    departments: payload.departments,
+                    positions: payload.positions,
                     onReady: (api: { getFormData: () => FormData | null }) => {
                         formApi = api
                     }
                 },
-                size: 'md',
+                size: 'lg',
                 onSubmit: () => {
                     if (!formApi) return;
+
                     const formData = formApi.getFormData();
                     if (!formData) return;
-                    formData.append('_method', 'put');
-                    router.post(`/users/${payload.user.id}`, formData, {
+
+                    router.post(`/users/update`, formData, {
                         preserveScroll: true,
                     });
                 }

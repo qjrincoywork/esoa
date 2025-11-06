@@ -22,7 +22,6 @@ const visible = ref(false);
 const title = ref('');
 const buttonLabel = ref('');
 const contentComponent = shallowRef<Component | null>(null);
-// const contentComponent = ref(markRaw(Component)) 
 const componentProps = ref<Record<string, any>>({});
 const submitAction = ref<(() => void | Promise<void>) | null>(null);
 const submitUrl = ref<string | null>(null);

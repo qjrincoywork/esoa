@@ -83,11 +83,22 @@ class User extends Authenticatable
                 $query->where('is_active', $params['is_active']);
             })
             ->with('userDetail')
-            ->orderBy('created_at', 'desc')
+            ->orderBy('id', 'desc')
             ->paginate($perPage);
 
         // dd($result, 'hits users');
         // dd($result->toSql(), 'hits users');
         return $result;
+    }
+
+    public function saveUser(array $data) {
+        auth()->user()->userDetail()->updateOrCreate(['user_id' => auth()->id()], $data);
+        // if (isset($data['id'])) {
+        //     dd($data);
+        //     auth()->user()->userDetail()->find($data['id'])->update($data);
+        // } else {
+        //     $data += ['user_id' => auth()->id()];
+        //     auth()->user()->userDetail()->create($data);
+        // }
     }
 }
