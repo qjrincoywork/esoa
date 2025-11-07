@@ -3,17 +3,34 @@
   import type { Notification } from './interfaces';
   import { ErrorIcon, InfoIcon, WarningIcon, SuccessIcon, CloseIcon } from './icons';
 
-  defineProps<{
+  const props = defineProps<{
     notification: Notification,
   }>();
 
   const closeNotification = (id: string) => {
     store.actions.removeNotification(id);
   }
+
+  let notif_color = 'bg-neutral';
+  switch (props.notification.type) {
+    case 'info':
+      notif_color = 'bg-sky-100'
+      break;
+    case 'success':
+      notif_color = 'bg-emerald-100'
+      break;
+    case 'warning':
+      notif_color = 'bg-orange-100'
+      break;
+    case 'error':
+      notif_color = 'bg-red-100'
+      break;
+  }
+
 </script>
 
 <template>
-  <div class="bg-white shadow-lg rounded-lg pointer-events-auto z-[999]">
+  <div class="shadow-lg rounded-lg pointer-events-auto" :class="notif_color">
     <div class="rounded-lg shadow-xl overflow-hidden">
       <div class="p-4">
         <div class="flex items-start">

@@ -75,14 +75,14 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeyDown))
 
 <template>
     <Transition name="modal" :duration="150">
-        <div v-if="show" class="fixed inset-0" role="region" aria-labelledby="modalId">
+        <div v-if="show" class="fixed inset-0 z-20" role="region" aria-labelledby="modalId">
             <div
                 class="fixed inset-0 grid h-screen w-screen place-items-center bg-black/30 dark:bg-black/50"
                 aria-hidden="true"
                 @click="handleClickOutside"></div>
 
             <main
-                class="fixed inset-0 z-10 grid h-screen w-screen place-items-center p-2 sm:p-4 md:p-6 overflow-auto"
+                class="fixed inset-0 grid h-screen w-screen place-items-center p-2 sm:p-4 md:p-6 overflow-auto"
                 role="dialog"
                 aria-modal="true"
                 :aria-labelledby="modalId">

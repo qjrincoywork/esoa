@@ -1,5 +1,4 @@
 import { ref, shallowRef, type Component } from 'vue';
-// import { ref, type Component, markRaw } from 'vue';
 import { router } from '@inertiajs/vue3';
 
 export type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
@@ -8,6 +7,7 @@ export type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl
 export interface ModalOptions {
   modalTitle?: string;
   buttonText?: string;
+  buttonClass?: string;
   component?: Component | null;
   componentProps?: Record<string, any>;
   onSubmit?: () => void | Promise<void>;
@@ -21,6 +21,7 @@ export interface ModalOptions {
 const visible = ref(false);
 const title = ref('');
 const buttonLabel = ref('');
+const buttonClass = ref('');
 const contentComponent = shallowRef<Component | null>(null);
 const componentProps = ref<Record<string, any>>({});
 const submitAction = ref<(() => void | Promise<void>) | null>(null);
@@ -34,6 +35,7 @@ export function useModal() {
   const openModal = (options: ModalOptions = {}) => {
     title.value = options.modalTitle || 'Modal';
     buttonLabel.value = options.buttonText || 'Submit';
+    buttonClass.value = options.buttonClass || 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500 dark:bg-blue-500 dark:hover:bg-blue-600';
     contentComponent.value = options.component || null;
     componentProps.value = options.componentProps || {};
     submitAction.value = options.onSubmit || null;
@@ -51,6 +53,7 @@ export function useModal() {
     setTimeout(() => {
       title.value = '';
       buttonLabel.value = '';
+      buttonClass.value = '';
       contentComponent.value = null;
       componentProps.value = {};
       submitAction.value = null;
@@ -102,6 +105,7 @@ export function useModal() {
     visible,
     title,
     buttonLabel,
+    buttonClass,
     contentComponent,
     componentProps,
     size,

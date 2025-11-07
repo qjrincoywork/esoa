@@ -19,7 +19,7 @@ type UsersPagination = {
 const page = usePage();
 const user = (page.props as any).auth.user as unknown;
 const users = computed(() => (page.props as any).users as UsersPagination);
-const { editUser } = useUsers();
+const { editUser, deleteUser } = useUsers();
 const columnHelper = createColumnHelper();
 const pagination = ref({
 	current_page: users.value.current_page,
@@ -39,6 +39,7 @@ const columns = [
   createActionColumn({
     basePath: '/users',
     onEdit: editUser,
+    onDelete: deleteUser,
   }),
 ]
 
@@ -96,8 +97,8 @@ watch(
                 :pagination="pagination"
                 :search-fields="['username', 'email']"
                 empty-message="No audit records found"
-                empty-description="System activities will appear here"
-                export-file-name="activity_log"
+                empty-description="System users will appear here"
+                export-file-name="users_list"
                 @update:pagination="pagination = $event">
             </Datatable>
         </div>

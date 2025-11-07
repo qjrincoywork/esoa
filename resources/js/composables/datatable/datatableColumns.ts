@@ -4,6 +4,10 @@ import { createColumnHelper } from '@tanstack/vue-table';
 import { Eye, Pencil, Trash2 } from 'lucide-vue-next';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { dispatchNotification } from '@/components/notification';
+import { useModal } from '@/composables/useModal';
+const { openModal, closeModal } = useModal();
+import DeleteForm from '@/components/forms/users/DeleteForm.vue';
+let formApi: { getFormData: () => FormData | null } | null = null;
 
 const columnHelper = createColumnHelper<any>()
 
@@ -106,15 +110,10 @@ export function createActionColumn(options: ActionColumnOptions | string) {
                         type: 'button',
                         class: 'p-1 text-red-600 hover:text-red-800 transition-colors rounded',
                         onClick: () => {
-                            if (onDelete) {
+                            try {
                                 onDelete(item);
-                            } else {
-                                dispatchNotification({ title: 'Warning!', content: 'Successfully Deleted.', type: 'warning' });
-                                // if (confirm('Are you sure you want to delete this item?')) {
-                                //     router.delete(`${basePath}/${item.id}`, {
-                                //         preserveScroll: true,
-                                //     });
-                                // }
+                            } catch (error) {
+                                dispatchNotification({ title: 'Warning!', content: 'Encountered internal Server Error:' + error, type: 'warning' });
                             }
                         },
                     },

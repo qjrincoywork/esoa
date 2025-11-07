@@ -2,13 +2,10 @@ import { useModal } from '@/composables/useModal';
 import { useAjax } from '@/composables/useAjax';
 import { ref } from 'vue';
 import { router } from '@inertiajs/vue3';
+import DeleteForm from '@/components/forms/users/DeleteForm.vue';
 import SavingForm from '@/components/forms/users/SavingForm.vue';
 let formApi: { getFormData: () => FormData | null } | null = null;
-import { NotificationProvider, dispatchNotification } from '@/components/notification';
-
-const addNotification = () => {
-    dispatchNotification({ title: 'Success!', content: 'Your action was successfully submitted', type: 'success' });
-}
+import { dispatchNotification } from '@/components/notification';
 
 export interface User {
     id?: number | string;
@@ -102,9 +99,44 @@ export function useUsers() {
         });
     };
 
+    const deleteUser = async (user: User) => {
+        try {
+            openModal({
+                modalTitle: `Delete ${user?.username || ' User'}`,
+                buttonText: 'Delete',
+                buttonClass: 'bg-red-600 hover:bg-red-700 focus:ring-red-500 dark:bg-red-500 dark:hover:bg-red-600',
+                component: DeleteForm,
+                componentProps: {
+                    user: user,
+                    onReady: (api: { getFormData: () => FormData | null }) => {
+                        formApi = api
+                    }
+                },
+                size: 'sm',
+                onSubmit: async () => {
+                    if (!formApi) return;
+                    const formData = formApi.getFormData();
+                    if (!formData) return;
+
+                    const response = await post(`/users/destroy`, formData);
+
+                    if (!response.ok) {
+                        dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+                    } else {
+                        dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+                        closeModal();
+                    }
+                }
+            });
+        } catch (error) {
+            console.error('Error fetching user data:', error);
+        }
+    };
+
     return {
         editUser,
         createUser,
+        deleteUser,
     };
 }
 
