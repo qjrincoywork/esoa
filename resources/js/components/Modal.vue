@@ -75,7 +75,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeyDown))
 
 <template>
     <Transition name="modal" :duration="150">
-        <div v-if="show" class="fixed inset-0 z-[999]" role="region" aria-labelledby="modalId">
+        <div v-if="show" class="fixed inset-0" role="region" aria-labelledby="modalId">
             <div
                 class="fixed inset-0 grid h-screen w-screen place-items-center bg-black/30 dark:bg-black/50"
                 aria-hidden="true"

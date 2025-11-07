@@ -100,7 +100,7 @@ class UserController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(UserUpdateRequest $request): JsonResponse
+    public function update(UserUpdateRequest $request)
     {
         $validated = $request->validated();
 
@@ -112,51 +112,23 @@ class UserController extends Controller
             // Commit transaction
             DB::commit();
 
-            return response()->json([
-                'message' => 'User Updated successfully'
-            ], Response::HTTP_OK);
+            // Return JSON for AJAX requests (no URL change)
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'message' => 'User Updated successfully'
+                ], Response::HTTP_OK);
+            }
         } catch (\Exception $e) {
             // Catch and handle any unexpected errors
             DB::rollBack();
 
-            return response()->json(['message' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+            // Return JSON for AJAX requests (no URL change)
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'message' => $e->getMessage()
+                ], Response::HTTP_INTERNAL_SERVER_ERROR);
+            }
         }
-        // dd($user, $validated);
-
-        // $validated = $request->validate([
-        //     'id' => ['required', 'integer'],
-        //     'username' => ['nullable','string','max:255'],
-        //     'email' => ['nullable','email','max:255'],
-        //     'first_name' => ['nullable','string','max:255'],
-        //     'middle_name' => ['nullable','string','max:255'],
-        //     'last_name' => ['nullable','string','max:255'],
-        //     'birthdate' => ['nullable','date'],
-        //     'employee_no' => ['nullable','string','max:255'],
-        //     // 'suffix_id' => ['nullable','integer'],
-        // ]);
-
-        // Update user table fields
-        // $user->fill(array_filter([
-        //     'username' => $validated['username'] ?? null,
-        //     'email' => $validated['email'] ?? null,
-        // ], fn($v) => !is_null($v)));
-        // $user->save();
-
-        // // Update or create related detail
-        // $detailData = array_filter([
-        //     'first_name' => $validated['first_name'] ?? null,
-        //     'middle_name' => $validated['middle_name'] ?? null,
-        //     'last_name' => $validated['last_name'] ?? null,
-        //     'birthdate' => $validated['birthdate'] ?? null,
-        //     'employee_no' => $validated['employee_no'] ?? null,
-        //     'suffix_id' => $validated['suffix_id'] ?? null,
-        // ], fn($v) => !is_null($v));
-
-        // if (!empty($detailData)) {
-        //     $user->userDetail()->updateOrCreate(['user_id' => $user->id], $detailData);
-        // }
-
-        // return redirect()->back()->with('success', 'User updated successfully.');
     }
 
     /**

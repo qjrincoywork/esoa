@@ -4,6 +4,11 @@ import { ref } from 'vue';
 import { router } from '@inertiajs/vue3';
 import SavingForm from '@/components/forms/users/SavingForm.vue';
 let formApi: { getFormData: () => FormData | null } | null = null;
+import { NotificationProvider, dispatchNotification } from '@/components/notification';
+
+const addNotification = () => {
+    dispatchNotification({ title: 'Success!', content: 'Your action was successfully submitted', type: 'success' });
+}
 
 export interface User {
     id?: number | string;
@@ -19,8 +24,8 @@ export interface Suffixes {
 }
 
 export function useUsers() {
-    const { openModal } = useModal();
-    const { get } = useAjax();
+    const { openModal, closeModal } = useModal();
+    const { get, post } = useAjax();
 
     const editUser = async (user: User) => {
         try {
@@ -62,15 +67,22 @@ export function useUsers() {
                     }
                 },
                 size: 'lg',
-                onSubmit: () => {
+                onSubmit: async () => {
                     if (!formApi) return;
 
                     const formData = formApi.getFormData();
                     if (!formData) return;
 
-                    router.post(`/users/update`, formData, {
-                        preserveScroll: true,
-                    });
+                    const response = await post(`/users/update`, formData);
+
+                    if (!response.ok) {
+                        // console.log('onSubmit Failed:', response, response.status); 
+                        //To be Updated the showing of validation errors in the form
+                        dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+                    } else {
+                        dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+                        closeModal();
+                    }
                 }
             });
         } catch (error) {
