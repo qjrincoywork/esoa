@@ -9,7 +9,7 @@
       <TransitionGroup
         appear
         tag="div"
-        :enter-active-class="store.getters.getNotificationsCount() > 1 ? 'transform ease-out delay-300 transition' : 'transform ease-out transition'"
+        :enter-active-class="store.getters.getNotificationsCount() > 1 ? 'transform ease-out delay-300 duration-300 transition' : 'transform ease-out duration-300 transition'"
         enter-from-class="translate-x-4 opacity-0"
         enter-to-class="translate-x-0 opacity-100"
         leave-active-class="transition ease-in duration-100"
