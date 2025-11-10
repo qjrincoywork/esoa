@@ -27,8 +27,6 @@ const sizeClasses = {
     '5xl': 'w-full max-w-5xl mx-2 sm:mx-4',
     full: 'w-full max-w-full mx-1 sm:mx-2'
 }
-console.log(sizeClasses[props.size]);
-console.log(props.size);
 
 const handleKeyDown = e => {
     if (e.key === 'Escape' && props.show) emit('close')
