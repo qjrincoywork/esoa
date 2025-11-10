@@ -1,8 +1,10 @@
 <?php
 
 use App\Http\Controllers\{
+    AdminController,
+    PermissionController,
+    RoleController,
     UserController,
-    AdminController
 };
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -33,6 +35,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/{id}/edit', 'edit')->name('users.edit');
             Route::post('/update', 'update')->name('users.update');
             Route::post('/destroy', 'destroy')->name('users.destroy');
+        });
+
+        //Roles
+        Route::prefix('roles')->controller(RoleController::class)->group(function () {
+            Route::get('/', 'index')->name('roles.index');
+            Route::get('/{id}/edit', 'edit')->name('roles.edit');
+            Route::post('/update', 'update')->name('roles.update');
+            Route::post('/destroy', 'destroy')->name('roles.destroy');
+        });
+
+        //Permissions
+        Route::prefix('permissions')->controller(PermissionController::class)->group(function () {
+            Route::get('/', 'index')->name('permissions.index');
+            Route::get('/{id}/edit', 'edit')->name('permissions.edit');
+            Route::post('/update', 'update')->name('permissions.update');
+            Route::post('/destroy', 'destroy')->name('permissions.destroy');
         });
     });
 

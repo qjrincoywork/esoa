@@ -1,12 +1,12 @@
 <?php
 
-namespace App\Http\Requests;
+namespace App\Http\Requests\User;
 
 use App\Rules\IsDataExists;
 use Illuminate\Contracts\Validation\Rule;
 use Illuminate\Foundation\Http\FormRequest;
 
-class UserUpdateRequest extends FormRequest
+class UpdateRequest extends FormRequest
 {
     /**
      * Get the validation rules that apply to the request.
@@ -84,10 +84,6 @@ class UserUpdateRequest extends FormRequest
             //     'nullable',
             //     'string',
             //     'max:100'
-            // ],
-            // 'per_page' => [
-            //     'nullable',
-            //     'integer'
             // ],
         ];
     }

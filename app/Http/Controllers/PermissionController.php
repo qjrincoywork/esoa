@@ -3,33 +3,33 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Models\{ Citizenship, CivilStatus, Department, Gender, Position, Suffix, User };
-use App\Http\Requests\User\{CreateRequest, DeleteRequest, ListRequest, UpdateRequest};
+use Spatie\Permission\Models\Permission;
+use App\Http\Requests\Permission\{DeleteRequest, ListRequest, UpdateRequest};
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
 
-class UserController extends Controller
+class PermissionController extends Controller
 {
     /**
-     * User model instance.
+     * Permission model instance.
      *
-     * @var User
+     * @var Permission
      */
-    protected $user;
+    protected $permission;
 
     /**
-     * UserController constructor.
+     * PermissionController constructor.
      *
-     * @param User $user
+     * @param Permission $permission
      *
      * @return void
      */
-    public function __construct(User $user)
+    public function __construct(Permission $permission)
     {
-        $this->user = $user;
+        $this->permission = $permission;
     }
 
     /**
@@ -37,10 +37,31 @@ class UserController extends Controller
      */
     public function index(ListRequest $request)
     {
-        $users = $this->user->getUsers($request->validated())->toArray();
+        $perPage = $params['per_page'] ?? config('vc.default_pages');
 
-        return Inertia::render('users/Index', [
-            'users' => $users,
+        $permissions = $this->permission->query()
+            ->with('permissions')
+            ->latest()
+            ->paginate($perPage)
+            ->withQueryString()
+            ->through(function ($permission) {
+                return [
+                    'id' => $permission->id,
+                    'name' => $permission->name,
+                    'guard_name' => $permission->guard_name,
+                    // 'description' => $permission->description,
+                    'created_at' => $permission->created_at?->diffForHumans(),
+                    // 'permissions' => $permission->permissions->map(function ($permission) {
+                    //     return [
+                    //         'id' => $permission->id,
+                    //         'name' => $permission->name,
+                    //     ];
+                    // }),
+                ];
+            });
+
+        return Inertia::render('permissions/Index', [
+            'permissions' => $permissions,
         ]);
     }
 
@@ -73,24 +94,12 @@ class UserController extends Controller
      */
     public function edit(string $id, Request $request)
     {
-        $user = $this->user->with('userDetail')->findOrFail($id)->toArray();
-        $suffixes = Suffix::select(['id', 'name'])->get()->toArray();
-        $genders = Gender::select(['id', 'name'])->get()->toArray();
-        $civil_statuses = CivilStatus::select(['id', 'name'])->get()->toArray();
-        $citizenships = Citizenship::select(['id', 'name'])->get()->toArray();
-        $departments = Department::select(['id', 'name'])->get()->toArray();
-        $positions = Position::select(['id', 'name'])->get()->toArray();
+        $permission = Permission::find($id);
 
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
-                'user' => $user,
-                'suffixes' => $suffixes,
-                'genders' => $genders,
-                'civil_statuses' => $civil_statuses,
-                'citizenships' => $citizenships,
-                'departments' => $departments,
-                'positions' => $positions,
+                'permission' => $permission,
             ]);
         }
     }
@@ -105,15 +114,15 @@ class UserController extends Controller
         DB::beginTransaction();
 
         try {
-            $task = $this->user->saveUser($validated);
+            $task = $this->permission->update($validated);
 
             // Commit transaction
-            DB::commit();
+            // DB::commit();
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
-                    'message' => 'User Updated successfully'
+                    'message' => 'Permission Updated successfully'
                 ], Response::HTTP_OK);
             }
         } catch (\Exception $e) {
@@ -139,7 +148,8 @@ class UserController extends Controller
         DB::beginTransaction();
 
         try {
-            $task = $this->user->saveUser($validated);
+            $permission = $this->permission->find($validated['id']);
+            $permission->delete();
 
             // Commit transaction
             // DB::commit();
@@ -147,7 +157,7 @@ class UserController extends Controller
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json([
-                    'message' => 'User Deleted successfully'
+                    'message' => 'Permission Deleted successfully'
                 ], Response::HTTP_OK);
             }
         } catch (\Exception $e) {

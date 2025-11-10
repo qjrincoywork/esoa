@@ -1,10 +1,10 @@
 <?php
 
-namespace App\Http\Requests;
+namespace App\Http\Requests\User;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class UserListRequest extends FormRequest
+class ListRequest extends FormRequest
 {
     /**
      * Get the validation rules that apply to the request.

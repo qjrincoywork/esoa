@@ -17,7 +17,7 @@ const selectionColor = 'var(--selection-color)'
 const styles = {
     input: 'border border-[var(--color-border-strong)] rounded-md text-sm bg-[var(--color-surface)] text-[var(--color-text)] focus:ring-2 focus:ring-opacity-50 focus:border-transparent',
     button: 'btn-primary !p-2 focus:outline-none focus:ring-2 focus:ring-opacity-50',
-    tableCell: 'px-6 py-4 text-xs text-[var(--color-text)]',
+    tableCell: 'px-6 py-1 text-xs text-[var(--color-text)]',
     tableHeader: 'table-header',
     sortableHeader: 'cursor-pointer hover:bg-[var(--color-surface-muted)]',
     rowEven: 'bg-[var(--color-surface)]',
@@ -726,7 +726,7 @@ watch(
                                   ? styles.rowEven
                                   : styles.rowOdd
                         ]">
-                        <td class="px-6 py-4">
+                        <td class="px-6 py-1">
                             <div class="flex items-center">
                                 <label class="inline-flex items-center">
                                     <input

@@ -1,12 +1,12 @@
 <?php
 
-namespace App\Http\Requests;
+namespace App\Http\Requests\User;
 
 use App\Rules\{ IsDataExists, IsUserAdmin };
 use Illuminate\Contracts\Validation\Rule;
 use Illuminate\Foundation\Http\FormRequest;
 
-class UserDeleteRequest extends FormRequest
+class DeleteRequest extends FormRequest
 {
     /**
      * Get the validation rules that apply to the request.

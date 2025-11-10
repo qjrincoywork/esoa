@@ -11,7 +11,11 @@ import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
 
 defineProps<{
-    items: NavItem[];
+  items: {
+    title: string
+    href: string
+    icon: string
+  }[]
 }>();
 
 const page = usePage();
