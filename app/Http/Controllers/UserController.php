@@ -47,17 +47,60 @@ class UserController extends Controller
     /**
      * Show the form for creating a new resource.
      */
-    public function create()
+    public function create(Request $request)
     {
-        //
+        $suffixes = Suffix::select(['id', 'name'])->get()->toArray();
+        $genders = Gender::select(['id', 'name'])->get()->toArray();
+        $civil_statuses = CivilStatus::select(['id', 'name'])->get()->toArray();
+        $citizenships = Citizenship::select(['id', 'name'])->get()->toArray();
+        $departments = Department::select(['id', 'name'])->get()->toArray();
+        $positions = Position::select(['id', 'name'])->get()->toArray();
+
+        // Return JSON for AJAX requests (no URL change)
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'suffixes' => $suffixes,
+                'genders' => $genders,
+                'civil_statuses' => $civil_statuses,
+                'citizenships' => $citizenships,
+                'departments' => $departments,
+                'positions' => $positions,
+            ]);
+        }
     }
 
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(CreateRequest $request)
     {
-        //
+        $validated = $request->validated();
+
+        DB::beginTransaction();
+
+        try {
+            $this->user->saveUser($validated);
+
+            // Commit transaction
+            // DB::commit();
+
+            // Return JSON for AJAX requests (no URL change)
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'message' => 'User Created successfully'
+                ], Response::HTTP_OK);
+            }
+        } catch (\Exception $e) {
+            // Catch and handle any unexpected errors
+            DB::rollBack();
+
+            // Return JSON for AJAX requests (no URL change)
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'message' => $e->getMessage()
+                ], Response::HTTP_INTERNAL_SERVER_ERROR);
+            }
+        }
     }
 
     /**

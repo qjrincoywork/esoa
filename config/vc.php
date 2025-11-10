@@ -13,5 +13,6 @@ return [
     'api_key' => env('VC_API_KEY'),
     'api_auth_token' => 'API_AUTH_TOKEN',
 
-    'default_pages' => 10
+    'default_pages' => 10,
+    'default_password' => 'VALUCARE123'
 ];

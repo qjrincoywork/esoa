@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Controller;
 use Spatie\Permission\Models\Permission;
 use App\Http\Requests\Permission\{DeleteRequest, ListRequest, UpdateRequest};
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -49,14 +48,7 @@ class PermissionController extends Controller
                     'id' => $permission->id,
                     'name' => $permission->name,
                     'guard_name' => $permission->guard_name,
-                    // 'description' => $permission->description,
                     'created_at' => $permission->created_at?->diffForHumans(),
-                    // 'permissions' => $permission->permissions->map(function ($permission) {
-                    //     return [
-                    //         'id' => $permission->id,
-                    //         'name' => $permission->name,
-                    //     ];
-                    // }),
                 ];
             });
 
@@ -117,7 +109,7 @@ class PermissionController extends Controller
             $task = $this->permission->update($validated);
 
             // Commit transaction
-            // DB::commit();
+            DB::commit();
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
@@ -152,7 +144,7 @@ class PermissionController extends Controller
             $permission->delete();
 
             // Commit transaction
-            // DB::commit();
+            DB::commit();
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {

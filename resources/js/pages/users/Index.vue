@@ -2,10 +2,10 @@
 import { ref, watch, computed } from 'vue';
 import { Head, router, usePage } from '@inertiajs/vue3';
 import { createColumnHelper } from '@tanstack/vue-table';
-
-import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
+import AppLayout from '@/layouts/AppLayout.vue';
 import Datatable from '@/components/Datatable.vue';
+import { Button } from "@/components/ui/button";
 import { createActionColumn } from '@/composables/datatable/datatableColumns';
 import { useUsers } from '@/composables/users';
 
@@ -19,7 +19,7 @@ type UsersPagination = {
 const page = usePage();
 const user = (page.props as any).auth.user as unknown;
 const users = computed(() => (page.props as any).users as UsersPagination);
-const { editUser, deleteUser } = useUsers();
+const { createUser, editUser, deleteUser } = useUsers();
 const columnHelper = createColumnHelper();
 const pagination = ref({
 	current_page: users.value.current_page,
@@ -91,6 +91,7 @@ watch(
     <AppLayout :breadcrumbs="breadcrumbItems">
         <Head title="User list" />
         <div class="bg-[var(--color-surface)] shadow-sm border border-[var(--color-border)] p-6">
+            <Button :onClick="createUser">Create</Button>
             <Datatable
                 :data="users.data"
                 :columns="columns"

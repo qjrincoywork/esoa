@@ -34,7 +34,8 @@ type UserBasic = {
 const props = defineProps({
   user: {
     type: Object as unknown as () => UserBasic,
-    required: true,
+    default: () => [],
+    // required: true,
   },
   suffixes: {
     type: Array as unknown as () => Suffix[],
@@ -111,7 +112,7 @@ onMounted(() => {
             type="hidden"
             class="mt-1 block w-full"
             name="id"
-            :default-value="user.id"
+            :default-value="user?.id"
         />
     </div>
     <div class="grid gap-2 md:col-span-1">
@@ -120,7 +121,7 @@ onMounted(() => {
             id="first_name"
             class="mt-1 block w-full"
             name="first_name"
-            :default-value="detail.first_name"
+            :default-value="detail?.first_name"
             autocomplete="first_name"
             placeholder="First Name"
         />
@@ -132,7 +133,7 @@ onMounted(() => {
             id="middle_name"
             class="mt-1 block w-full"
             name="middle_name"
-            :default-value="detail.middle_name"
+            :default-value="detail?.middle_name"
             autocomplete="middle_name"
             placeholder="Middle Name"
         />
@@ -144,7 +145,7 @@ onMounted(() => {
             id="last_name"
             class="mt-1 block w-full"
             name="last_name"
-            :default-value="detail.last_name"
+            :default-value="detail?.last_name"
             autocomplete="last_name"
             placeholder="Last Name"
         />
@@ -156,7 +157,7 @@ onMounted(() => {
             id="suffix"
             class="mt-1 block w-full"
             name="suffix"
-            :default-value="detail.suffix"
+            :default-value="detail?.suffix"
             autocomplete="suffix"
             placeholder="Suffix"
         />
@@ -168,7 +169,7 @@ onMounted(() => {
             id="gender"
             class="mt-1 block w-full"
             name="gender_id"
-            :default-value="detail.gender_id ? String(detail.gender_id) : undefined"
+            :default-value="detail?.gender_id ? String(detail?.gender_id) : undefined"
         >
           <SelectTrigger class="w-full">
               <SelectValue placeholder="Select a gender" />
@@ -194,7 +195,7 @@ onMounted(() => {
             id="civil_status"
             class="mt-1 block w-full"
             name="civil_status_id"
-            :default-value="detail.civil_status_id ? String(detail.civil_status_id) : undefined"
+            :default-value="detail?.civil_status_id ? String(detail?.civil_status_id) : undefined"
         >
           <SelectTrigger class="w-full">
               <SelectValue placeholder="Select a civil_status" />
@@ -220,7 +221,7 @@ onMounted(() => {
             id="citizenship"
             class="mt-1 block w-full"
             name="citizenship_id"
-            :default-value="detail.citizenship_id ? String(detail.citizenship_id) : undefined"
+            :default-value="detail?.citizenship_id ? String(detail?.citizenship_id) : undefined"
         >
           <SelectTrigger class="w-full">
               <SelectValue placeholder="Select a citizenship" />
@@ -246,7 +247,7 @@ onMounted(() => {
             id="department"
             class="mt-1 block w-full"
             name="department_id"
-            :default-value="detail.department_id ? String(detail.department_id) : undefined"
+            :default-value="detail?.department_id ? String(detail?.department_id) : undefined"
         >
           <SelectTrigger class="w-full">
               <SelectValue placeholder="Select a department" />
@@ -272,7 +273,7 @@ onMounted(() => {
             id="position"
             class="mt-1 block w-full"
             name="position_id"
-            :default-value="detail.position_id ? String(detail.position_id) : undefined"
+            :default-value="detail?.position_id ? String(detail?.position_id) : undefined"
         >
           <SelectTrigger class="w-full">
               <SelectValue placeholder="Select a position" />
@@ -299,7 +300,7 @@ onMounted(() => {
             type="date"
             class="mt-1 block w-full"
             name="birthdate"
-            :default-value="detail.birthdate"
+            :default-value="detail?.birthdate"
             autocomplete="birthdate"
             placeholder="Birth Date"
         />
@@ -311,7 +312,7 @@ onMounted(() => {
             id="employee_no"
             class="mt-1 block w-full"
             name="employee_no"
-            :default-value="detail.employee_no"
+            :default-value="detail?.employee_no"
             autocomplete="employee_no"
             placeholder="Employee No"
         />
@@ -322,7 +323,7 @@ onMounted(() => {
             id="username"
             class="mt-1 block w-full"
             name="username"
-            :default-value="user.username"
+            :default-value="user?.username"
             autocomplete="username"
             placeholder="Username"
         />
@@ -334,7 +335,7 @@ onMounted(() => {
             id="email"
             class="mt-1 block w-full"
             name="email"
-            :default-value="user.email"
+            :default-value="user?.email"
             autocomplete="email"
             placeholder="Email"
         />

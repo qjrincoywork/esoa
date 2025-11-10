@@ -6,7 +6,7 @@ use App\Rules\IsDataExists;
 use Illuminate\Contracts\Validation\Rule;
 use Illuminate\Foundation\Http\FormRequest;
 
-class UpdateRequest extends FormRequest
+class CreateRequest extends FormRequest
 {
     /**
      * Get the validation rules that apply to the request.
@@ -16,10 +16,6 @@ class UpdateRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'id' => [
-                'required',
-                'integer'
-            ],
             'gender_id' => [
                 'required',
                 'integer',
@@ -75,16 +71,16 @@ class UpdateRequest extends FormRequest
                 'string',
                 'max:191'
             ],
-            // 'username' => [
-            //     'nullable',
-            //     'string',
-            //     'max:100'
-            // ],
-            // 'email' => [
-            //     'nullable',
-            //     'string',
-            //     'max:100'
-            // ],
+            'username' => [
+                'required',
+                'string',
+                'max:191'
+            ],
+            'email' => [
+                'required',
+                'string',
+                'max:191'
+            ],
         ];
     }
 

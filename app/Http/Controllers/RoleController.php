@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
 use App\Http\Requests\Role\{DeleteRequest, ListRequest, UpdateRequest};
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -50,7 +49,6 @@ class RoleController extends Controller
                     'id' => $role->id,
                     'name' => $role->name,
                     'guard_name' => $role->guard_name,
-                    // 'description' => $role->description,
                     'created_at' => $role->created_at?->diffForHumans(),
                     'permissions' => $role->permissions->map(function ($permission) {
                         return [
@@ -119,7 +117,7 @@ class RoleController extends Controller
             $task = $this->role->update($validated);
 
             // Commit transaction
-            // DB::commit();
+            DB::commit();
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
@@ -154,7 +152,7 @@ class RoleController extends Controller
             $role->delete();
 
             // Commit transaction
-            // DB::commit();
+            DB::commit();
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Hash;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Spatie\Permission\Traits\HasRoles;
 
@@ -92,13 +93,15 @@ class User extends Authenticatable
     }
 
     public function saveUser(array $data) {
-        auth()->user()->userDetail()->updateOrCreate(['user_id' => auth()->id()], $data);
-        // if (isset($data['id'])) {
-        //     dd($data);
-        //     auth()->user()->userDetail()->find($data['id'])->update($data);
-        // } else {
-        //     $data += ['user_id' => auth()->id()];
-        //     auth()->user()->userDetail()->create($data);
-        // }
+        if (isset($data['id'])) {
+            auth()->user()->userDetail()->updateOrCreate(['user_id' => auth()->id()], $data);
+            auth()->user()->userDetail()->find($data['id'])->update($data);
+        } else {
+            $data += ['password' => Hash::make(config('vc.default_password'))];
+            $user = self::create($data);
+
+            $data += ['user_id' => $user->id];
+            $user->userDetail()->create($data);
+        }
     }
 }

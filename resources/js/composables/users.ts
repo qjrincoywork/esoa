@@ -87,16 +87,74 @@ export function useUsers() {
         }
     };
 
-    const createUser = () => {
-        openModal({
-            modalTitle: 'Create New User',
-            buttonText: 'Create',
-            component: SavingForm,
-            submitUrl: '/users',
-            submitMethod: 'post',
-            submitData: {},
-            size: 'lg',
-        });
+    const createUser = async () => {
+        try {
+            // Make AJAX request without navigation using reusable composable
+            const response = await get<{
+                suffixes: Array<{ id: number | string; name: string }>;
+                genders: Array<{ id: number | string; name: string }>;
+                civil_statuses: Array<{ id: number | string; name: string }>;
+                citizenships: Array<{ id: number | string; name: string }>;
+                departments: Array<{ id: number | string; name: string }>;
+                positions: Array<{ id: number | string; name: string }>;
+            }>(
+                `/users/create`
+            );
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch user data');
+            }
+
+            const payload = response.data;
+
+            if (!payload) return;
+
+            openModal({
+                modalTitle: `Create User`,
+                buttonText: 'Save',
+                component: SavingForm,
+                componentProps: {
+                    suffixes: payload.suffixes,
+                    genders: payload.genders,
+                    civil_statuses: payload.civil_statuses,
+                    citizenships: payload.citizenships,
+                    departments: payload.departments,
+                    positions: payload.positions,
+                    onReady: (api: { getFormData: () => FormData | null }) => {
+                        formApi = api
+                    }
+                },
+                size: 'md',
+                onSubmit: async () => {
+                    if (!formApi) return;
+
+                    const formData = formApi.getFormData();
+                    if (!formData) return;
+
+                    const response = await post(`/users/store`, formData);
+
+                    if (!response.ok) {
+                        // console.log('onSubmit Failed:', response, response.status); 
+                        //To be Updated the showing of validation errors in the form
+                        dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+                    } else {
+                        dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+                        closeModal();
+                    }
+                }
+            });
+        } catch (error) {
+            console.error('Error fetching user data:', error);
+        }
+        // openModal({
+        //     modalTitle: 'Create New User',
+        //     buttonText: 'Create',
+        //     component: SavingForm,
+        //     submitUrl: '/users',
+        //     // submitMethod: 'post',
+        //     submitData: {},
+        //     size: 'lg',
+        // });
     };
 
     const deleteUser = async (user: User) => {
