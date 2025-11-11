@@ -2,9 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\CustomResponse;
 use App\Http\Controllers\Controller;
 use Spatie\Permission\Models\Permission;
-use App\Http\Requests\Permission\{DeleteRequest, ListRequest, UpdateRequest};
+use App\Http\Requests\Permission\{CreateRequest, DeleteRequest, ListRequest, UpdateRequest};
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -68,9 +69,25 @@ class PermissionController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(CreateRequest $request)
     {
-        //
+        $validated = $request->validated();
+
+        DB::beginTransaction();
+
+        try {
+            $this->permission->create($validated);
+
+            // Commit transaction
+            DB::commit();
+
+            return CustomResponse::created('Role Created successfully', Response::HTTP_CREATED);
+        } catch (\Exception $e) {
+            // Catch and handle any unexpected errors
+            DB::rollBack();
+
+            return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
     }
 
     /**
@@ -106,16 +123,15 @@ class PermissionController extends Controller
         DB::beginTransaction();
 
         try {
-            $task = $this->permission->update($validated);
+            $permission = $this->permission->find($validated['id']);
+            $permission->update($validated);
 
             // Commit transaction
             DB::commit();
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
-                return response()->json([
-                    'message' => 'Permission Updated successfully'
-                ], Response::HTTP_OK);
+                return CustomResponse::created('Permission Updated successfully', Response::HTTP_OK);
             }
         } catch (\Exception $e) {
             // Catch and handle any unexpected errors
@@ -123,9 +139,7 @@ class PermissionController extends Controller
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
-                return response()->json([
-                    'message' => $e->getMessage()
-                ], Response::HTTP_INTERNAL_SERVER_ERROR);
+                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
             }
         }
     }

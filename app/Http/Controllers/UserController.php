@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\CustomResponse;
 use App\Http\Controllers\Controller;
-use App\Models\{ Citizenship, CivilStatus, Department, Gender, Position, Suffix, User };
 use App\Http\Requests\User\{CreateRequest, DeleteRequest, ListRequest, UpdateRequest};
-use Illuminate\Http\JsonResponse;
+use App\Models\{ Citizenship, CivilStatus, Department, Gender, Position, Suffix, User };
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -82,24 +82,17 @@ class UserController extends Controller
             $this->user->saveUser($validated);
 
             // Commit transaction
-            // DB::commit();
+            DB::commit();
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
-                return response()->json([
-                    'message' => 'User Created successfully'
-                ], Response::HTTP_OK);
+                return CustomResponse::created('User Created successfully', Response::HTTP_CREATED);
             }
         } catch (\Exception $e) {
             // Catch and handle any unexpected errors
             DB::rollBack();
 
-            // Return JSON for AJAX requests (no URL change)
-            if ($request->wantsJson() || $request->ajax()) {
-                return response()->json([
-                    'message' => $e->getMessage()
-                ], Response::HTTP_INTERNAL_SERVER_ERROR);
-            }
+            return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -155,9 +148,7 @@ class UserController extends Controller
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
-                return response()->json([
-                    'message' => 'User Updated successfully'
-                ], Response::HTTP_OK);
+                return CustomResponse::ok('User Updated successfully', Response::HTTP_OK);
             }
         } catch (\Exception $e) {
             // Catch and handle any unexpected errors
@@ -165,9 +156,8 @@ class UserController extends Controller
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
-                return response()->json([
-                    'message' => $e->getMessage()
-                ], Response::HTTP_INTERNAL_SERVER_ERROR);
+                // Catch and handle any unexpected errors
+                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
             }
         }
     }
@@ -189,9 +179,7 @@ class UserController extends Controller
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
-                return response()->json([
-                    'message' => 'User Deleted successfully'
-                ], Response::HTTP_OK);
+                return CustomResponse::ok('User Deleted successfully', Response::HTTP_OK);
             }
         } catch (\Exception $e) {
             // Catch and handle any unexpected errors
@@ -199,9 +187,7 @@ class UserController extends Controller
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
-                return response()->json([
-                    'message' => $e->getMessage()
-                ], Response::HTTP_INTERNAL_SERVER_ERROR);
+                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
             }
         }
     }

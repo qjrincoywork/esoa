@@ -6,6 +6,7 @@ import { createColumnHelper } from '@tanstack/vue-table';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import Datatable from '@/components/Datatable.vue';
+import { Button } from "@/components/ui/button";
 import { createActionColumn } from '@/composables/datatable/datatableColumns';
 import { usePermissions } from '@/composables/permissions';
 
@@ -18,7 +19,7 @@ type PermissionsPagination = {
 
 const page = usePage();
 const permissions = computed(() => (page.props as any).permissions as PermissionsPagination);
-const { editPermission, deletePermission } = usePermissions();
+const { createPermission, editPermission, deletePermission } = usePermissions();
 const columnHelper = createColumnHelper();
 const pagination = ref({
 	current_page: permissions.value.current_page,
@@ -90,6 +91,7 @@ watch(
     <AppLayout :breadcrumbs="breadcrumbItems">
         <Head title="Permission list" />
         <div class="bg-[var(--color-surface)] shadow-sm border border-[var(--color-border)] p-6">
+            <Button :onClick="createPermission">Create</Button>
             <Datatable
                 :data="permissions.data"
                 :columns="columns"

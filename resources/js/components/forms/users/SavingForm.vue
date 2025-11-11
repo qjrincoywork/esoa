@@ -35,7 +35,6 @@ const props = defineProps({
   user: {
     type: Object as unknown as () => UserBasic,
     default: () => [],
-    // required: true,
   },
   suffixes: {
     type: Array as unknown as () => Suffix[],

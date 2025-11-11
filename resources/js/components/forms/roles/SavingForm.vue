@@ -12,7 +12,6 @@ type Role = {
 const props = defineProps({
   role: {
     type: Object as unknown as () => Role,
-    required: true,
   },
   onReady: {
     type: Function as unknown as () => ((api: { getFormData: () => FormData | null; formRef: HTMLFormElement | null }) => void) | undefined,
@@ -52,7 +51,7 @@ onMounted(() => {
             type="hidden"
             class="mt-1 block w-full"
             name="id"
-            :default-value="role.id"
+            :default-value="role?.id"
         />
     </div>
     <div class="grid gap-2 md:col-span-1">
@@ -61,7 +60,7 @@ onMounted(() => {
             id="name"
             class="mt-1 block w-full"
             name="name"
-            :default-value="role.name"
+            :default-value="role?.name"
             autocomplete="name"
             placeholder="Name"
         />
@@ -72,7 +71,7 @@ onMounted(() => {
             id="guard_name"
             class="mt-1 block w-full"
             name="guard_name"
-            :default-value="role.guard_name"
+            :default-value="role?.guard_name"
             autocomplete="guard_name"
             placeholder="Guard Name"
         />

@@ -44,6 +44,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/', 'index')->name('roles.index');
             Route::get('/{id}/edit', 'edit')->name('roles.edit');
             Route::post('/update', 'update')->name('roles.update');
+            Route::post('/store', 'store')->name('roles.store');
             Route::post('/destroy', 'destroy')->name('roles.destroy');
         });
 
@@ -52,6 +53,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/', 'index')->name('permissions.index');
             Route::get('/{id}/edit', 'edit')->name('permissions.edit');
             Route::post('/update', 'update')->name('permissions.update');
+            Route::post('/store', 'store')->name('permissions.store');
             Route::post('/destroy', 'destroy')->name('permissions.destroy');
         });
     });

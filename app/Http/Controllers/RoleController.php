@@ -2,10 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\CustomResponse;
 use App\Http\Controllers\Controller;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
-use App\Http\Requests\Role\{DeleteRequest, ListRequest, UpdateRequest};
+use App\Http\Requests\Role\{DeleteRequest, ListRequest, CreateRequest, UpdateRequest};
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -76,9 +77,28 @@ class RoleController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(CreateRequest $request)
     {
-        //
+        $validated = $request->validated();
+
+        DB::beginTransaction();
+
+        try {
+            $role = $this->role->create($validated);
+
+            if ($request->has('permissions')) {
+                $role->syncPermissions($request->permissions);
+            }
+            // Commit transaction
+            DB::commit();
+
+            return CustomResponse::created('Role Created successfully', Response::HTTP_CREATED);
+        } catch (\Exception $e) {
+            // Catch and handle any unexpected errors
+            DB::rollBack();
+
+            return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
     }
 
     /**
@@ -114,27 +134,21 @@ class RoleController extends Controller
         DB::beginTransaction();
 
         try {
-            $task = $this->role->update($validated);
+            $role = $this->role->find($validated['id']);
+            $role->update($validated);
 
             // Commit transaction
             DB::commit();
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
-                return response()->json([
-                    'message' => 'Role Updated successfully'
-                ], Response::HTTP_OK);
+                return CustomResponse::created('Role Updated successfully', Response::HTTP_OK);
             }
         } catch (\Exception $e) {
             // Catch and handle any unexpected errors
             DB::rollBack();
 
-            // Return JSON for AJAX requests (no URL change)
-            if ($request->wantsJson() || $request->ajax()) {
-                return response()->json([
-                    'message' => $e->getMessage()
-                ], Response::HTTP_INTERNAL_SERVER_ERROR);
-            }
+            return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -156,9 +170,7 @@ class RoleController extends Controller
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
-                return response()->json([
-                    'message' => 'Role Deleted successfully'
-                ], Response::HTTP_OK);
+                return CustomResponse::created('Role Deleted successfully', Response::HTTP_OK);
             }
         } catch (\Exception $e) {
             // Catch and handle any unexpected errors
@@ -166,9 +178,7 @@ class RoleController extends Controller
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
-                return response()->json([
-                    'message' => $e->getMessage()
-                ], Response::HTTP_INTERNAL_SERVER_ERROR);
+                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
             }
         }
     }

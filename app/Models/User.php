@@ -94,8 +94,9 @@ class User extends Authenticatable
 
     public function saveUser(array $data) {
         if (isset($data['id'])) {
-            auth()->user()->userDetail()->updateOrCreate(['user_id' => auth()->id()], $data);
-            auth()->user()->userDetail()->find($data['id'])->update($data);
+            $user = self::find($data['id']);
+            $user->update($data);
+            $user->userDetail()->updateOrCreate(['user_id' => $user->id], $data);
         } else {
             $data += ['password' => Hash::make(config('vc.default_password'))];
             $user = self::create($data);

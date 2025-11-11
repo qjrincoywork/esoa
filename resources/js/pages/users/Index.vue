@@ -14,6 +14,7 @@ type UsersPagination = {
     per_page: number
     total: number
     data: unknown[]
+    
 }
 
 const page = usePage();

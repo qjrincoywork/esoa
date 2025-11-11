@@ -6,123 +6,146 @@ let formApi: { getFormData: () => FormData | null } | null = null;
 import { dispatchNotification } from '@/components/notification';
 
 export interface Permission {
-    id?: number | string;
-    name?: string;
-    guard_name?: string;
-    [key: string]: any;
+  id?: number | string;
+  name?: string;
+  guard_name?: string;
+  [key: string]: any;
 }
 
 export interface Suffixes {
-    id?: number | string;
-    name?: string;
-    [key: string]: any;
+  id?: number | string;
+  name?: string;
+  [key: string]: any;
 }
 
 export function usePermissions() {
-    const { openModal, closeModal } = useModal();
-    const { get, post } = useAjax();
+  const { openModal, closeModal } = useModal();
+  const { get, post } = useAjax();
 
-    const editPermission = async (permission: Permission) => {
-        try {
-            // Make AJAX request without navigation using reusable composable
-            const response = await get<{
-                permission: Permission;
-            }>(
-                `/permissions/${permission.id}/edit`
-            );
+  const editPermission = async (permission: Permission) => {
+    try {
+      // Make AJAX request without navigation using reusable composable
+      const response = await get<{
+        permission: Permission;
+      }>(
+        `/permissions/${permission.id}/edit`
+      );
 
-            if (!response.ok) {
-                throw new Error('Failed to fetch Permission data');
-            }
+      if (!response.ok) {
+        throw new Error('Failed to fetch Permission data');
+      }
 
-            const payload = response.data;
+      const payload = response.data;
 
-            if (!payload) return;
+      if (!payload) return;
 
-            openModal({
-                modalTitle: `Edit ${payload.permission?.name || 'Permission'}`,
-                buttonText: 'Update',
-                component: SavingForm,
-                componentProps: {
-                    permission: payload.permission,
-                    onReady: (api: { getFormData: () => FormData | null }) => {
-                        formApi = api
-                    }
-                },
-                size: 'lg',
-                onSubmit: async () => {
-                    if (!formApi) return;
+      openModal({
+        modalTitle: `Edit ${payload.permission?.name || 'Permission'}`,
+        buttonText: 'Update',
+        component: SavingForm,
+        componentProps: {
+          permission: payload.permission,
+          onReady: (api: { getFormData: () => FormData | null }) => {
+            formApi = api
+          }
+        },
+        size: 'lg',
+        onSubmit: async () => {
+          if (!formApi) return;
 
-                    const formData = formApi.getFormData();
-                    if (!formData) return;
+          const formData = formApi.getFormData();
+          if (!formData) return;
 
-                    const response = await post(`/permissions/update`, formData);
+          const response = await post(`/permissions/update`, formData);
 
-                    if (!response.ok) {
-                        //To be Updated the showing of validation errors in the form
-                        dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
-                    } else {
-                        dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
-                        closeModal();
-                    }
-                }
-            });
-        } catch (error) {
-            // dispatchNotification({ title: 'Error', content: error, type: 'error' });
-            console.error('Error fetching permission data:', error);
+          if (!response.ok) {
+            //To be Updated the showing of validation errors in the form
+            dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+          } else {
+            dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+            closeModal();
+          }
         }
-    };
+      });
+    } catch (error) {
+      dispatchNotification({ title: 'Error', content: 'Internal Server Error', type: 'error' });
+      console.error('Internal Server Error:', error);
+    }
+  };
 
-    const createPermission = () => {
-        openModal({
-            modalTitle: 'Create New Permission',
-            buttonText: 'Create',
-            component: SavingForm,
-            submitUrl: '/permissions',
-            submitMethod: 'post',
-            submitData: {},
-            size: 'lg',
-        });
-    };
+  const createPermission = () => {
+    try {
+      openModal({
+        modalTitle: `Create Permission`,
+        buttonText: 'Save',
+        component: SavingForm,
+        componentProps: {
+          onReady: (api: { getFormData: () => FormData | null }) => {
+            formApi = api
+          }
+        },
+        size: 'lg',
+        onSubmit: async () => {
+          if (!formApi) return;
 
-    const deletePermission = async (permission: Permission) => {
-        try {
-            openModal({
-                modalTitle: `Delete ${permission?.name || ' Permission'}`,
-                buttonText: 'Delete',
-                buttonClass: 'bg-red-600 hover:bg-red-700 focus:ring-red-500 dark:bg-red-500 dark:hover:bg-red-600',
-                component: DeleteForm,
-                componentProps: {
-                    permission: permission,
-                    onReady: (api: { getFormData: () => FormData | null }) => {
-                        formApi = api
-                    }
-                },
-                size: 'sm',
-                onSubmit: async () => {
-                    if (!formApi) return;
-                    const formData = formApi.getFormData();
-                    if (!formData) return;
+          const formData = formApi.getFormData();
+          if (!formData) return;
 
-                    const response = await post(`/permissions/destroy`, formData);
+          const response = await post(`/permissions/store`, formData);
 
-                    if (!response.ok) {
-                        dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
-                    } else {
-                        dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
-                        closeModal();
-                    }
-                }
-            });
-        } catch (error) {
-            console.error('Error fetching permission data:', error);
+          if (!response.ok) {
+            //To be Updated the showing of validation errors in the form
+            dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+          } else {
+            dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+            closeModal();
+          }
         }
-    };
+      });
+    } catch (error) {
+      dispatchNotification({ title: 'Error', content: 'Internal Server Error', type: 'error' });
+      console.error('Internal Server Error:', error);
+    }
+  };
 
-    return {
-        editPermission,
-        createPermission,
-        deletePermission,
-    };
+  const deletePermission = async (permission: Permission) => {
+    try {
+      openModal({
+        modalTitle: `Delete ${permission?.name || ' Permission'}`,
+        buttonText: 'Delete',
+        buttonClass: 'bg-red-600 hover:bg-red-700 focus:ring-red-500 dark:bg-red-500 dark:hover:bg-red-600',
+        component: DeleteForm,
+        componentProps: {
+          permission: permission,
+          onReady: (api: { getFormData: () => FormData | null }) => {
+            formApi = api
+          }
+        },
+        size: 'sm',
+        onSubmit: async () => {
+          if (!formApi) return;
+          const formData = formApi.getFormData();
+          if (!formData) return;
+
+          const response = await post(`/permissions/destroy`, formData);
+
+          if (!response.ok) {
+            dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+          } else {
+            dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+            closeModal();
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Internal Server Error:', error);
+    }
+  };
+
+  return {
+    editPermission,
+    createPermission,
+    deletePermission,
+  };
 }
 

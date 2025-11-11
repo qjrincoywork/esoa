@@ -1,11 +1,11 @@
 <script setup lang="ts">
+import AppLayout from '@/layouts/AppLayout.vue';
 import { ref, watch, computed } from 'vue';
 import { Head, router, usePage } from '@inertiajs/vue3';
 import { createColumnHelper } from '@tanstack/vue-table';
-
-import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import Datatable from '@/components/Datatable.vue';
+import { Button } from "@/components/ui/button";
 import { createActionColumn } from '@/composables/datatable/datatableColumns';
 import { useRoles } from '@/composables/roles';
 
@@ -18,7 +18,7 @@ type RolesPagination = {
 
 const page = usePage();
 const roles = computed(() => (page.props as any).roles as RolesPagination);
-const { editRole, deleteRole } = useRoles();
+const { createRole, editRole, deleteRole } = useRoles();
 const columnHelper = createColumnHelper();
 const pagination = ref({
 	current_page: roles.value.current_page,
@@ -90,6 +90,7 @@ watch(
     <AppLayout :breadcrumbs="breadcrumbItems">
         <Head title="Role list" />
         <div class="bg-[var(--color-surface)] shadow-sm border border-[var(--color-border)] p-6">
+            <Button :onClick="createRole">Create</Button>
             <Datatable
                 :data="roles.data"
                 :columns="columns"
