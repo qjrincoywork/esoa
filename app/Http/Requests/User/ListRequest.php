@@ -14,15 +14,10 @@ class ListRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'username' => [
+            'search_string' => [
                 'nullable',
                 'string',
-                'max:100'
-            ],
-            'email' => [
-                'nullable',
-                'string',
-                'max:100'
+                'max:191'
             ],
             'per_page' => [
                 'nullable',

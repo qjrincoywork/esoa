@@ -70,15 +70,13 @@ class User extends Authenticatable
 
     public function getUsers(array $params)
     {
-        // $users = auth()->user()->users()
         // Pagination
-        // $page = $params['page'] ?? config('vc.default_start_page');
         $perPage = $params['per_page'] ?? config('vc.default_pages');
-        $result = self::when(isset($params['username']), function ($query) use ($params) {
-                $query->where('username', 'LIKE', '%' . $params['username'] . '%');
+        $result = self::when(isset($params['search_string']), function ($query) use ($params) {
+                $query->where('email', 'LIKE', '%' . $params['search_string'] . '%');
             })
-            ->when(isset($params['email']), function ($query) use ($params) {
-                $query->where('email', 'LIKE', '%' . $params['email'] . '%');
+            ->when(isset($params['search_string']), function ($query) use ($params) {
+                $query->where('username', 'LIKE', '%' . $params['search_string'] . '%');
             })
             ->when(isset($params['is_active']), function ($query) use ($params) {
                 $query->where('is_active', $params['is_active']);
@@ -87,8 +85,6 @@ class User extends Authenticatable
             ->orderBy('id', 'desc')
             ->paginate($perPage);
 
-        // dd($result, 'hits users');
-        // dd($result->toSql(), 'hits users');
         return $result;
     }
 
