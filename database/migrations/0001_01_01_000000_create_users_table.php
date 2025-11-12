@@ -15,7 +15,6 @@ return new class extends Migration
             $table->bigIncrements('id');
             $table->string('username');
             $table->string('email')->unique();
-            // $table->string('email', 191)->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->tinyInteger('is_approved')->default(0);
             $table->tinyInteger('is_active')->default(1);

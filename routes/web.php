@@ -4,6 +4,7 @@ use App\Http\Controllers\{
     AdminController,
     PermissionController,
     RoleController,
+    SoaController,
     UserController,
 };
 use Illuminate\Support\Facades\Route;
@@ -27,39 +28,44 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', function () {
         return Inertia::render('Dashboard');
     })->name('dashboard');
-    // Only admins can access these
-    Route::middleware(['role:admin'])->group(function () {
+    // Superadmin-only routes - only admins can access these
+    Route::middleware(['role:superadmin'])->group(function () {
         Route::resource('admin', AdminController::class);
-        Route::prefix('users')->controller(UserController::class)->group(function () {
-            Route::get('/', 'index')->name('users.index');
-            Route::get('/{id}/edit', 'edit')->name('users.edit');
-            Route::post('/update', 'update')->name('users.update');
-            Route::get('/create', 'create')->name('users.create');
-            Route::post('/store', 'store')->name('users.store');
-            Route::post('/destroy', 'destroy')->name('users.destroy');
+        Route::prefix('users')->name('users.')->controller(UserController::class)->group(function () {
+            Route::get('/', 'index')->name('index');
+            Route::get('/{id}/edit', 'edit')->name('edit');
+            Route::post('/update', 'update')->name('update');
+            Route::get('/create', 'create')->name('create');
+            Route::post('/store', 'store')->name('store');
+            Route::post('/destroy', 'destroy')->name('destroy');
         });
 
         //Roles
-        Route::prefix('roles')->controller(RoleController::class)->group(function () {
-            Route::get('/', 'index')->name('roles.index');
-            Route::get('/{id}/edit', 'edit')->name('roles.edit');
-            Route::post('/update', 'update')->name('roles.update');
-            Route::post('/store', 'store')->name('roles.store');
-            Route::post('/destroy', 'destroy')->name('roles.destroy');
+        Route::prefix('roles')->name('roles.')->controller(RoleController::class)->group(function () {
+            Route::get('/', 'index')->name('index');
+            Route::get('/{id}/edit', 'edit')->name('edit');
+            Route::post('/update', 'update')->name('update');
+            Route::post('/store', 'store')->name('store');
+            Route::post('/destroy', 'destroy')->name('destroy');
         });
 
         //Permissions
-        Route::prefix('permissions')->controller(PermissionController::class)->group(function () {
-            Route::get('/', 'index')->name('permissions.index');
-            Route::get('/{id}/edit', 'edit')->name('permissions.edit');
-            Route::post('/update', 'update')->name('permissions.update');
-            Route::post('/store', 'store')->name('permissions.store');
-            Route::post('/destroy', 'destroy')->name('permissions.destroy');
+        Route::prefix('permissions')->name('permissions.')->controller(PermissionController::class)->group(function () {
+            Route::get('/', 'index')->name('index');
+            Route::get('/{id}/edit', 'edit')->name('edit');
+            Route::post('/update', 'update')->name('update');
+            Route::post('/store', 'store')->name('store');
+            Route::post('/destroy', 'destroy')->name('destroy');
         });
     });
 
-    // Only users can access these
-    Route::middleware(['role:users'])->group(function () {
+    // User routes - admins can access these too, but regular users can only access their own routes
+    // Using allow_admin_or_role middleware: admin can access everything, users can only access their specific routes
+    Route::middleware(['allow_admin_or_role:user'])->group(function () {
+        //user_dashboard
+        Route::prefix('soa')->name('soa.')->controller(SoaController::class)->group(function () {
+            Route::get('/', 'index')->name('index');
+        });
     });
 });
 
