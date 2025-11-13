@@ -15,24 +15,24 @@ import {
 import { dashboard } from '@/routes';
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
+import { ref, computed } from 'vue';
 import { BookOpen, Folder, KeyRound, LayoutGrid, Lock, SquareTerminal, Users } from 'lucide-vue-next';
 import AppLogo from './AppLogo.vue';
+import Esoa from './navigations/department/ict/Esoa.vue';
 
 const mainNavItems = {
-    user: [
+    superadmin: [
       {
-          title: 'Dashboard',
-          href: dashboard(),
-          icon: LayoutGrid,
-      },
-    ],
-    admin: [
-      {
-        title: "Admin",
+        title: "ICT Admin",
         url: "#",
         icon: SquareTerminal,
         isActive: true,
         items: [
+          {
+              title: 'Admin Dashboard',
+              href: dashboard(),
+              icon: LayoutGrid,
+          },
           {
               title: 'Users',
               href: '/users',
@@ -66,7 +66,16 @@ const footerNavItems: NavItem[] = [
     // },
 ];
 const page = usePage();
-const isAdmin = (page.props as any).auth.is_admin as unknown;
+const department = ref((page.props as any).auth.user_detail.department_id)
+const isSuperadmin = (page.props as any).auth.is_superadmin as unknown;
+const departmentComponent = computed(() => {
+  switch (department.value) {
+    case 8:
+      return Esoa
+    default:
+      return null
+  }
+})
 </script>
 
 <template>
@@ -83,16 +92,16 @@ const isAdmin = (page.props as any).auth.is_admin as unknown;
             </SidebarMenu>
         </SidebarHeader>
 
-        <SidebarContent :class="isAdmin ? 'flex-none' : ''">
-            <NavMain :items="mainNavItems.user" />
+        <SidebarContent :class="isSuperadmin ? 'flex-none' : ''">
+          <component :is="departmentComponent" />
         </SidebarContent>
 
-        <SidebarContent v-if="isAdmin">
-            <NavAdminMain :items="mainNavItems.admin" />
+        <SidebarContent v-if="isSuperadmin">
+            <NavAdminMain :items="mainNavItems.superadmin" />
         </SidebarContent>
 
         <SidebarFooter>
-            <NavFooter :items="footerNavItems" />
+            <!-- <NavFooter :items="footerNavItems" /> -->
             <NavUser />
         </SidebarFooter>
     </Sidebar>
