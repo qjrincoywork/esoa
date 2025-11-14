@@ -5,9 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\{Model, SoftDeletes};
 
-class MainAccount extends Model
+class FinancialAssistance extends Model
 {
-    /** @use HasFactory<\Database\Factories\MainAccountFactory> */
+    /** @use HasFactory<\Database\Factories\FinancialAssistanceFactory> */
     use HasFactory, SoftDeletes;
 
     /**
@@ -16,12 +16,11 @@ class MainAccount extends Model
      * @var list<string>
      */
     protected $fillable = [
-        'code',
-        'name',
-        'sob',
+        'fin_code',
+        'amount',
+        'natural_death_amount',
+        'accident_death_amount',
+        'dismemberment_amount',
         'remarks',
-        'address',
-        'contact_person',
-        'contact_number',
     ];
 }

@@ -15,14 +15,13 @@ return new class extends Migration
             $table->bigIncrements('id');
             $table->string('code');
             $table->string('name');
-            $table->string('sob');
-            $table->longText('remarks');
-            $table->string('address');
-            $table->string('contact_person');
-            $table->string('contact_no');
-            $table->string('franchise_code');
-            $table->integer('integration');
-            $table->integer('prexexpiry');
+            $table->string('sob')
+                ->nullable()
+                ->comment('Summary Of Benefits');
+            $table->longText('remarks')->nullable();
+            $table->string('address')->nullable();
+            $table->string('contact_person')->nullable();
+            $table->string('contact_number')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });

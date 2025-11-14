@@ -75,16 +75,16 @@ class UpdateRequest extends FormRequest
                 'string',
                 'max:191'
             ],
-            // 'username' => [
-            //     'nullable',
-            //     'string',
-            //     'max:100'
-            // ],
-            // 'email' => [
-            //     'nullable',
-            //     'string',
-            //     'max:100'
-            // ],
+            'username' => [
+                'required',
+                'string',
+                'max:100'
+            ],
+            'email' => [
+                'required',
+                'string',
+                'max:100'
+            ],
         ];
     }
 
