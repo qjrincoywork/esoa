@@ -30,6 +30,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     })->name('dashboard');
     // Superadmin-only routes - only admins can access these
     Route::middleware(['role:superadmin'])->group(function () {
+        Route::prefix('admin')->name('admin.')->controller(AdminController::class)->group(function () {
+            Route::get('/start_import', 'startImport')->name('startImport');
+            Route::get('/import_main_accounts', 'importMainAccounts')->name('importMainAccounts');
+            Route::get('/import_accounts', 'importAccounts')->name('importAccounts');
+        });
         Route::resource('admin', AdminController::class);
         Route::prefix('users')->name('users.')->controller(UserController::class)->group(function () {
             Route::get('/', 'index')->name('index');

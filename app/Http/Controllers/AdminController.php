@@ -7,9 +7,10 @@ use App\Models\User;
 use App\Http\Requests\{UserCreateRequest, UserDeleteRequest, UserListRequest, UserUpdateRequest};
 // use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{ DB, Schema };
+use Illuminate\Support\Facades\{ Bus, DB, Log, Schema };
 use Inertia\Inertia;
 use Spatie\Permission\Models\{ Permission, Role };
+use App\Jobs\{ ImportAccountsJob, ImportMainAccountsJob };
 
 class AdminController extends Controller
 {
@@ -29,6 +30,73 @@ class AdminController extends Controller
      */
     public function __construct(User $user) {
         $this->user = $user;
+    }
+
+    public function startImport()
+    {
+        try {
+            $this->importMainAccounts();
+            $this->importAccounts();
+        } catch (\Exception $e) {
+            Log::error('startImport Jobs failed: ' . $e->getMessage());
+            Log::error($e->getTraceAsString());
+            throw $e;
+        }
+    }
+
+    public function importAccounts()
+    {
+        DB::beginTransaction();
+
+        try {
+            DB::connection('hms')
+                ->table('Accounts as a')
+                ->leftJoin('agent_table as ag', 'a.ac_agcode', '=', 'ag.agent_code')
+                ->orderBy('a.ac_id')
+                ->select([
+                    'a.*',
+                    'ag.agent_id',
+                    'ag.agent_code',
+                    'ag.agent_name',
+                ])
+                ->chunk(2000, function ($chunk) {
+                    Log::info('Start Account: ' . $chunk->count());
+                    // dispatch job for each 2000 rows
+                    ImportAccountsJob::dispatch($chunk);
+                });
+
+            DB::commit();
+            Log::info('End Account Job');
+        } catch (\Exception $e) {
+            Log::error('Job failed Accounts: ' . $e->getMessage());
+            Log::error($e->getTraceAsString());
+            DB::rollBack();
+            throw $e;
+        }
+    }
+
+    public function importMainAccounts()
+    {
+        DB::beginTransaction();
+
+        try {
+            DB::connection('hms')
+                ->table('MainAcct')
+                ->orderBy('ma_id')
+                ->chunk(2000, function ($chunk) {
+                    Log::info('Start Main Account: ' . $chunk->count());
+                    // dispatch job for each 2000 rows
+                    ImportMainAccountsJob::dispatch($chunk);
+                });
+
+            DB::commit();
+            Log::info('End Main Account Job');
+        } catch (\Exception $e) {
+            Log::error('Job failed: ' . $e->getMessage());
+            Log::error($e->getTraceAsString());
+            DB::rollBack();
+            throw $e;
+        }
     }
 
     /**

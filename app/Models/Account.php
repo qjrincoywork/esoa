@@ -18,6 +18,7 @@ class Account extends Model
     protected $fillable = [
         'updated_by', //reference by user_id - users
         'agent_id', //reference by agent_id - agents
+        'contact_id', //reference by contact_id - contacts
         'code',
         'name',
         'remarks',
@@ -28,8 +29,6 @@ class Account extends Model
         'expiry_date',
         'cancel_date',
         'type',
-        'contact_person',
-        'contact_number',
         'payment_type',
         'contribution_type',
         'pre_existing_coverage', //mpec - pre-existing coverage
