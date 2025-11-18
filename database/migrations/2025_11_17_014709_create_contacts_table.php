@@ -11,16 +11,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('main_accounts', function (Blueprint $table) {
+        Schema::create('contacts', function (Blueprint $table) {
             $table->bigIncrements('id');
-            $table->integer('contact_id')->nullable();
-            $table->string('code');
-            $table->string('name');
-            $table->string('sob')
-                ->nullable()
-                ->comment('Summary Of Benefits');
-            $table->longText('remarks')->nullable();
-            $table->longText('address')->nullable();
+            $table->integer('created_by')->nullable();
+            $table->string('name')->nullable();
+            $table->string('number')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
@@ -31,6 +26,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('main_accounts');
+        Schema::dropIfExists('contacts');
     }
 };

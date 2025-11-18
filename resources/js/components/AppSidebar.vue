@@ -66,7 +66,7 @@ const footerNavItems: NavItem[] = [
     // },
 ];
 const page = usePage();
-const department = ref((page.props as any).auth.user_detail.department_id)
+const department = ref((page.props as any).auth.user_detail?.department_id)
 const isSuperadmin = (page.props as any).auth.is_superadmin as unknown;
 const departmentComponent = computed(() => {
   switch (department.value) {

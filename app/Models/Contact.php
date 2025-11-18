@@ -5,9 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\{Model, SoftDeletes};
 
-class MainAccount extends Model
+class Contact extends Model
 {
-    /** @use HasFactory<\Database\Factories\MainAccountFactory> */
+    /** @use HasFactory<\Database\Factories\ContactFactory> */
     use HasFactory, SoftDeletes;
 
     /**
@@ -16,11 +16,8 @@ class MainAccount extends Model
      * @var list<string>
      */
     protected $fillable = [
-        'contact_id',
-        'code',
+        'created_by', // reference by user_id - users, auth user
         'name',
-        'sob',
-        'remarks',
-        'address',
+        'number',
     ];
 }

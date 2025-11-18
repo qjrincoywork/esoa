@@ -15,23 +15,24 @@ return new class extends Migration
             $table->bigIncrements('id');
             $table->string('code');
             $table->string('name');
-            $table->longText('remarks');
-            $table->longText('address');
-            $table->string('logo');
-            $table->string('contact_person')->nullable();
-            $table->string('contact_number')->nullable();
+            $table->longText('remarks')->nullable();
+            $table->longText('address')->nullable();
+            $table->string('logo')->nullable();
+            $table->integer('contact_id')->nullable();
             $table->date('effectivity_date');
             $table->date('renewal_date')->nullable();
-            $table->date('expiry_date');
+            $table->date('expiry_date')->nullable();
             $table->date('cancel_date')->nullable();
             $table->date('billing_cutoff_date')->nullable();
             $table->longText('cancel_reason')->nullable();
             $table->string('type')
                 ->comment('Special account, standard account - SA, STD');
             $table->string('payment_type')
+                ->nullable()
                 ->comment('Contributory (C) or Subsidized (S)');
             $table->string('contribution_type')
-                ->comment('SSS (S) or GSIS (G)');
+                ->comment('SSS (S) or GSIS (G)')
+                ->nullable();
             $table->string('pre_existing_coverage')
                 ->nullable()
                 ->comment('mpec');
@@ -69,10 +70,10 @@ return new class extends Migration
             $table->integer('main_account_id')
                 ->nullable()
                 ->comment('reference by main_account_id - main_accounts table');
-            $table->tinyInteger('integration')->default(1);
-            $table->tinyInteger('is_vchealth_activated')->default(1);
-            $table->tinyInteger('is_ar_integration')->default(1);
-            $table->tinyInteger('is_showvirtual')->default(1);
+            $table->tinyInteger('integration')->default(1)->nullable();
+            $table->tinyInteger('is_vchealth_activated')->default(1)->nullable();
+            $table->tinyInteger('is_ar_integration')->default(1)->nullable();
+            $table->tinyInteger('is_showvirtual')->default(1)->nullable();
             $table->timestamps();
             $table->softDeletes();
         });
