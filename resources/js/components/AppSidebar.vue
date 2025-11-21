@@ -3,6 +3,7 @@ import NavFooter from '@/components/NavFooter.vue';
 import NavAdminMain from '@/components/NavAdminMain.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
+import CustomNav from '@/components/CustomNav.vue';
 import {
     Sidebar,
     SidebarContent,
@@ -93,12 +94,13 @@ const departmentComponent = computed(() => {
         </SidebarHeader>
 
         <SidebarContent :class="isSuperadmin ? 'flex-none' : ''">
-          <component :is="departmentComponent" />
+          <CustomNav></CustomNav>
+          <!-- <component :is="departmentComponent" /> -->
         </SidebarContent>
 
-        <SidebarContent v-if="isSuperadmin">
+        <!-- <SidebarContent v-if="isSuperadmin">
             <NavAdminMain :items="mainNavItems.superadmin" />
-        </SidebarContent>
+        </SidebarContent> -->
 
         <SidebarFooter>
             <!-- <NavFooter :items="footerNavItems" /> -->

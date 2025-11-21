@@ -18,6 +18,33 @@ type UsersPagination = {
 
 const page = usePage();
 const user = (page.props as any).auth.user as unknown;
+const authPermissions = computed<string[]>(() => (page.props as any).auth?.permissions ?? []);
+const accessibleModules = computed(() => {
+    const navs = ((page.props as any).navigations ?? []) as Array<{ modules?: any[] }>;
+    return navs.flatMap((nav) => nav.modules ?? []);
+});
+const accessiblePermissions = computed<string[]>(() => {
+    return accessibleModules.value
+        .map((module: any) => module.permission_name)
+        .filter((name: string | null | undefined) => !!name);
+});
+
+const hasPermission = (permissionsToCheck: string | string[]) => {
+    const checks = Array.isArray(permissionsToCheck) ? permissionsToCheck : [permissionsToCheck];
+    return checks.some((permission) => {
+        if (!permission) {
+            return false;
+        }
+        return (
+            authPermissions.value.includes(permission) ||
+            accessiblePermissions.value.includes(permission)
+        );
+    });
+};
+
+const canCreateUser = computed(() => hasPermission(['users.create', 'users.store']));
+const canEditUser = computed(() => hasPermission(['users.edit', 'users.update']));
+const canDeleteUser = computed(() => hasPermission(['users.delete', 'users.destroy']));
 // Initialize with empty data - no data loaded on mount
 const users = computed(() => {
     const propsUsers = (page.props as any).users as UsersPagination | undefined;
@@ -41,7 +68,7 @@ const pagination = ref({
 const searchQuery = ref('')
 const hasInitialized = ref(false)
 const isFirstLoad = ref(true)  // Track if this is the very first data load
-const columns = [
+const baseColumns: any[] = [
   columnHelper.accessor('id', {
     header: 'ID',
   }),
@@ -51,12 +78,26 @@ const columns = [
   columnHelper.accessor('email', {
     header: 'Email',
   }),
-  createActionColumn({
-    basePath: '/users',
-    onEdit: editUser,
-    onDelete: deleteUser,
-  }),
 ]
+
+const columns = computed(() => {
+  const cols = [...baseColumns];
+  const showEdit = canEditUser.value;
+  const showDelete = canDeleteUser.value;
+
+  if (showEdit || showDelete) {
+    cols.push(createActionColumn({
+      basePath: '/users',
+      onEdit: showEdit ? editUser : undefined,
+      onDelete: showDelete ? deleteUser : undefined,
+      showView: false,
+      showEdit,
+      showDelete,
+    }));
+  }
+
+  return cols;
+});
 
 const breadcrumbItems: BreadcrumbItem[] = [
     {
@@ -174,7 +215,7 @@ watch(
         <Head title="User list" />
         <div class="bg-[var(--color-surface)] shadow-sm border border-[var(--color-border)] p-6">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-                <Button :onClick="createUser">Create</Button>
+                <Button v-if="canCreateUser" :onClick="createUser">Create</Button>
                 <div class="relative w-full sm:w-64">
                     <label class="sr-only" for="user-search">Search users</label>
                     <input
