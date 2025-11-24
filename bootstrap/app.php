@@ -14,18 +14,20 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
+        $middleware->encryptCookies( ['appearance', 'sidebar_state']);
 
         $middleware->alias([
             'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
             'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
             'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
-            'allow_admin_or_role' => \App\Http\Middleware\AllowAdminOrRole::class,
+            // 'allow_admin_or_role' => \App\Http\Middleware\AllowAdminOrRole::class,
+            'custom_permissions' => \App\Http\Middleware\CheckPermission::class,
         ]);
-        $middleware->web(append: [
+        $middleware->web( [
             HandleAppearance::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
+            // \App\Http\Middleware\CheckPermission::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
