@@ -14,17 +14,17 @@ return new class extends Migration
         Schema::create('user_details', function (Blueprint $table) {
             $table->bigIncrements('id');
             $table->bigInteger('user_id');
-            $table->bigInteger('suffix_id');
             $table->bigInteger('gender_id');
             $table->bigInteger('civil_status_id');
             $table->bigInteger('citizenship_id');
             $table->bigInteger('department_id');
             $table->bigInteger('position_id');
-            $table->string('first_name')->collation('SQL_Latin1_General_CP1_CS_AS');
-            $table->string('middle_name')->nullable()->collation('SQL_Latin1_General_CP1_CS_AS');
-            $table->string('last_name')->collation('SQL_Latin1_General_CP1_CS_AS');
+            $table->string('first_name');
+            $table->string('middle_name')->nullable();
+            $table->string('last_name');
+            $table->string('suffix')->nullable();
             $table->string('birthdate')->nullable();
-            $table->string('employee_no')->nullable()->collation('SQL_Latin1_General_CP1_CS_AS');
+            $table->string('employee_no')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });

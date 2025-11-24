@@ -2,20 +2,22 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Contracts\Auth\Access\Authorizable as AuthorizableContract;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Foundation\Auth\Access\Authorizable;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Hash;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Spatie\Permission\Traits\HasRoles;
 
-class User extends Authenticatable
+class User extends Authenticatable implements AuthorizableContract
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    // use HasRoles;
-    use HasFactory, HasRoles;
-    // use HasFactory, HasRoles, Notifiable, TwoFactorAuthenticatable;
+    use HasFactory, HasRoles, Authorizable;
+    // use HasFactory, HasRoles, Notifiable, TwoFactorAuthenticatable, Authorizable;
 
     /**
      * The attributes that are mass assignable.
@@ -57,29 +59,47 @@ class User extends Authenticatable
     }
 
     /**
-     * Method: user_detail
+     * Method: userDetail
      * This method defines the relationship between the User model and the UserDetail model.
      *
      * @return HasOne The relationship between User and UserDetail models.
      */
-    public function user_detail(): HasOne {
-        return $this->hasOne(UserDetail::class);
+    public function userDetail(): HasOne
+    {
+        return $this->hasOne(UserDetail::class, 'user_id');
     }
 
     public function getUsers(array $params)
     {
-        // $users = auth()->user()->users()
-        $users = self::when(isset($params['username']), function ($query) use ($params) {
-                $query->where('username', 'LIKE', '%' . $params['username'] . '%');
+        // Pagination
+        $perPage = $params['per_page'] ?? config('vc.default_pages');
+        $result = self::when(isset($params['search_string']), function ($query) use ($params) {
+                $query->where('email', 'LIKE', '%' . $params['search_string'] . '%');
+            })
+            ->when(isset($params['search_string']), function ($query) use ($params) {
+                $query->where('username', 'LIKE', '%' . $params['search_string'] . '%');
             })
             ->when(isset($params['is_active']), function ($query) use ($params) {
                 $query->where('is_active', $params['is_active']);
             })
-            ->orderBy('created_at', 'desc')
-            ->paginate($params['per_page'] ?? config('vc.default_pages'));
+            ->with('userDetail')
+            ->orderBy('id', 'desc')
+            ->paginate($perPage);
 
-        dd(auth()->user(), config('vc.default_pages'), 'hit getUsers');
+        return $result;
+    }
 
-        return $users;
+    public function saveUser(array $data) {
+        if (isset($data['id'])) {
+            $user = self::find($data['id']);
+            $user->update($data);
+            $user->userDetail()->updateOrCreate(['user_id' => $user->id], $data);
+        } else {
+            $data += ['password' => Hash::make(config('vc.default_password'))];
+            $user = self::create($data);
+
+            $data += ['user_id' => $user->id];
+            $user->userDetail()->create($data);
+        }
     }
 }

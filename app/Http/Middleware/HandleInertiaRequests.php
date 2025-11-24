@@ -37,16 +37,23 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         [$message, $author] = str(Inspiring::quotes()->random())->explode('-');
+        $authUser = $request->user();
+        $userPermissions = $authUser
+            ? $authUser->getAllPermissions()->pluck('name')->toArray()
+            : [];
+        $navigationService = app(\App\Services\NavigationService::class);
 
-        // dd($request->user());
         return [
             ...parent::share($request),
             'name' => config('app.name'),
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'auth' => [
-                'user' => $request->user(),
-                'user_details' => $request->user()?->user_detail(),
+                'user' => $authUser,
+                'user_detail' => $authUser?->userDetail,
+                'is_superadmin' => $authUser?->hasRole('superadmin'),
+                'permissions' => $userPermissions,
             ],
+            'navigations' => $navigationService->getNavigationsForUser($authUser),
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];
     }
