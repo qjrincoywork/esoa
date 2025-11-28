@@ -9,6 +9,7 @@ import {
     SidebarMenuSubButton,
     SidebarMenuSubItem,
 } from '@/components/ui/sidebar';
+import type { Navigation } from '@/types';
 import Icon from '@/components/Icon.vue';
 import { computed } from 'vue';
 import { urlIsActive } from '@/lib/utils';
@@ -20,85 +21,46 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 
-interface NavigationModule {
-    id: number;
-    name: string;
-    slug: string;
-    url: string;
+const props = defineProps<{
+  navigation: {
     icon: string;
-    permission_id: number | null;
-    permission_name: string | null;
-}
-
-interface Navigation {
     id: number;
-    name: string;
     label: string;
-    icon: string;
-    modules: NavigationModule[];
-}
+    modules: [];
+    name: string;
+  }
+}>();
 
 const page = usePage();
-const navigations = computed(() => (page.props as any).navigations as Navigation[] || []);
-
-console.log(navigations)
-// Generate href from url or slug
-// const getModuleHref = (module: NavigationModule): string => {
-//     // If url exists and is a valid path/route, use it
-//     if (module.url) {
-//         // If it starts with /, it's already a path
-//         if (module.url.startsWith('/')) {
-//             return module.url;
-//         }
-//         // If it contains a dot, it might be a route name (e.g., 'users.index')
-//         // For now, convert to path format
-//         if (module.url.includes('.')) {
-//             // Convert 'users.index' to '/users' or keep as is
-//             const routeParts = module.url.split('.');
-//             return `/${routeParts[0]}`;
-//         }
-//         // Otherwise treat as path
-//         return `/${module.url}`;
-//     }
-//     // Fallback to slug
-//     return `/${module.slug}`;
-// };
-
-// Optional: Handle navigation programmatically using router
-// const handleNavigation = (module: NavigationModule, event?: Event) => {
-//     if (event) {
-//         event.preventDefault();
-//     }
-//     const href = getModuleHref(module);
-//     router.visit(href);
-// };
+// const navigation = props.navigation as Navigation[] || [];
+const navigation = computed(() => props.navigation as Navigation || []);
 </script>
 
 <template>
-  <component v-for="nav in navigations" v-if="navigations && navigations.length > 0" >
+  <component v-if="navigation" >
     <SidebarGroup class="px-2 py-0">
-        <SidebarGroupLabel>{{ nav.label }}</SidebarGroupLabel>
+        <SidebarGroupLabel>{{ navigation.label }}</SidebarGroupLabel>
         <SidebarMenu>
           <Collapsible
-            :key="nav.name"
+            :key="navigation.name"
             as-child
             :default-open="true"
             class="group/collapsible"
           >
             <SidebarMenuItem>
               <CollapsibleTrigger as-child>
-                <SidebarMenuButton :tooltip="nav.name">
+                <SidebarMenuButton :tooltip="navigation.name">
                   <Icon 
-                    v-if="nav.icon" 
-                    :name="nav.icon" 
+                    v-if="navigation.icon" 
+                    :name="navigation.icon" 
                   />
-                  <span>{{ nav.name }}</span>
+                  <span>{{ navigation.name }}</span>
                   <ChevronRight class="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                 </SidebarMenuButton>
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <SidebarMenuSub>
-                  <SidebarMenuSubItem v-for="module in nav.modules" :key="module.name">
+                  <SidebarMenuSubItem v-for="module in navigation.modules" :key="module.name">
                     <SidebarMenuSubButton 
                         as-child
                         :is-active="urlIsActive(module.url, page.url)"

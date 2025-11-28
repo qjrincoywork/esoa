@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\Status;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\{Model, SoftDeletes, Relations\HasMany, Relations\BelongsTo};
 use App\Models\User;
@@ -74,5 +75,29 @@ class Navigation extends Model
 
         // If no user, return only modules without permission requirement
         return $query->whereNull('permission_id')->get();
+    }
+
+    protected function casts(): array
+    {
+        return [
+            // 'status' => Status::class,
+        ];
+    }
+
+    public function getNavigations(array $params)
+    {
+        // Pagination
+        $perPage = $params['per_page'] ?? config('vc.default_pages');
+        $result = self::when(isset($params['search_string']), function ($query) use ($params) {
+                $query->where('name', 'LIKE', '%' . $params['search_string'] . '%');
+            })
+            ->when(isset($params['status']), function ($query) use ($params) {
+                $query->where('status', $params['status']);
+            })
+            ->with('modules')
+            ->orderBy('id', 'desc')
+            ->paginate($perPage);
+
+        return $result;
     }
 }
