@@ -7,10 +7,10 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import Datatable from '@/components/Datatable.vue';
 import { Button } from "@/components/ui/button";
 import { createActionColumn } from '@/composables/datatable/datatableColumns';
-import { useUsers } from '@/composables/users';
+import { useNavigations } from '@/composables/navigations';
 import { useModulePermissions } from '@/composables/useModulePermissions';
 
-type UsersPagination = {
+type NavigationsPagination = {
     current_page: number
     per_page: number
     total: number
@@ -19,24 +19,24 @@ type UsersPagination = {
 const page = usePage();
 const { slug, authPermissions, hasPermission, canCreate, canEdit, canDelete } = useModulePermissions();
 // Initialize with empty data - no data loaded on mount
-const users = computed(() => {
-    const propsUsers = (page.props as any).users as UsersPagination | undefined;
-    if (!propsUsers) {
+const navigations = computed(() => {
+    const propsNavigations = (page.props as any).navigation_list as NavigationsPagination | undefined;
+    if (!propsNavigations) {
         return {
             current_page: 1,
             per_page: 10,
             total: 0,
             data: []
-        } as UsersPagination;
+        } as NavigationsPagination;
     }
-    return propsUsers;
+    return propsNavigations;
 });
-const { createUser, editUser, deleteUser } = useUsers();
+const { createNavigation, editNavigation, deleteNavigation } = useNavigations();
 const columnHelper = createColumnHelper();
 const pagination = ref({
-	current_page: users.value.current_page,
-	per_page: Number(users.value.per_page),
-	total: users.value.total
+	current_page: navigations.value.current_page,
+	per_page: Number(navigations.value.per_page),
+	total: navigations.value.total
 })
 const searchQuery = ref('')
 const hasInitialized = ref(false)
@@ -45,11 +45,20 @@ const baseColumns: any[] = [
   columnHelper.accessor('id', {
     header: 'ID',
   }),
-  columnHelper.accessor('username', {
-    header: 'Username',
+  columnHelper.accessor('name', {
+    header: 'Name',
   }),
-  columnHelper.accessor('email', {
-    header: 'Email',
+  columnHelper.accessor('label', {
+    header: 'Label',
+  }),
+  columnHelper.accessor('icon', {
+    header: 'Icon',
+  }),
+  columnHelper.accessor('created_by', {
+    header: 'Created By',
+  }),
+  columnHelper.accessor('status', {
+    header: 'Status',
   }),
 ]
 
@@ -61,8 +70,8 @@ const columns = computed(() => {
   if (showEdit || showDelete) {
     cols.push(createActionColumn({
       basePath: `/${slug.value}`,
-      onEdit: showEdit ? editUser : undefined,
-      onDelete: showDelete ? deleteUser : undefined,
+      onEdit: showEdit ? editNavigation : undefined,
+      onDelete: showDelete ? deleteNavigation : undefined,
       showView: false,
       showEdit,
       showDelete,
@@ -74,13 +83,13 @@ const columns = computed(() => {
 
 const breadcrumbItems: BreadcrumbItem[] = [
   {
-    title: 'User list',
+    title: 'Navigation list',
     href: slug.value,
   },
 ];
 
 // Function to fetch data from server
-const fetchUsers = () => {
+const fetchNavigations = () => {
   const params: Record<string, any> = {
     page: pagination.value.current_page,
     per_page: pagination.value.per_page
@@ -107,7 +116,7 @@ const searchTimeout = ref<number | null>(null)
 watch(
     searchQuery,
     (newQuery, oldQuery) => {
-        // Only fetch if user has interacted (not on initial mount)
+        // Only fetch if navigation has interacted (not on initial mount)
         if (!hasInitialized.value && oldQuery === undefined) return
         
         if (searchTimeout.value) {
@@ -116,17 +125,17 @@ watch(
         searchTimeout.value = window.setTimeout(() => {
             // Reset to first page when searching
             pagination.value.current_page = 1
-            fetchUsers()
+            fetchNavigations()
         }, 500)
     },
     { immediate: false }
 )
 
-// Keep local pagination in sync when server returns new users payload
+// Keep local pagination in sync when server returns new navigations payload
 // Use a flag to prevent infinite loops when Datatable's watcher updates pagination
 const isUpdatingFromServer = ref(false)
 watch(
-    users,
+    navigations,
     (next) => {
         if (!next) return
         isUpdatingFromServer.value = true
@@ -149,7 +158,7 @@ watch(
 
 // Debounced data fetching for pagination changes
 const fetchTimeout = ref<number | null>(null)
-const isUserPaginationChange = ref(false)
+const isPaginationChange = ref(false)
 watch(
     () => [pagination.value.current_page, pagination.value.per_page],
     ([currentPage, perPage], _prev) => {
@@ -163,7 +172,7 @@ watch(
         }
         
         // Mark that this is a user-initiated pagination change
-        isUserPaginationChange.value = true
+        isPaginationChange.value = true
         
         fetchTimeout.value = window.setTimeout(() => {
             pagination.value.current_page = Number(currentPage) || 1
@@ -171,11 +180,11 @@ watch(
             
             // Make our request with search parameter
             // This will happen before Datatable's watcher can trigger
-            fetchUsers()
+            fetchNavigations()
             
             // Reset flag after request is made
             setTimeout(() => {
-                isUserPaginationChange.value = false
+                isPaginationChange.value = false
             }, 500)
         }, 50) // Shorter timeout to beat Datatable's watcher
     },
@@ -185,17 +194,17 @@ watch(
 
 <template>
     <AppLayout :breadcrumbs="breadcrumbItems">
-        <Head title="User list" />
+        <Head title="Navigation list" />
         <div class="bg-[var(--color-surface)] shadow-sm border border-[var(--color-border)] p-6">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-                <Button v-if="canCreate" :onClick="createUser">Create</Button>
+                <Button v-if="canCreate" :onClick="createNavigation">Create</Button>
                 <div class="relative w-full sm:w-64">
-                    <label class="sr-only" for="user-search">Search users</label>
+                    <label class="sr-only" for="navigation-search">Search navigations</label>
                     <input
-                        id="user-search"
+                        id="navigation-search"
                         v-model="searchQuery"
                         type="text"
-                        placeholder="Search username or email..."
+                        placeholder="Search name..."
                         class="border border-[var(--color-border-strong)] rounded-md text-sm bg-[var(--color-surface)] text-[var(--color-text)] focus:ring-2 focus:ring-opacity-50 focus:border-transparent w-full px-4 py-2 pr-8"
                         :style="{ '--tw-ring-color': 'var(--primary-color)' }"
                         @input="hasInitialized = true" />
@@ -217,14 +226,14 @@ watch(
                 </div>
             </div>
             <Datatable
-                :data="users.data"
+                :data="navigations.data"
                 :columns="columns"
                 :pagination="pagination"
                 :search-fields="[]"
                 :enable-search="false"
-                empty-message="No users found"
-                empty-description="System users will appear here. Use search, pagination, or change rows per page to load data."
-                export-file-name="users_list"
+                empty-message="No navigations found"
+                empty-description="System navigations will appear here. Use search, pagination, or change rows per page to load data."
+                export-file-name="navigations_list"
                 @update:pagination="(newPagination: typeof pagination) => { hasInitialized = true; pagination = newPagination }">
             </Datatable>
         </div>

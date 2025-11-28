@@ -13,12 +13,17 @@ class CheckPermission
      *
      * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
      */
-    public function handle(Request $request, Closure $next, string $permission): Response
+    public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
         
         if (!$user) {
             return redirect()->route('login');
+        }
+        // Get full route name e.g., "users.update"
+        $routeName = $request->route()->getName();
+        if (!$routeName) {
+            return abort(Response::HTTP_FORBIDDEN, 'Route has no name.');
         }
 
         // Superadmin bypasses all permission checks
@@ -27,7 +32,7 @@ class CheckPermission
         }
 
         // Check if user has the required permission
-        $hasPermission = $user->hasPermissionTo($permission);
+        $hasPermission = $user->hasPermissionTo($routeName);
 
         if (!$hasPermission) {
             if ($request->expectsJson() || $request->wantsJson()) {
@@ -38,6 +43,7 @@ class CheckPermission
             }
 
             // Redirect to dashboard with error message for toast display
+            // return abort(Response::HTTP_FORBIDDEN, 'You do not have permission to access this resource.');
             return redirect()->route('dashboard')->with('error', 'You do not have permission to access this resource');
         }
 

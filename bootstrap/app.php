@@ -21,7 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
             'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
             // 'allow_admin_or_role' => \App\Http\Middleware\AllowAdminOrRole::class,
-            'custom_permissions' => \App\Http\Middleware\CheckPermission::class,
+            'check_permissions' => \App\Http\Middleware\CheckPermission::class,
         ]);
         $middleware->web( [
             HandleAppearance::class,
