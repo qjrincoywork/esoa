@@ -36,11 +36,6 @@ const props = defineProps({
     type: Object as unknown as () => UserBasic,
     default: () => [],
   },
-  suffixes: {
-    type: Array as unknown as () => Suffix[],
-    required: true,
-    default: () => [],
-  },
   genders: {
     type: Array as unknown as () => Gender[],
     required: true,
@@ -76,11 +71,10 @@ const props = defineProps({
 const user = computed<UserBasic>(() => props.user as UserBasic)
 const detail = computed<UserDetail>(() => (user.value?.user_detail ?? user.value?.userDetail ?? {}) as UserDetail)
 const genders = computed<Gender[]>(() => props.genders as Gender[]);
-const suffixes = computed<Suffix[]>(() => props.suffixes as Suffix[]);
-const civil_statuses = computed<Gender[]>(() => props.civil_statuses as CivilStatus[]);
-const citizenships = computed<Gender[]>(() => props.citizenships as Citizenship[]);
-const departments = computed<Gender[]>(() => props.departments as Department[]);
-const positions = computed<Gender[]>(() => props.positions as Position[]);
+const civil_statuses = computed<CivilStatus[]>(() => props.civil_statuses as CivilStatus[]);
+const citizenships = computed<Citizenship[]>(() => props.citizenships as Citizenship[]);
+const departments = computed<Department[]>(() => props.departments as Department[]);
+const positions = computed<Position[]>(() => props.positions as Position[]);
 
 // Expose a form ref so parent components can access without document.getElementById
 const userEditForm = ref<HTMLFormElement | null>(null)

@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\{
     AdminController,
+    NavigationController,
+    NavigationModuleController,
     PermissionController,
     RoleController,
     SoaController,
@@ -30,43 +32,75 @@ Route::middleware(['auth', 'verified'])->group(function () {
     })->name('dashboard');
     // Superadmin-only routes - only admins can access these
     Route::middleware(['role:superadmin'])->group(function () {
-        Route::prefix('admin')->name('admin.')->controller(AdminController::class)->group(function () {
-            Route::get('/start_import', 'startImport')->name('startImport');
-            Route::get('/import_main_accounts', 'importMainAccounts')->name('importMainAccounts');
-            Route::get('/import_accounts', 'importAccounts')->name('importAccounts');
+        Route::resource('admin', AdminController::class)->middleware('check_permissions');
+        Route::prefix('admin')->name('admin.')
+            ->middleware('check_permissions')
+            ->controller(AdminController::class)->group(function () {
+                Route::get('/start_import', 'startImport')->name('startImport');
+                Route::get('/import_main_accounts', 'importMainAccounts')->name('importMainAccounts');
+                Route::get('/import_accounts', 'importAccounts')->name('importAccounts');
         });
-        Route::resource('admin', AdminController::class);
-        Route::prefix('users')->name('users.')->controller(UserController::class)->group(function () {
-            Route::get('/', 'index')->name('index')->middleware('custom_permissions:users.index');
-            Route::get('/{id}/edit', 'edit')->name('edit');
-            Route::post('/update', 'update')->name('update');
-            Route::get('/create', 'create')->name('create');
-            Route::post('/store', 'store')->name('store');
-            Route::post('/destroy', 'destroy')->name('destroy');
+        Route::prefix('users')->name('users.')
+            ->middleware('check_permissions')
+            ->controller(UserController::class)->group(function () {
+                Route::get('/', 'index')->name('index');
+                Route::get('/{id}/edit', 'edit')->name('edit');
+                Route::post('/update', 'update')->name('update');
+                Route::post('/store', 'store')->name('store');
+                Route::post('/destroy', 'destroy')->name('destroy');
         });
 
         //Roles
-        Route::prefix('roles')->name('roles.')->controller(RoleController::class)->group(function () {
-            Route::get('/', 'index')->name('index')->middleware('custom_permissions:roles.index');
-            Route::get('/{id}/edit', 'edit')->name('edit');
-            Route::post('/update', 'update')->name('update');
-            Route::post('/store', 'store')->name('store');
-            Route::post('/destroy', 'destroy')->name('destroy');
+        Route::prefix('roles')->name('roles.')
+            ->middleware('check_permissions')
+            ->controller(RoleController::class)->group(function () {
+                Route::get('/', 'index')->name('index');
+                Route::get('/{id}/edit', 'edit')->name('edit');
+                Route::post('/update', 'update')->name('update');
+                Route::get('/create', 'create')->name('create');
+                Route::post('/store', 'store')->name('store');
+                Route::post('/destroy', 'destroy')->name('destroy');
         });
 
         //Permissions
-        Route::prefix('permissions')->name('permissions.')->controller(PermissionController::class)->group(function () {
-            Route::get('/', 'index')->name('index');
-            Route::get('/{id}/edit', 'edit')->name('edit');
-            Route::post('/update', 'update')->name('update');
-            Route::post('/store', 'store')->name('store');
-            Route::post('/destroy', 'destroy')->name('destroy');
+        Route::prefix('permissions')->name('permissions.')
+            ->middleware('check_permissions')
+            ->controller(PermissionController::class)->group(function () {
+                Route::get('/', 'index')->name('index');
+                Route::get('/{id}/edit', 'edit')->name('edit');
+                Route::get('/create', 'create')->name('create');
+                Route::post('/update', 'update')->name('update');
+                Route::post('/store', 'store')->name('store');
+                Route::post('/destroy', 'destroy')->name('destroy');
+        });
+
+        //Navigations
+        Route::prefix('navigations')->name('navigations.')
+            ->middleware('check_permissions')
+            ->controller(NavigationController::class)->group(function () {
+                Route::get('/', 'index')->name('index');
+                Route::get('/{id}/edit', 'edit')->name('edit');
+                Route::get('/create', 'create')->name('create');
+                Route::post('/update', 'update')->name('update');
+                Route::post('/store', 'store')->name('store');
+                Route::post('/destroy', 'destroy')->name('destroy');
+        });
+
+        //Navigation modules
+        Route::prefix('navigation_modules')->name('navigation_modules.')
+            ->middleware('check_permissions')
+            ->controller(NavigationModuleController::class)->group(function () {
+                Route::get('/', 'index')->name('index');
+                Route::get('/{id}/edit', 'edit')->name('edit');
+                Route::post('/update', 'update')->name('update');
+                Route::post('/store', 'store')->name('store');
+                Route::post('/destroy', 'destroy')->name('destroy');
         });
     });
 
     // User routes - admins can access these too, but regular users can only access their own routes
     // Using allow_admin_or_role middleware: admin can access everything, users can only access their specific routes
-    Route::middleware(['allow_admin_or_role:user'])->group(function () {
+    Route::middleware(['check_permissions'])->group(function () {
         //user_dashboard
         Route::prefix('soa')->name('soa.')->controller(SoaController::class)->group(function () {
             Route::get('/', 'index')->name('index');
