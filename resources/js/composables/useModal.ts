@@ -63,6 +63,8 @@ export function useModal() {
       size.value = 'md';
       closeOnClickOutside.value = true;
     }, 150);
+    // Refresh current page to update datatable props
+    router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
   };
 
   const submitModal = async () => {

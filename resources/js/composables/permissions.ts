@@ -1,5 +1,6 @@
 import { useModal } from '@/composables/useModal';
 import { useAjax } from '@/composables/useAjax';
+import { router } from '@inertiajs/vue3';
 import DeleteForm from '@/components/forms/permissions/DeleteForm.vue';
 import SavingForm from '@/components/forms/permissions/SavingForm.vue';
 let formApi: { getFormData: () => FormData | null } | null = null;
@@ -64,6 +65,9 @@ export function usePermissions() {
           } else {
             dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
             closeModal();
+            try {
+              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+            } catch (e) {}
           }
         }
       });
@@ -99,6 +103,9 @@ export function usePermissions() {
           } else {
             dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
             closeModal();
+            try {
+              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+            } catch (e) {}
           }
         }
       });
@@ -134,6 +141,9 @@ export function usePermissions() {
           } else {
             dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
             closeModal();
+            try {
+              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+            } catch (e) {}
           }
         }
       });

@@ -2,32 +2,34 @@
 
 namespace App\Enums;
 
-enum Status: int
-{
-    case Active = 1;
-    case InActive = 0;
+use BenSampo\Enum\Enum;
 
-    public function label(): string
+final class Status extends Enum
+{
+    public const ACTIVE = 1;
+    public const INACTIVE = 0;
+
+    public static function label($value): string
     {
-        return match ($this) {
-            self::Active => 'Active',
-            self::InActive => 'In Active',
+        return match ($value) {
+            self::ACTIVE => 'Active',
+            self::INACTIVE => 'In Active',
         };
     }
 
-    public function color(): string
+    public static function color($value): string
     {
-        return match ($this) {
-            self::Active => 'bg-blue-500/20 text-blue-300 border-blue-500/30',
-            self::InActive => 'bg-red-500/20 text-red-300 border-red-500/30',
+        return match ($value) {
+            self::ACTIVE => 'bg-blue-500/20 text-blue-300 border-blue-500/30',
+            self::INACTIVE => 'bg-red-500/20 text-red-300 border-red-500/30',
         };
     }
 
     public static function list(): array
     {
         return [
-            ['value' => self::Active->value, 'name' => self::Active->label()],
-            ['value' => self::InActive->value, 'name' => self::InActive->label()],
+            ['value' => self::ACTIVE, 'name' => self::label(self::ACTIVE)],
+            ['value' => self::INACTIVE, 'name' => self::label(self::INACTIVE)],
         ];
     }
 }

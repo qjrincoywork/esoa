@@ -71,7 +71,6 @@ export function useUsers() {
           const response = await post(`/users/update`, formData);
 
           if (!response.ok) {
-            // console.log('onSubmit Failed:', response, response.status); 
             //To be Updated the showing of validation errors in the form
             dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
           } else {
@@ -133,7 +132,6 @@ export function useUsers() {
           const response = await post(`/users/store`, formData);
 
           if (!response.ok) {
-            // console.log('onSubmit Failed:', response, response.status); 
             //To be Updated the showing of validation errors in the form
             dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
           } else {
@@ -173,7 +171,6 @@ export function useUsers() {
             dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
           } else {
             dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
-            closeModal();
           }
         }
       });

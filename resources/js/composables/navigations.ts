@@ -13,13 +13,8 @@ export interface Navigation {
   icon?: string
   created_by?: number
   status?: number
+  deleted_at?: string
 }
-
-// export interface Suffixes {
-//   id?: number | string;
-//   name?: string;
-//   [key: string]: any;
-// }
 
 export function useNavigations() {
   const { slug } = useModulePermissions();
@@ -132,10 +127,19 @@ export function useNavigations() {
 
   const deleteNavigation = async (navigation: Navigation) => {
     try {
+      const deleteOrRestore = navigation.deleted_at ? 'Restore' : 'Delete'
+      const color = navigation.deleted_at ? 'green' : 'red';
+
+      const buttonClass = `bg-${color}-600
+        hover:bg-${color}-700
+        focus:ring-${color}-500
+        dark:bg-${color}-500
+        dark:hover:bg-${color}-600`;
+
       openModal({
-        modalTitle: `Delete ${navigation?.name || ' Navigation'}`,
-        buttonText: 'Delete',
-        buttonClass: 'bg-red-600 hover:bg-red-700 focus:ring-red-500 dark:bg-red-500 dark:hover:bg-red-600',
+        modalTitle: `${deleteOrRestore} ${navigation?.name || ' Navigation'}`,
+        buttonText: deleteOrRestore,
+        buttonClass: buttonClass,
         component: DeleteForm,
         componentProps: {
           navigation: navigation,

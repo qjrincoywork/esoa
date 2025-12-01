@@ -172,7 +172,8 @@ class UserController extends Controller
         DB::beginTransaction();
 
         try {
-            $task = $this->user->saveUser($validated);
+            $user = $this->user->find($validated['id']);
+            $user->delete();
 
             // Commit transaction
             // DB::commit();

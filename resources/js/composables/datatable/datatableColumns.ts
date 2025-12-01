@@ -1,7 +1,7 @@
 import { h } from 'vue';
 import { router } from '@inertiajs/vue3';
 import { createColumnHelper } from '@tanstack/vue-table';
-import { Eye, Pencil, Trash2 } from 'lucide-vue-next';
+import { Eye, Pencil, Trash2, Recycle } from 'lucide-vue-next';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { dispatchNotification } from '@/components/notification';
 
@@ -100,22 +100,36 @@ export function createActionColumn(options: ActionColumnOptions | string) {
 
       // Delete Button
       if (showDelete) {
+        const deleteOrRestore = item.deleted_at ? 'Restore' : 'Delete'
+        const icon = item.deleted_at ? Recycle : Trash2
+        const color = item.deleted_at ? 'green' : 'red'
         const button = h(
           'button',
           {
             type: 'button',
-            class: 'p-1 text-red-600 hover:text-red-800 transition-colors rounded',
-            onClick: () => {
+            class: `p-1 text-${color}-600 hover:text-${color}-800 transition-colors rounded`,
+            onClick: async () => {
+              if (typeof onDelete !== 'function') {
+                // Fallback to a default delete visit if no handler provided
+                try {
+                  await router.delete(`${basePath}/${item.id}`);
+                } catch (error) {
+                  dispatchNotification({ title: 'Warning!', content: 'Encountered internal Server Error:' + String(error), type: 'warning' });
+                }
+                return;
+              }
+
               try {
-                onDelete(item);
+                // Support async handler
+                await Promise.resolve(onDelete(item));
               } catch (error) {
-                dispatchNotification({ title: 'Warning!', content: 'Encountered internal Server Error:' + error, type: 'warning' });
+                dispatchNotification({ title: 'Warning!', content: 'Encountered internal Server Error:' + String(error), type: 'warning' });
               }
             },
           },
-          [h(Trash2, { size: 18 })]
+          [h(icon, { size: 18 })]
         );
-        actions.push(withTooltip(button, 'Delete'));
+        actions.push(withTooltip(button, deleteOrRestore));
       }
 
       return h('div', { class: 'flex gap-2 items-center' }, actions);

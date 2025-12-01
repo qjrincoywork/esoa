@@ -9,6 +9,7 @@ type Navigation = {
   icon?: string
   created_by?: number
   status?: number
+  deleted_at?: string
 }
 
 const props = defineProps({
@@ -24,6 +25,7 @@ const props = defineProps({
 
 const navigation = computed<Navigation>(() => props.navigation as Navigation)
 const navigationDeleteForm = ref<HTMLFormElement | null>(null)
+const message = navigation.value.deleted_at ? 'Restore' : 'Delete'
 
 // Helper to extract FormData from this form (exposed to parent)
 function getFormData(): FormData | null {
@@ -55,5 +57,5 @@ onMounted(() => {
         />
     </div>
   </form>
-  Are you sure you want to delete this?
+  Are you sure you want to {{message}} this?
 </template>
