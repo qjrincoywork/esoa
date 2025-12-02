@@ -4,6 +4,8 @@ import DeleteForm from '@/components/forms/roles/DeleteForm.vue';
 import SavingForm from '@/components/forms/roles/SavingForm.vue';
 let formApi: { getFormData: () => FormData | null } | null = null;
 import { dispatchNotification } from '@/components/notification';
+import { showLoader, hideLoader } from '@/composables/useLoader';
+import { useModulePermissions } from '@/composables/useModulePermissions';
 
 export interface Role {
   id?: number | string;
@@ -19,6 +21,7 @@ export interface Suffixes {
 }
 
 export function useRoles() {
+  const { slug } = useModulePermissions();
   const { openModal, closeModal } = useModal();
   const { get, post } = useAjax();
 
@@ -28,7 +31,7 @@ export function useRoles() {
       const response = await get<{
         role: Role;
       }>(
-        `/roles/${role.id}/edit`
+        `/${slug.value}/${role.id}/edit`
       );
 
       if (!response.ok) {
@@ -56,14 +59,22 @@ export function useRoles() {
           const formData = formApi.getFormData();
           if (!formData) return;
 
-          const response = await post(`/roles/update`, formData);
+          showLoader();
+          try {
+            const response = await post(`/${slug.value}/update`, formData);
 
-          if (!response.ok) {
-            //To be Updated the showing of validation errors in the form
-            dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
-          } else {
-            dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
-            closeModal();
+            if (!response.ok) {
+              //To be Updated the showing of validation errors in the form
+              dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+            } else {
+              dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+              closeModal();
+            }
+          } catch (err) {
+            dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+            console.error(err);
+          } finally {
+            hideLoader();
           }
         }
       });
@@ -91,14 +102,22 @@ export function useRoles() {
           const formData = formApi.getFormData();
           if (!formData) return;
 
-          const response = await post(`/roles/store`, formData);
+          showLoader();
+          try {
+            const response = await post(`/${slug.value}/store`, formData);
 
-          if (!response.ok) {
-            //To be Updated the showing of validation errors in the form
-            dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
-          } else {
-            dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
-            closeModal();
+            if (!response.ok) {
+              //To be Updated the showing of validation errors in the form
+              dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+            } else {
+              dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+              closeModal();
+            }
+          } catch (err) {
+            dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+            console.error(err);
+          } finally {
+            hideLoader();
           }
         }
       });
@@ -127,13 +146,21 @@ export function useRoles() {
           const formData = formApi.getFormData();
           if (!formData) return;
 
-          const response = await post(`/roles/destroy`, formData);
+          showLoader();
+          try {
+            const response = await post(`/${slug.value}/destroy`, formData);
 
-          if (!response.ok) {
-            dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
-          } else {
-            dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
-            closeModal();
+            if (!response.ok) {
+              dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+            } else {
+              dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+              closeModal();
+            }
+          } catch (err) {
+            dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+            console.error(err);
+          } finally {
+            hideLoader();
           }
         }
       });
