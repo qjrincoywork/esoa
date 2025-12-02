@@ -109,7 +109,7 @@ onMounted(() => {
             id="status"
             class="mt-1 block w-full"
             name="status"
-            :default-value="navigation?.status ? Number(navigation?.status) : undefined"
+            :default-value="Number(navigation?.status)"
         >
           <SelectTrigger class="w-full">
               <SelectValue placeholder="Select a status" />
@@ -118,9 +118,9 @@ onMounted(() => {
               <SelectGroup>
                   <SelectLabel>Status</SelectLabel>
                   <SelectItem
-                          v-for="status in statuses"
-                          :key="status.value"
-                          :value="Number(status.value)"
+                    v-for="status in statuses"
+                    :key="status.value"
+                    :value="Number(status.value)"
                   >
                   {{ status.name }}
                   </SelectItem>

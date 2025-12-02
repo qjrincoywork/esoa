@@ -3,12 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Enums\Status;
-use App\Http\Requests\Navigation\ListRequest;
+use App\Helpers\CustomResponse;
+use App\Http\Requests\Navigation\{CreateRequest, DeleteRequest, ListRequest, UpdateRequest};
 use App\Http\Resources\NavigationResource;
 use App\Models\Navigation;
-use Illuminate\Database\Eloquent\Casts\AsEnumCollection;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
+use Symfony\Component\HttpFoundation\Response;
 
 class NavigationController extends Controller
 {
@@ -38,7 +40,6 @@ class NavigationController extends Controller
     {
         $navs = $this->navigation->getNavigations($request->validated())->toArray();
 
-        dd(NavigationResource::make($navs));
         return Inertia::render('navigations/Index', [
             'navigation_list' => $navs
         ]);
@@ -60,9 +61,28 @@ class NavigationController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(CreateRequest $request)
     {
-        //
+        $validated = $request->validated();
+
+        DB::beginTransaction();
+
+        try {
+            $this->navigation->saveNavigation($validated);
+
+            // Commit transaction
+            DB::commit();
+
+            // Return JSON for AJAX requests (no URL change)
+            if ($request->wantsJson() || $request->ajax()) {
+                return CustomResponse::created('Navigation Created successfully', Response::HTTP_CREATED);
+            }
+        } catch (\Exception $e) {
+            // Catch and handle any unexpected errors
+            DB::rollBack();
+
+            return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
     }
 
     /**
@@ -76,24 +96,87 @@ class NavigationController extends Controller
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit(Navigation $navigation)
+    public function edit(int $id, Request $request)
     {
-        //
+        $navigation = $this->navigation->findOrFail($id);
+
+        // Return JSON for AJAX requests (no URL change)
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'navigation' => $navigation,
+                'statuses' => Status::list(),
+            ]);
+        }
     }
 
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Navigation $navigation)
+    public function update(UpdateRequest $request, Navigation $navigation)
     {
-        //
+        $validated = $request->validated();
+
+        DB::beginTransaction();
+
+        try {
+            $this->navigation->saveNavigation($validated);
+
+            // Commit transaction
+            DB::commit();
+
+            // Return JSON for AJAX requests (no URL change)
+            if ($request->wantsJson() || $request->ajax()) {
+                return CustomResponse::ok('Navigation Updated successfully', Response::HTTP_OK);
+            }
+        } catch (\Exception $e) {
+            // Catch and handle any unexpected errors
+            DB::rollBack();
+
+            // Return JSON for AJAX requests (no URL change)
+            if ($request->wantsJson() || $request->ajax()) {
+                // Catch and handle any unexpected errors
+                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+            }
+        }
     }
 
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Navigation $navigation)
+    public function destroy(DeleteRequest $request)
     {
-        //
+        $validated = $request->validated();
+
+        DB::beginTransaction();
+
+        try {
+            $navigation = $this->navigation
+                ->withTrashed()
+                ->find($validated['id']);
+
+            if ($navigation->trashed()) {
+                $navigation->restore();
+                $message = 'Restored';
+            } else {
+                $navigation->delete();
+                $message = 'Deleted';
+            }
+
+            // Commit transaction
+            DB::commit();
+
+            // Return JSON for AJAX requests (no URL change)
+            if ($request->wantsJson() || $request->ajax()) {
+                return CustomResponse::ok('Navigation ' . $message . ' successfully', Response::HTTP_OK);
+            }
+        } catch (\Exception $e) {
+            // Catch and handle any unexpected errors
+            DB::rollBack();
+
+            // Return JSON for AJAX requests (no URL change)
+            if ($request->wantsJson() || $request->ajax()) {
+                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+            }
+        }
     }
 }

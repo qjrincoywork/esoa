@@ -4,6 +4,8 @@ import DeleteForm from '@/components/forms/users/DeleteForm.vue';
 import SavingForm from '@/components/forms/users/SavingForm.vue';
 let formApi: { getFormData: () => FormData | null } | null = null;
 import { dispatchNotification } from '@/components/notification';
+import { showLoader, hideLoader } from '@/composables/useLoader';
+import { useModulePermissions } from '@/composables/useModulePermissions';
 
 export interface User {
   id?: number | string;
@@ -19,6 +21,7 @@ export interface Suffixes {
 }
 
 export function useUsers() {
+  const { slug } = useModulePermissions();
   const { openModal, closeModal } = useModal();
   const { get, post } = useAjax();
 
@@ -34,7 +37,7 @@ export function useUsers() {
         departments: Array<{ id: number | string; name: string }>;
         positions: Array<{ id: number | string; name: string }>;
       }>(
-        `/users/${user.id}/edit`
+        `/${slug.value}/${user.id}/edit`
       );
 
       if (!response.ok) {
@@ -68,15 +71,22 @@ export function useUsers() {
           const formData = formApi.getFormData();
           if (!formData) return;
 
-          const response = await post(`/users/update`, formData);
+          showLoader();
+          try {
+            const response = await post(`/${slug.value}/update`, formData);
 
-          if (!response.ok) {
-            // console.log('onSubmit Failed:', response, response.status); 
-            //To be Updated the showing of validation errors in the form
-            dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
-          } else {
-            dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
-            closeModal();
+            if (!response.ok) {
+              //To be Updated the showing of validation errors in the form
+              dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+            } else {
+              dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+              closeModal();
+            }
+          } catch (err) {
+            dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+            console.error(err);
+          } finally {
+            hideLoader();
           }
         }
       });
@@ -97,7 +107,7 @@ export function useUsers() {
         departments: Array<{ id: number | string; name: string }>;
         positions: Array<{ id: number | string; name: string }>;
       }>(
-        `/users/create`
+        `/${slug.value}/create`
       );
 
       if (!response.ok) {
@@ -130,15 +140,22 @@ export function useUsers() {
           const formData = formApi.getFormData();
           if (!formData) return;
 
-          const response = await post(`/users/store`, formData);
+          showLoader();
+          try {
+            const response = await post(`/${slug.value}/store`, formData);
 
-          if (!response.ok) {
-            // console.log('onSubmit Failed:', response, response.status); 
-            //To be Updated the showing of validation errors in the form
-            dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
-          } else {
-            dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
-            closeModal();
+            if (!response.ok) {
+              //To be Updated the showing of validation errors in the form
+              dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+            } else {
+              dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+              closeModal();
+            }
+          } catch (err) {
+            dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+            console.error(err);
+          } finally {
+            hideLoader();
           }
         }
       });
@@ -167,13 +184,21 @@ export function useUsers() {
           const formData = formApi.getFormData();
           if (!formData) return;
 
-          const response = await post(`/users/destroy`, formData);
+          showLoader();
+          try {
+            const response = await post(`/${slug.value}/destroy`, formData);
 
-          if (!response.ok) {
-            dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
-          } else {
-            dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
-            closeModal();
+            if (!response.ok) {
+              dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+            } else {
+              dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+              closeModal();
+            }
+          } catch (err) {
+            dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+            console.error(err);
+          } finally {
+            hideLoader();
           }
         }
       });

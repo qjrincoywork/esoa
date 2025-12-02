@@ -5,6 +5,7 @@ import SavingForm from '@/components/forms/navigations/SavingForm.vue';
 let formApi: { getFormData: () => FormData | null } | null = null;
 import { dispatchNotification } from '@/components/notification';
 import { useModulePermissions } from '@/composables/useModulePermissions';
+import { showLoader, hideLoader } from '@/composables/useLoader';
 
 export interface Navigation {
   id?: number
@@ -13,13 +14,8 @@ export interface Navigation {
   icon?: string
   created_by?: number
   status?: number
+  deleted_at?: string
 }
-
-// export interface Suffixes {
-//   id?: number | string;
-//   name?: string;
-//   [key: string]: any;
-// }
 
 export function useNavigations() {
   const { slug } = useModulePermissions();
@@ -62,14 +58,21 @@ export function useNavigations() {
           const formData = formApi.getFormData();
           if (!formData) return;
 
-          const response = await post(`/${slug.value}/update`, formData);
+          showLoader();
+          try {
+            const response = await post(`/${slug.value}/update`, formData);
 
-          if (!response.ok) {
-            //To be Updated the showing of validation errors in the form
-            dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
-          } else {
-            dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
-            closeModal();
+            if (!response.ok) {
+              dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+            } else {
+              dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+              closeModal();
+            }
+          } catch (err) {
+            dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+            console.error(err);
+          } finally {
+            hideLoader();
           }
         }
       });
@@ -113,14 +116,21 @@ export function useNavigations() {
           const formData = formApi.getFormData();
           if (!formData) return;
 
-          const response = await post(`/${slug.value}/store`, formData);
+          showLoader();
+          try {
+            const response = await post(`/${slug.value}/store`, formData);
 
-          if (!response.ok) {
-            //To be Updated the showing of validation errors in the form
-            dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
-          } else {
-            dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
-            closeModal();
+            if (!response.ok) {
+              dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+            } else {
+              dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+              closeModal();
+            }
+          } catch (err) {
+            dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+            console.error(err);
+          } finally {
+            hideLoader();
           }
         }
       });
@@ -132,10 +142,19 @@ export function useNavigations() {
 
   const deleteNavigation = async (navigation: Navigation) => {
     try {
+      const deleteOrRestore = navigation.deleted_at ? 'Restore' : 'Delete'
+      const color = navigation.deleted_at ? 'green' : 'red';
+
+      const buttonClass = `bg-${color}-600
+        hover:bg-${color}-700
+        focus:ring-${color}-500
+        dark:bg-${color}-500
+        dark:hover:bg-${color}-600`;
+
       openModal({
-        modalTitle: `Delete ${navigation?.name || ' Navigation'}`,
-        buttonText: 'Delete',
-        buttonClass: 'bg-red-600 hover:bg-red-700 focus:ring-red-500 dark:bg-red-500 dark:hover:bg-red-600',
+        modalTitle: `${deleteOrRestore} ${navigation?.name || ' Navigation'}`,
+        buttonText: deleteOrRestore,
+        buttonClass: buttonClass,
         component: DeleteForm,
         componentProps: {
           navigation: navigation,
@@ -149,13 +168,21 @@ export function useNavigations() {
           const formData = formApi.getFormData();
           if (!formData) return;
 
-          const response = await post(`/${slug.value}/destroy`, formData);
+          showLoader();
+          try {
+            const response = await post(`/${slug.value}/destroy`, formData);
 
-          if (!response.ok) {
-            dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
-          } else {
-            dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
-            closeModal();
+            if (!response.ok) {
+              dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+            } else {
+              dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+              closeModal();
+            }
+          } catch (err) {
+            dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+            console.error(err);
+          } finally {
+            hideLoader();
           }
         }
       });

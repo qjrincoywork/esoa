@@ -94,7 +94,7 @@ const fetchNavigations = () => {
     page: pagination.value.current_page,
     per_page: pagination.value.per_page
   }
-  
+
   if (searchQuery.value.trim()) {
     params.search_string = searchQuery.value.trim()
   }
@@ -118,7 +118,7 @@ watch(
     (newQuery, oldQuery) => {
         // Only fetch if navigation has interacted (not on initial mount)
         if (!hasInitialized.value && oldQuery === undefined) return
-        
+
         if (searchTimeout.value) {
             clearTimeout(searchTimeout.value)
         }
@@ -142,12 +142,12 @@ watch(
         pagination.value.current_page = next.current_page
         pagination.value.per_page = Number(next.per_page)
         pagination.value.total = next.total
-        
+
         // Mark that we've loaded data at least once
         if (isFirstLoad.value && next.total > 0) {
             isFirstLoad.value = false
         }
-        
+
         // Reset flag after a tick to allow Datatable to process the update
         // Use a longer timeout to prevent Datatable's watcher from triggering
         setTimeout(() => {
@@ -166,22 +166,22 @@ watch(
         if (!hasInitialized.value) return
         // Don't fetch if this is an update from server response
         if (isUpdatingFromServer.value) return
-        
+
         if (fetchTimeout.value) {
             clearTimeout(fetchTimeout.value)
         }
-        
+
         // Mark that this is a user-initiated pagination change
         isPaginationChange.value = true
-        
+
         fetchTimeout.value = window.setTimeout(() => {
             pagination.value.current_page = Number(currentPage) || 1
             pagination.value.per_page = Number(perPage) || 10
-            
+
             // Make our request with search parameter
             // This will happen before Datatable's watcher can trigger
             fetchNavigations()
-            
+
             // Reset flag after request is made
             setTimeout(() => {
                 isPaginationChange.value = false

@@ -45,6 +45,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->controller(UserController::class)->group(function () {
                 Route::get('/', 'index')->name('index');
                 Route::get('/{id}/edit', 'edit')->name('edit');
+                Route::get('/create', 'create')->name('create');
                 Route::post('/update', 'update')->name('update');
                 Route::post('/store', 'store')->name('store');
                 Route::post('/destroy', 'destroy')->name('destroy');
@@ -92,6 +93,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->controller(NavigationModuleController::class)->group(function () {
                 Route::get('/', 'index')->name('index');
                 Route::get('/{id}/edit', 'edit')->name('edit');
+                Route::get('/create', 'create')->name('create');
                 Route::post('/update', 'update')->name('update');
                 Route::post('/store', 'store')->name('store');
                 Route::post('/destroy', 'destroy')->name('destroy');
