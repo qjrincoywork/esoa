@@ -7,65 +7,73 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import Datatable from '@/components/Datatable.vue';
 import { Button } from "@/components/ui/button";
 import { createActionColumn } from '@/composables/datatable/datatableColumns';
-import { useUsers } from '@/composables/users';
+import { useSoas } from '@/composables/soas';
 import { useModulePermissions } from '@/composables/useModulePermissions';
 
-type UsersPagination = {
+type SoasPagination = {
     current_page: number
     per_page: number
     total: number
     data: unknown[]
 }
 const page = usePage();
-const { slug, authPermissions, hasPermission, canCreate, canEdit, canDelete, canAction } = useModulePermissions();
+const { slug, authPermissions, hasPermission, canCreate, canEdit, canView, canDelete } = useModulePermissions();
 // Initialize with empty data - no data loaded on mount
-const users = computed(() => {
-    const propsUsers = (page.props as any).users as UsersPagination | undefined;
-    if (!propsUsers) {
+const soas = computed(() => {
+    const propsSoas = (page.props as any).soas as SoasPagination | undefined;
+    if (!propsSoas) {
         return {
             current_page: 1,
             per_page: 10,
             total: 0,
             data: []
-        } as UsersPagination;
+        } as SoasPagination;
     }
-    return propsUsers;
+    return propsSoas;
 });
-const { createUser, editUser, deleteUser } = useUsers();
+const { createSoa, editSoa, deleteSoa, viewSoa } = useSoas();
 const columnHelper = createColumnHelper();
 const pagination = ref({
-	current_page: users.value.current_page,
-	per_page: Number(users.value.per_page),
-	total: users.value.total
+    current_page: soas.value.current_page,
+    per_page: Number(soas.value.per_page),
+    total: soas.value.total
 })
 const searchQuery = ref('')
 const hasInitialized = ref(false)
 const isFirstLoad = ref(true)  // Track if this is the very first data load
 const baseColumns: any[] = [
-  columnHelper.accessor('id', {
-    header: 'ID',
+//   columnHelper.accessor('id', {
+//     header: 'ID',
+//   }),
+  columnHelper.accessor('macode', {
+    header: 'MA Code',
   }),
-  columnHelper.accessor('username', {
-    header: 'Username',
+  columnHelper.accessor('soanum', {
+    header: 'Soa Num',
   }),
-  columnHelper.accessor('email', {
-    header: 'Email',
+  columnHelper.accessor('company_branch', {
+    header: 'Company / Branch',
+  }),
+  columnHelper.accessor('upcode', {
+    header: 'Up Code',
+  }),
+  columnHelper.accessor('status', {
+    header: 'Status',
   }),
 ]
 
 const columns = computed(() => {
   const cols = [...baseColumns];
   const showEdit = canEdit.value;
+  const showView = canView.value;
   const showDelete = canDelete.value;
-  const showAction = canAction('update-access');
-  console.log("User List - showEdit:", showEdit, "showDelete:", showDelete, "showAction:", showAction);
 
-  if (showEdit || showDelete) {
+  if (showEdit || showDelete || showView) {
     cols.push(createActionColumn({
       basePath: `/${slug.value}`,
-      onEdit: showEdit ? editUser : undefined,
-      onDelete: showDelete ? deleteUser : undefined,
-      showView: false,
+      onEdit: showEdit ? editSoa : undefined,
+      onDelete: showDelete ? deleteSoa : undefined,
+      onView: showView ? viewSoa : undefined,
       showEdit,
       showDelete,
     }));
@@ -76,20 +84,20 @@ const columns = computed(() => {
 
 const breadcrumbItems: BreadcrumbItem[] = [
   {
-    title: 'User list',
+    title: 'Soa list',
     href: slug.value,
   },
 ];
 
 // Function to fetch data from server
-const fetchUsers = () => {
+const fetchSoas = () => {
   const params: Record<string, any> = {
     page: pagination.value.current_page,
     per_page: pagination.value.per_page
   }
 
   if (searchQuery.value.trim()) {
-    params.search_string = searchQuery.value.trim()
+    params.soanum = searchQuery.value.trim()
   }
 
   router.get(
@@ -109,7 +117,7 @@ const searchTimeout = ref<number | null>(null)
 watch(
     searchQuery,
     (newQuery, oldQuery) => {
-        // Only fetch if user has interacted (not on initial mount)
+        // Only fetch if soa has interacted (not on initial mount)
         if (!hasInitialized.value && oldQuery === undefined) return
 
         if (searchTimeout.value) {
@@ -118,17 +126,17 @@ watch(
         searchTimeout.value = window.setTimeout(() => {
             // Reset to first page when searching
             pagination.value.current_page = 1
-            fetchUsers()
+            fetchSoas()
         }, 500)
     },
     { immediate: false }
 )
 
-// Keep local pagination in sync when server returns new users payload
+// Keep local pagination in sync when server returns new soas payload
 // Use a flag to prevent infinite loops when Datatable's watcher updates pagination
 const isUpdatingFromServer = ref(false)
 watch(
-    users,
+    soas,
     (next) => {
         if (!next) return
         isUpdatingFromServer.value = true
@@ -151,7 +159,7 @@ watch(
 
 // Debounced data fetching for pagination changes
 const fetchTimeout = ref<number | null>(null)
-const isUserPaginationChange = ref(false)
+const isPaginationChange = ref(false)
 watch(
     () => [pagination.value.current_page, pagination.value.per_page],
     ([currentPage, perPage], _prev) => {
@@ -165,7 +173,7 @@ watch(
         }
 
         // Mark that this is a user-initiated pagination change
-        isUserPaginationChange.value = true
+        isPaginationChange.value = true
 
         fetchTimeout.value = window.setTimeout(() => {
             pagination.value.current_page = Number(currentPage) || 1
@@ -173,11 +181,11 @@ watch(
 
             // Make our request with search parameter
             // This will happen before Datatable's watcher can trigger
-            fetchUsers()
+            fetchSoas()
 
             // Reset flag after request is made
             setTimeout(() => {
-                isUserPaginationChange.value = false
+                isPaginationChange.value = false
             }, 500)
         }, 50) // Shorter timeout to beat Datatable's watcher
     },
@@ -187,17 +195,17 @@ watch(
 
 <template>
     <AppLayout :breadcrumbs="breadcrumbItems">
-        <Head title="User list" />
+        <Head title="Soa list" />
         <div class="bg-[var(--color-surface)] shadow-sm border border-[var(--color-border)] p-6">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-                <Button v-if="canCreate" :onClick="createUser">Create</Button>
+                <Button v-if="canCreate" :onClick="createSoa">Create</Button>
                 <div class="relative w-full sm:w-64">
-                    <label class="sr-only" for="user-search">Search users</label>
+                    <label class="sr-only" for="soa-search">Search soas</label>
                     <input
-                        id="user-search"
+                        id="soa-search"
                         v-model="searchQuery"
                         type="text"
-                        placeholder="Search username or email..."
+                        placeholder="Search soa number..."
                         class="border border-[var(--color-border-strong)] rounded-md text-sm bg-[var(--color-surface)] text-[var(--color-text)] focus:ring-2 focus:ring-opacity-50 focus:border-transparent w-full px-4 py-2 pr-8"
                         :style="{ '--tw-ring-color': 'var(--primary-color)' }"
                         @input="hasInitialized = true" />
@@ -219,15 +227,14 @@ watch(
                 </div>
             </div>
             <Datatable
-                :data="users.data"
+                :data="soas.data"
                 :columns="columns"
                 :pagination="pagination"
-                :show-selection-column="true"
                 :search-fields="[]"
                 :enable-search="false"
-                empty-message="No users found"
-                empty-description="System users will appear here. Use search, pagination, or change rows per page to load data."
-                export-file-name="users_list"
+                empty-message="No soas found"
+                empty-description="System soas will appear here. Use search, pagination, or change rows per page to load data."
+                export-file-name="soas_list"
                 @update:pagination="(newPagination: typeof pagination) => { hasInitialized = true; pagination = newPagination }">
             </Datatable>
         </div>

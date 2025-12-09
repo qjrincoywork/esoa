@@ -3,11 +3,10 @@
 namespace App\Http\Requests\User;
 
 use App\Rules\IsDataExists;
-use App\Models\User;
+use Illuminate\Contracts\Validation\Rule;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
-class UpdateRequest extends FormRequest
+class CreateRequest extends FormRequest
 {
     /**
      * Get the validation rules that apply to the request.
@@ -17,10 +16,6 @@ class UpdateRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'id' => [
-                'required',
-                'integer'
-            ],
             'gender_id' => [
                 'required',
                 'integer',
@@ -79,15 +74,12 @@ class UpdateRequest extends FormRequest
             'username' => [
                 'required',
                 'string',
-                'max:100'
+                'max:191'
             ],
             'email' => [
                 'required',
                 'string',
-                'lowercase',
-                'email',
-                'max:191',
-                Rule::unique(User::class)->ignore($this->user()->id),
+                'max:191'
             ],
         ];
     }

@@ -32,43 +32,41 @@ const props = defineProps<{
 }>();
 
 const page = usePage();
-// const navigation = props.navigation as Navigation[] || [];
 const navigation = computed(() => props.navigation as Navigation || []);
 </script>
 
 <template>
-  <component v-if="navigation" >
-    <SidebarGroup class="px-2 py-0">
-        <SidebarGroupLabel>{{ navigation.label }}</SidebarGroupLabel>
-        <SidebarMenu>
-          <Collapsible
+  <SidebarGroup v-if="navigation" class="px-2 py-0">
+    <SidebarGroupLabel>{{ navigation.label }}</SidebarGroupLabel>
+      <SidebarMenu>
+        <Collapsible
             :key="navigation.name"
             as-child
             :default-open="true"
             class="group/collapsible"
-          >
+            >
             <SidebarMenuItem>
               <CollapsibleTrigger as-child>
                 <SidebarMenuButton :tooltip="navigation.name">
-                  <Icon 
-                    v-if="navigation.icon" 
-                    :name="navigation.icon" 
-                  />
-                  <span>{{ navigation.name }}</span>
-                  <ChevronRight class="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+                    <Icon
+                    v-if="navigation.icon"
+                    :name="navigation.icon"
+                    />
+                    <span>{{ navigation.name }}</span>
+                    <ChevronRight class="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                 </SidebarMenuButton>
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <SidebarMenuSub>
                   <SidebarMenuSubItem v-for="module in navigation.modules" :key="module.name">
-                    <SidebarMenuSubButton 
+                    <SidebarMenuSubButton
                         as-child
                         :is-active="urlIsActive(module.url, page.url)"
                         :tooltip="module.name">
                       <Link :href="module.url">
-                        <Icon 
-                          v-if="module.icon" 
-                          :name="module.icon" 
+                        <Icon
+                            v-if="module.icon"
+                            :name="module.icon"
                         />
                         <span>{{ module.name }}</span>
                       </Link>
@@ -76,9 +74,8 @@ const navigation = computed(() => props.navigation as Navigation || []);
                   </SidebarMenuSubItem>
                 </SidebarMenuSub>
               </CollapsibleContent>
-            </SidebarMenuItem>
-          </Collapsible>
-        </SidebarMenu>
-    </SidebarGroup>
-  </component>
+          </SidebarMenuItem>
+        </Collapsible>
+    </SidebarMenu>
+  </SidebarGroup>
 </template>

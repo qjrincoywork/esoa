@@ -54,6 +54,8 @@ const props = defineProps({
     defaultPageSize: { type: Number, default: 10 },
     loading: { type: Boolean, default: false },
     error: { type: String, default: '' },
+    // When true, render the selection checkbox column (select all / row checkboxes)
+    showSelectionColumn: { type: Boolean, default: false },
     bulkDeleteRoute: {
         type: String,
         default: ''
@@ -539,6 +541,7 @@ watch(
         <div class="overflow-x-auto border border-[var(--color-border)] rounded-lg">
             <div class="block md:hidden space-y-3 p-3">
                 <div
+                    v-if="showSelectionColumn"
                     class="flex items-center justify-between p-2 bg-[var(--color-surface-muted)] rounded-lg border border-[var(--color-border)]">
                     <label class="inline-flex items-center">
                         <input
@@ -569,7 +572,7 @@ watch(
                     <div class="p-2">
                         <div class="flex items-center justify-between mb-1.5">
                             <div class="flex items-center gap-1.5">
-                                <label class="inline-flex items-center">
+                                <label v-if="showSelectionColumn" class="inline-flex items-center">
                                     <input
                                         type="checkbox"
                                         class="form-checkbox rounded border-[var(--color-border-strong)] focus:ring-2 focus:ring-opacity-50 bg-[var(--color-surface)]"
@@ -664,7 +667,7 @@ watch(
                 role="grid">
                 <thead class="bg-[var(--color-surface-muted)]">
                     <tr>
-                        <th class="w-10 px-6 py-3">
+                        <th v-if="showSelectionColumn" class="w-10 px-6 py-3">
                             <div class="flex items-center">
                                 <label class="inline-flex items-center">
                                     <input
@@ -705,7 +708,7 @@ watch(
                 <tbody
                     class="bg-[var(--color-surface)] divide-y divide-[var(--color-border)]">
                     <tr v-if="!table.getRowModel().rows.length" :class="styles.rowHover">
-                        <td :colspan="columns.length + 1" class="px-6 py-8 text-center">
+                        <td :colspan="props.columns.length + (showSelectionColumn ? 1 : 0)" class="px-6 py-8 text-center">
                             <p class="text-[var(--color-text-muted)] text-sm">
                                 {{ emptyMessage }}
                             </p>
@@ -726,7 +729,7 @@ watch(
                                   ? styles.rowEven
                                   : styles.rowOdd
                         ]">
-                        <td class="px-6 py-1">
+                        <td v-if="showSelectionColumn" class="px-6 py-1">
                             <div class="flex items-center">
                                 <label class="inline-flex items-center">
                                     <input

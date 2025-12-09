@@ -69,7 +69,7 @@ export function createActionColumn(options: ActionColumnOptions | string) {
               if (onView) {
                 onView(item);
               } else {
-                router.get(`${basePath}/${item.id}`);
+                router.get(`${basePath}/${item.id}/show`);
               }
             },
           },
