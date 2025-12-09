@@ -1,41 +1,65 @@
 import { useModal } from '@/composables/useModal';
 import { useAjax } from '@/composables/useAjax';
-import DeleteForm from '@/components/forms/permissions/DeleteForm.vue';
-import SavingForm from '@/components/forms/permissions/SavingForm.vue';
+import DeleteForm from '@/components/forms/soas/DeleteForm.vue';
+import SavingForm from '@/components/forms/soas/SavingForm.vue';
+import ViewForm from '@/components/forms/soas/ViewForm.vue';
 let formApi: { getFormData: () => FormData | null } | null = null;
 import { dispatchNotification } from '@/components/notification';
 import { showLoader, hideLoader } from '@/composables/useLoader';
 import { useModulePermissions } from '@/composables/useModulePermissions';
 
-export interface Permission {
-  id?: number | string;
-  name?: string;
-  guard_name?: string;
-  [key: string]: any;
+export interface Soa {
+  id?: number
+  soanum?: string
+  macode?: string
+  refid?: string
+  upcode?: string
+  billcode?: string
+  billtype?: string
+  billdate?: string
+  upload_date?: string
+  due_date?: string
+  period_coverage?: string
+  paid_date?: string
+  amount_due?: number
+  company_branch?: string
+  file_pdf?: string
+  file_xls?: string
+  status?: string
 }
 
-export interface Suffixes {
-  id?: number | string;
-  name?: string;
-  [key: string]: any;
-}
-
-export function usePermissions() {
-    const { slug } = useModulePermissions();
+export function useSoas() {
+  const { slug } = useModulePermissions();
   const { openModal, closeModal } = useModal();
   const { get, post } = useAjax();
 
-  const editPermission = async (permission: Permission) => {
+  const viewSoa = async (soa: Soa) => {
+    try {
+      openModal({
+        modalTitle: `View ${soa?.soanum || 'Soa'}`,
+        buttonText: 'View',
+        component: ViewForm,
+        componentProps: {
+          soa: soa,
+        },
+        size: 'lg',
+      });
+    } catch (error) {
+      dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
+      console.error('Error fetching soa data:', error);
+    }
+  };
+  const editSoa = async (soa: Soa) => {
     try {
       // Make AJAX request without navigation using reusable composable
       const response = await get<{
-        permission: Permission;
+        soa: Soa;
       }>(
-        `/${slug.value}/${permission.id}/edit`
+        `/${slug.value}/${soa.id}/edit`
       );
 
       if (!response.ok) {
-        throw new Error('Failed to fetch Permission data');
+        throw new Error('Failed to fetch soa data');
       }
 
       const payload = response.data;
@@ -43,11 +67,11 @@ export function usePermissions() {
       if (!payload) return;
 
       openModal({
-        modalTitle: `Edit ${payload.permission?.name || 'Permission'}`,
+        modalTitle: `Edit ${payload.soa?.soanum || 'Soa'}`,
         buttonText: 'Update',
         component: SavingForm,
         componentProps: {
-          permission: payload.permission,
+          soa: payload.soa,
           onReady: (api: { getFormData: () => FormData | null }) => {
             formApi = api
           }
@@ -79,23 +103,44 @@ export function usePermissions() {
         }
       });
     } catch (error) {
-      dispatchNotification({ title: 'Error', content: 'Internal Server Error', type: 'error' });
-      console.error('Internal Server Error:', error);
+      dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
+      console.error('Error fetching soa data:', error);
     }
   };
 
-  const createPermission = () => {
+  const createSoa = async () => {
     try {
+      // Make AJAX request without navigation using reusable composable
+      const response = await get<{
+        suffixes: Array<{ id: number | string; name: string }>;
+        genders: Array<{ id: number | string; name: string }>;
+        civil_statuses: Array<{ id: number | string; name: string }>;
+        citizenships: Array<{ id: number | string; name: string }>;
+        departments: Array<{ id: number | string; name: string }>;
+        positions: Array<{ id: number | string; name: string }>;
+      }>(
+        `/${slug.value}/create`
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch soa data');
+      }
+
+      const payload = response.data;
+
+      if (!payload) return;
+
       openModal({
-        modalTitle: `Create Permission`,
+        modalTitle: `Create Soa`,
         buttonText: 'Save',
         component: SavingForm,
         componentProps: {
+          suffixes: payload.suffixes,
           onReady: (api: { getFormData: () => FormData | null }) => {
             formApi = api
           }
         },
-        size: 'lg',
+        size: 'md',
         onSubmit: async () => {
           if (!formApi) return;
 
@@ -122,20 +167,29 @@ export function usePermissions() {
         }
       });
     } catch (error) {
-      dispatchNotification({ title: 'Error', content: 'Internal Server Error', type: 'error' });
-      console.error('Internal Server Error:', error);
+      dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
+      console.error('Error fetching user data:', error);
     }
   };
 
-  const deletePermission = async (permission: Permission) => {
+  const deleteSoa = async (soa: Soa) => {
+    const deleteOrRestore = soa.deleted_at ? 'Restore' : 'Delete'
+    const color = soa.deleted_at ? 'green' : 'red';
+
+    const buttonClass = `bg-${color}-600
+      hover:bg-${color}-700
+      focus:ring-${color}-500
+      dark:bg-${color}-500
+      dark:hover:bg-${color}-600`;
+
     try {
       openModal({
-        modalTitle: `Delete ${permission?.name || ' Permission'}`,
-        buttonText: 'Delete',
-        buttonClass: 'bg-red-600 hover:bg-red-700 focus:ring-red-500 dark:bg-red-500 dark:hover:bg-red-600',
+        modalTitle: `${deleteOrRestore} ${soa?.name || ' Soa'}`,
+        buttonText: deleteOrRestore,
+        buttonClass: buttonClass,
         component: DeleteForm,
         componentProps: {
-          permission: permission,
+          soa: soa,
           onReady: (api: { getFormData: () => FormData | null }) => {
             formApi = api
           }
@@ -165,14 +219,16 @@ export function usePermissions() {
         }
       });
     } catch (error) {
-      console.error('Internal Server Error:', error);
+      dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
+      console.error('Error fetching soa data:', error);
     }
   };
 
   return {
-    editPermission,
-    createPermission,
-    deletePermission,
+    editSoa,
+    viewSoa,
+    createSoa,
+    deleteSoa,
   };
 }
 

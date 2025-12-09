@@ -2,6 +2,7 @@
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
 import { edit } from '@/routes/profile';
 import { send } from '@/routes/verification';
+import { computed } from 'vue';
 import { Form, Head, Link, usePage } from '@inertiajs/vue3';
 
 import DeleteUser from '@/components/DeleteUser.vue';
@@ -28,6 +29,19 @@ interface Props {
     status?: string;
 }
 
+type UserDetail = {
+  gender_id?: number
+  civil_status_id?: number
+  citizenship_id?: number
+  department_id?: number
+  position_id?: number
+  first_name?: string
+  middle_name?: string
+  last_name?: string
+  suffix?: string | number
+  birthdate?: string
+  employee_no?: string
+}
 defineProps<Props>();
 
 const breadcrumbItems: BreadcrumbItem[] = [
@@ -39,7 +53,8 @@ const breadcrumbItems: BreadcrumbItem[] = [
 
 const page = usePage();
 const user = page.props.auth.user;
-const suffixes = page.props.suffixes;
+const isSuperAdmin = page.props.auth?.is_superadmin;
+const detail = computed<UserDetail>(() => (user?.user_detail ?? user?.userDetail ?? {}) as UserDetail)
 </script>
 
 <template>
@@ -49,6 +64,7 @@ const suffixes = page.props.suffixes;
         <SettingsLayout>
             <div class="flex flex-col space-y-6">
                 <HeadingSmall
+                    v-if="isSuperAdmin"
                     title="Profile information"
                     description="Update your name and email address"
                 />
@@ -58,13 +74,23 @@ const suffixes = page.props.suffixes;
                     class="space-y-6"
                     v-slot="{ errors, processing, recentlySuccessful }"
                 >
+                    <!-- <div class="md:col-span-2 hidden">
+                        <Input
+                            id="id"
+                            type="hidden"
+                            class="mt-1 block w-full"
+                            name="id"
+                            :default-value="user?.id"
+                        />
+                    </div>
+
                     <div class="grid gap-2">
                         <Label for="first_name">First Name</Label>
                         <Input
                             id="first_name"
                             class="mt-1 block w-full"
                             name="first_name"
-                            :default-value="user.first_name"
+                            :default-value="detail?.first_name"
                             autocomplete="first_name"
                             placeholder="First Name"
                         />
@@ -77,7 +103,7 @@ const suffixes = page.props.suffixes;
                             id="middle_name"
                             class="mt-1 block w-full"
                             name="middle_name"
-                            :default-value="user.middle_name"
+                            :default-value="detail?.middle_name"
                             autocomplete="middle_name"
                             placeholder="Middle Name"
                         />
@@ -90,7 +116,7 @@ const suffixes = page.props.suffixes;
                             id="last_name"
                             class="mt-1 block w-full"
                             name="last_name"
-                            :default-value="user.last_name"
+                            :default-value="detail?.last_name"
                             autocomplete="last_name"
                             placeholder="Last Name"
                         />
@@ -99,27 +125,15 @@ const suffixes = page.props.suffixes;
 
                     <div class="grid gap-2">
                         <Label for="suffix">Suffix</Label>
-                        <Select
+                        <Input
                             id="suffix"
                             class="mt-1 block w-full"
-                        >
-                            <SelectTrigger class="w-[580px]">
-                                <SelectValue placeholder="Select a suffix" />
-                            </SelectTrigger>
-                            <SelectContent class="w-[580px]">
-                                <SelectGroup>
-                                    <SelectLabel>Suffix</SelectLabel>
-                                    <!--  Dynamically loop suffix items -->
-                                    <SelectItem
-                                            v-for="suffix in suffixes"
-                                            :key="suffix.id"
-                                            :value="suffix.id"
-                                    >
-                                        {{ suffix.name }}
-                                    </SelectItem>
-                                </SelectGroup>
-                            </SelectContent>
-                        </Select>
+                            name="suffix"
+                            :default-value="detail?.suffix"
+                            autocomplete="suffix"
+                            placeholder="Suffix"
+                        />
+                        <InputError class="mt-2" :message="errors.suffix" />
                     </div>
 
                     <div class="grid gap-2">
@@ -129,7 +143,7 @@ const suffixes = page.props.suffixes;
                             type="date"
                             class="mt-1 block w-full"
                             name="birthdate"
-                            :default-value="user.birthdate"
+                            :default-value="detail?.birthdate"
                             autocomplete="birthdate"
                             placeholder="Birth Date"
                         />
@@ -142,12 +156,12 @@ const suffixes = page.props.suffixes;
                             id="employee_no"
                             class="mt-1 block w-full"
                             name="employee_no"
-                            :default-value="user.employee_no"
+                            :default-value="detail?.employee_no"
                             autocomplete="employee_no"
                             placeholder="Employee No"
                         />
                         <InputError class="mt-2" :message="errors.employee_no" />
-                    </div>
+                    </div> -->
 
                     <div class="grid gap-2">
                         <Label for="username">Username</Label>
@@ -155,7 +169,7 @@ const suffixes = page.props.suffixes;
                             id="username"
                             class="mt-1 block w-full"
                             name="username"
-                            :default-value="user.username"
+                            :default-value="user?.username"
                             required
                             autocomplete="username"
                             placeholder="Username"
@@ -171,7 +185,7 @@ const suffixes = page.props.suffixes;
                             type="email"
                             class="mt-1 block w-full"
                             name="email"
-                            :default-value="user.email"
+                            :default-value="user?.email"
                             required
                             autocomplete="username"
                             placeholder="Email address"
@@ -180,7 +194,7 @@ const suffixes = page.props.suffixes;
                         <InputError class="mt-2" :message="errors.email" />
                     </div>
 
-                    <div v-if="mustVerifyEmail && !user.email_verified_at">
+                    <div v-if="mustVerifyEmail && !user?.email_verified_at">
                         <p class="-mt-4 text-sm text-muted-foreground">
                             Your email address is unverified.
                             <Link
@@ -201,7 +215,7 @@ const suffixes = page.props.suffixes;
                         </div>
                     </div>
 
-                    <div class="flex items-center gap-4">
+                    <div v-if="isSuperAdmin" class="flex items-center gap-4">
                         <Button
                             :disabled="processing"
                             data-test="update-profile-button"
@@ -225,7 +239,7 @@ const suffixes = page.props.suffixes;
                 </Form>
             </div>
 
-            <DeleteUser />
+            <DeleteUser v-if="isSuperAdmin" />
         </SettingsLayout>
     </AppLayout>
 </template>

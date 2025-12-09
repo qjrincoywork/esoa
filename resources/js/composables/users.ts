@@ -11,6 +11,7 @@ export interface User {
   id?: number | string;
   username?: string;
   email?: string;
+  deleted_at?: string;
   [key: string]: any;
 }
 
@@ -166,11 +167,20 @@ export function useUsers() {
   };
 
   const deleteUser = async (user: User) => {
+    const deleteOrRestore = user.deleted_at ? 'Restore' : 'Delete'
+    const color = user.deleted_at ? 'green' : 'red';
+
+    const buttonClass = `bg-${color}-600
+      hover:bg-${color}-700
+      focus:ring-${color}-500
+      dark:bg-${color}-500
+      dark:hover:bg-${color}-600`;
+
     try {
       openModal({
-        modalTitle: `Delete ${user?.username || ' User'}`,
-        buttonText: 'Delete',
-        buttonClass: 'bg-red-600 hover:bg-red-700 focus:ring-red-500 dark:bg-red-500 dark:hover:bg-red-600',
+        modalTitle: `${deleteOrRestore} ${user?.username || ' User'}`,
+        buttonText: deleteOrRestore,
+        buttonClass: buttonClass,
         component: DeleteForm,
         componentProps: {
           user: user,

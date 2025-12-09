@@ -4,8 +4,8 @@ namespace App\Models;
 
 use Illuminate\Contracts\Auth\Access\Authorizable as AuthorizableContract;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Database\Eloquent\{Model, SoftDeletes, Relations\HasMany, Relations\HasOne, Relations\BelongsTo};
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\Access\Authorizable;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -16,7 +16,7 @@ use Spatie\Permission\Traits\HasRoles;
 class User extends Authenticatable implements AuthorizableContract
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, HasRoles, Authorizable;
+    use HasFactory, HasRoles, Authorizable, SoftDeletes;
     // use HasFactory, HasRoles, Notifiable, TwoFactorAuthenticatable, Authorizable;
 
     /**
@@ -83,10 +83,13 @@ class User extends Authenticatable implements AuthorizableContract
                 $query->where('is_active', $params['is_active']);
             })
             ->with('userDetail')
-            ->orderBy('id', 'desc')
-            ->paginate($perPage);
+            ->orderBy('id', 'desc');
 
-        return $result;
+        if (auth()->user() && auth()->user()->hasRole('superadmin')) {
+            $result->withTrashed();
+        }
+
+        return $result->paginate($perPage);
     }
 
     public function saveUser(array $data) {

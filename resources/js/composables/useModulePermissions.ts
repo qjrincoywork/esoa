@@ -11,15 +11,15 @@ export interface ModulePermissionsOptions {
 
 /**
  * Composable for checking module-based permissions.
- * 
+ *
  * @example
  * ```ts
  * // Basic usage - auto-detects slug from page component
- * const { slug, authPermissions, hasPermission, canCreate, canEdit, canDelete } = useModulePermissions();
- * 
+ * const { slug, authPermissions, hasPermission, canCreate, canEdit, canView, canDelete } = useModulePermissions();
+ *
  * // With custom slug
  * const { hasPermission, canAction } = useModulePermissions({ slug: 'custom-module' });
- * 
+ *
  * // Check custom actions
  * const canGeneratePdf = computed(() => hasPermission([`${slug.value}.generate-pdf`]));
  * const canUploadPdf = computed(() => hasPermission([`${slug.value}.upload-pdf`]));
@@ -63,10 +63,10 @@ export function useModulePermissions(options: ModulePermissionsOptions = {}) {
 
   /**
    * Check if the user has any of the specified permissions.
-   * 
+   *
    * @param permissionsToCheck - Single permission string or array of permission strings
    * @returns true if user has at least one of the specified permissions
-   * 
+   *
    * @example
    * ```ts
    * hasPermission('users.create')
@@ -92,6 +92,13 @@ export function useModulePermissions(options: ModulePermissionsOptions = {}) {
   );
 
   /**
+   * Check if user can view (has view or update permission)
+   */
+  const canView = computed(() =>
+    hasPermission([`${slug.value}.view`, `${slug.value}.show`])
+  );
+
+  /**
    * Check if user can edit (has edit or update permission)
    */
   const canEdit = computed(() =>
@@ -108,11 +115,11 @@ export function useModulePermissions(options: ModulePermissionsOptions = {}) {
   /**
    * Generic function to check any custom action permission.
    * Useful for actions beyond the basic CRUD operations.
-   * 
+   *
    * @param action - The action name (e.g., 'generate-pdf', 'upload-pdf', 'update-access')
    * @param alternativeNames - Optional alternative permission names to check
    * @returns computed ref that checks if user has the permission
-   * 
+   *
    * @example
    * ```ts
    * const canGeneratePdf = canAction('generate-pdf');
@@ -134,6 +141,7 @@ export function useModulePermissions(options: ModulePermissionsOptions = {}) {
     hasPermission,
     canCreate,
     canEdit,
+    canView,
     canDelete,
     canAction,
   };

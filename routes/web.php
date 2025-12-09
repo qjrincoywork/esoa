@@ -46,6 +46,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::get('/', 'index')->name('index');
                 Route::get('/{id}/edit', 'edit')->name('edit');
                 Route::get('/create', 'create')->name('create');
+                Route::get('/access', 'access')->name('access');
+                Route::post('/update_access', 'update_access')->name('update_access');
                 Route::post('/update', 'update')->name('update');
                 Route::post('/store', 'store')->name('store');
                 Route::post('/destroy', 'destroy')->name('destroy');
@@ -104,8 +106,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Using allow_admin_or_role middleware: admin can access everything, users can only access their specific routes
     Route::middleware(['check_permissions'])->group(function () {
         //user_dashboard
-        Route::prefix('soa')->name('soa.')->controller(SoaController::class)->group(function () {
+        Route::prefix('soas')->name('soas.')->controller(SoaController::class)->group(function () {
             Route::get('/', 'index')->name('index');
+            Route::get('/{id}/show', 'show')->name('show');
         });
     });
 });

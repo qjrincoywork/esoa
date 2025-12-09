@@ -8,7 +8,7 @@ import { edit as editProfile } from '@/routes/profile';
 import { show } from '@/routes/two-factor';
 import { edit as editPassword } from '@/routes/user-password';
 import { type NavItem } from '@/types';
-import { Link } from '@inertiajs/vue3';
+import { Link, usePage } from '@inertiajs/vue3';
 
 const sidebarNavItems: NavItem[] = [
     {
@@ -20,15 +20,20 @@ const sidebarNavItems: NavItem[] = [
         href: editPassword(),
     },
     {
-        title: 'Two-Factor Auth',
-        href: show(),
-    },
-    {
         title: 'Appearance',
         href: editAppearance(),
     },
 ];
 
+const page = usePage();
+const isSuperAdmin = page.props.auth?.is_superadmin;
+
+if (isSuperAdmin) {
+    sidebarNavItems.push({
+        title: 'Two-Factor Auth',
+        href: show(),
+    });
+}
 const currentPath = typeof window !== undefined ? window.location.pathname : '';
 </script>
 

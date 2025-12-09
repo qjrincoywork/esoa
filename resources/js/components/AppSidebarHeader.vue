@@ -2,6 +2,14 @@
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import type { BreadcrumbItemType } from '@/types';
+import { Switch } from '@/components/ui/switch';
+import { useAppearance } from '@/composables/useAppearance';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 withDefaults(
     defineProps<{
@@ -11,6 +19,15 @@ withDefaults(
         breadcrumbs: () => [],
     },
 );
+const { appearance, updateAppearance } = useAppearance();
+const storageApperance = localStorage.getItem('appearance');
+const isDark = storageApperance === 'dark';
+const toggleTheme = () => {
+  console.log("Theme set From:", isDark, appearance.value);
+  appearance.value = !isDark ? 'dark' : 'light';
+  updateAppearance(appearance.value);
+  console.log("Theme set to:", appearance.value);
+};
 </script>
 
 <template>
@@ -22,6 +39,21 @@ withDefaults(
             <template v-if="breadcrumbs && breadcrumbs.length > 0">
                 <Breadcrumbs :breadcrumbs="breadcrumbs" />
             </template>
+          <!-- <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <div class="flex items-center space-x-2">
+                  <Switch
+                    :checked="isDark"
+                    @click="toggleTheme"
+                  />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Toggle Theme</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider> -->
         </div>
     </header>
 </template>
