@@ -15,14 +15,16 @@ class NavigationSeeder extends Seeder
             'icon' => 'LayoutGrid',
             'created_by' => 1,
             'status' => 1,
+            'order_number' => 1,
         ]);
 
         Navigation::firstOrCreate(['id' => 2], [
-            'name' => 'User Dashboard',
-            'label' => 'Users',
-            'icon' => 'Users',
+            'name' => 'Soa',
+            'label' => 'Soa',
+            'icon' => 'File',
             'created_by' => 1,
             'status' => 1,
+            'order_number' => 2,
         ]);
     }
 }

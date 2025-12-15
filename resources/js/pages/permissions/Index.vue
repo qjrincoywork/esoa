@@ -9,6 +9,7 @@ import Datatable from '@/components/Datatable.vue';
 import { Button } from "@/components/ui/button";
 import { createActionColumn } from '@/composables/datatable/datatableColumns';
 import { usePermissions } from '@/composables/permissions';
+import { useModulePermissions } from '@/composables/useModulePermissions';
 
 type PermissionsPagination = {
     current_page: number
@@ -18,6 +19,7 @@ type PermissionsPagination = {
 }
 
 const page = usePage();
+const { canCreate, slug, hasPermission } = useModulePermissions();
 const permissions = computed(() => (page.props as any).permissions as PermissionsPagination);
 const { createPermission, editPermission, deletePermission } = usePermissions();
 const columnHelper = createColumnHelper();
@@ -26,7 +28,7 @@ const pagination = ref({
 	per_page: Number(permissions.value.per_page),
 	total: permissions.value.total
 })
-const columns = [
+const baseColumns = [
   columnHelper.accessor('id', {
     header: 'ID',
   }),
@@ -36,12 +38,27 @@ const columns = [
   columnHelper.accessor('guard_name', {
     header: 'Guard Name',
   }),
-  createActionColumn({
-    basePath: '/permissions',
-    onEdit: editPermission,
-    onDelete: deletePermission,
-  }),
 ]
+
+const handlerMap: Record<string, Function> = {
+  edit: editPermission,
+  update: editPermission,
+  delete: deletePermission,
+  destroy: deletePermission,
+}
+
+const columns = computed(() => {
+  const subModules = page.props.sub_modules
+    .filter((m: any) => hasPermission(m.slug) && m.slug.split('.')[1] != 'create')
+    .map((m: any) => ({
+      ...m,
+      handler: handlerMap[m.slug.split('.')[1]],
+    }))
+
+  return subModules.length
+    ? [...baseColumns, createActionColumn(subModules)]
+    : baseColumns
+})
 
 const breadcrumbItems: BreadcrumbItem[] = [
     {

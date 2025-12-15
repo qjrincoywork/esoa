@@ -17,7 +17,7 @@ type NavigationsPagination = {
     data: unknown[]
 }
 const page = usePage();
-const { slug, authPermissions, hasPermission, canCreate, canEdit, canDelete } = useModulePermissions();
+const { slug, hasPermission, canCreate } = useModulePermissions();
 // Initialize with empty data - no data loaded on mount
 const navigations = computed(() => {
     const propsNavigations = (page.props as any).navigation_list as NavigationsPagination | undefined;
@@ -62,24 +62,25 @@ const baseColumns: any[] = [
   }),
 ]
 
+const handlerMap: Record<string, Function> = {
+  edit: editNavigation,
+  update: editNavigation,
+  delete: deleteNavigation,
+  destroy: deleteNavigation,
+}
+
 const columns = computed(() => {
-  const cols = [...baseColumns];
-  const showEdit = canEdit.value;
-  const showDelete = canDelete.value;
+  const subModules = page.props.sub_modules
+    .filter((m: any) => hasPermission(m.slug) && m.slug.split('.')[1] != 'create')
+    .map((m: any) => ({
+      ...m,
+      handler: handlerMap[m.slug.split('.')[1]],
+    }))
 
-  if (showEdit || showDelete) {
-    cols.push(createActionColumn({
-      basePath: `/${slug.value}`,
-      onEdit: showEdit ? editNavigation : undefined,
-      onDelete: showDelete ? deleteNavigation : undefined,
-      showView: false,
-      showEdit,
-      showDelete,
-    }));
-  }
-
-  return cols;
-});
+  return subModules.length
+    ? [...baseColumns, createActionColumn(subModules)]
+    : baseColumns
+})
 
 const breadcrumbItems: BreadcrumbItem[] = [
   {

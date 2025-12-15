@@ -10,7 +10,7 @@ class NavigationService
 {
     /**
      * Get all navigations with their accessible modules for a user.
-     * 
+     *
      * @param \App\Models\User|null $user
      * @return \Illuminate\Support\Collection
      */
@@ -88,7 +88,7 @@ class NavigationService
 
     /**
      * Clear navigation cache for a specific user or all users.
-     * 
+     *
      * @param \App\Models\User|null $user
      * @return void
      */
@@ -103,9 +103,23 @@ class NavigationService
     }
 
     /**
+     * Get referenced-modules based on the current request path.
+     *
+     * @return void
+     */
+    public function getReferencedModules()
+    {
+        $navModule = NavigationModule::where('status', 1)
+            ->where('slug', request()->route()->getName())
+            ->first();
+
+        return $navModule?->subModules()->get();
+    }
+
+    /**
      * Sync permission with navigation module.
      * Creates a permission if it doesn't exist and links it to the module.
-     * 
+     *
      * @param \App\Models\NavigationModule $module
      * @param string|null $permissionName
      * @return \Spatie\Permission\Models\Permission|null
@@ -123,7 +137,7 @@ class NavigationService
         );
 
         $module->update(['permission_id' => $permission->id]);
-        
+
         $this->clearCache();
 
         return $permission;

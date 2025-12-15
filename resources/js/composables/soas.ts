@@ -3,6 +3,7 @@ import { useAjax } from '@/composables/useAjax';
 import DeleteForm from '@/components/forms/soas/DeleteForm.vue';
 import SavingForm from '@/components/forms/soas/SavingForm.vue';
 import ViewForm from '@/components/forms/soas/ViewForm.vue';
+import ManageFileForm from '@/components/forms/soas/ManageFileForm.vue';
 let formApi: { getFormData: () => FormData | null } | null = null;
 import { dispatchNotification } from '@/components/notification';
 import { showLoader, hideLoader } from '@/composables/useLoader';
@@ -43,12 +44,31 @@ export function useSoas() {
           soa: soa,
         },
         size: 'lg',
+        hasSubmitButton: false,
       });
     } catch (error) {
       dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
       console.error('Error fetching soa data:', error);
     }
   };
+
+  const manageFile = async (soa: Soa) => {
+    try {
+      openModal({
+        modalTitle: `Manage ${soa?.soanum || ' Files'}`,
+        buttonText: 'Submit',
+        component: ManageFileForm,
+        componentProps: {
+          soa: soa,
+        },
+        size: 'lg'
+      });
+    } catch (error) {
+      dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
+      console.error('Error fetching soa data:', error);
+    }
+  };
+
   const editSoa = async (soa: Soa) => {
     try {
       // Make AJAX request without navigation using reusable composable
@@ -229,6 +249,7 @@ export function useSoas() {
     viewSoa,
     createSoa,
     deleteSoa,
+    manageFile,
   };
 }
 

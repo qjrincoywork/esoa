@@ -26,26 +26,39 @@ class RolePermissionSeeder extends Seeder
             'users.index',
             'users.create',
             'users.edit',
-            'users.delete',
+            'users.destroy',
 
             // roles
             'roles.index',
             'roles.create',
             'roles.edit',
-            'roles.delete',
+            'roles.destroy',
 
             // permissions
             'permissions.index',
             'permissions.create',
             'permissions.edit',
-            'permissions.delete',
+            'permissions.destroy',
+
+            // navigations
+            'navigations.index',
+            'navigations.create',
+            'navigations.edit',
+            'navigations.destroy',
+
+            // soas
+            'soas.index',
+            'soas.create',
+            'soas.edit',
+            'soas.destroy',
+            'soas.manage_file',
         ];
 
         try {
             foreach ($roles as $role) {
                 Role::firstOrCreate(['name' => $role, 'guard_name'=> 'web']);
             }
-    
+
             foreach ($permissions as $perm) {
                 Permission::firstOrCreate(['name' => $perm, 'guard_name'=> 'web']);
             }

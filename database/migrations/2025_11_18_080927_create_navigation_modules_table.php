@@ -17,6 +17,7 @@ return new class extends Migration
             $table->string('name');
             $table->string('slug');
             $table->string('icon');
+            $table->string('color')->nullable();
             $table->string('url');
             $table->unsignedBigInteger('navigation_id');
             $table->bigInteger('ref_id')->nullable();

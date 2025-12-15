@@ -87,7 +87,7 @@ class UpdateRequest extends FormRequest
                 'lowercase',
                 'email',
                 'max:191',
-                Rule::unique(User::class)->ignore($this->user()->id),
+                Rule::unique(User::class)->ignore(request()->user()->id),
             ],
         ];
     }

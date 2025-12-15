@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
+use Spatie\Permission\Models\Permission;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -39,7 +40,11 @@ class HandleInertiaRequests extends Middleware
         [$message, $author] = str(Inspiring::quotes()->random())->explode('-');
         $authUser = $request->user();
         $userPermissions = $authUser
-            ? $authUser->getAllPermissions()->pluck('name')->toArray()
+            ? (
+                $authUser?->hasRole('superadmin')
+                    ? Permission::all()->pluck('name')->toArray()
+                    : $authUser->getAllPermissions()->pluck('name')->toArray()
+              )
             : [];
         $navigationService = app(\App\Services\NavigationService::class);
 
@@ -54,6 +59,7 @@ class HandleInertiaRequests extends Middleware
                 'permissions' => $userPermissions,
             ],
             'navigations' => $navigationService->getNavigationsForUser($authUser),
+            'sub_modules' => $navigationService->getReferencedModules(),
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];
     }
