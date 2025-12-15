@@ -11,32 +11,32 @@ import { useSoas } from '@/composables/soas';
 import { useModulePermissions } from '@/composables/useModulePermissions';
 
 type SoasPagination = {
-    current_page: number
-    per_page: number
-    total: number
-    data: unknown[]
+  current_page: number
+  per_page: number
+  total: number
+  data: unknown[]
 }
 const page = usePage();
-const { slug, authPermissions, hasPermission, canCreate, canEdit, canView, canDelete } = useModulePermissions();
+const { canCreate, slug, hasPermission } = useModulePermissions();
 // Initialize with empty data - no data loaded on mount
 const soas = computed(() => {
-    const propsSoas = (page.props as any).soas as SoasPagination | undefined;
-    if (!propsSoas) {
-        return {
-            current_page: 1,
-            per_page: 10,
-            total: 0,
-            data: []
-        } as SoasPagination;
-    }
-    return propsSoas;
+  const propsSoas = (page.props as any).soas as SoasPagination | undefined;
+  if (!propsSoas) {
+    return {
+      current_page: 1,
+      per_page: 10,
+      total: 0,
+      data: []
+    } as SoasPagination;
+  }
+  return propsSoas;
 });
-const { createSoa, editSoa, deleteSoa, viewSoa } = useSoas();
+const { createSoa, editSoa, deleteSoa, viewSoa, manageFile } = useSoas();
 const columnHelper = createColumnHelper();
 const pagination = ref({
-    current_page: soas.value.current_page,
-    per_page: Number(soas.value.per_page),
-    total: soas.value.total
+  current_page: soas.value.current_page,
+  per_page: Number(soas.value.per_page),
+  total: soas.value.total
 })
 const searchQuery = ref('')
 const hasInitialized = ref(false)
@@ -62,25 +62,28 @@ const baseColumns: any[] = [
   }),
 ]
 
+const handlerMap: Record<string, Function> = {
+  view: viewSoa,
+  show: viewSoa,
+  edit: editSoa,
+  update: editSoa,
+  delete: deleteSoa,
+  destroy: deleteSoa,
+  manage_file: manageFile,
+}
+
 const columns = computed(() => {
-  const cols = [...baseColumns];
-  const showEdit = canEdit.value;
-  const showView = canView.value;
-  const showDelete = canDelete.value;
+  const subModules = page.props.sub_modules
+    .filter((m: any) => hasPermission(m.slug) && m.slug.split('.')[1] != 'create')
+    .map((m: any) => ({
+      ...m,
+      handler: handlerMap[m.slug.split('.')[1]],
+    }))
 
-  if (showEdit || showDelete || showView) {
-    cols.push(createActionColumn({
-      basePath: `/${slug.value}`,
-      onEdit: showEdit ? editSoa : undefined,
-      onDelete: showDelete ? deleteSoa : undefined,
-      onView: showView ? viewSoa : undefined,
-      showEdit,
-      showDelete,
-    }));
-  }
-
-  return cols;
-});
+  return subModules.length
+    ? [...baseColumns, createActionColumn(subModules)]
+    : baseColumns
+})
 
 const breadcrumbItems: BreadcrumbItem[] = [
   {

@@ -23,7 +23,7 @@ return new class extends Migration
             $table->string('middle_name')->nullable();
             $table->string('last_name');
             $table->string('suffix')->nullable();
-            $table->string('birthdate')->nullable();
+            $table->date('birthdate')->nullable();
             $table->string('employee_no')->nullable();
             $table->timestamps();
             $table->softDeletes();

@@ -24,6 +24,9 @@ class NavigationModule extends Model
         'icon',
         'navigation_id',
         'permission_id',
+        'color',
+        'ref_id',
+        'order_number',
         'status',
         'created_by',
     ];
@@ -42,6 +45,7 @@ class NavigationModule extends Model
     public function subModules(): HasMany
     {
         return $this->hasMany(NavigationModule::class, 'ref_id')
+            ->orderBy('order_number')
             ->where('status', 1);
     }
 

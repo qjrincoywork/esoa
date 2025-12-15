@@ -53,26 +53,25 @@ const baseColumns: any[] = [
   }),
 ]
 
+const handlerMap: Record<string, Function> = {
+  edit: editUser,
+  update: editUser,
+  delete: deleteUser,
+  destroy: deleteUser,
+}
+
 const columns = computed(() => {
-  const cols = [...baseColumns];
-  const showEdit = canEdit.value;
-  const showDelete = canDelete.value;
-  const showAction = canAction('update-access');
-  console.log("User List - showEdit:", showEdit, "showDelete:", showDelete, "showAction:", showAction);
+  const subModules = page.props.sub_modules
+    .filter((m: any) => hasPermission(m.slug) && m.slug.split('.')[1] != 'create')
+    .map((m: any) => ({
+      ...m,
+      handler: handlerMap[m.slug.split('.')[1]],
+    }))
 
-  if (showEdit || showDelete) {
-    cols.push(createActionColumn({
-      basePath: `/${slug.value}`,
-      onEdit: showEdit ? editUser : undefined,
-      onDelete: showDelete ? deleteUser : undefined,
-      showView: false,
-      showEdit,
-      showDelete,
-    }));
-  }
-
-  return cols;
-});
+  return subModules.length
+    ? [...baseColumns, createActionColumn(subModules)]
+    : baseColumns
+})
 
 const breadcrumbItems: BreadcrumbItem[] = [
   {

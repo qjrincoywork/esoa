@@ -22,6 +22,7 @@ class Navigation extends Model
         'label',
         'icon',
         'status',
+        'order_number',
         'created_by',
     ];
 

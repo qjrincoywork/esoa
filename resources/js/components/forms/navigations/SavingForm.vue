@@ -32,7 +32,6 @@ const props = defineProps({
 
 const navigation = computed<Navigation>(() => props.navigation as Navigation)
 const statuses = computed<Status[]>(() => props.statuses as Status[])
-console.log(statuses)
 
 // Expose a form ref so parent components can access without document.getElementById
 const navigationEditForm = ref<HTMLFormElement | null>(null)

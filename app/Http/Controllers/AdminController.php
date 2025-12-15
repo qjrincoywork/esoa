@@ -35,8 +35,8 @@ class AdminController extends Controller
     public function startImport()
     {
         try {
-            $this->importMainAccounts();
-            $this->importAccounts();
+            dispatch(new \App\Jobs\ImportAccountsJob());
+            dispatch(new \App\Jobs\ImportMainAccountsJob());
         } catch (\Exception $e) {
             Log::error('startImport Jobs failed: ' . $e->getMessage());
             Log::error($e->getTraceAsString());

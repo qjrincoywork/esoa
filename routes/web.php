@@ -109,6 +109,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::prefix('soas')->name('soas.')->controller(SoaController::class)->group(function () {
             Route::get('/', 'index')->name('index');
             Route::get('/{id}/show', 'show')->name('show');
+            Route::get('/{id}/edit', 'edit')->name('edit');
+            Route::get('/{id}/manage_file', 'manage_file')->name('manage_file');
+            Route::post('/destroy', 'destroy')->name('destroy');
         });
     });
 });
