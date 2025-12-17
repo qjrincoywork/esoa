@@ -6,6 +6,7 @@ let formApi: { getFormData: () => FormData | null } | null = null;
 import { dispatchNotification } from '@/components/notification';
 import { useModulePermissions } from '@/composables/useModulePermissions';
 import { showLoader, hideLoader } from '@/composables/useLoader';
+import { router } from '@inertiajs/vue3';
 
 export interface Navigation {
   id?: number
@@ -72,6 +73,8 @@ export function useNavigations() {
             dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
             console.error(err);
           } finally {
+            // Refresh current page to update datatable props
+            router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
             hideLoader();
           }
         }
@@ -130,6 +133,8 @@ export function useNavigations() {
             dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
             console.error(err);
           } finally {
+            // Refresh current page to update datatable props
+            router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
             hideLoader();
           }
         }
@@ -182,6 +187,8 @@ export function useNavigations() {
             dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
             console.error(err);
           } finally {
+            // Refresh current page to update datatable props
+            router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
             hideLoader();
           }
         }

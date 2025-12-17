@@ -31,7 +31,7 @@ const soas = computed(() => {
   }
   return propsSoas;
 });
-const { createSoa, editSoa, deleteSoa, viewSoa, manageFile } = useSoas();
+const { createSoa, editSoa, deleteSoa, viewSoa, manageFile, untagSoa } = useSoas();
 const columnHelper = createColumnHelper();
 const pagination = ref({
   current_page: soas.value.current_page,
@@ -70,6 +70,7 @@ const handlerMap: Record<string, Function> = {
   delete: deleteSoa,
   destroy: deleteSoa,
   manage_file: manageFile,
+  untag: untagSoa,
 }
 
 const columns = computed(() => {

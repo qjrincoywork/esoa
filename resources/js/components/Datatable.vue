@@ -19,10 +19,10 @@ const styles = {
     button: 'btn-primary !p-2 focus:outline-none focus:ring-2 focus:ring-opacity-50',
     tableCell: 'px-6 py-1 text-xs text-[var(--color-text)]',
     tableHeader: 'table-header',
-    sortableHeader: 'cursor-pointer hover:bg-[var(--color-surface-muted)]',
+    sortableHeader: 'cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
     rowEven: 'bg-[var(--color-surface)]',
     rowOdd: 'bg-[var(--color-surface-muted)]',
-    rowHover: 'hover:bg-[var(--color-surface-muted)] transition-colors',
+    rowHover: 'cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-lg transition-colors',
     rowSelected: 'bg-[var(--selection-color-light)] dark:bg-[var(--selection-color-dark)]',
     focusRing: 'focus:outline-none focus:ring-2 focus:ring-opacity-50',
     dropdown:
@@ -847,7 +847,7 @@ watch(
                         class="px-2 py-1 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
                         :class="[
                             table.getCanPreviousPage()
-                                ? 'text-[var(--color-text)] hover:bg-[var(--color-surface-muted)]'
+                                ? 'text-[var(--color-text)] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
                                 : 'text-[var(--color-text-muted)]',
                             styles.focusRing
                         ]"
@@ -875,7 +875,7 @@ watch(
                         class="px-2 py-1 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
                         :class="[
                             table.getCanNextPage()
-                                ? 'text-[var(--color-text)] hover:bg-[var(--color-surface-muted)]'
+                                ? 'text-[var(--color-text)] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
                                 : 'text-[var(--color-text-muted)]',
                             styles.focusRing
                         ]"

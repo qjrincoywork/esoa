@@ -73,26 +73,26 @@ onMounted(() => {
     <div class="grid gap-2 md:col-span-1">
         <Label for="file_pdf">PDF</Label>
         <Input
+            type="file"
             id="file_pdf"
             class="mt-1 block w-full"
             name="file_pdf"
             :default-value="soa?.file_pdf"
             autocomplete="file_pdf"
             placeholder="PDF"
-            readonly
         />
     </div>
 
     <div class="grid gap-2 md:col-span-1">
         <Label for="file_xls">Excel File</Label>
         <Input
+            type="file"
             id="file_xls"
             class="mt-1 block w-full"
             name="file_xls"
             :default-value="soa?.file_xls"
             autocomplete="file_xls"
             placeholder="Excel File"
-            readonly
         />
     </div>
 
