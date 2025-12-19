@@ -68,33 +68,29 @@ export function useSoas() {
         onSubmit: async () => {
           if (!formApi) return;
           const formData = formApi.getFormData();
-          console.log('Untag formData entries:', formData);
           if (!formData) return;
 
           showLoader();
           try {
             const response = await post(`/${slug.value}/update_tag`, formData);
-            console.log('Untag formData entries:', response);
 
-            // if (!response.ok) {
-            //   dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
-            // } else {
-            //   dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
-            //   closeModal();
-            // }
+            if (!response.ok) {
+              dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+            } else {
+              dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+              closeModal();
+              // Refresh current page to update datatable props
+              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+            }
           } catch (err) {
             dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
-            console.error(err);
           } finally {
-            // Refresh current page to update datatable props
-            router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
             hideLoader();
           }
         }
       });
     } catch (error) {
       dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
-      console.error('Error fetching soa data:', error);
     }
   };
 
@@ -112,7 +108,6 @@ export function useSoas() {
       });
     } catch (error) {
       dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
-      console.error('Error fetching soa data:', error);
     }
   };
 
@@ -129,7 +124,6 @@ export function useSoas() {
       });
     } catch (error) {
       dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
-      console.error('Error fetching soa data:', error);
     }
   };
 
@@ -177,20 +171,18 @@ export function useSoas() {
             } else {
               dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
               closeModal();
+              // Refresh current page to update datatable props
+              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
             }
           } catch (err) {
             dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
-            console.error(err);
           } finally {
-            // Refresh current page to update datatable props
-            router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
             hideLoader();
           }
         }
       });
     } catch (error) {
       dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
-      console.error('Error fetching soa data:', error);
     }
   };
 
@@ -243,20 +235,18 @@ export function useSoas() {
             } else {
               dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
               closeModal();
+              // Refresh current page to update datatable props
+              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
             }
           } catch (err) {
             dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
-            console.error(err);
           } finally {
-            // Refresh current page to update datatable props
-            router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
             hideLoader();
           }
         }
       });
     } catch (error) {
       dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
-      console.error('Error fetching user data:', error);
     }
   };
 
@@ -297,20 +287,18 @@ export function useSoas() {
             } else {
               dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
               closeModal();
+              // Refresh current page to update datatable props
+              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
             }
           } catch (err) {
             dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
-            console.error(err);
           } finally {
-            // Refresh current page to update datatable props
-            router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
             hideLoader();
           }
         }
       });
     } catch (error) {
       dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
-      console.error('Error fetching soa data:', error);
     }
   };
 

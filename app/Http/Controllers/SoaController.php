@@ -7,7 +7,7 @@ use App\Helpers\CommonHelper;
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Soa\ListRequest;
+use App\Http\Requests\Soa\{ ListRequest, UpdateTagRequest };
 use App\Http\Resources\CommonResource;
 use App\Http\Resources\SoaResource;
 use App\Models\{Account, Citizenship, CivilStatus, Contact, Department, Gender, MainAccount, Position, Suffix, User };
@@ -24,7 +24,6 @@ class SoaController extends Controller
      * @var SqlDatabase
      */
     protected $sqlDatabase;
-
 
     /**
      * Constructor
@@ -90,22 +89,43 @@ class SoaController extends Controller
     /**
      * Update the tag of the specified soa from a user.
      */
-    public function updateTag(Request $request)
+    public function updateTag(UpdateTagRequest $request)
     {
-        dd('post', $request->all(), CommonHelper::getUserIP());
-        $validated = $request->validate([
-            'id' => 'required|integer|exists:soas,id',
-            'untag_type' => 'required|integer',
-            'reason' => 'nullable|string|max:1000',
-        ]);
+        $validated = $request->validated();
+        DB::connection('soa')->beginTransaction();
 
-        dd($validated);
+        try {
+            switch ($validated['untag_type']) {
+                case UntagType::USER_ERROR:
+                    $validated['reason'] = __('esoa.reason.user_error');
+                    break;
+                case UntagType::CLIENT_ERROR:
+                    $validated['reason'] = __('esoa.reason.client_error');
+                    break;
+                case UntagType::BOUNCED_RETURNED_CHECK:
+                    $validated['reason'] = __('esoa.reason.bounced_returned_check');
+                    break;
+            }
 
-        // (new $this->sqlDatabase('soa'))->untagSoa($validated['id']);
+            (new $this->sqlDatabase('soa'))->untagSoa($validated);
+            //additional logic for email notification can be added here
 
-        // return CustomResponse::success(
-        //     message: 'SOA untagged successfully.',
-        //     status: Response::HTTP_OK
-        // );
+            // Commit transaction
+            DB::connection('soa')->commit();
+
+            // Return JSON for AJAX requests (no URL change)
+            if ($request->wantsJson() || $request->ajax()) {
+                return CustomResponse::ok('Retraction Completed', Response::HTTP_OK);
+            }
+        } catch (\Exception $e) {
+            // Catch and handle any unexpected errors
+            DB::connection('soa')->rollBack();
+
+            // Return JSON for AJAX requests (no URL change)
+            if ($request->wantsJson() || $request->ajax()) {
+                // Catch and handle any unexpected errors
+                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+            }
+        }
     }
 }

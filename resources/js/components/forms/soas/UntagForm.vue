@@ -92,11 +92,16 @@ onMounted(() => {
   <form ref="soaViewForm" class="grid grid-cols-1 md:grid-cols-1 gap-3">
     <div class="md:col-span-2 hidden">
       <Input
-        id="id"
         type="hidden"
         class="mt-1 block w-full"
         name="id"
         :default-value="soa?.id"
+      />
+      <Input
+        type="hidden"
+        class="mt-1 block w-full"
+        name="soanum"
+        :default-value="soa?.soanum"
       />
     </div>
 
@@ -105,7 +110,7 @@ onMounted(() => {
         <div class="flex items-center space-x-2" v-for="type in untag_types" :key="type.value">
           <RadioGroupItem
             :id="type.name"
-            :value="type.value"
+            :value=type.value
             name="untag_type"
           />
           <Label :for="type.name">{{ type.name }}</Label>
