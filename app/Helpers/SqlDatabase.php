@@ -75,16 +75,8 @@ class SqlDatabase
      * @param array $params
      * @return void
      */
-    public function untagSoa($params)
+    public function untagSoa($soa, $params)
     {
-        $soa = $this->db
-            ->table('Upload')
-            ->where('up_id', $params['id'])
-            ->first();
-
-        if (!$soa) {
-            throw new \Exception('SOA record not found.');
-        }
         $username = auth()->user()->username;
         $userIp = request()->ip();
         $now = now();
@@ -116,6 +108,49 @@ class SqlDatabase
                 'macode' => $soa->up_macode,
                 'branch' => $soa->up_branch,
                 'rem_isVC' => 1,
+            ]);
+        } catch (\Exception $e) {
+            throw new \Exception($e->getMessage());
+        }
+    }
+
+    /**
+     * Saves changes to a SOA record.
+     *
+     * @param array $params
+     * @return void
+     */
+    public function saveSoa($params)
+    {
+        $username = auth()->user()->username;
+        $userIp = request()->ip();
+        $now = now();
+
+        try {
+            if (isset($params['id'])) {
+                // Update SOA record to untag
+                $this->db
+                    ->table('Upload')
+                    ->where('up_id', $params['id'])
+                    ->update([
+                        'up_amount' => $params['amount_due'],
+                    ]);
+                $changes = 'Updated a SOA record';
+            } else {
+                // Save SOA record
+                $this->db
+                    ->table('Upload')
+                    ->save($params);
+                $changes = 'Created a SOA record';
+            }
+
+            //save history
+            $this->saveHistory([
+                'soanum' => $params['soanum'],
+                'changes' => $changes,
+                'username' => $username,
+                'datetime' => $now,
+                'ip' => $userIp,
             ]);
         } catch (\Exception $e) {
             throw new \Exception($e->getMessage());

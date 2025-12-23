@@ -28,7 +28,7 @@ class SoaResource extends JsonResource
             'due_date' => $this->formatDate($this->up_due_date),
             'period_coverage' => $this->up_period_cov,
             'paid_date' => $this->formatDate($this->up_status_date),
-            'amount_due' => $this->up_amount,
+            'amount_due' => number_format($this->up_amount, 2),
             'company_branch' => $this->up_acname ?? $this->up_branch,
             'file_pdf' => $this->up_filepdf,
             'file_xls' => $this->up_filexls,
