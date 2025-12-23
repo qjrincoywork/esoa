@@ -3,11 +3,13 @@ import { useAjax } from '@/composables/useAjax';
 import DeleteForm from '@/components/forms/soas/DeleteForm.vue';
 import SavingForm from '@/components/forms/soas/SavingForm.vue';
 import ViewForm from '@/components/forms/soas/ViewForm.vue';
+import UntagForm from '@/components/forms/soas/UntagForm.vue';
 import ManageFileForm from '@/components/forms/soas/ManageFileForm.vue';
 let formApi: { getFormData: () => FormData | null } | null = null;
 import { dispatchNotification } from '@/components/notification';
 import { showLoader, hideLoader } from '@/composables/useLoader';
 import { useModulePermissions } from '@/composables/useModulePermissions';
+import { router } from '@inertiajs/vue3';
 
 export interface Soa {
   id?: number
@@ -34,6 +36,64 @@ export function useSoas() {
   const { openModal, closeModal } = useModal();
   const { get, post } = useAjax();
 
+  const untagSoa = async (soa: Soa) => {
+    try {
+      // Make AJAX request without navigation using reusable composable
+      const response = await get<{
+        soa: Soa;
+        untag_types: Array<{ value: number | string; name: string }>;
+      }>(
+        `/${slug.value}/${soa.id}/untag`
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch soa data');
+      }
+
+      const payload = response.data;
+
+      if (!payload) return;
+      openModal({
+        modalTitle: `Undo SOA ${soa?.soanum || ' as  Paid'}`,
+        buttonText: 'Undo/Untag',
+        component: UntagForm,
+        componentProps: {
+          soa: soa,
+          untag_types: payload.untag_types,
+          onReady: (api: { getFormData: () => FormData | null }) => {
+            formApi = api
+          }
+        },
+        size: 'lg',
+        onSubmit: async () => {
+          if (!formApi) return;
+          const formData = formApi.getFormData();
+          if (!formData) return;
+
+          showLoader();
+          try {
+            const response = await post(`/${slug.value}/update_tag`, formData);
+
+            if (!response.ok) {
+              dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+            } else {
+              dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+              closeModal();
+              // Refresh current page to update datatable props
+              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+            }
+          } catch (err) {
+            dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+          } finally {
+            hideLoader();
+          }
+        }
+      });
+    } catch (error) {
+      dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
+    }
+  };
+
   const viewSoa = async (soa: Soa) => {
     try {
       openModal({
@@ -48,7 +108,6 @@ export function useSoas() {
       });
     } catch (error) {
       dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
-      console.error('Error fetching soa data:', error);
     }
   };
 
@@ -65,7 +124,6 @@ export function useSoas() {
       });
     } catch (error) {
       dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
-      console.error('Error fetching soa data:', error);
     }
   };
 
@@ -113,10 +171,11 @@ export function useSoas() {
             } else {
               dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
               closeModal();
+              // Refresh current page to update datatable props
+              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
             }
           } catch (err) {
             dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
-            console.error(err);
           } finally {
             hideLoader();
           }
@@ -124,7 +183,6 @@ export function useSoas() {
       });
     } catch (error) {
       dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
-      console.error('Error fetching soa data:', error);
     }
   };
 
@@ -177,10 +235,11 @@ export function useSoas() {
             } else {
               dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
               closeModal();
+              // Refresh current page to update datatable props
+              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
             }
           } catch (err) {
             dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
-            console.error(err);
           } finally {
             hideLoader();
           }
@@ -188,7 +247,6 @@ export function useSoas() {
       });
     } catch (error) {
       dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
-      console.error('Error fetching user data:', error);
     }
   };
 
@@ -229,10 +287,11 @@ export function useSoas() {
             } else {
               dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
               closeModal();
+              // Refresh current page to update datatable props
+              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
             }
           } catch (err) {
             dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
-            console.error(err);
           } finally {
             hideLoader();
           }
@@ -240,7 +299,6 @@ export function useSoas() {
       });
     } catch (error) {
       dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
-      console.error('Error fetching soa data:', error);
     }
   };
 
@@ -250,6 +308,7 @@ export function useSoas() {
     createSoa,
     deleteSoa,
     manageFile,
+    untagSoa,
   };
 }
 

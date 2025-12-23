@@ -35,8 +35,8 @@ class AdminController extends Controller
     public function startImport()
     {
         try {
-            dispatch(new \App\Jobs\ImportAccountsJob());
-            dispatch(new \App\Jobs\ImportMainAccountsJob());
+            $this->importMainAccounts();
+            $this->importAccounts();
         } catch (\Exception $e) {
             Log::error('startImport Jobs failed: ' . $e->getMessage());
             Log::error($e->getTraceAsString());
@@ -152,7 +152,7 @@ class AdminController extends Controller
         //     ->where('table_schema', DB::connection('soa')->getDatabaseName())
         //     ->where('table_name', 'Upload')
         //     ->pluck('COLUMN_NAME');
-        
+
         // $result = DB::connection('cenuser')
         //     ->table('ref_gender')
         //     ->get();

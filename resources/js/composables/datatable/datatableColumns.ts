@@ -46,7 +46,7 @@ export function createActionColumn(customActions: ActionColumnOptions) {
         for (const action of customActions) {
           const ActionIcon = action.icon || File;
           const label = action.name || action.slug || 'Action';
-          const css = `p-1 text-${action.color}-600 hover:text-${action.color}-800 transition-colors rounded`;
+          const css = `cursor-pointer p-1 text-${action.color}-600 hover:text-${action.color}-800 transition-colors rounded`;
 
           const button = h(
             'button',

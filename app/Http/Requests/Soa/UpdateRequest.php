@@ -1,9 +1,10 @@
 <?php
 
-namespace App\Http\Requests\User;
+namespace App\Http\Requests\Soa;
 
-use App\Rules\IsDataExists;
-use Illuminate\Contracts\Validation\Rule;
+use App\Enums\UntagType;
+use App\Rules\IsServerDataExists;
+use Illuminate\Validation\Rule;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateRequest extends FormRequest
@@ -15,75 +16,35 @@ class UpdateRequest extends FormRequest
      */
     public function rules(): array
     {
+        $this->merge([
+            'amount_due' => str_replace(',', '', $this->amount_due),
+        ]);
         return [
             'id' => [
                 'required',
-                'integer'
-            ],
-            'gender_id' => [
-                'required',
                 'integer',
-                new IsDataExists('genders'),
+                new IsServerDataExists('soa', 'Upload', 'up_id'),
             ],
-            'civil_status_id' => [
-                'required',
-                'integer',
-                new IsDataExists('civil_statuses'),
-            ],
-            'citizenship_id' => [
-                'required',
-                'integer',
-                new IsDataExists('citizenships'),
-            ],
-            'department_id' => [
-                'required',
-                'integer',
-                new IsDataExists('departments'),
-            ],
-            'position_id' => [
-                'required',
-                'integer',
-                new IsDataExists('positions'),
-            ],
-            'first_name' => [
+            'soanum' => [
                 'required',
                 'string',
-                'max:191'
+                new IsServerDataExists('soa', 'Upload', 'up_soanum'),
             ],
-            'last_name' => [
+            // 'untag_type' => [
+            //     'required',
+            //     'integer',
+            //     Rule::in(UntagType::getValues()),
+            // ],
+            // 'reason' => [
+            //     'required_if:untag_type,' . UntagType::OTHERS,
+            //     'nullable',
+            //     'string',
+            //     'max:' . config('vc.default_text_limit'),
+            // ],
+            'amount_due' => [
                 'required',
-                'string',
-                'max:191'
-            ],
-            'middle_name' => [
-                'nullable',
-                'string',
-                'max:191'
-            ],
-            'suffix' => [
-                'nullable',
-                'string',
-                'max:191'
-            ],
-            'birthdate' => [
-                'nullable',
-                'date',
-                'max:191'
-            ],
-            'employee_no' => [
-                'nullable',
-                'string',
-                'max:191'
-            ],
-            'username' => [
-                'required',
-                'string',
-                'max:100'
-            ],
-            'email' => [
-                'required',
-                'string',
-                'max:100'
+                'numeric',
+                // 'max:' . config('vc.default_text_limit'),
             ],
         ];
     }

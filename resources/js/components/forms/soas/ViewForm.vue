@@ -61,91 +61,104 @@ onMounted(() => {
 <template>
   <form ref="soaViewForm" class="grid grid-cols-1 md:grid-cols-1 gap-3">
     <div class="md:col-span-2 hidden">
-        <Input
-            id="id"
-            type="hidden"
-            class="mt-1 block w-full"
-            name="id"
-            :default-value="soa?.id"
-        />
+      <Input
+        id="id"
+        type="hidden"
+        class="mt-1 block w-full"
+        name="id"
+        :default-value="soa?.id"
+      />
     </div>
 
     <div class="grid gap-2 md:col-span-1">
-        <Label for="company_branch">Company / Branch</Label>
-        <Input
-            id="company_branch"
-            class="mt-1 block w-full"
-            name="company_branch"
-            :default-value="soa?.company_branch"
-            autocomplete="company_branch"
-            placeholder="Company / Branch"
-            readonly
-        />
+      <Label for="company_branch">Company / Branch</Label>
+      <Input
+        id="company_branch"
+        class="mt-1 block w-full"
+        name="company_branch"
+        :default-value="soa?.company_branch"
+        autocomplete="company_branch"
+        placeholder="Company / Branch"
+        readonly
+      />
     </div>
 
     <div class="grid gap-2 md:col-span-1">
-        <Label for="billtype">Bill Type</Label>
-        <Input
-            id="billtype"
-            class="mt-1 block w-full"
-            name="billtype"
-            :default-value="soa?.billtype"
-            autocomplete="billtype"
-            placeholder="Bill Type"
-            readonly
-        />
+      <Label for="billtype">Bill Type</Label>
+      <Input
+        id="billtype"
+        class="mt-1 block w-full"
+        name="billtype"
+        :default-value="soa?.billtype"
+        autocomplete="billtype"
+        placeholder="Bill Type"
+        readonly
+      />
     </div>
 
     <div class="grid gap-2 md:col-span-1">
-        <Label for="billdate">Bill Date</Label>
-        <Input
-            id="billdate"
-            class="mt-1 block w-full"
-            name="billdate"
-            :default-value="soa?.billdate"
-            autocomplete="billdate"
-            placeholder="Bill Date"
-            readonly
-        />
+      <Label for="billdate">Bill Date</Label>
+      <Input
+        id="billdate"
+        class="mt-1 block w-full"
+        name="billdate"
+        :default-value="soa?.billdate"
+        autocomplete="billdate"
+        placeholder="Bill Date"
+        readonly
+      />
     </div>
 
     <div class="grid gap-2 md:col-span-1">
-        <Label for="upload_date">SOA Upload Date</Label>
-        <Input
-            id="upload_date"
-            class="mt-1 block w-full"
-            name="upload_date"
-            :default-value="soa?.upload_date"
-            autocomplete="upload_date"
-            placeholder="SOA Upload Date"
-            readonly
-        />
+      <Label for="upload_date">SOA Upload Date</Label>
+      <Input
+        id="upload_date"
+        class="mt-1 block w-full"
+        name="upload_date"
+        :default-value="soa?.upload_date"
+        autocomplete="upload_date"
+        placeholder="SOA Upload Date"
+        readonly
+      />
     </div>
 
     <div class="grid gap-2 md:col-span-1">
-        <Label for="period_coverage">Covered Period</Label>
-        <Input
-            id="period_coverage"
-            class="mt-1 block w-full"
-            name="period_coverage"
-            :default-value="soa?.period_coverage"
-            autocomplete="period_coverage"
-            placeholder="Covered Period"
-            readonly
-        />
+      <Label for="period_coverage">Covered Period</Label>
+      <Input
+        id="period_coverage"
+        class="mt-1 block w-full"
+        name="period_coverage"
+        :default-value="soa?.period_coverage"
+        autocomplete="period_coverage"
+        placeholder="Covered Period"
+        readonly
+      />
     </div>
 
     <div class="grid gap-2 md:col-span-1">
-        <Label for="due_date">Due Date</Label>
-        <Input
-            id="due_date"
-            class="mt-1 block w-full"
-            name="due_date"
-            :default-value="soa?.due_date"
-            autocomplete="due_date"
-            placeholder="Due Date"
-            readonly
-        />
+      <Label for="due_date">Due Date</Label>
+      <Input
+        id="due_date"
+        class="mt-1 block w-full"
+        name="due_date"
+        :default-value="soa?.due_date"
+        autocomplete="due_date"
+        placeholder="Due Date"
+        readonly
+      />
+    </div>
+
+    <div class="grid gap-2 md:col-span-1">
+      <Label for="amount_due">Amount Due</Label>
+      <Input
+        id="amount_due"
+        class="mt-1 block w-full"
+        name="amount_due"
+        :default-value="soa?.amount_due"
+        autocomplete="amount_due"
+        placeholder="Amount Due"
+        readonly
+      />
     </div>
 
   </form>

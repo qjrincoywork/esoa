@@ -2,26 +2,30 @@
 import { ref, onMounted, computed, defineExpose } from 'vue';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectTrigger, SelectContent, SelectGroup, SelectLabel, SelectItem, SelectValue } from '@/components/ui/select';
 
-type Status = { value: number; name: string }
-type Navigation = {
+type Soa = {
   id?: number
-  name?: string | number
-  label?: string
-  icon?: string
-  created_by?: number
-  status?: number
+  soanum?: string
+  macode?: string
+  refid?: string
+  upcode?: string
+  billcode?: string
+  billtype?: string
+  billdate?: string
+  upload_date?: string
+  due_date?: string
+  period_coverage?: string
+  paid_date?: string
+  amount_due?: number
+  company_branch?: string
+  file_pdf?: string
+  file_xls?: string
+  status?: string
 }
 
 const props = defineProps({
-  navigation: {
-    type: Object as unknown as () => Navigation,
-    default: () => [],
-  },
-  statuses: {
-    type: Array as unknown as () => Status[],
-    required: true,
+  soa: {
+    type: Object as unknown as () => Soa,
     default: () => [],
   },
   onReady: {
@@ -30,103 +34,135 @@ const props = defineProps({
   },
 });
 
-const navigation = computed<Navigation>(() => props.navigation as Navigation)
-const statuses = computed<Status[]>(() => props.statuses as Status[])
-console.log(statuses)
+const soa = computed<Soa>(() => props.soa as Soa)
 
 // Expose a form ref so parent components can access without document.getElementById
-const navigationEditForm = ref<HTMLFormElement | null>(null)
+const savingForm = ref<HTMLFormElement | null>(null)
 
 // Helper to extract FormData from this form (exposed to parent)
 function getFormData(): FormData | null {
-    if (!navigationEditForm.value) return null
-    return new FormData(navigationEditForm.value)
+  if (!savingForm.value) return null
+  return new FormData(savingForm.value)
 }
 
 defineExpose({
-    navigationEditForm,
-    getFormData,
+  savingForm,
+  getFormData,
 })
 
 onMounted(() => {
     if (typeof props.onReady === 'function') {
-        props.onReady({ getFormData, formRef: navigationEditForm.value })
+        props.onReady({ getFormData, formRef: savingForm.value })
     }
 })
 </script>
 
 <template>
-  <form ref="navigationEditForm" class="grid grid-cols-1 md:grid-cols-1 gap-3">
+  <form ref="savingForm" class="grid grid-cols-1 md:grid-cols-1 gap-3">
     <div class="md:col-span-2 hidden">
-        <Input
-            id="id"
-            type="hidden"
-            class="mt-1 block w-full"
-            name="id"
-            :default-value="navigation?.id"
-        />
+      <Input
+        type="hidden"
+        class="mt-1 block w-full"
+        name="id"
+        :default-value="soa?.id"
+      />
+      <Input
+        type="hidden"
+        class="mt-1 block w-full"
+        name="soanum"
+        :default-value="soa?.soanum"
+      />
     </div>
 
     <div class="grid gap-2 md:col-span-1">
-        <Label for="name">Name</Label>
-        <Input
-            id="name"
-            class="mt-1 block w-full"
-            name="name"
-            :default-value="navigation?.name"
-            autocomplete="name"
-            placeholder="Name"
-        />
+      <Label for="company_branch">Company / Branch</Label>
+      <Input
+        id="company_branch"
+        class="mt-1 block w-full"
+        name="company_branch"
+        :default-value="soa?.company_branch"
+        autocomplete="company_branch"
+        placeholder="Company / Branch"
+        readonly
+      />
     </div>
 
     <div class="grid gap-2 md:col-span-1">
-        <Label for="label">Label</Label>
-        <Input
-            id="label"
-            class="mt-1 block w-full"
-            name="label"
-            :default-value="navigation?.label"
-            autocomplete="label"
-            placeholder="Label"
-        />
+      <Label for="billtype">Bill Type</Label>
+      <Input
+        id="billtype"
+        class="mt-1 block w-full"
+        name="billtype"
+        :default-value="soa?.billtype"
+        autocomplete="billtype"
+        placeholder="Bill Type"
+        readonly
+      />
     </div>
 
     <div class="grid gap-2 md:col-span-1">
-        <Label for="icon">Icon</Label>
-        <Input
-            id="icon"
-            class="mt-1 block w-full"
-            name="icon"
-            :default-value="navigation?.icon"
-            autocomplete="icon"
-            placeholder="Icon"
-        />
+      <Label for="billdate">Bill Date</Label>
+      <Input
+        id="billdate"
+        class="mt-1 block w-full"
+        name="billdate"
+        :default-value="soa?.billdate"
+        autocomplete="billdate"
+        placeholder="Bill Date"
+        readonly
+      />
     </div>
 
     <div class="grid gap-2 md:col-span-1">
-        <Label for="status">Status</Label>
-        <Select
-            id="status"
-            class="mt-1 block w-full"
-            name="status"
-            :default-value="Number(navigation?.status)"
-        >
-          <SelectTrigger class="w-full">
-              <SelectValue placeholder="Select a status" />
-          </SelectTrigger>
-          <SelectContent class="w-full">
-              <SelectGroup>
-                  <SelectLabel>Status</SelectLabel>
-                  <SelectItem
-                    v-for="status in statuses"
-                    :key="status.value"
-                    :value="Number(status.value)"
-                  >
-                  {{ status.name }}
-                  </SelectItem>
-              </SelectGroup>
-          </SelectContent>
-        </Select>
+      <Label for="upload_date">SOA Upload Date</Label>
+      <Input
+        id="upload_date"
+        class="mt-1 block w-full"
+        name="upload_date"
+        :default-value="soa?.upload_date"
+        autocomplete="upload_date"
+        placeholder="SOA Upload Date"
+        readonly
+      />
     </div>
+
+    <div class="grid gap-2 md:col-span-1">
+      <Label for="period_coverage">Covered Period</Label>
+      <Input
+        id="period_coverage"
+        class="mt-1 block w-full"
+        name="period_coverage"
+        :default-value="soa?.period_coverage"
+        autocomplete="period_coverage"
+        placeholder="Covered Period"
+        readonly
+      />
+    </div>
+
+    <div class="grid gap-2 md:col-span-1">
+      <Label for="due_date">Due Date</Label>
+      <Input
+        id="due_date"
+        class="mt-1 block w-full"
+        name="due_date"
+        :default-value="soa?.due_date"
+        autocomplete="due_date"
+        placeholder="Due Date"
+        readonly
+      />
+    </div>
+
+    <div class="grid gap-2 md:col-span-1">
+      <Label for="amount_due">Amount Due</Label>
+      <Input
+        id="amount_due"
+        class="mt-1 block w-full"
+        name="amount_due"
+        :default-value="soa?.amount_due"
+        autocomplete="amount_due"
+        placeholder="Amount Due"
+      />
+    </div>
+
   </form>
 </template>

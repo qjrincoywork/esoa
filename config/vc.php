@@ -14,5 +14,6 @@ return [
     'api_auth_token' => 'API_AUTH_TOKEN',
 
     'default_pages' => 10,
+    'default_text_limit' => 800,
     'default_password' => 'VALUCARE123'
 ];
