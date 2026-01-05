@@ -66,7 +66,7 @@ export function useUsers() {
             formApi = api
           }
         },
-        size: 'lg',
+        size: 'xl2',
         onSubmit: async () => {
           if (!formApi) return;
 

@@ -7,13 +7,14 @@ use App\Helpers\CommonHelper;
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Soa\{ ListRequest, UpdateRequest, UpdateTagRequest };
+use App\Http\Requests\Soa\{FileProxyRequest, ListRequest, UpdateRequest, UpdateTagRequest };
 use App\Http\Resources\CommonResource;
 use App\Http\Resources\SoaResource;
 use App\Mail\NewSoaUploaded;
 use App\Models\{Account, Citizenship, CivilStatus, Contact, Department, Gender, MainAccount, Position, Suffix, User };
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
@@ -39,6 +40,38 @@ class SoaController extends Controller
         $this->sqlDatabase = SqlDatabase::class;
     }
 
+    /**
+     * Fetch a file from the given URL.
+     *
+     * @param Request $request
+     * @return Response
+     * @throws \Exception
+     */
+    public function fileProxy(FileProxyRequest $request)
+    {
+        $fileUrl = env('VC_ADMIN_DOMAIN') . $request->get('url');
+
+        if (!$fileUrl) {
+            return CustomResponse::error('URL parameter is required', Response::HTTP_BAD_REQUEST);
+        }
+
+        try {
+            $response = Http::withoutVerifying()->timeout(15)->get($fileUrl);
+            $contentType = $response->header('Content-Type') ?? 'application/octet-stream';
+
+            if ($response->successful()) {
+                return response($response->body(), Response::HTTP_OK, [
+                    'Content-Type' => $contentType,
+                    'Access-Control-Allow-Origin' => '*',
+                    'Content-Disposition' => 'inline',
+                ]);
+            } else {
+                return CustomResponse::error('Failed to fetch PDF', $response->status());
+            }
+        } catch (\Exception $e) {
+            return CustomResponse::error('An error occurred: ' . $e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
     /**
      * Display a listing of the resource.
      */
