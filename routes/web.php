@@ -107,10 +107,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware(['check_permissions'])->group(function () {
         //user_dashboard
         Route::prefix('soas')->name('soas.')->controller(SoaController::class)->group(function () {
+            Route::get('/file_proxy', 'fileProxy')->name('file_proxy');
             Route::get('/', 'index')->name('index');
             Route::get('/{id}/show', 'show')->name('show');
             Route::get('/{id}/edit', 'edit')->name('edit');
-            Route::get('/{id}/manage_file', 'manage_file')->name('manage_file');
+            Route::get('/{id}/manage_file', 'manageFile')->name('manage_file');
             Route::get('/{id}/untag', 'untag')->name('untag');
             Route::post('/update', 'update')->name('update');
             Route::post('/update_tag', 'updateTag')->name('update_tag');
