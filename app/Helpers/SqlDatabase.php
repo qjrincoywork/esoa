@@ -90,7 +90,6 @@ class SqlDatabase
             })
             // ->limit(1)
             ->first();
-        dd($result);
 
         return $result;
     }
