@@ -47,7 +47,6 @@ class NewSoaUploaded extends Mailable
     {
         return new Content(
             view: 'emails.esoa.new-soa-uploaded',
-            // markdown: 'emails.mcompanies.new-notifications-from-admin',
         );
     }
 

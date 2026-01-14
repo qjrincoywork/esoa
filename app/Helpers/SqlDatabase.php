@@ -70,6 +70,31 @@ class SqlDatabase
     }
 
     /**
+     * Retrieves a single billing record by its reference ID.
+     *
+     * Excludes records that are currently being recomputed.
+     *
+     * @param string $billref Reference ID of the billing record
+     * @return object|null
+     */
+    public function getBilling($billref)
+    {
+        $result = $this->db
+            ->table('billing')
+            ->select('bl_refid, bl_balance, bl_urgcol, bl_vat_amt, bl_urg_dateproc')
+            ->like('bl_refid', $billref)
+            ->whereNotIn('bl_refid', function ($builder) {
+                return $builder
+                    ->select('billing_id')
+                    ->from('billing_recompute');
+            })
+            // ->limit(1)
+            ->first();
+
+        return $result;
+    }
+
+    /**
      * Untags a SOA record.
      *
      * @param array $params

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Soa;
 
+use App\Enums\Server;
 use App\Enums\UntagType;
 use App\Rules\IsServerDataExists;
 use Illuminate\Validation\Rule;
@@ -20,12 +21,12 @@ class UpdateTagRequest extends FormRequest
             'id' => [
                 'required',
                 'integer',
-                new IsServerDataExists('soa', 'Upload', 'up_id'),
+                new IsServerDataExists(Server::SOA, 'Upload', 'up_id'),
             ],
             'soanum' => [
                 'required',
                 'string',
-                new IsServerDataExists('soa', 'Upload', 'up_soanum'),
+                new IsServerDataExists(Server::SOA, 'Upload', 'up_soanum'),
             ],
             'untag_type' => [
                 'required',

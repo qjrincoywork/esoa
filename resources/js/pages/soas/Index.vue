@@ -54,6 +54,12 @@ const baseColumns: any[] = [
   columnHelper.accessor('company_branch', {
     header: 'Company / Branch',
   }),
+  // columnHelper.accessor('due_date', {
+  //   header: 'Due Date',
+  // }),
+  columnHelper.accessor('due_in', {
+    header: 'Due In',
+  }),
   columnHelper.accessor('upcode', {
     header: 'Up Code',
   }),
@@ -205,7 +211,8 @@ watch(
                 <Button v-if="canCreate" :onClick="createSoa">Create</Button>
                 <div class="relative w-full sm:w-64">
                     <label class="sr-only" for="soa-search">Search soas</label>
-                    <input
+                    <div>
+                      <input
                         id="soa-search"
                         v-model="searchQuery"
                         type="text"
@@ -213,6 +220,7 @@ watch(
                         class="border border-[var(--color-border-strong)] rounded-md text-sm bg-[var(--color-surface)] text-[var(--color-text)] focus:ring-2 focus:ring-opacity-50 focus:border-transparent w-full px-4 py-2 pr-8"
                         :style="{ '--tw-ring-color': 'var(--primary-color)' }"
                         @input="hasInitialized = true" />
+                    </div>
                     <button
                         v-if="searchQuery"
                         class="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] hover:text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-opacity-50"
@@ -231,15 +239,15 @@ watch(
                 </div>
             </div>
             <Datatable
-                :data="soas.data"
-                :columns="columns"
-                :pagination="pagination"
-                :search-fields="[]"
-                :enable-search="false"
-                empty-message="No soas found"
-                empty-description="System soas will appear here. Use search, pagination, or change rows per page to load data."
-                export-file-name="soas_list"
-                @update:pagination="(newPagination: typeof pagination) => { hasInitialized = true; pagination = newPagination }">
+              :data="soas.data"
+              :columns="columns"
+              :pagination="pagination"
+              :search-fields="[]"
+              :enable-search="false"
+              empty-message="No soas found"
+              empty-description="System soas will appear here. Use search, pagination, or change rows per page to load data."
+              export-file-name="soas_list"
+              @update:pagination="(newPagination: typeof pagination) => { hasInitialized = true; pagination = newPagination }">
             </Datatable>
         </div>
     </AppLayout>
