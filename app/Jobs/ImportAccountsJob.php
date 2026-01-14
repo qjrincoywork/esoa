@@ -32,8 +32,7 @@ class ImportAccountsJob implements ShouldQueue
      */
     public function handle(): void
     {
-        $authId = 1; // fallback if queue doesn't have auth
-
+        DB::beginTransaction();
         try {
             $authId = 1; // fallback if queue doesn't have auth
             Log::info('Start Accounts Logging');
@@ -90,8 +89,10 @@ class ImportAccountsJob implements ShouldQueue
                 ]);
             }
 
+            DB::commit();
             Log::info('End Accounts Logging');
         } catch (\Exception $e) {
+            DB::rollBack();
             Log::error('Job failed: ' . $e->getMessage() . ' ' . $e->getTraceAsString());
             throw $e;
         }

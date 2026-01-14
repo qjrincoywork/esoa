@@ -26,6 +26,7 @@ class SoaResource extends JsonResource
             'billdate' => $this->formatDate($this->up_billdate),
             'upload_date' => $this->formatDate($this->up_date, true),
             'due_date' => $this->formatDate($this->up_due_date),
+            'due_in' => $this->formatDaysDue($this->up_due_date),
             'period_coverage' => $this->up_period_cov,
             'paid_date' => $this->formatDate($this->up_status_date),
             'amount_due' => number_format($this->up_amount, 2),
@@ -74,5 +75,36 @@ class SoaResource extends JsonResource
         return $withTime
             ? $date->format('F j, Y')
             : $date->format('F j, Y h:i A');
+    }
+
+    /**
+     * Format a due date into a human-readable string.
+     *
+     * @param string|null $date The date to format.
+     *
+     * @return string|null If the date is null, returns null.
+     *   If the date is in the past, returns 'Past Due'.
+     *   If the date is today, returns 'Due today'.
+     *   If the date is in the future, returns 'Due in X days'.
+     */
+    public function formatDaysDue($date)
+    {
+        if (!$date) {
+            return null;
+        }
+
+        $date = Carbon::parse($date);
+
+        if ($date->isPast()) {
+            return 'Past Due';
+        }
+
+        $days = (int) now()->diffInDays($date, true);
+
+        return match ($days) {
+            0 => 'Due Today',
+            1 => 'Due Tomorrow',
+            default => "Due in {$days} days",
+        };
     }
 }

@@ -127,6 +127,25 @@ export function useSoas() {
     }
   };
 
+  const recomputeTax = async (formData: FormData) => {
+    showLoader();
+    try {
+      const response = await post(`/${slug.value}/recompute_tax`, formData);
+
+      if (!response.ok) {
+        //To be Updated the showing of validation errors in the form
+        dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+      } else {
+        dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+        closeModal();
+      }
+    } catch (err) {
+      dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+    } finally {
+      hideLoader();
+    }
+  };
+
   const editSoa = async (soa: Soa) => {
     try {
       // Make AJAX request without navigation using reusable composable
@@ -309,6 +328,7 @@ export function useSoas() {
     deleteSoa,
     manageFile,
     untagSoa,
+    recomputeTax,
   };
 }
 

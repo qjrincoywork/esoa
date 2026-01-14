@@ -52,13 +52,11 @@ class ProfileController extends Controller
      */
     public function update(UpdateRequest $request)
     {
-        dd('hit');
         $validated = $request->validated();
 
         DB::beginTransaction();
 
         try {
-            dd($validated);
             $this->user->saveUser($validated);
 
             // Commit transaction

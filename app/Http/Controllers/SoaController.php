@@ -2,12 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\Server;
 use App\Enums\UntagType;
 use App\Helpers\CommonHelper;
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Soa\{FileProxyRequest, ListRequest, UpdateRequest, UpdateTagRequest };
+use App\Http\Requests\Soa\{FileProxyRequest, ListRequest, RecomputeTaxRequest, UpdateRequest, UpdateTagRequest };
 use App\Http\Resources\CommonResource;
 use App\Http\Resources\SoaResource;
 use App\Mail\NewSoaUploaded;
@@ -72,12 +73,13 @@ class SoaController extends Controller
             return CustomResponse::error('An error occurred: ' . $e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
+
     /**
      * Display a listing of the resource.
      */
     public function index(ListRequest $request)
     {
-        $soas = (new $this->sqlDatabase('soa'))->getSoas($request->validated());
+        $soas = (new $this->sqlDatabase(Server::SOA))->getSoas($request->validated());
 
         return Inertia::render('soas/Index', [
             'soas' => new CommonResource(SoaResource::collection($soas))
@@ -89,7 +91,7 @@ class SoaController extends Controller
      */
     public function show(int $id)
     {
-        $soa = (new $this->sqlDatabase('soa'))->getSoa($id);
+        $soa = (new $this->sqlDatabase(Server::SOA))->getSoa($id);
 
         return Inertia::render('soas/Index', [
             'soa' => SoaResource::make($soa)
@@ -101,7 +103,7 @@ class SoaController extends Controller
      */
     public function edit(Request $request, int $id)
     {
-        $soa = (new $this->sqlDatabase('soa'))->getSoa($id);
+        $soa = (new $this->sqlDatabase(Server::SOA))->getSoa($id);
 
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
@@ -118,13 +120,13 @@ class SoaController extends Controller
     {
         $validated = $request->validated();
 
-        DB::connection('soa')->beginTransaction();
+        DB::connection(Server::SOA)->beginTransaction();
 
         try {
-            (new $this->sqlDatabase('soa'))->saveSoa($validated);
+            (new $this->sqlDatabase(Server::SOA))->saveSoa($validated);
 
             // Commit transaction
-            DB::connection('soa')->commit();
+            DB::connection(Server::SOA)->commit();
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
@@ -132,7 +134,7 @@ class SoaController extends Controller
             }
         } catch (\Exception $e) {
             // Catch and handle any unexpected errors
-            DB::connection('soa')->rollBack();
+            DB::connection(Server::SOA)->rollBack();
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
@@ -161,7 +163,7 @@ class SoaController extends Controller
     public function updateTag(UpdateTagRequest $request)
     {
         $validated = $request->validated();
-        DB::connection('soa')->beginTransaction();
+        DB::connection(Server::SOA)->beginTransaction();
 
         try {
             switch ($validated['untag_type']) {
@@ -175,18 +177,17 @@ class SoaController extends Controller
                     $validated['reason'] = __('esoa.reason.bounced_returned_check');
                     break;
             }
-            $soa = (new $this->sqlDatabase('soa'))->getSoa($validated['id']);
+            $soa = (new $this->sqlDatabase(Server::SOA))->getSoa($validated['id']);
 
-            // dd($soa);
             if (!$soa) {
                 throw new \Exception('SOA record not found.');
             }
 
-            // (new $this->sqlDatabase('soa'))->untagSoa($soa, $validated);
+            // (new $this->sqlDatabase(Server::SOA))->untagSoa($soa, $validated);
             Mail::to('quirjohnincoy.work@gmail.com')->send(new NewSoaUploaded($soa));
 
             // Commit transaction
-            DB::connection('soa')->commit();
+            DB::connection(Server::SOA)->commit();
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
@@ -194,7 +195,36 @@ class SoaController extends Controller
             }
         } catch (\Exception $e) {
             // Catch and handle any unexpected errors
-            DB::connection('soa')->rollBack();
+            DB::connection(Server::SOA)->rollBack();
+
+            // Return JSON for AJAX requests (no URL change)
+            if ($request->wantsJson() || $request->ajax()) {
+                // Catch and handle any unexpected errors
+                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+            }
+        }
+    }
+
+    public function taxComputation(Request $request)
+    {
+        return Inertia::render('soas/TaxComputation');
+    }
+
+    public function recomputeTax(RecomputeTaxRequest $request)
+    {
+        $validated = $request->validated();
+        // DB::connection(Server::HMS)->beginTransaction();
+
+        try {
+            // Commit transaction
+            // DB::connection(Server::HMS)->commit();
+            // Return JSON for AJAX requests (no URL change)
+            if ($request->wantsJson() || $request->ajax()) {
+                return CustomResponse::ok('Retraction Completed', Response::HTTP_OK);
+            }
+        } catch (\Exception $e) {
+            // Catch and handle any unexpected errors
+            // DB::connection(Server::HMS)->rollBack();
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
