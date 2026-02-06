@@ -1,9 +1,8 @@
 <?php
 
-namespace App\Http\Requests\User;
+namespace App\Http\Requests\Navigation;
 
 use App\Rules\{ IsDataExists, IsUserAdmin };
-use Illuminate\Contracts\Validation\Rule;
 use Illuminate\Foundation\Http\FormRequest;
 
 class DeleteRequest extends FormRequest
@@ -19,7 +18,7 @@ class DeleteRequest extends FormRequest
             'id' => [
                 'required',
                 'integer',
-                new IsDataExists('users'),
+                new IsDataExists('navigations'),
                 new IsUserAdmin()
             ],
         ];

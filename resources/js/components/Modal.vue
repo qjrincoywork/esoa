@@ -17,15 +17,15 @@ const closeButton = ref(null)
 const previouslyFocused = ref(null)
 const modalId = `modal-${Math.random().toString(36).substr(2, 9)}`
 const sizeClasses = {
-    sm: 'w-full max-w-sm mx-2 sm:mx-4',
-    md: 'w-full max-w-md mx-2 sm:mx-6',
-    lg: 'w-full max-w-lg mx-2 sm:mx-8',
-    xl: 'w-full max-w-xl mx-2 sm:mx-12',
-    '2xl': 'w-full max-w-2xl mx-2 sm:mx-4',
-    '3xl': 'w-full max-w-3xl mx-2 sm:mx-4',
-    '4xl': 'w-full max-w-4xl mx-2 sm:mx-4',
-    '5xl': 'w-full max-w-5xl mx-2 sm:mx-4',
-    full: 'w-full max-w-full mx-1 sm:mx-2'
+  sm: 'w-full max-w-sm sm:mx-4',
+  md: 'w-full max-w-md sm:mx-6',
+  lg: 'w-full max-w-lg sm:mx-8',
+  xl: 'w-full max-w-xl sm:mx-12',
+  xl2: 'w-full max-w-xl2',
+  xl3: 'w-full max-w-xl3',
+  xl4: 'w-full max-w-xl4',
+  xl5: 'w-full max-w-xl5',
+  full: 'w-full mx-1 sm:mx-2'
 }
 
 const handleKeyDown = e => {
@@ -87,9 +87,10 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeyDown))
                 <article
                     ref="modalPanel"
                     tabindex="-1"
-                    class="relative w-full rounded-xl bg-white dark:bg-gray-800 shadow-2xl flex flex-col ring-1 ring-black/5 dark:ring-white/5 overflow-visible overflow-y-auto"
+                    class="relative rounded-xl bg-white dark:bg-gray-800 shadow-2xl flex flex-col ring-1 ring-black/5 dark:ring-white/5 overflow-visible overflow-y-auto"
                     :class="sizeClasses[props.size]">
                     <!-- :class="sizeClasses[size] || sizeClasses['md']">
+                    class="relative w-full rounded-xl bg-white dark:bg-gray-800 shadow-2xl flex flex-col ring-1 ring-black/5 dark:ring-white/5 overflow-visible overflow-y-auto w-full w-full max-w-xl mx-2 sm:mx-12"
                     class="relative w-full rounded-xl bg-white dark:bg-gray-800 shadow-2xl flex flex-col max-h-[calc(100vh-1rem)] sm:max-h-[calc(100vh-2rem)] md:max-h-[calc(100vh-3rem)] ring-1 ring-black/5 dark:ring-white/5 overflow-visible"
                          :class="props.size ?? 'sm'"> -->
                     <header

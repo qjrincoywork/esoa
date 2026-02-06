@@ -8,6 +8,7 @@ import Datatable from '@/components/Datatable.vue';
 import { Button } from "@/components/ui/button";
 import { createActionColumn } from '@/composables/datatable/datatableColumns';
 import { useRoles } from '@/composables/roles';
+import { useModulePermissions } from '@/composables/useModulePermissions';
 
 type RolesPagination = {
     current_page: number
@@ -17,6 +18,7 @@ type RolesPagination = {
 }
 
 const page = usePage();
+const { canCreate, slug, hasPermission } = useModulePermissions();
 const roles = computed(() => (page.props as any).roles as RolesPagination);
 const { createRole, editRole, deleteRole } = useRoles();
 const columnHelper = createColumnHelper();
@@ -25,7 +27,7 @@ const pagination = ref({
 	per_page: Number(roles.value.per_page),
 	total: roles.value.total
 })
-const columns = [
+const baseColumns = [
   columnHelper.accessor('id', {
     header: 'ID',
   }),
@@ -35,12 +37,27 @@ const columns = [
   columnHelper.accessor('guard_name', {
     header: 'Guard Name',
   }),
-  createActionColumn({
-    basePath: '/roles',
-    onEdit: editRole,
-    onDelete: deleteRole,
-  }),
 ]
+
+const handlerMap: Record<string, Function> = {
+  edit: editRole,
+  update: editRole,
+  delete: deleteRole,
+  destroy: deleteRole,
+}
+
+const columns = computed(() => {
+  const subModules = page.props.sub_modules
+    .filter((m: any) => hasPermission(m.slug) && m.slug.split('.')[1] != 'create')
+    .map((m: any) => ({
+      ...m,
+      handler: handlerMap[m.slug.split('.')[1]],
+    }))
+
+  return subModules.length
+    ? [...baseColumns, createActionColumn(subModules)]
+    : baseColumns
+})
 
 const breadcrumbItems: BreadcrumbItem[] = [
     {
@@ -95,6 +112,7 @@ watch(
                 :data="roles.data"
                 :columns="columns"
                 :pagination="pagination"
+                :show-selection-column="true"
                 :search-fields="['name']"
                 empty-message="No audit records found"
                 empty-description="System roles will appear here"

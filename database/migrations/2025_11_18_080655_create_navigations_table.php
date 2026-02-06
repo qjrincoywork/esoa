@@ -18,6 +18,7 @@ return new class extends Migration
             $table->string('icon');
             $table->integer('created_by');
             $table->integer('status');
+            $table->integer('order_number');
             $table->timestamps();
             $table->softDeletes();
         });

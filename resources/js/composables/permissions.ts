@@ -4,6 +4,9 @@ import DeleteForm from '@/components/forms/permissions/DeleteForm.vue';
 import SavingForm from '@/components/forms/permissions/SavingForm.vue';
 let formApi: { getFormData: () => FormData | null } | null = null;
 import { dispatchNotification } from '@/components/notification';
+import { showLoader, hideLoader } from '@/composables/useLoader';
+import { useModulePermissions } from '@/composables/useModulePermissions';
+import { router } from '@inertiajs/vue3';
 
 export interface Permission {
   id?: number | string;
@@ -19,6 +22,7 @@ export interface Suffixes {
 }
 
 export function usePermissions() {
+    const { slug } = useModulePermissions();
   const { openModal, closeModal } = useModal();
   const { get, post } = useAjax();
 
@@ -28,7 +32,7 @@ export function usePermissions() {
       const response = await get<{
         permission: Permission;
       }>(
-        `/permissions/${permission.id}/edit`
+        `/${slug.value}/${permission.id}/edit`
       );
 
       if (!response.ok) {
@@ -56,14 +60,24 @@ export function usePermissions() {
           const formData = formApi.getFormData();
           if (!formData) return;
 
-          const response = await post(`/permissions/update`, formData);
+          showLoader();
+          try {
+            const response = await post(`/${slug.value}/update`, formData);
 
-          if (!response.ok) {
-            //To be Updated the showing of validation errors in the form
-            dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
-          } else {
-            dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
-            closeModal();
+            if (!response.ok) {
+              //To be Updated the showing of validation errors in the form
+              dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+            } else {
+              dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+              closeModal();
+            }
+          } catch (err) {
+            dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+            console.error(err);
+          } finally {
+            // Refresh current page to update datatable props
+            router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+            hideLoader();
           }
         }
       });
@@ -91,14 +105,24 @@ export function usePermissions() {
           const formData = formApi.getFormData();
           if (!formData) return;
 
-          const response = await post(`/permissions/store`, formData);
+          showLoader();
+          try {
+            const response = await post(`/${slug.value}/store`, formData);
 
-          if (!response.ok) {
-            //To be Updated the showing of validation errors in the form
-            dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
-          } else {
-            dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
-            closeModal();
+            if (!response.ok) {
+              //To be Updated the showing of validation errors in the form
+              dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+            } else {
+              dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+              closeModal();
+            }
+          } catch (err) {
+            dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+            console.error(err);
+          } finally {
+            // Refresh current page to update datatable props
+            router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+            hideLoader();
           }
         }
       });
@@ -127,13 +151,23 @@ export function usePermissions() {
           const formData = formApi.getFormData();
           if (!formData) return;
 
-          const response = await post(`/permissions/destroy`, formData);
+          showLoader();
+          try {
+            const response = await post(`/${slug.value}/destroy`, formData);
 
-          if (!response.ok) {
-            dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
-          } else {
-            dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
-            closeModal();
+            if (!response.ok) {
+              dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+            } else {
+              dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+              closeModal();
+            }
+          } catch (err) {
+            dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+            console.error(err);
+          } finally {
+            // Refresh current page to update datatable props
+            router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+            hideLoader();
           }
         }
       });

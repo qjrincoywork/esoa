@@ -22,6 +22,7 @@ class Navigation extends Model
         'label',
         'icon',
         'status',
+        'order_number',
         'created_by',
     ];
 
@@ -58,14 +59,14 @@ class Navigation extends Model
         $query = $this->modules()->with('subModules');
 
         // If user is superadmin, return all modules
-        // if ($user && $user->hasRole('superadmin')) {
-        //     return $query->get();
-        // }
+        if ($user && $user->hasRole('superadmin')) {
+            return $query->whereNull('ref_id')->get();
+        }
 
         // Filter modules based on user permissions
         if ($user) {
             $permissionIds = $user->getAllPermissions()->pluck('id')->toArray();
-            
+
             return $query->where(function ($q) use ($permissionIds) {
                 $q->whereNull('permission_id') // Modules without permission requirement
                   ->orWhereIn('permission_id', $permissionIds) // Modules user has permission for
@@ -75,13 +76,6 @@ class Navigation extends Model
 
         // If no user, return only modules without permission requirement
         return $query->whereNull('permission_id')->get();
-    }
-
-    protected function casts(): array
-    {
-        return [
-            // 'status' => Status::class,
-        ];
     }
 
     public function getNavigations(array $params)
@@ -95,9 +89,22 @@ class Navigation extends Model
                 $query->where('status', $params['status']);
             })
             ->with('modules')
-            ->orderBy('id', 'desc')
-            ->paginate($perPage);
+            ->orderBy('id', 'desc');
 
-        return $result;
+        if (auth()->user() && auth()->user()->hasRole('superadmin')) {
+            $result->withTrashed();
+        }
+
+        return $result->paginate($perPage);
+    }
+
+    public function saveNavigation(array $data) {
+        $data += ['created_by' => auth()->user()->id];
+        if (isset($data['id'])) {
+            $navigation = self::find($data['id']);
+            $navigation->update($data);
+        } else {
+            $navigation = self::create($data);
+        }
     }
 }

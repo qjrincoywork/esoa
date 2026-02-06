@@ -15,10 +15,12 @@ export interface ModalOptions {
   submitMethod?: HttpMethod;
   submitData?: Record<string, any>;
   size?: ModalSize;
+  hasSubmitButton?: boolean;
   closeOnClickOutside?: boolean;
 }
 
 const visible = ref(false);
+const hasSubmitButton = ref(true);
 const title = ref('');
 const buttonLabel = ref('');
 const buttonClass = ref('');
@@ -43,6 +45,7 @@ export function useModal() {
     submitMethod.value = options.submitMethod || 'post';
     submitData.value = options.submitData || {};
     size.value = options.size || 'md';
+    hasSubmitButton.value = options.hasSubmitButton !== undefined ? options.hasSubmitButton : true;
     closeOnClickOutside.value = options.closeOnClickOutside ?? true;
     visible.value = true;
   };
@@ -61,6 +64,7 @@ export function useModal() {
       submitMethod.value = 'post';
       submitData.value = {};
       size.value = 'md';
+      hasSubmitButton.value = true;
       closeOnClickOutside.value = true;
     }, 150);
   };
@@ -109,6 +113,7 @@ export function useModal() {
     contentComponent,
     componentProps,
     size,
+    hasSubmitButton,
     closeOnClickOutside,
     openModal,
     closeModal,

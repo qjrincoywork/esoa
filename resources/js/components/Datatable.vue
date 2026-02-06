@@ -11,6 +11,8 @@ import {
 
 import { Form, Head, Link, router, usePage } from '@inertiajs/vue3';
 import Modal from '@/components/Modal.vue';
+import { Button } from "@/components/ui/button";
+import { Pointer } from 'lucide-vue-next';
 
 const selectionColor = 'var(--selection-color)'
 
@@ -19,10 +21,10 @@ const styles = {
     button: 'btn-primary !p-2 focus:outline-none focus:ring-2 focus:ring-opacity-50',
     tableCell: 'px-6 py-1 text-xs text-[var(--color-text)]',
     tableHeader: 'table-header',
-    sortableHeader: 'cursor-pointer hover:bg-[var(--color-surface-muted)]',
+    sortableHeader: 'cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
     rowEven: 'bg-[var(--color-surface)]',
     rowOdd: 'bg-[var(--color-surface-muted)]',
-    rowHover: 'hover:bg-[var(--color-surface-muted)] transition-colors',
+    rowHover: 'cursor-pointer hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-lg transition-colors',
     rowSelected: 'bg-[var(--selection-color-light)] dark:bg-[var(--selection-color-dark)]',
     focusRing: 'focus:outline-none focus:ring-2 focus:ring-opacity-50',
     dropdown:
@@ -54,6 +56,8 @@ const props = defineProps({
     defaultPageSize: { type: Number, default: 10 },
     loading: { type: Boolean, default: false },
     error: { type: String, default: '' },
+    // When true, render the selection checkbox column (select all / row checkboxes)
+    showSelectionColumn: { type: Boolean, default: false },
     bulkDeleteRoute: {
         type: String,
         default: ''
@@ -111,10 +115,7 @@ const toggleRow = index => {
     }
 }
 
-const handleSelectAll = () => {
-    table.toggleAllRowsSelected()
-}
-
+const isServerPagination = computed(() => Boolean(props.pagination?.total))
 const filteredData = computed(() => {
     if (!searchQuery.value || !props.searchFields.length) return props.data
 
@@ -128,7 +129,58 @@ const filteredData = computed(() => {
     )
 })
 
-const isServerPagination = computed(() => Boolean(props.pagination?.total))
+const table = useVueTable({
+    get data() {
+        return filteredData.value
+    },
+    columns: props.columns,
+    state: {
+        get sorting() {
+            return sorting.value
+        },
+        get rowSelection() {
+            return rowSelection.value
+        },
+        get pagination() {
+            if (isServerPagination.value) {
+                return {
+                    pageSize: props.pagination.per_page,
+                    pageIndex: props.pagination.current_page - 1
+                }
+            }
+            return {
+                pageIndex: pagination.value.pageIndex,
+                pageSize: pagination.value.pageSize
+            }
+        }
+    },
+    onRowSelectionChange: updaterOrValue => {
+        rowSelection.value =
+            typeof updaterOrValue === 'function'
+                ? updaterOrValue(rowSelection.value)
+                : updaterOrValue
+    },
+    onSortingChange: updaterOrValue => {
+        sorting.value =
+            typeof updaterOrValue === 'function' ? updaterOrValue(sorting.value) : updaterOrValue
+    },
+    onPaginationChange: updaterOrValue => {
+        const newPagination =
+            typeof updaterOrValue === 'function' ? updaterOrValue(pagination.value) : updaterOrValue
+        pagination.value = newPagination
+    },
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getPaginationRowModel: isServerPagination.value ? undefined : getPaginationRowModel(),
+    enableRowSelection: true,
+    enableMultiRowSelection: true,
+    getRowId: row => row.id || row.ID || JSON.stringify(row)
+})
+
+const handleSelectAll = () => {
+    table.toggleAllRowsSelected()
+}
 
 const isAllSelected = computed(() => {
     if (!isServerPagination.value) return false
@@ -285,55 +337,6 @@ const exportToCSV = () => {
     document.body.removeChild(link)
 }
 
-const table = useVueTable({
-    get data() {
-        return filteredData.value
-    },
-    columns: props.columns,
-    state: {
-        get sorting() {
-            return sorting.value
-        },
-        get rowSelection() {
-            return rowSelection.value
-        },
-        get pagination() {
-            if (isServerPagination.value) {
-                return {
-                    pageSize: props.pagination.per_page,
-                    pageIndex: props.pagination.current_page - 1
-                }
-            }
-            return {
-                pageIndex: pagination.value.pageIndex,
-                pageSize: pagination.value.pageSize
-            }
-        }
-    },
-    onRowSelectionChange: updaterOrValue => {
-        rowSelection.value =
-            typeof updaterOrValue === 'function'
-                ? updaterOrValue(rowSelection.value)
-                : updaterOrValue
-    },
-    onSortingChange: updaterOrValue => {
-        sorting.value =
-            typeof updaterOrValue === 'function' ? updaterOrValue(sorting.value) : updaterOrValue
-    },
-    onPaginationChange: updaterOrValue => {
-        const newPagination =
-            typeof updaterOrValue === 'function' ? updaterOrValue(pagination.value) : updaterOrValue
-        pagination.value = newPagination
-    },
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: isServerPagination.value ? undefined : getPaginationRowModel(),
-    enableRowSelection: true,
-    enableMultiRowSelection: true,
-    getRowId: row => row.id || row.ID || JSON.stringify(row)
-})
-
 watch(
     () => pagination.value.pageSize,
     newSize => {
@@ -485,6 +488,12 @@ watch(
                         </svg>
                         Bulk Delete
                     </button>
+                    <!-- <button
+                        class="items-center gap-2 cursor-pointer"
+                        @click="showDeleteModal = true">
+                        Add Access Permission
+                    </button> -->
+                    <Button class="cursor-pointer" @click="showDeleteModal = true">Add Access Permission</Button>
 
                     <slot name="bulk-actions" :selected-rows="selectedRows" />
                 </div>
@@ -539,6 +548,7 @@ watch(
         <div class="overflow-x-auto border border-[var(--color-border)] rounded-lg">
             <div class="block md:hidden space-y-3 p-3">
                 <div
+                    v-if="showSelectionColumn"
                     class="flex items-center justify-between p-2 bg-[var(--color-surface-muted)] rounded-lg border border-[var(--color-border)]">
                     <label class="inline-flex items-center">
                         <input
@@ -569,7 +579,7 @@ watch(
                     <div class="p-2">
                         <div class="flex items-center justify-between mb-1.5">
                             <div class="flex items-center gap-1.5">
-                                <label class="inline-flex items-center">
+                                <label v-if="showSelectionColumn" class="inline-flex items-center">
                                     <input
                                         type="checkbox"
                                         class="form-checkbox rounded border-[var(--color-border-strong)] focus:ring-2 focus:ring-opacity-50 bg-[var(--color-surface)]"
@@ -664,7 +674,7 @@ watch(
                 role="grid">
                 <thead class="bg-[var(--color-surface-muted)]">
                     <tr>
-                        <th class="w-10 px-6 py-3">
+                        <th v-if="showSelectionColumn" class="w-10 px-6 py-3">
                             <div class="flex items-center">
                                 <label class="inline-flex items-center">
                                     <input
@@ -705,7 +715,7 @@ watch(
                 <tbody
                     class="bg-[var(--color-surface)] divide-y divide-[var(--color-border)]">
                     <tr v-if="!table.getRowModel().rows.length" :class="styles.rowHover">
-                        <td :colspan="columns.length + 1" class="px-6 py-8 text-center">
+                        <td :colspan="props.columns.length + (showSelectionColumn ? 1 : 0)" class="px-6 py-8 text-center">
                             <p class="text-[var(--color-text-muted)] text-sm">
                                 {{ emptyMessage }}
                             </p>
@@ -726,7 +736,7 @@ watch(
                                   ? styles.rowEven
                                   : styles.rowOdd
                         ]">
-                        <td class="px-6 py-1">
+                        <td v-if="showSelectionColumn" class="px-6 py-1">
                             <div class="flex items-center">
                                 <label class="inline-flex items-center">
                                     <input
@@ -844,7 +854,7 @@ watch(
                         class="px-2 py-1 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
                         :class="[
                             table.getCanPreviousPage()
-                                ? 'text-[var(--color-text)] hover:bg-[var(--color-surface-muted)]'
+                                ? 'text-[var(--color-text)] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
                                 : 'text-[var(--color-text-muted)]',
                             styles.focusRing
                         ]"
@@ -872,7 +882,7 @@ watch(
                         class="px-2 py-1 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
                         :class="[
                             table.getCanNextPage()
-                                ? 'text-[var(--color-text)] hover:bg-[var(--color-surface-muted)]'
+                                ? 'text-[var(--color-text)] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
                                 : 'text-[var(--color-text-muted)]',
                             styles.focusRing
                         ]"

@@ -3,8 +3,9 @@
 namespace App\Http\Requests\User;
 
 use App\Rules\IsDataExists;
-use Illuminate\Contracts\Validation\Rule;
+use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateRequest extends FormRequest
 {
@@ -83,7 +84,10 @@ class UpdateRequest extends FormRequest
             'email' => [
                 'required',
                 'string',
-                'max:100'
+                'lowercase',
+                'email',
+                'max:191',
+                Rule::unique(User::class)->ignore(request()->user()->id),
             ],
         ];
     }

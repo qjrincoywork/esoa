@@ -172,14 +172,24 @@ class UserController extends Controller
         DB::beginTransaction();
 
         try {
-            $task = $this->user->saveUser($validated);
+            $user = $this->user
+                ->withTrashed()
+                ->find($validated['id']);
+
+            if ($user->trashed()) {
+                $user->restore();
+                $message = 'Restored';
+            } else {
+                $user->delete();
+                $message = 'Deleted';
+            }
 
             // Commit transaction
-            // DB::commit();
+            DB::commit();
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
-                return CustomResponse::ok('User Deleted successfully', Response::HTTP_OK);
+                return CustomResponse::ok('User ' . $message . ' successfully', Response::HTTP_OK);
             }
         } catch (\Exception $e) {
             // Catch and handle any unexpected errors

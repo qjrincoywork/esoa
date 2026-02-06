@@ -1,38 +1,25 @@
 import { h } from 'vue';
 import { router } from '@inertiajs/vue3';
 import { createColumnHelper } from '@tanstack/vue-table';
-import { Eye, Pencil, Trash2 } from 'lucide-vue-next';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import Icon from '@/components/Icon.vue';
 import { dispatchNotification } from '@/components/notification';
 
 const columnHelper = createColumnHelper<any>()
 
 export interface ActionColumnOptions {
-  basePath: string;
-  onView?: (item: any) => void;
-  onEdit?: (item: any) => void;
-  onDelete?: (item: any) => void;
-  showView?: boolean;
-  showEdit?: boolean;
-  showDelete?: boolean;
+  customActions?: Array<{
+    slug: string;
+    name?: string;
+    url?: string;
+    icon?: any;
+    color?: string;
+    handler?: (item: any) => void;
+    class?: string;
+  }>;
 }
 
-export function createActionColumn(options: ActionColumnOptions | string) {
-  // Support both old API (string basePath) and new API (options object)
-  const opts: ActionColumnOptions = typeof options === 'string'
-    ? { basePath: options }
-    : options;
-
-  const {
-    basePath,
-    onView,
-    onEdit,
-    onDelete,
-    showView = true,
-    showEdit = true,
-    showDelete = true,
-  } = opts;
-
+export function createActionColumn(customActions: ActionColumnOptions) {
   return columnHelper.display({
     id: 'actions',
     header: 'Actions',
@@ -47,75 +34,41 @@ export function createActionColumn(options: ActionColumnOptions | string) {
           null,
           {
             default: () => [
-              h(
-                TooltipTrigger,
-                null,
-                () => [buttonVNode]
-              ),
+              h(TooltipTrigger, null, () => [buttonVNode]),
               h(TooltipContent, null, () => tooltipText)
             ]
           }
         );
       };
 
-      // View Button
-      if (showView) {
-        const button = h(
-          'button',
-          {
-            type: 'button',
-            class: 'p-1 text-green-600 hover:text-green-800 transition-colors rounded',
-            onClick: () => {
-              if (onView) {
-                onView(item);
-              } else {
-                router.get(`${basePath}/${item.id}`);
-              }
-            },
-          },
-          [h(Eye, { size: 18 })]
-        );
-        actions.push(withTooltip(button, 'View'));
-      }
+      // Render dynamic custom actions
+      if (Array.isArray(customActions) && customActions.length > 0) {
+        for (const action of customActions) {
+          const ActionIcon = action.icon || File;
+          const label = action.name || action.slug || 'Action';
+          const css = `cursor-pointer p-1 text-${action.color}-600 hover:text-${action.color}-800 transition-colors rounded`;
 
-      // Edit Button
-      if (showEdit) {
-        const button = h(
-          'button',
-          {
-            type: 'button',
-            class: 'p-1 text-blue-600 hover:text-blue-800 transition-colors rounded',
-            onClick: () => {
-              if (onEdit) {
-                onEdit(item);
-              } else {
-                router.get(`${basePath}/${item.id}/edit`);
-              }
+          const button = h(
+            'button',
+            {
+              type: 'button',
+              class: css,
+              onClick: () => {
+                if (action.handler) {
+                  action.handler(item);
+                } else if (action.url) {
+                  router.get(action.url);
+                }
+              },
             },
-          },
-          [h(Pencil, { size: 18 })]
-        );
-        actions.push(withTooltip(button, 'Edit'));
-      }
-
-      // Delete Button
-      if (showDelete) {
-        const button = h(
-          'button',
-          {
-            type: 'button',
-            class: 'p-1 text-red-600 hover:text-red-800 transition-colors rounded',
-            onClick: () => {
-              try {
-                onDelete(item);
-              } catch (error) {
-                dispatchNotification({ title: 'Warning!', content: 'Encountered internal Server Error:' + error, type: 'warning' });
-              }
-            },
-          },
-          [h(Trash2, { size: 18 })]
-        );
-        actions.push(withTooltip(button, 'Delete'));
+            [
+              typeof action.icon === 'string'
+                ? h(Icon, { name: action.icon, size: 18 })
+                : h(ActionIcon, { size: 18 })
+            ]
+          );
+          actions.push(withTooltip(button, label));
+        }
       }
 
       return h('div', { class: 'flex gap-2 items-center' }, actions);

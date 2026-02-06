@@ -32,7 +32,6 @@ const props = defineProps({
 
 const navigation = computed<Navigation>(() => props.navigation as Navigation)
 const statuses = computed<Status[]>(() => props.statuses as Status[])
-console.log(statuses)
 
 // Expose a form ref so parent components can access without document.getElementById
 const navigationEditForm = ref<HTMLFormElement | null>(null)
@@ -109,7 +108,7 @@ onMounted(() => {
             id="status"
             class="mt-1 block w-full"
             name="status"
-            :default-value="navigation?.status ? Number(navigation?.status) : undefined"
+            :default-value="Number(navigation?.status)"
         >
           <SelectTrigger class="w-full">
               <SelectValue placeholder="Select a status" />
@@ -118,9 +117,9 @@ onMounted(() => {
               <SelectGroup>
                   <SelectLabel>Status</SelectLabel>
                   <SelectItem
-                          v-for="status in statuses"
-                          :key="status.value"
-                          :value="Number(status.value)"
+                    v-for="status in statuses"
+                    :key="status.value"
+                    :value="Number(status.value)"
                   >
                   {{ status.name }}
                   </SelectItem>

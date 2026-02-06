@@ -4,11 +4,15 @@ import DeleteForm from '@/components/forms/users/DeleteForm.vue';
 import SavingForm from '@/components/forms/users/SavingForm.vue';
 let formApi: { getFormData: () => FormData | null } | null = null;
 import { dispatchNotification } from '@/components/notification';
+import { showLoader, hideLoader } from '@/composables/useLoader';
+import { useModulePermissions } from '@/composables/useModulePermissions';
+import { router } from '@inertiajs/vue3';
 
 export interface User {
   id?: number | string;
   username?: string;
   email?: string;
+  deleted_at?: string;
   [key: string]: any;
 }
 
@@ -19,6 +23,7 @@ export interface Suffixes {
 }
 
 export function useUsers() {
+  const { slug } = useModulePermissions();
   const { openModal, closeModal } = useModal();
   const { get, post } = useAjax();
 
@@ -34,7 +39,7 @@ export function useUsers() {
         departments: Array<{ id: number | string; name: string }>;
         positions: Array<{ id: number | string; name: string }>;
       }>(
-        `/users/${user.id}/edit`
+        `/${slug.value}/${user.id}/edit`
       );
 
       if (!response.ok) {
@@ -61,22 +66,31 @@ export function useUsers() {
             formApi = api
           }
         },
-        size: 'lg',
+        size: 'xl2',
         onSubmit: async () => {
           if (!formApi) return;
 
           const formData = formApi.getFormData();
           if (!formData) return;
 
-          const response = await post(`/users/update`, formData);
+          showLoader();
+          try {
+            const response = await post(`/${slug.value}/update`, formData);
 
-          if (!response.ok) {
-            // console.log('onSubmit Failed:', response, response.status); 
-            //To be Updated the showing of validation errors in the form
-            dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
-          } else {
-            dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
-            closeModal();
+            if (!response.ok) {
+              //To be Updated the showing of validation errors in the form
+              dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+            } else {
+              dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+              closeModal();
+              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+            }
+          } catch (err) {
+            dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+            console.error(err);
+          } finally {
+            // Refresh current page to update datatable props
+            hideLoader();
           }
         }
       });
@@ -97,7 +111,7 @@ export function useUsers() {
         departments: Array<{ id: number | string; name: string }>;
         positions: Array<{ id: number | string; name: string }>;
       }>(
-        `/users/create`
+        `/${slug.value}/create`
       );
 
       if (!response.ok) {
@@ -130,15 +144,24 @@ export function useUsers() {
           const formData = formApi.getFormData();
           if (!formData) return;
 
-          const response = await post(`/users/store`, formData);
+          showLoader();
+          try {
+            const response = await post(`/${slug.value}/store`, formData);
 
-          if (!response.ok) {
-            // console.log('onSubmit Failed:', response, response.status); 
-            //To be Updated the showing of validation errors in the form
-            dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
-          } else {
-            dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
-            closeModal();
+            if (!response.ok) {
+              //To be Updated the showing of validation errors in the form
+              dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+            } else {
+              dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+              closeModal();
+              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+            }
+          } catch (err) {
+            dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+            console.error(err);
+          } finally {
+            // Refresh current page to update datatable props
+            hideLoader();
           }
         }
       });
@@ -149,11 +172,20 @@ export function useUsers() {
   };
 
   const deleteUser = async (user: User) => {
+    const deleteOrRestore = user.deleted_at ? 'Restore' : 'Delete'
+    const color = user.deleted_at ? 'green' : 'red';
+
+    const buttonClass = `bg-${color}-600
+      hover:bg-${color}-700
+      focus:ring-${color}-500
+      dark:bg-${color}-500
+      dark:hover:bg-${color}-600`;
+
     try {
       openModal({
-        modalTitle: `Delete ${user?.username || ' User'}`,
-        buttonText: 'Delete',
-        buttonClass: 'bg-red-600 hover:bg-red-700 focus:ring-red-500 dark:bg-red-500 dark:hover:bg-red-600',
+        modalTitle: `${deleteOrRestore} ${user?.username || ' User'}`,
+        buttonText: deleteOrRestore,
+        buttonClass: buttonClass,
         component: DeleteForm,
         componentProps: {
           user: user,
@@ -167,13 +199,23 @@ export function useUsers() {
           const formData = formApi.getFormData();
           if (!formData) return;
 
-          const response = await post(`/users/destroy`, formData);
+          showLoader();
+          try {
+            const response = await post(`/${slug.value}/destroy`, formData);
 
-          if (!response.ok) {
-            dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
-          } else {
-            dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
-            closeModal();
+            if (!response.ok) {
+              dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+            } else {
+              dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+              closeModal();
+              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+            }
+          } catch (err) {
+            dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+            console.error(err);
+          } finally {
+            // Refresh current page to update datatable props
+            hideLoader();
           }
         }
       });

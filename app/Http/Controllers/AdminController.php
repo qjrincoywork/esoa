@@ -10,7 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\{ Bus, DB, Log, Schema };
 use Inertia\Inertia;
 use Spatie\Permission\Models\{ Permission, Role };
-use App\Jobs\{ ImportAccountsJob, ImportMainAccountsJob };
+use App\Jobs\{ ImportAccountsJob, ImportBranchesJob, ImportMainAccountsJob };
 
 class AdminController extends Controller
 {
@@ -46,8 +46,6 @@ class AdminController extends Controller
 
     public function importAccounts()
     {
-        DB::beginTransaction();
-
         try {
             DB::connection('hms')
                 ->table('Accounts as a')
@@ -65,20 +63,39 @@ class AdminController extends Controller
                     ImportAccountsJob::dispatch($chunk);
                 });
 
-            DB::commit();
             Log::info('End Account Job');
         } catch (\Exception $e) {
             Log::error('Job failed Accounts: ' . $e->getMessage());
             Log::error($e->getTraceAsString());
-            DB::rollBack();
+            throw $e;
+        }
+    }
+
+    public function importBranches()
+    {
+        try {
+            DB::connection('hms')
+                ->table('Branches as b')
+                ->orderBy('b.br_id')
+                ->select([
+                    'b.*',
+                ])
+                ->chunk(2000, function ($chunk) {
+                    Log::info('Start Branch: ' . $chunk->count());
+                    // dispatch job for each 2000 rows
+                    ImportBranchesJob::dispatch($chunk);
+                });
+
+            Log::info('End Branch Job');
+        } catch (\Exception $e) {
+            Log::error('Job failed Branches: ' . $e->getMessage());
+            Log::error($e->getTraceAsString());
             throw $e;
         }
     }
 
     public function importMainAccounts()
     {
-        DB::beginTransaction();
-
         try {
             DB::connection('hms')
                 ->table('MainAcct')
@@ -89,12 +106,10 @@ class AdminController extends Controller
                     ImportMainAccountsJob::dispatch($chunk);
                 });
 
-            DB::commit();
             Log::info('End Main Account Job');
         } catch (\Exception $e) {
             Log::error('Job failed: ' . $e->getMessage());
             Log::error($e->getTraceAsString());
-            DB::rollBack();
             throw $e;
         }
     }
@@ -104,6 +119,7 @@ class AdminController extends Controller
      */
     public function index(Request $request)
     {
+        dd('hit index');
         // try {
         //     return Inertia::render('dashboard');
         //     dd('hits');
@@ -152,7 +168,7 @@ class AdminController extends Controller
         //     ->where('table_schema', DB::connection('soa')->getDatabaseName())
         //     ->where('table_name', 'Upload')
         //     ->pluck('COLUMN_NAME');
-        
+
         // $result = DB::connection('cenuser')
         //     ->table('ref_gender')
         //     ->get();

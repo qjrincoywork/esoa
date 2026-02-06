@@ -15,6 +15,7 @@ const props = defineProps<{
 }>();
 
 const inputEmail = ref(props.email);
+console.log(props.email);
 </script>
 
 <template>

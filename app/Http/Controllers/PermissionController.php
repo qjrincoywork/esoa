@@ -154,6 +154,7 @@ class PermissionController extends Controller
         DB::beginTransaction();
 
         try {
+            dd($validated);
             $permission = $this->permission->find($validated['id']);
             $permission->delete();
 

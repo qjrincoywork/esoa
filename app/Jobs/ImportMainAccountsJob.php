@@ -31,10 +31,11 @@ class ImportMainAccountsJob implements ShouldQueue
      */
     public function handle(): void
     {
+        DB::beginTransaction();
         try {
             $authId = 1; // fallback if queue doesn't have auth
             Log::info('Start Logging');
-    
+
             foreach ($this->chunk as $mainAccount) {
                 // contact
                 $contactId = null;
@@ -49,7 +50,7 @@ class ImportMainAccountsJob implements ShouldQueue
                     ]);
                     $contactId = $contact->id;
                 }
-    
+
                 if (
                     !empty($mainAccount->ma_code)
                     && !empty($mainAccount->ma_name)
@@ -65,8 +66,10 @@ class ImportMainAccountsJob implements ShouldQueue
                     ]);
                 }
             }
+            DB::commit();
             Log::info('End Logging');
         } catch (\Exception $e) {
+            DB::rollBack();
             Log::error('Job failed: ' . $e->getMessage() . ' ' . $e->getTraceAsString());
             throw $e;
         }

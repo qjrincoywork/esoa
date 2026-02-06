@@ -2,155 +2,137 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\AccountType;
+use App\Enums\Server;
+use App\Enums\UntagType;
+use App\Helpers\CommonHelper;
 use App\Helpers\CustomResponse;
+use App\Helpers\SqlDatabase;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\User\{CreateRequest, DeleteRequest, ListRequest, UpdateRequest};
+use App\Http\Requests\Soa\{FileProxyRequest, ListRequest, RecomputeTaxRequest, UpdateRequest, UpdateTagRequest };
+use App\Http\Resources\AccountResource;
+use App\Http\Resources\CommonResource;
+use App\Http\Resources\SoaResource;
+use App\Mail\NewSoaUploaded;
 use App\Models\{Account, Citizenship, CivilStatus, Contact, Department, Gender, MainAccount, Position, Suffix, User };
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
 
 class SoaController extends Controller
 {
     /**
-     * User model instance.
+     * SqlDatabase instance.
      *
-     * @var User
+     * @var SqlDatabase
      */
-    protected $user;
+    protected $sqlDatabase;
 
     /**
-     * UserController constructor.
+     * Constructor
      *
-     * @param User $user
+     * @param SqlDatabase $sqlDatabase
      *
      * @return void
      */
-    public function __construct(User $user)
+    public function __construct()
     {
-        $this->user = $user;
+        $this->sqlDatabase = SqlDatabase::class;
+    }
+
+    /**
+     * Fetch a file from the given URL.
+     *
+     * @param Request $request
+     * @return Response
+     * @throws \Exception
+     */
+    public function fileProxy(FileProxyRequest $request)
+    {
+        $fileUrl = env('VC_ADMIN_DOMAIN') . $request->get('url');
+
+        if (!$fileUrl) {
+            return CustomResponse::error('URL parameter is required', Response::HTTP_BAD_REQUEST);
+        }
+
+        try {
+            $response = Http::withoutVerifying()->timeout(15)->get($fileUrl);
+            $contentType = $response->header('Content-Type') ?? 'application/octet-stream';
+
+            if ($response->successful()) {
+                return response($response->body(), Response::HTTP_OK, [
+                    'Content-Type' => $contentType,
+                    'Access-Control-Allow-Origin' => '*',
+                    'Content-Disposition' => 'inline',
+                ]);
+            } else {
+                return CustomResponse::error('Failed to fetch PDF', $response->status());
+            }
+        } catch (\Exception $e) {
+            return CustomResponse::error('An error occurred: ' . $e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
     }
 
     /**
      * Display a listing of the resource.
      */
-    public function index(Request $request)
+    public function index(ListRequest $request)
     {
-        dd('hits');
-        // DB::beginTransaction();
+        $soas = (new $this->sqlDatabase(Server::SOA))->getSoas($request->validated());
 
-        // try {
-        //     // $columns = DB::connection('soa')
-        //     //     ->table('INFORMATION_SCHEMA.COLUMNS')
-        //     //     ->select('COLUMN_NAME')
-        //     //     ->where('TABLE_NAME', 'Upload')
-        //     //     ->where('TABLE_SCHEMA', 'dbo')
-        //     //     ->pluck('COLUMN_NAME');
-        //     // Commit transaction
-        //     // DB::commit();
-        // } catch (\Exception $e) {
-        //     // Catch and handle any unexpected errors
-        //     DB::rollBack();
-        // }
-        // $billTypes = DB::connection('soa')
-        //     ->table('upload')
-        //     ->select('up_billtype', 'up_billcode')
-        //     ->distinct('up_billtype')
-        //     // ->pluck('up_billtype')
-        //     ->get()
-        //     ->toArray();
-        // dd($mainAccounts, 'hits');
-        // $users = $this->user->getUsers($request->validated())->toArray();
-
-        // return Inertia::render('users/Index', [
-        //     'users' => $users,
-        // ]);
+        return Inertia::render('soas/Index', [
+            'soas' => new CommonResource(SoaResource::collection($soas))
+        ]);
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
     public function create(Request $request)
     {
-        $suffixes = Suffix::select(['id', 'name'])->get()->toArray();
-        $genders = Gender::select(['id', 'name'])->get()->toArray();
-        $civil_statuses = CivilStatus::select(['id', 'name'])->get()->toArray();
-        $citizenships = Citizenship::select(['id', 'name'])->get()->toArray();
-        $departments = Department::select(['id', 'name'])->get()->toArray();
-        $positions = Position::select(['id', 'name'])->get()->toArray();
-
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
-                'suffixes' => $suffixes,
-                'genders' => $genders,
-                'civil_statuses' => $civil_statuses,
-                'citizenships' => $citizenships,
-                'departments' => $departments,
-                'positions' => $positions,
+                'account_types' => AccountType::list(),
             ]);
         }
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(CreateRequest $request)
+    public function getAccounts(Request $request)
     {
-        $validated = $request->validated();
+        $accounts = (new $this->sqlDatabase(Server::HMS))->getAccountsByType($request->get('type'));
 
-        DB::beginTransaction();
-
-        try {
-            $this->user->saveUser($validated);
-
-            // Commit transaction
-            DB::commit();
-
-            // Return JSON for AJAX requests (no URL change)
-            if ($request->wantsJson() || $request->ajax()) {
-                return CustomResponse::created('User Created successfully', Response::HTTP_CREATED);
-            }
-        } catch (\Exception $e) {
-            // Catch and handle any unexpected errors
-            DB::rollBack();
-
-            return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+        // Return JSON for AJAX requests (no URL change)
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'accounts' => AccountResource::collection($accounts),
+            ]);
         }
     }
 
     /**
      * Display the specified resource.
      */
-    public function show(string $id)
+    public function show(int $id)
     {
-        //
+        $soa = (new $this->sqlDatabase(Server::SOA))->getSoa($id);
+
+        return Inertia::render('soas/Index', [
+            'soa' => SoaResource::make($soa)
+        ]);
     }
 
     /**
-     * Show the form for editing the specified resource.
+     * Edit the specified resource.
      */
-    public function edit(string $id, Request $request)
+    public function edit(Request $request, int $id)
     {
-        $user = $this->user->with('userDetail')->findOrFail($id)->toArray();
-        $suffixes = Suffix::select(['id', 'name'])->get()->toArray();
-        $genders = Gender::select(['id', 'name'])->get()->toArray();
-        $civil_statuses = CivilStatus::select(['id', 'name'])->get()->toArray();
-        $citizenships = Citizenship::select(['id', 'name'])->get()->toArray();
-        $departments = Department::select(['id', 'name'])->get()->toArray();
-        $positions = Position::select(['id', 'name'])->get()->toArray();
+        $soa = (new $this->sqlDatabase(Server::SOA))->getSoa($id);
 
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
-                'user' => $user,
-                'suffixes' => $suffixes,
-                'genders' => $genders,
-                'civil_statuses' => $civil_statuses,
-                'citizenships' => $citizenships,
-                'departments' => $departments,
-                'positions' => $positions,
+                'soa' => SoaResource::make($soa)
             ]);
         }
     }
@@ -162,21 +144,21 @@ class SoaController extends Controller
     {
         $validated = $request->validated();
 
-        DB::beginTransaction();
+        DB::connection(Server::SOA)->beginTransaction();
 
         try {
-            $task = $this->user->saveUser($validated);
+            (new $this->sqlDatabase(Server::SOA))->saveSoa($validated);
 
             // Commit transaction
-            DB::commit();
+            DB::connection(Server::SOA)->commit();
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
-                return CustomResponse::ok('User Updated successfully', Response::HTTP_OK);
+                return CustomResponse::ok('Soa Updated successfully', Response::HTTP_OK);
             }
         } catch (\Exception $e) {
             // Catch and handle any unexpected errors
-            DB::rollBack();
+            DB::connection(Server::SOA)->rollBack();
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
@@ -187,30 +169,90 @@ class SoaController extends Controller
     }
 
     /**
-     * Remove the specified resource from storage.
+     * Untag the specified soa from a user.
      */
-    public function destroy(DeleteRequest $request)
+    public function untag(Request $request)
+    {
+        // Return JSON for AJAX requests (no URL change)
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'untag_types' => UntagType::list(),
+            ]);
+        }
+    }
+
+    /**
+     * Update the tag of the specified soa from a user.
+     */
+    public function updateTag(UpdateTagRequest $request)
     {
         $validated = $request->validated();
-
-        DB::beginTransaction();
+        DB::connection(Server::SOA)->beginTransaction();
 
         try {
-            $task = $this->user->saveUser($validated);
+            switch ($validated['untag_type']) {
+                case UntagType::USER_ERROR:
+                    $validated['reason'] = __('esoa.reason.user_error');
+                    break;
+                case UntagType::CLIENT_ERROR:
+                    $validated['reason'] = __('esoa.reason.client_error');
+                    break;
+                case UntagType::BOUNCED_RETURNED_CHECK:
+                    $validated['reason'] = __('esoa.reason.bounced_returned_check');
+                    break;
+            }
+            $soa = (new $this->sqlDatabase(Server::SOA))->getSoa($validated['id']);
+
+            if (!$soa) {
+                throw new \Exception('SOA record not found.');
+            }
+
+            // (new $this->sqlDatabase(Server::SOA))->untagSoa($soa, $validated);
+            Mail::to('quirjohnincoy.work@gmail.com')->send(new NewSoaUploaded($soa));
 
             // Commit transaction
-            // DB::commit();
+            DB::connection(Server::SOA)->commit();
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
-                return CustomResponse::ok('User Deleted successfully', Response::HTTP_OK);
+                return CustomResponse::ok('Retraction Completed', Response::HTTP_OK);
             }
         } catch (\Exception $e) {
             // Catch and handle any unexpected errors
-            DB::rollBack();
+            DB::connection(Server::SOA)->rollBack();
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
+                // Catch and handle any unexpected errors
+                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+            }
+        }
+    }
+
+    public function taxComputation(Request $request)
+    {
+        return Inertia::render('soas/TaxComputation');
+    }
+
+    public function recomputeTax(RecomputeTaxRequest $request)
+    {
+        $validated = $request->validated();
+        // DB::connection(Server::HMS)->beginTransaction();
+
+        try {
+            // Commit transaction
+            // DB::connection(Server::HMS)->commit();
+            // Return JSON for AJAX requests (no URL change)
+            if ($request->wantsJson() || $request->ajax()) {
+                return CustomResponse::ok('Retraction Completed', Response::HTTP_OK);
+            }
+        } catch (\Exception $e) {
+            // Catch and handle any unexpected errors
+            // DB::connection(Server::HMS)->rollBack();
+
+            // Return JSON for AJAX requests (no URL change)
+            if ($request->wantsJson() || $request->ajax()) {
+                // Catch and handle any unexpected errors
                 return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
             }
         }

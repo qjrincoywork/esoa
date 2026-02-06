@@ -37,6 +37,15 @@ return [
 
     'mailers' => [
 
+        'office365' => [
+            'transport' => 'smtp',
+            'host' => env('MAIL_HOST', 'smtp.office365.com'),
+            'port' => 587,
+            'encryption' => 'tls',
+            'username' => env('MAIL_USERNAME'),
+            'password' => env('MAIL_PASSWORD'),
+            'timeout' => null,
+        ],
         'smtp' => [
             'transport' => 'smtp',
             'scheme' => env('MAIL_SCHEME'),
@@ -82,6 +91,7 @@ return [
         'failover' => [
             'transport' => 'failover',
             'mailers' => [
+                'office365',
                 'smtp',
                 'log',
             ],
