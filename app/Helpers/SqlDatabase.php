@@ -2,6 +2,7 @@
 
 namespace App\Helpers;
 
+use App\Enums\AccountType;
 use Illuminate\Support\Facades\DB;
 
 class SqlDatabase
@@ -92,6 +93,37 @@ class SqlDatabase
             ->first();
 
         return $result;
+    }
+
+    /**
+     * Retrieves accounts based on the specified type.
+     *
+     * @param string $type The type of accounts to retrieve
+     * @return \Illuminate\Pagination\Paginator
+     */
+    public function getAccountsByType($type)
+    {
+        // Pagination
+        $perPage = $params['per_page'] ?? config('vc.default_pages');
+        $result = $this->db
+            ->table('Accounts')
+            ->select('ac_name', 'ac_code', 'ac_ma_code')
+            ->when(isset($type), function ($query) use ($type) {
+                if (AccountType::HMO === $type) {
+                    $query->where('ac_accttype', $type);
+                } else {
+                    $query->where('ac_accttype', '!=', AccountType::HMO);
+                }
+            })
+            ->where(function ($q) {
+                $q->where('ac_code', 'not like', 'IN%')
+                    ->where('ac_code', 'not like', 'FM%')
+                    ->where('ac_code', 'not like', 'GR%');
+            })
+            ->groupBy('ac_name', 'ac_code', 'ac_ma_code')
+            ->orderBy('ac_name');
+
+        return $result->paginate($perPage);
     }
 
     /**

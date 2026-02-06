@@ -16,7 +16,7 @@ use Spatie\Permission\Traits\HasRoles;
 class User extends Authenticatable implements AuthorizableContract
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, HasRoles, Authorizable, SoftDeletes;
+    use HasFactory, HasRoles, Notifiable, Authorizable, SoftDeletes;
     // use HasFactory, HasRoles, Notifiable, TwoFactorAuthenticatable, Authorizable;
 
     /**

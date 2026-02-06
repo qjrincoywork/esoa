@@ -11,6 +11,8 @@ import {
 
 import { Form, Head, Link, router, usePage } from '@inertiajs/vue3';
 import Modal from '@/components/Modal.vue';
+import { Button } from "@/components/ui/button";
+import { Pointer } from 'lucide-vue-next';
 
 const selectionColor = 'var(--selection-color)'
 
@@ -113,10 +115,7 @@ const toggleRow = index => {
     }
 }
 
-const handleSelectAll = () => {
-    table.toggleAllRowsSelected()
-}
-
+const isServerPagination = computed(() => Boolean(props.pagination?.total))
 const filteredData = computed(() => {
     if (!searchQuery.value || !props.searchFields.length) return props.data
 
@@ -130,7 +129,58 @@ const filteredData = computed(() => {
     )
 })
 
-const isServerPagination = computed(() => Boolean(props.pagination?.total))
+const table = useVueTable({
+    get data() {
+        return filteredData.value
+    },
+    columns: props.columns,
+    state: {
+        get sorting() {
+            return sorting.value
+        },
+        get rowSelection() {
+            return rowSelection.value
+        },
+        get pagination() {
+            if (isServerPagination.value) {
+                return {
+                    pageSize: props.pagination.per_page,
+                    pageIndex: props.pagination.current_page - 1
+                }
+            }
+            return {
+                pageIndex: pagination.value.pageIndex,
+                pageSize: pagination.value.pageSize
+            }
+        }
+    },
+    onRowSelectionChange: updaterOrValue => {
+        rowSelection.value =
+            typeof updaterOrValue === 'function'
+                ? updaterOrValue(rowSelection.value)
+                : updaterOrValue
+    },
+    onSortingChange: updaterOrValue => {
+        sorting.value =
+            typeof updaterOrValue === 'function' ? updaterOrValue(sorting.value) : updaterOrValue
+    },
+    onPaginationChange: updaterOrValue => {
+        const newPagination =
+            typeof updaterOrValue === 'function' ? updaterOrValue(pagination.value) : updaterOrValue
+        pagination.value = newPagination
+    },
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getPaginationRowModel: isServerPagination.value ? undefined : getPaginationRowModel(),
+    enableRowSelection: true,
+    enableMultiRowSelection: true,
+    getRowId: row => row.id || row.ID || JSON.stringify(row)
+})
+
+const handleSelectAll = () => {
+    table.toggleAllRowsSelected()
+}
 
 const isAllSelected = computed(() => {
     if (!isServerPagination.value) return false
@@ -287,55 +337,6 @@ const exportToCSV = () => {
     document.body.removeChild(link)
 }
 
-const table = useVueTable({
-    get data() {
-        return filteredData.value
-    },
-    columns: props.columns,
-    state: {
-        get sorting() {
-            return sorting.value
-        },
-        get rowSelection() {
-            return rowSelection.value
-        },
-        get pagination() {
-            if (isServerPagination.value) {
-                return {
-                    pageSize: props.pagination.per_page,
-                    pageIndex: props.pagination.current_page - 1
-                }
-            }
-            return {
-                pageIndex: pagination.value.pageIndex,
-                pageSize: pagination.value.pageSize
-            }
-        }
-    },
-    onRowSelectionChange: updaterOrValue => {
-        rowSelection.value =
-            typeof updaterOrValue === 'function'
-                ? updaterOrValue(rowSelection.value)
-                : updaterOrValue
-    },
-    onSortingChange: updaterOrValue => {
-        sorting.value =
-            typeof updaterOrValue === 'function' ? updaterOrValue(sorting.value) : updaterOrValue
-    },
-    onPaginationChange: updaterOrValue => {
-        const newPagination =
-            typeof updaterOrValue === 'function' ? updaterOrValue(pagination.value) : updaterOrValue
-        pagination.value = newPagination
-    },
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: isServerPagination.value ? undefined : getPaginationRowModel(),
-    enableRowSelection: true,
-    enableMultiRowSelection: true,
-    getRowId: row => row.id || row.ID || JSON.stringify(row)
-})
-
 watch(
     () => pagination.value.pageSize,
     newSize => {
@@ -487,6 +488,12 @@ watch(
                         </svg>
                         Bulk Delete
                     </button>
+                    <!-- <button
+                        class="items-center gap-2 cursor-pointer"
+                        @click="showDeleteModal = true">
+                        Add Access Permission
+                    </button> -->
+                    <Button class="cursor-pointer" @click="showDeleteModal = true">Add Access Permission</Button>
 
                     <slot name="bulk-actions" :selected-rows="selectedRows" />
                 </div>

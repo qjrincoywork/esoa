@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\AccountType;
 use App\Enums\Server;
 use App\Enums\UntagType;
 use App\Helpers\CommonHelper;
@@ -9,6 +10,7 @@ use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Soa\{FileProxyRequest, ListRequest, RecomputeTaxRequest, UpdateRequest, UpdateTagRequest };
+use App\Http\Resources\AccountResource;
 use App\Http\Resources\CommonResource;
 use App\Http\Resources\SoaResource;
 use App\Mail\NewSoaUploaded;
@@ -84,6 +86,28 @@ class SoaController extends Controller
         return Inertia::render('soas/Index', [
             'soas' => new CommonResource(SoaResource::collection($soas))
         ]);
+    }
+
+    public function create(Request $request)
+    {
+        // Return JSON for AJAX requests (no URL change)
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'account_types' => AccountType::list(),
+            ]);
+        }
+    }
+
+    public function getAccounts(Request $request)
+    {
+        $accounts = (new $this->sqlDatabase(Server::HMS))->getAccountsByType($request->get('type'));
+
+        // Return JSON for AJAX requests (no URL change)
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'accounts' => AccountResource::collection($accounts),
+            ]);
+        }
     }
 
     /**

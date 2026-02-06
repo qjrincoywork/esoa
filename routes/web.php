@@ -13,19 +13,22 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
 
-// Route::resource('admin', AdminController::class);
+// Route::get('/', function () {
+//     return Inertia::render('Welcome', [
+//         'canRegister' => Features::enabled(false),
+//     ]);
+// })->name('home');
+// Route::get('/', function () {
+//     return redirect()->route('login');
+// });
 Route::get('/', function () {
-    return Inertia::render('Welcome', [
-        'canRegister' => Features::enabled(Features::registration()),
+    return Inertia::render('auth/Login', [
+        'canResetPassword' => Features::enabled(Features::resetPasswords()),
+        'canRegister' => Features::enabled(false),
+        'status' => request()->session()->get('status'),
     ]);
 })->name('home');
-// Route::get('/', function () {
-//     return redirect('login');
-// });
 
-// Route::get('dashboard', function () {
-//     return Inertia::render('Dashboard');
-// })->middleware(['auth', 'verified'])->name('dashboard');
 // for manual testing of import jobs
 // Route::prefix('admin')->name('admin.')
 //     // ->middleware('check_permissions')
@@ -120,7 +123,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/file_proxy', 'fileProxy')->name('file_proxy');
             Route::get('/', 'index')->name('index');
             Route::get('/tax_computation', 'taxComputation')->name('tax_computation');
+            Route::get('/get_accounts', 'getAccounts')->name('get_accounts');
             Route::get('/{id}/show', 'show')->name('show');
+            Route::get('/create', 'create')->name('create');
             Route::get('/{id}/edit', 'edit')->name('edit');
             Route::get('/{id}/manage_file', 'manageFile')->name('manage_file');
             Route::get('/{id}/untag', 'untag')->name('untag');
