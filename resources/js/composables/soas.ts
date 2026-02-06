@@ -209,18 +209,13 @@ export function useSoas() {
     try {
       // Make AJAX request without navigation using reusable composable
       const response = await get<{
-        suffixes: Array<{ id: number | string; name: string }>;
-        genders: Array<{ id: number | string; name: string }>;
-        civil_statuses: Array<{ id: number | string; name: string }>;
-        citizenships: Array<{ id: number | string; name: string }>;
-        departments: Array<{ id: number | string; name: string }>;
-        positions: Array<{ id: number | string; name: string }>;
+        account_types: Array<{ value: number | string; name: string }>;
       }>(
         `/${slug.value}/create`
       );
 
       if (!response.ok) {
-        throw new Error('Failed to fetch soa data');
+        throw new Error('Failed to fetch data');
       }
 
       const payload = response.data;
@@ -232,12 +227,12 @@ export function useSoas() {
         buttonText: 'Save',
         component: SavingForm,
         componentProps: {
-          suffixes: payload.suffixes,
+          account_types: payload.account_types,
           onReady: (api: { getFormData: () => FormData | null }) => {
             formApi = api
           }
         },
-        size: 'md',
+        size: 'xl4',
         onSubmit: async () => {
           if (!formApi) return;
 
@@ -264,6 +259,24 @@ export function useSoas() {
           }
         }
       });
+    } catch (error) {
+      dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
+    }
+  };
+
+  const getAccountsByType = async (type: string) => {
+    try {
+      // Make AJAX request without navigation using reusable composable
+      const response = await get(`/${slug.value}/get_accounts`, { type: type });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch data');
+      }
+
+      const payload = response.data;
+
+      if (!payload) return;
+      return payload.accounts;
     } catch (error) {
       dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
     }
@@ -329,6 +342,7 @@ export function useSoas() {
     manageFile,
     untagSoa,
     recomputeTax,
+    getAccountsByType,
   };
 }
 

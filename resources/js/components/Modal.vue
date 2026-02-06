@@ -21,10 +21,10 @@ const sizeClasses = {
   md: 'w-full max-w-md sm:mx-6',
   lg: 'w-full max-w-lg sm:mx-8',
   xl: 'w-full max-w-xl sm:mx-12',
-  xl2: 'w-full max-w-xl2 sm:mx-4',
-  xl3: 'w-full max-w-xl3 sm:mx-4',
-  xl4: 'w-full max-w-xl4 sm:mx-4',
-  xl5: 'w-full max-w-xl5 sm:mx-4',
+  xl2: 'w-full max-w-xl2',
+  xl3: 'w-full max-w-xl3',
+  xl4: 'w-full max-w-xl4',
+  xl5: 'w-full max-w-xl5',
   full: 'w-full mx-1 sm:mx-2'
 }
 

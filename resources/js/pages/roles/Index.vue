@@ -112,6 +112,7 @@ watch(
                 :data="roles.data"
                 :columns="columns"
                 :pagination="pagination"
+                :show-selection-column="true"
                 :search-fields="['name']"
                 empty-message="No audit records found"
                 empty-description="System roles will appear here"
