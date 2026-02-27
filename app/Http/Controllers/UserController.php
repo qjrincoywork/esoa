@@ -2,10 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\{ AccountType, Gender, Server};
 use App\Helpers\CustomResponse;
+use App\Helpers\SqlDatabase;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\User\{CreateRequest, DeleteRequest, ListRequest, UpdateRequest};
-use App\Models\{ Citizenship, CivilStatus, Department, Gender, Position, Suffix, User };
+use App\Http\Resources\AccountResource;
+use App\Http\Resources\BranchResource;
+use App\Http\Resources\CommonResource;
+use App\Models\{Account, Citizenship, CivilStatus, Department, Position, Suffix, User };
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -21,15 +26,24 @@ class UserController extends Controller
     protected $user;
 
     /**
+     * SqlDatabase instance.
+     *
+     * @var SqlDatabase
+     */
+    protected $sqlDatabase;
+
+    /**
      * UserController constructor.
      *
      * @param User $user
+     * @param SqlDatabase $sqlDatabase
      *
      * @return void
      */
     public function __construct(User $user)
     {
         $this->user = $user;
+        $this->sqlDatabase = SqlDatabase::class;
     }
 
     /**
@@ -49,8 +63,7 @@ class UserController extends Controller
      */
     public function create(Request $request)
     {
-        $suffixes = Suffix::select(['id', 'name'])->get()->toArray();
-        $genders = Gender::select(['id', 'name'])->get()->toArray();
+        // $genders = Gender::select(['id', 'name'])->get()->toArray();
         $civil_statuses = CivilStatus::select(['id', 'name'])->get()->toArray();
         $citizenships = Citizenship::select(['id', 'name'])->get()->toArray();
         $departments = Department::select(['id', 'name'])->get()->toArray();
@@ -59,8 +72,8 @@ class UserController extends Controller
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
-                'suffixes' => $suffixes,
-                'genders' => $genders,
+                'account_types' => AccountType::list(),
+                'genders' => Gender::list(),
                 'civil_statuses' => $civil_statuses,
                 'citizenships' => $citizenships,
                 'departments' => $departments,
@@ -104,6 +117,30 @@ class UserController extends Controller
         //
     }
 
+    public function getAccounts(Request $request)
+    {
+        $accounts = (new $this->sqlDatabase(Server::HMS))->getAccountsByParams($request->all());
+
+        // Return JSON for AJAX requests (no URL change)
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'accounts' => new CommonResource(AccountResource::collection($accounts))
+            ]);
+        }
+    }
+
+    public function getBranches(Request $request)
+    {
+        $branches = (new $this->sqlDatabase(Server::HMS))->getBranchesByParams($request->all());
+
+        // Return JSON for AJAX requests (no URL change)
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'branches' => new CommonResource(BranchResource::collection($branches))
+            ]);
+        }
+    }
+
     /**
      * Show the form for editing the specified resource.
      */
@@ -123,6 +160,7 @@ class UserController extends Controller
                 'user' => $user,
                 'suffixes' => $suffixes,
                 'genders' => $genders,
+                'account_types' => AccountType::list(),
                 'civil_statuses' => $civil_statuses,
                 'citizenships' => $citizenships,
                 'departments' => $departments,

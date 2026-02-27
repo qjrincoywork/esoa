@@ -60,7 +60,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::get('/{id}/edit', 'edit')->name('edit');
                 Route::get('/create', 'create')->name('create');
                 Route::get('/access', 'access')->name('access');
-                Route::post('/update_access', 'update_access')->name('update_access');
+                Route::get('/get_accounts', 'getAccounts')->name('get_accounts');
+                Route::get('/get_branches', 'getBranches')->name('get_branches');
+                Route::post('/update_access', 'updateAccess')->name('update_access');
                 Route::post('/update', 'update')->name('update');
                 Route::post('/store', 'store')->name('store');
                 Route::post('/destroy', 'destroy')->name('destroy');
@@ -124,6 +126,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/', 'index')->name('index');
             Route::get('/tax_computation', 'taxComputation')->name('tax_computation');
             Route::get('/get_accounts', 'getAccounts')->name('get_accounts');
+            Route::get('/get_branches', 'getBranches')->name('get_branches');
             Route::get('/{id}/show', 'show')->name('show');
             Route::get('/create', 'create')->name('create');
             Route::get('/{id}/edit', 'edit')->name('edit');

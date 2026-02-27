@@ -34,6 +34,7 @@ export function useUsers() {
         user: User;
         suffixes: Array<{ id: number | string; name: string }>;
         genders: Array<{ id: number | string; name: string }>;
+        account_types: Array<{ value: number | string; name: string }>;
         civil_statuses: Array<{ id: number | string; name: string }>;
         citizenships: Array<{ id: number | string; name: string }>;
         departments: Array<{ id: number | string; name: string }>;
@@ -58,6 +59,7 @@ export function useUsers() {
           user: payload.user,
           suffixes: payload.suffixes,
           genders: payload.genders,
+          account_types: payload.account_types,
           civil_statuses: payload.civil_statuses,
           citizenships: payload.citizenships,
           departments: payload.departments,
@@ -106,6 +108,7 @@ export function useUsers() {
       const response = await get<{
         suffixes: Array<{ id: number | string; name: string }>;
         genders: Array<{ id: number | string; name: string }>;
+        account_types: Array<{ value: number | string; name: string }>;
         civil_statuses: Array<{ id: number | string; name: string }>;
         citizenships: Array<{ id: number | string; name: string }>;
         departments: Array<{ id: number | string; name: string }>;
@@ -129,6 +132,7 @@ export function useUsers() {
         componentProps: {
           suffixes: payload.suffixes,
           genders: payload.genders,
+          account_types: payload.account_types,
           civil_statuses: payload.civil_statuses,
           citizenships: payload.citizenships,
           departments: payload.departments,
@@ -137,7 +141,7 @@ export function useUsers() {
             formApi = api
           }
         },
-        size: 'md',
+        size: 'xl4',
         onSubmit: async () => {
           if (!formApi) return;
 
@@ -170,6 +174,44 @@ export function useUsers() {
       console.error('Error fetching user data:', error);
     }
   };
+
+  const getAccountsByParams = async (params: Record<string, string | number | undefined>) => {
+    try {
+      const response = await get(`/${slug.value}/get_accounts`, params);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch data');
+      }
+
+      const payload = response.data;
+
+      if (!payload) return;
+      // Return full paginated response: { data, meta, links } or plain array for backward compatibility
+      return payload.accounts;
+    } catch (error) {
+      dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
+    }
+  };
+
+  const getBranchesByParams = async (params: Record<string, string | number | undefined>) => {
+    try {
+      const response = await get(`/${slug.value}/get_branches`, params);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch data');
+      }
+
+      const payload = response.data;
+      console.log(payload)
+
+      if (!payload) return;
+      // Return full paginated response: { data, meta, links } or plain array for backward compatibility
+      return payload.branches;
+    } catch (error) {
+      dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
+    }
+  };
+
 
   const deleteUser = async (user: User) => {
     const deleteOrRestore = user.deleted_at ? 'Restore' : 'Delete'
@@ -229,6 +271,8 @@ export function useUsers() {
     editUser,
     createUser,
     deleteUser,
+    getAccountsByParams,
+    getBranchesByParams,
   };
 }
 

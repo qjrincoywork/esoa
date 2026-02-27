@@ -264,24 +264,6 @@ export function useSoas() {
     }
   };
 
-  const getAccountsByType = async (type: string) => {
-    try {
-      // Make AJAX request without navigation using reusable composable
-      const response = await get(`/${slug.value}/get_accounts`, { type: type });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch data');
-      }
-
-      const payload = response.data;
-
-      if (!payload) return;
-      return payload.accounts;
-    } catch (error) {
-      dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
-    }
-  };
-
   const deleteSoa = async (soa: Soa) => {
     const deleteOrRestore = soa.deleted_at ? 'Restore' : 'Delete'
     const color = soa.deleted_at ? 'green' : 'red';
@@ -342,7 +324,8 @@ export function useSoas() {
     manageFile,
     untagSoa,
     recomputeTax,
-    getAccountsByType,
+    getAccountsByParams,
+    getBranchesByParams,
   };
 }
 

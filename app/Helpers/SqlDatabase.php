@@ -101,27 +101,55 @@ class SqlDatabase
      * @param string $type The type of accounts to retrieve
      * @return \Illuminate\Pagination\Paginator
      */
-    public function getAccountsByType($type)
+    public function getAccountsByParams($params)
     {
         // Pagination
         $perPage = $params['per_page'] ?? config('vc.default_pages');
         $result = $this->db
             ->table('Accounts')
             ->select('ac_name', 'ac_code', 'ac_ma_code')
-            ->when(isset($type), function ($query) use ($type) {
-                if (AccountType::HMO === $type) {
-                    $query->where('ac_accttype', $type);
+            ->when(isset($params['type']), function ($query) use ($params) {
+                if (AccountType::HMO === $params['type']) {
+                    $query->where('ac_accttype', $params['type']);
                 } else {
                     $query->where('ac_accttype', '!=', AccountType::HMO);
                 }
+            })
+            ->when(isset($params['name']), function ($query) use ($params) {
+                $query->where('ac_name', 'like', '%' . $params['name'] . '%');
             })
             ->where(function ($q) {
                 $q->where('ac_code', 'not like', 'IN%')
                     ->where('ac_code', 'not like', 'FM%')
                     ->where('ac_code', 'not like', 'GR%');
             })
+            ->where('ac_status', 'A') // Active accounts only
             ->groupBy('ac_name', 'ac_code', 'ac_ma_code')
             ->orderBy('ac_name');
+
+        return $result->paginate($perPage);
+    }
+
+    /**
+     * Retrieves branches based on the specified type.
+     *
+     * @param string $type The type of branches to retrieve
+     * @return \Illuminate\Pagination\Paginator
+     */
+    public function getBranchesByParams($params)
+    {
+        // Pagination
+        $perPage = $params['per_page'] ?? config('vc.default_pages');
+        $result = $this->db
+            ->table('Branches')
+            ->select('br_branch_name', 'br_ac_code', 'br_code')
+            ->when(isset($params['account_code']), function ($query) use ($params) {
+                $query->where('br_ac_code', $params['account_code']);
+            })
+            ->when(isset($params['name']), function ($query) use ($params) {
+                $query->where('br_branch_name', 'like', '%' . $params['name'] . '%');
+            })
+            ->orderBy('br_branch_name');
 
         return $result->paginate($perPage);
     }
