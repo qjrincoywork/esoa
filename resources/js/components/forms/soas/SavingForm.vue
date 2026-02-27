@@ -58,7 +58,6 @@ const isReadOnly = ref(soa.value?.id ? true : false)
 // Selected account type value (bound to Select) — use string|null to match server values
 const selectedAccountType = ref<string | null>(null)
 let accounts = ref<Account[]>(null)
-// const accounts = computed<Account[]>(() => props.accounts as Account[]);
 
 // Helper to extract FormData from this form (exposed to parent)
 function getFormData(): FormData | null {

@@ -18,6 +18,9 @@ class UserDetail extends Model
      */
     protected $fillable = [
         'user_id',
+        'account_code',
+        'branch_code',
+        'is_vc_employee',
         'suffix_id',
         'gender_id',
         'civil_status_id',

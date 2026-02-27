@@ -14,11 +14,14 @@ return new class extends Migration
         Schema::create('user_details', function (Blueprint $table) {
             $table->bigIncrements('id');
             $table->bigInteger('user_id');
+            $table->longText('account_code')->nullable();
+            $table->longText('branch_code')->nullable();
+            $table->bigInteger('is_vc_employee')->default(0);
             $table->bigInteger('gender_id');
             $table->bigInteger('civil_status_id');
             $table->bigInteger('citizenship_id');
-            $table->bigInteger('department_id');
-            $table->bigInteger('position_id');
+            $table->bigInteger('department_id')->nullable();
+            $table->bigInteger('position_id')->nullable();
             $table->string('first_name');
             $table->string('middle_name')->nullable();
             $table->string('last_name');
