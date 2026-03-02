@@ -120,6 +120,7 @@ const openAccounts = ref(false)
 const openBranches = ref(false)
 // const isVcEmployee = ref<number>(detail.value?.is_vc_employee ?? 0)
 const isVcEmployee = ref(detail.value?.is_vc_employee != null ? Number(detail.value.is_vc_employee) : 0)
+const userId = ref(user?.value?.id ?? undefined)
 
 // Sync from props when user/detail loads (e.g. edit mode with async data)
 watch(
@@ -281,7 +282,7 @@ watch([selectedAccount, searchedBranchName], async () => {
           type="hidden"
           class="mt-1 block w-full"
           name="id"
-          :value="user?.id"
+          v-model="userId"
         />
         <Input
           id="is_vc_employee"
@@ -466,7 +467,7 @@ watch([selectedAccount, searchedBranchName], async () => {
           id="department"
           class="mt-1 block w-full"
           name="department_id"
-          :default-value="detail?.department_id ? String(detail?.department_id) : undefined"
+          :default-value="detail?.department_id ? Number(detail?.department_id) : undefined"
       >
         <SelectTrigger class="w-full">
             <SelectValue placeholder="Select a department" />
@@ -477,7 +478,7 @@ watch([selectedAccount, searchedBranchName], async () => {
             <SelectItem
               v-for="department in departments"
               :key="department.id"
-              :value="String(department.id)"
+              :value="Number(department.id)"
             >
             {{ department.name }}
             </SelectItem>

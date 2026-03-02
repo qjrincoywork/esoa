@@ -89,7 +89,6 @@ export function useUsers() {
             }
           } catch (err) {
             dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
-            console.error(err);
           } finally {
             // Refresh current page to update datatable props
             hideLoader();
@@ -98,7 +97,6 @@ export function useUsers() {
       });
     } catch (error) {
       dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
-      console.error('Error fetching user data:', error);
     }
   };
 
@@ -162,7 +160,6 @@ export function useUsers() {
             }
           } catch (err) {
             dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
-            console.error(err);
           } finally {
             // Refresh current page to update datatable props
             hideLoader();
@@ -171,7 +168,6 @@ export function useUsers() {
       });
     } catch (error) {
       dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
-      console.error('Error fetching user data:', error);
     }
   };
 
@@ -202,7 +198,6 @@ export function useUsers() {
       }
 
       const payload = response.data;
-      console.log(payload)
 
       if (!payload) return;
       // Return full paginated response: { data, meta, links } or plain array for backward compatibility
@@ -254,7 +249,6 @@ export function useUsers() {
             }
           } catch (err) {
             dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
-            console.error(err);
           } finally {
             // Refresh current page to update datatable props
             hideLoader();
@@ -263,7 +257,6 @@ export function useUsers() {
       });
     } catch (error) {
       dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
-      console.error('Error fetching user data:', error);
     }
   };
 

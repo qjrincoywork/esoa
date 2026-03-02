@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Helpers\CommonHelper;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -30,7 +31,7 @@ class SoaResource extends JsonResource
             'period_coverage' => $this->up_period_cov,
             'paid_date' => $this->formatDate($this->up_status_date),
             'amount_due' => number_format($this->up_amount, 2),
-            'company_branch' => $this->up_acname ?? $this->up_branch,
+            'company_branch' => CommonHelper::convertStringEncoding($this->up_acname ?? $this->up_branch),
             'file_pdf' => $this->up_filepdf,
             'file_xls' => $this->up_filexls,
             'status' => $this->status(),

@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\{ AccountType, Gender, Server};
+use App\Enums\{ AccountType, Gender, Server };
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
 use App\Http\Controllers\Controller;
@@ -63,7 +63,6 @@ class UserController extends Controller
      */
     public function create(Request $request)
     {
-        // $genders = Gender::select(['id', 'name'])->get()->toArray();
         $civil_statuses = CivilStatus::select(['id', 'name'])->get()->toArray();
         $citizenships = Citizenship::select(['id', 'name'])->get()->toArray();
         $departments = Department::select(['id', 'name'])->get()->toArray();
@@ -144,11 +143,10 @@ class UserController extends Controller
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit(string $id, Request $request)
+    public function edit(int $id, Request $request)
     {
         $user = $this->user->with('userDetail')->findOrFail($id)->toArray();
         $suffixes = Suffix::select(['id', 'name'])->get()->toArray();
-        $genders = Gender::select(['id', 'name'])->get()->toArray();
         $civil_statuses = CivilStatus::select(['id', 'name'])->get()->toArray();
         $citizenships = Citizenship::select(['id', 'name'])->get()->toArray();
         $departments = Department::select(['id', 'name'])->get()->toArray();
@@ -159,7 +157,7 @@ class UserController extends Controller
             return response()->json([
                 'user' => $user,
                 'suffixes' => $suffixes,
-                'genders' => $genders,
+                'genders' => Gender::list(),
                 'account_types' => AccountType::list(),
                 'civil_statuses' => $civil_statuses,
                 'citizenships' => $citizenships,
@@ -174,12 +172,12 @@ class UserController extends Controller
      */
     public function update(UpdateRequest $request)
     {
-        $validated = $request->validated();
+        dd($request->validated());
 
         DB::beginTransaction();
 
         try {
-            $task = $this->user->saveUser($validated);
+            $this->user->saveUser($request->validated());
 
             // Commit transaction
             DB::commit();

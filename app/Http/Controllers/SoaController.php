@@ -11,6 +11,7 @@ use App\Helpers\SqlDatabase;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Soa\{FileProxyRequest, ListRequest, RecomputeTaxRequest, UpdateRequest, UpdateTagRequest };
 use App\Http\Resources\AccountResource;
+use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
 use App\Http\Resources\SoaResource;
 use App\Mail\NewSoaUploaded;
@@ -106,6 +107,18 @@ class SoaController extends Controller
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'accounts' => AccountResource::collection($accounts),
+            ]);
+        }
+    }
+
+    public function getBranches(Request $request)
+    {
+        $branches = (new $this->sqlDatabase(Server::HMS))->getBranchesByParams($request->all());
+
+        // Return JSON for AJAX requests (no URL change)
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'branches' => new CommonResource(BranchResource::collection($branches))
             ]);
         }
     }

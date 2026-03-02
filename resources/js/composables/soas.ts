@@ -264,6 +264,42 @@ export function useSoas() {
     }
   };
 
+  const getAccountsByParams = async (params: Record<string, string | number | undefined>) => {
+    try {
+      const response = await get(`/${slug.value}/get_accounts`, params);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch data');
+      }
+
+      const payload = response.data;
+
+      if (!payload) return;
+      // Return full paginated response: { data, meta, links } or plain array for backward compatibility
+      return payload.accounts;
+    } catch (error) {
+      dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
+    }
+  };
+
+  const getBranchesByParams = async (params: Record<string, string | number | undefined>) => {
+    try {
+      const response = await get(`/${slug.value}/get_branches`, params);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch data');
+      }
+
+      const payload = response.data;
+
+      if (!payload) return;
+      // Return full paginated response: { data, meta, links } or plain array for backward compatibility
+      return payload.branches;
+    } catch (error) {
+      dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
+    }
+  };
+
   const deleteSoa = async (soa: Soa) => {
     const deleteOrRestore = soa.deleted_at ? 'Restore' : 'Delete'
     const color = soa.deleted_at ? 'green' : 'red';

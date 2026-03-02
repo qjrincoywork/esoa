@@ -2,6 +2,9 @@
 
 namespace App\Http\Requests\User;
 
+use App\Enums\AccountType;
+use App\Enums\BooleanAsInteger;
+use App\Enums\Gender;
 use App\Rules\IsDataExists;
 use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
@@ -16,20 +19,33 @@ class UpdateRequest extends FormRequest
      */
     public function rules(): array
     {
+        dd($this->all());
         return [
             'id' => [
                 'required',
                 'integer'
             ],
+            'account_type' => [
+                'required_if:is_vc_employee,' . BooleanAsInteger::FALSE,
+                'nullable',
+                'string',
+                Rule::in(AccountType::getValues()),
+            ],
+            'account_code' => [
+                'required_if:is_vc_employee,' . BooleanAsInteger::FALSE,
+                'nullable',
+                'string',
+                //new IsDataExists('accounts'),
+            ],
             'gender_id' => [
                 'required',
                 'integer',
-                new IsDataExists('genders'),
+                Rule::in(Gender::getValues()),
             ],
             'civil_status_id' => [
                 'required',
                 'integer',
-                new IsDataExists('civil_statuses'),
+                // new IsDataExists('civil_statuses'),
             ],
             'citizenship_id' => [
                 'required',
@@ -37,14 +53,19 @@ class UpdateRequest extends FormRequest
                 new IsDataExists('citizenships'),
             ],
             'department_id' => [
-                'required',
+                'required_if:is_vc_employee,' . BooleanAsInteger::TRUE,
                 'integer',
                 new IsDataExists('departments'),
             ],
             'position_id' => [
-                'required',
+                'required_if:is_vc_employee,' . BooleanAsInteger::TRUE,
                 'integer',
                 new IsDataExists('positions'),
+            ],
+            'employee_no' => [
+                'required_if:is_vc_employee,' . BooleanAsInteger::TRUE,
+                'string',
+                'max:191'
             ],
             'first_name' => [
                 'required',
@@ -79,15 +100,15 @@ class UpdateRequest extends FormRequest
             'username' => [
                 'required',
                 'string',
-                'max:100'
+                'max:191',
+                Rule::unique(User::class)->ignore(request()->input('id')),
             ],
             'email' => [
                 'required',
                 'string',
-                'lowercase',
                 'email',
                 'max:191',
-                Rule::unique(User::class)->ignore(request()->user()->id),
+                Rule::unique(User::class)->ignore(request()->input('id')),
             ],
         ];
     }
@@ -102,9 +123,11 @@ class UpdateRequest extends FormRequest
         return [
             'gender_id.required' => 'The Gender field is required',
             'civil_status_id.required' => 'The Civil Status field is required',
-            'citizenship_id.required' => 'The Citizenship field is required',
-            'department_id.required' => 'The Department field is required',
-            'position_id.required' => 'The Position field is required',
+            'citizenship_id.required_if' => 'The Citizenship field is required',
+            'department_id.required_if' => 'The Department field is required',
+            'position_id.required_if' => 'The Position field is required',
+            'account_type.required_if' => 'The Account Type field is required',
+            'account_code.required_if' => 'The Account field is required',
         ];
     }
 }
