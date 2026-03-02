@@ -95,7 +95,6 @@ watch(selectedAccountType, async (next) => {
   accounts.value = [];
   if (selectedAccountType.value != null) {
     const result = await getAccountsByType(selectedAccountType.value);
-    console.log('watch accounts', result);
     accounts.value = result;
   }
 }, { immediate: true })

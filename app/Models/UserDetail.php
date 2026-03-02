@@ -21,6 +21,7 @@ class UserDetail extends Model
         'account_code',
         'branch_code',
         'is_vc_employee',
+        'is_broker',
         'suffix_id',
         'gender_id',
         'civil_status_id',
