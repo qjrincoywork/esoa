@@ -3,8 +3,8 @@
 namespace App\Http\Requests\User;
 
 use App\Enums\AccountType;
-use App\Enums\BooleanAsInteger;
 use App\Enums\Gender;
+use App\Enums\UserType;
 use App\Rules\IsDataExists;
 use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
@@ -19,20 +19,24 @@ class UpdateRequest extends FormRequest
      */
     public function rules(): array
     {
-        dd($this->all());
         return [
             'id' => [
                 'required',
                 'integer'
             ],
+            'type' => [
+                'required',
+                'integer',
+                Rule::in(UserType::getValues()),
+            ],
             'account_type' => [
-                'required_if:is_vc_employee,' . BooleanAsInteger::FALSE,
+                'required_if:type,' . UserType::ACCOUNT_BRANCH_ADMIN,
                 'nullable',
                 'string',
                 Rule::in(AccountType::getValues()),
             ],
             'account_code' => [
-                'required_if:is_vc_employee,' . BooleanAsInteger::FALSE,
+                'required_if:type,' . UserType::ACCOUNT_BRANCH_ADMIN,
                 'nullable',
                 'string',
                 //new IsDataExists('accounts'),
@@ -53,17 +57,17 @@ class UpdateRequest extends FormRequest
                 new IsDataExists('citizenships'),
             ],
             'department_id' => [
-                'required_if:is_vc_employee,' . BooleanAsInteger::TRUE,
+                'required_if:type,' . UserType::VC_EMPLOYEE,
                 'integer',
                 new IsDataExists('departments'),
             ],
             'position_id' => [
-                'required_if:is_vc_employee,' . BooleanAsInteger::TRUE,
+                'required_if:type,' . UserType::VC_EMPLOYEE,
                 'integer',
                 new IsDataExists('positions'),
             ],
             'employee_no' => [
-                'required_if:is_vc_employee,' . BooleanAsInteger::TRUE,
+                'required_if:type,' . UserType::VC_EMPLOYEE,
                 'string',
                 'max:191'
             ],

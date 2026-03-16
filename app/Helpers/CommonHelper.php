@@ -2,27 +2,11 @@
 
 namespace App\Helpers;
 
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class CommonHelper
 {
-    // public static function getUserIP()
-    // {
-    //     $ip = request()->ip();
-    //     $remote = request()->server('REMOTE_ADDR');
-    //     $forward = request()->server('HTTP_X_FORWARDED_FOR');
-    //     $client = request()->server('HTTP_CLIENT_IP');
-
-    //     if (filter_var($client, FILTER_VALIDATE_IP)) {
-    //         $ip = $client;
-    //     } elseif (filter_var($forward, FILTER_VALIDATE_IP)) {
-    //         $ip = $forward;
-    //     } else {
-    //         $ip = $remote;
-    //     }
-
-    //     return $ip;
-    // }
     /**
      * Best-effort fix for legacy mojibake like:
      * - "PIÃ‘AS" or "PIÃƒâ€˜AS" -> "PIÑAS"
@@ -70,5 +54,25 @@ class CommonHelper
 
         // Already valid and not obviously mojibake; return as-is.
         return $string;
+    }
+
+    /**
+     * Format a date string according to the given parameters.
+     *
+     * @param  string|null  $date
+     * @param  bool  $withTime
+     * @return  string|null
+     */
+    public static function formatDate($date, $withTime = false)
+    {
+        if (!$date) {
+            return null;
+        }
+
+        $date = Carbon::parse($date);
+
+        return $withTime
+            ? $date->format('F j, Y')
+            : $date->format('F j, Y h:i A');
     }
 }

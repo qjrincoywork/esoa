@@ -14,10 +14,10 @@ return new class extends Migration
         Schema::create('user_details', function (Blueprint $table) {
             $table->bigIncrements('id');
             $table->bigInteger('user_id');
+            $table->string('account_type')->nullable();
             $table->longText('account_code')->nullable();
             $table->longText('branch_code')->nullable();
-            $table->integer('is_vc_employee')->default(0);
-            $table->integer('is_broker')->default(0);
+            $table->integer('type');
             $table->integer('gender_id');
             $table->integer('civil_status_id');
             $table->integer('citizenship_id');

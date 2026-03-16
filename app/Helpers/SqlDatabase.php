@@ -71,6 +71,38 @@ class SqlDatabase
     }
 
     /**
+     * Retrieves a single account record by its accountCode.
+     *
+     * @param string $accountCode
+     * @return object|null
+     */
+    public function getAccount($accountCode)
+    {
+        $result = $this->db
+            ->table('Accounts')
+            ->where('ac_code', $accountCode)
+            ->first();
+
+        return $result;
+    }
+
+    /**
+     * Retrieves a single branch record by its branchCode.
+     *
+     * @param string $branchCode
+     * @return object|null
+     */
+    public function getBranch($branchCode)
+    {
+        $result = $this->db
+            ->table('Branches')
+            ->where('br_code', $branchCode)
+            ->first();
+
+        return $result;
+    }
+
+    /**
      * Retrieves a single billing record by its reference ID.
      *
      * Excludes records that are currently being recomputed.
@@ -128,6 +160,56 @@ class SqlDatabase
             ->orderBy('ac_name');
 
         return $result->paginate($perPage);
+    }
+
+    public function getBillingRefsByParams($params)
+    {
+        // Pagination
+        $perPage = $params['per_page'] ?? config('vc.default_pages');
+        $result = $this->db
+            ->table('Billing as a')
+            ->select([
+                'a.bl_refid',
+                'a.bl_type',
+                'a.bl_claimnum',
+                'a.bl_policynum',
+                'a.bl_name',
+                'a.bl_dateposted',
+                'a.bl_workstatus',
+                'c.blp_tobebilledby',
+                'e.ac_name'
+            ])
+            ->leftJoin('Billing_Process as c', 'a.bl_refid', '=', 'c.blp_refid')
+            ->leftJoin('Accounts as e', function ($join) {
+                $join->on(DB::raw('SUBSTRING(a.bl_policynum,1,11)'), '=', 'e.ac_code');
+            })
+            ->whereIn('a.bl_workstatus', ['FB', 'PX'])
+            // ->where('a.bl_type', 'MEDCOLL')
+            ->where('e.ac_code', $params['account_code'])
+            ->orderBy('a.bl_dateposted', 'desc')
+            ->paginate($perPage);
+
+        return $result;
+    }
+
+    public function getClaimByBillingRef($params)
+    {
+        $result = $this->db
+            ->table('Billing as a')
+            ->select([
+                'a.bl_refid',
+                'a.bl_type',
+                'a.bl_claimnum',
+                'a.bl_policynum',
+                'a.bl_name',
+                'a.bl_dateposted',
+                'a.bl_workstatus',
+            ])
+            ->where('a.bl_refid', $params['billing_ref'])
+            ->orderBy('a.bl_dateposted', 'desc')
+            ->first();
+
+        return $result;
     }
 
     /**

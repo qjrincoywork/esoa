@@ -47,6 +47,11 @@ return [
             'report' => false,
         ],
 
+        'rm' => [
+            'driver' => 'local',
+            'root' => '\\\\192.170.11.185\\dmis_finance\\file\\rm',
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),

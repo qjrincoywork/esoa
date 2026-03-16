@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\{ AccountType, Gender, Server };
+use App\Enums\{ AccountType, Gender, Server, UserType };
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
 use App\Http\Controllers\Controller;
@@ -72,6 +72,7 @@ class UserController extends Controller
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'account_types' => AccountType::list(),
+                'types' => UserType::list(),
                 'genders' => Gender::list(),
                 'civil_statuses' => $civil_statuses,
                 'citizenships' => $citizenships,
@@ -158,6 +159,7 @@ class UserController extends Controller
                 'user' => $user,
                 'suffixes' => $suffixes,
                 'genders' => Gender::list(),
+                'types' => UserType::list(),
                 'account_types' => AccountType::list(),
                 'civil_statuses' => $civil_statuses,
                 'citizenships' => $citizenships,
@@ -172,8 +174,6 @@ class UserController extends Controller
      */
     public function update(UpdateRequest $request)
     {
-        dd($request->validated());
-
         DB::beginTransaction();
 
         try {

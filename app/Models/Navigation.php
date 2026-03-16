@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\OrderType;
 use App\Enums\Status;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\{Model, SoftDeletes, Relations\HasMany, Relations\BelongsTo};
@@ -56,7 +57,7 @@ class Navigation extends Model
      */
     public function accessibleModules($user)
     {
-        $query = $this->modules()->with('subModules');
+        $query = $this->modules()->with('subModules')->orderBy('order_number', OrderType::ASC);
 
         // If user is superadmin, return all modules
         if ($user && $user->hasRole('superadmin')) {

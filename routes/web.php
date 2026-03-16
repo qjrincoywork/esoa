@@ -124,11 +124,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::prefix('soas')->name('soas.')->controller(SoaController::class)->group(function () {
             Route::get('/file_proxy', 'fileProxy')->name('file_proxy');
             Route::get('/', 'index')->name('index');
+            Route::get('/list', 'list')->name('list');
+            Route::get('/file_list', 'fileList')->name('file_list');
+            Route::post('/preview_file', 'previewFile')->name('preview_file');
+            Route::get('/preview_file/{file}', 'previewFile')->name('preview_file_with_param');
             Route::get('/tax_computation', 'taxComputation')->name('tax_computation');
             Route::get('/get_accounts', 'getAccounts')->name('get_accounts');
+            Route::get('/get_billing_refs', 'getBillingRefs')->name('get_billing_refs');
             Route::get('/get_branches', 'getBranches')->name('get_branches');
             Route::get('/{id}/show', 'show')->name('show');
             Route::get('/create', 'create')->name('create');
+            Route::post('/store', 'store')->name('store');
             Route::get('/{id}/edit', 'edit')->name('edit');
             Route::get('/{id}/manage_file', 'manageFile')->name('manage_file');
             Route::get('/{id}/untag', 'untag')->name('untag');
