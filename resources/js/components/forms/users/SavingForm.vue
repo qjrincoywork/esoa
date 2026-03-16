@@ -1,28 +1,14 @@
 <script setup lang="ts">
-import { CheckIcon, ChevronsUpDownIcon } from 'lucide-vue-next';
 import { ref, onMounted, computed, defineExpose, watch } from 'vue';
-import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { SearchableCombobox } from '@/components/ui/searchable-combobox';
 import { useUsers } from '@/composables/users';
 import { debounce } from '@/composables/utilities/helper';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectTrigger, SelectContent, SelectGroup, SelectLabel, SelectItem, SelectValue } from '@/components/ui/select';
 
+type Type = { value: string | number; name: string }
 type AccountType = { value: string | number; name: string }
 type Account = { value: string | number; name: string }
 type Branch = { value: string | number; name: string }
@@ -32,7 +18,8 @@ type Citizenship = { id: string | number; name: string }
 type Department = { id: string | number; name: string }
 type Position = { id: string | number; name: string }
 type UserDetail = {
-  is_vc_employee?: number
+  account_type?: string
+  type?: number
   account_code?: string
   branch_code?: string
   gender_id?: number
@@ -61,6 +48,11 @@ const props = defineProps({
   },
   genders: {
     type: Array as unknown as () => Gender[],
+    required: true,
+    default: () => [],
+  },
+  types: {
+    type: Array as unknown as () => Type[],
     required: true,
     default: () => [],
   },
@@ -103,8 +95,10 @@ const civil_statuses = computed<CivilStatus[]>(() => props.civil_statuses as Civ
 const citizenships = computed<Citizenship[]>(() => props.citizenships as Citizenship[]);
 const departments = computed<Department[]>(() => props.departments as Department[]);
 const positions = computed<Position[]>(() => props.positions as Position[]);
-const selectedAccountType = ref<string | null>(null)
+// const selectedAccountType = ref<string | null>(null)
+const selectedAccountType = ref(detail.value?.account_type != null ? String(detail.value.account_type) : 1)
 const account_types = computed<AccountType[]>(() => props.account_types as AccountType[]);
+const types = computed<Type[]>(() => props.types as Type[]);
 const accounts = ref<Account[]>([])
 const branches = ref<Branch[]>([])
 const accountPage = ref(1)
@@ -116,30 +110,21 @@ const branchesLoadingMore = ref(false)
 const hasMoreAccounts = computed(() => accountPage.value < accountLastPage.value)
 const hasMoreBranches = computed(() => branchPage.value < branchLastPage.value)
 const { getAccountsByParams, getBranchesByParams } = useUsers();
-const openAccounts = ref(false)
-const openBranches = ref(false)
-// const isVcEmployee = ref<number>(detail.value?.is_vc_employee ?? 0)
-const isVcEmployee = ref(detail.value?.is_vc_employee != null ? Number(detail.value.is_vc_employee) : 0)
+const userType = ref(detail.value?.type != null ? Number(detail.value.type) : 1)
 const userId = ref(user?.value?.id ?? undefined)
 
 // Sync from props when user/detail loads (e.g. edit mode with async data)
 watch(
-  () => detail.value?.is_vc_employee,
+  () => detail.value?.type,
   (val) => {
     if (val != null) {
-      isVcEmployee.value = Number(val)
+      userType.value = Number(val)
     }
   },
   { immediate: true },
 )
 
-const isVcEmployeeChecked = computed({
-  get: () => isVcEmployee.value === 1,
-  set: (value: boolean) => {
-    isVcEmployee.value = value ? 1 : 0
-  },
-})
-const isShowFields = computed(() => isVcEmployeeChecked.value)
+const isShowFields = computed(() => userType.value == 1 ? 1 :0)
 const accountCode = ref(detail.value?.account_code != null ? String(detail.value.account_code) : '')
 const branchCode = ref(detail.value?.branch_code != null ? String(detail.value.branch_code) : '')
 const searchedAccountName = ref('')
@@ -147,20 +132,9 @@ const searchedBranchName = ref('')
 const selectedAccount = computed(() =>
   accounts.value?.find(account => String(account.value) === accountCode.value),
 )
-const selectedBranch = computed(() =>
-  branches.value?.find(branch => String(branch.value) === branchCode.value),
-)
-function selectInput(selectedValue: string, isAccount:boolean = true) {
-  if (isAccount) {
-    accountCode.value = selectedValue
-    openAccounts.value = false
-  } else {
-    branchCode.value = selectedValue
-    openBranches.value = false
-  }
-}
+// selectedAccount still needed for Branch combobox disabled state and branch fetch
 
-// Expose a form ref so parent components can access without document.getElementById
+// Expose a form ref
 const userEditForm = ref<HTMLFormElement | null>(null)
 
 // Helper to extract FormData from this form (exposed to parent)
@@ -285,13 +259,6 @@ watch([selectedAccount, searchedBranchName], async () => {
           v-model="userId"
         />
         <Input
-          id="is_vc_employee"
-          type="hidden"
-          class="mt-1 block w-full"
-          name="is_vc_employee"
-          v-model="isVcEmployee"
-        />
-        <Input
           id="account_code"
           type="hidden"
           class="mt-1 block w-full"
@@ -306,10 +273,34 @@ watch([selectedAccount, searchedBranchName], async () => {
           :value="branchCode"
         />
     </div>
-    <div class="flex items-center space-x-2">
-      <Switch id="is_vc_employee_switch" v-model="isVcEmployeeChecked" :checked="isVcEmployeeChecked"/>
-      <Label for="is_vc_employee_switch">Is VC Employee</Label>
+
+    <div class="grid gap-2 md:col-span-1">
+      <Label for="type">User Type<span class="text-red-400">*</span></Label>
+      <Select
+        id="type"
+        class="mt-1 block w-full"
+        name="type"
+        :default-value="userType"
+        v-model="userType"
+      >
+        <SelectTrigger class="w-full">
+          <SelectValue placeholder="Select User type" />
+        </SelectTrigger>
+        <SelectContent class="w-full">
+          <SelectGroup>
+            <SelectLabel>User Type</SelectLabel>
+            <SelectItem
+              v-for="type in types"
+              :key="type.value"
+              :value="Number(type.value)"
+            >
+            {{ type.name }}
+            </SelectItem>
+          </SelectGroup>
+        </SelectContent>
+      </Select>
     </div>
+
     <div v-if="!isShowFields" class="grid gap-2 md:col-span-1">
       <Label for="account_type">Account Type<span class="text-red-400">*</span></Label>
       <Select
@@ -318,6 +309,7 @@ watch([selectedAccount, searchedBranchName], async () => {
         name="account_type"
         v-model="selectedAccountType"
       >
+        <!-- :default-value="detail?.account_type ? String(detail?.account_type) : undefined" -->
         <SelectTrigger class="w-full">
           <SelectValue placeholder="Select an account type" />
         </SelectTrigger>
@@ -336,129 +328,39 @@ watch([selectedAccount, searchedBranchName], async () => {
       </Select>
     </div>
 
-    <div v-if="!isShowFields" class="grid gap-2 md:col-span-1 truncate">
-      <Label for="account">Account<span class="text-red-400">*</span></Label>
-      <Popover v-model:open="openAccounts">
-        <PopoverTrigger as-child>
-          <Button
-            variant="outline"
-            role="combobox"
-            :aria-expanded="openAccounts"
-            :disabled="!selectedAccountType"
-            class="w-full justify-between"
-          >
-            <span class="truncate">{{ selectedAccount?.name || "Select Account..." }}</span>
-            <ChevronsUpDownIcon class="ml-2 h-4 w-4 shrink-0 opacity-50" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent class="mt-1 block w-full">
-          <Command>
-            <CommandInput
-              class="h-9"
-              v-model="searchedAccountName"
-              placeholder="Search Account..."
-            />
-            <CommandList>
-              <CommandEmpty v-if="!accounts?.length">No account found.</CommandEmpty>
-              <CommandGroup>
-                <CommandItem
-                  v-for="account in accounts"
-                  :key="account.value"
-                  :value="account.value"
-                  @select="(ev) => {
-                    selectInput(ev.detail.value as string, true)
-                  }"
-                >
-                  {{ account.name }}
-                  <CheckIcon
-                    :class="cn(
-                      'ml-auto',
-                      String(account.value) === accountCode ? 'opacity-100' : 'opacity-0',
-                    )"
-                  />
-                </CommandItem>
-                <div
-                  v-if="hasMoreAccounts"
-                  class="flex justify-center py-2"
-                >
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    class="w-full text-muted-foreground"
-                    :disabled="accountsLoadingMore"
-                    @click="loadMoreData('accounts')"
-                  >
-                    {{ accountsLoadingMore ? 'Loading...' : 'Load more' }}
-                  </Button>
-                </div>
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
+    <div v-if="!isShowFields" class="md:col-span-1">
+      <SearchableCombobox
+        id="account"
+        label="Account"
+        :required="true"
+        v-model="accountCode"
+        v-model:search="searchedAccountName"
+        :items="accounts"
+        placeholder="Select Account..."
+        search-placeholder="Search Account..."
+        empty-text="No account found."
+        :disabled="!selectedAccountType"
+        :has-more="hasMoreAccounts"
+        :loading-more="accountsLoadingMore"
+        @load-more="loadMoreData('accounts')"
+      />
     </div>
-    <div v-if="!isShowFields" class="grid gap-2 md:col-span-1 truncate">
-      <Label for="branch">Branch</Label>
-      <Popover v-model:open="openBranches">
-        <PopoverTrigger as-child>
-          <Button
-            variant="outline"
-            role="combobox"
-            :aria-expanded="openBranches"
-            :disabled="!selectedAccount"
-            class="w-full justify-between"
-          >
-            <span class="truncate">{{ selectedBranch?.name || "Select Branch..." }}</span>
-            <ChevronsUpDownIcon class="ml-2 h-4 w-4 shrink-0 opacity-50" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent class="mt-1 block w-full">
-          <Command>
-            <CommandInput
-              class="h-9"
-              v-model="searchedBranchName"
-              placeholder="Search Branch..."
-            />
-            <CommandList>
-              <CommandEmpty v-if="!branches?.length">No branch found.</CommandEmpty>
-              <CommandGroup>
-                <CommandItem
-                  v-for="branch in branches"
-                  :key="branch.value"
-                  :value="branch.value"
-                  @select="(ev) => {
-                    selectInput(ev.detail.value as string, false)
-                  }"
-                >
-                  {{ branch.name }}
-                  <CheckIcon
-                    :class="cn(
-                      'ml-auto',
-                      String(branch.value) === branchCode ? 'opacity-100' : 'opacity-0',
-                    )"
-                  />
-                </CommandItem>
-                <div
-                  v-if="hasMoreBranches"
-                  class="flex justify-center py-2"
-                >
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    class="w-full text-muted-foreground"
-                    :disabled="branchesLoadingMore"
-                    @click="loadMoreData('branches')"
-                  >
-                    {{ branchesLoadingMore ? 'Loading...' : 'Load more' }}
-                  </Button>
-                </div>
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
+
+    <div v-if="!isShowFields" class="md:col-span-1">
+      <SearchableCombobox
+        id="branch"
+        label="Branch"
+        v-model="branchCode"
+        v-model:search="searchedBranchName"
+        :items="branches"
+        placeholder="Select Branch..."
+        search-placeholder="Search Branch..."
+        empty-text="No branch found."
+        :disabled="!selectedAccount"
+        :has-more="hasMoreBranches"
+        :loading-more="branchesLoadingMore"
+        @load-more="loadMoreData('branches')"
+      />
     </div>
 
     <div v-if="isShowFields" class="grid gap-2 md:col-span-1">

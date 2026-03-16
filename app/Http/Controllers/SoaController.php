@@ -3,23 +3,23 @@
 namespace App\Http\Controllers;
 
 use App\Enums\AccountType;
+use App\Enums\BillType;
 use App\Enums\Server;
+use App\Enums\SoaStatus;
 use App\Enums\UntagType;
 use App\Helpers\CommonHelper;
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Soa\{FileProxyRequest, ListRequest, RecomputeTaxRequest, UpdateRequest, UpdateTagRequest };
+use App\Http\Requests\Soa\{CreateRequest, FileProxyRequest, ListRequest, RecomputeTaxRequest, UpdateRequest, UpdateTagRequest };
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
-use App\Http\Resources\SoaResource;
+use App\Http\Resources\{BillingRefResource, OldSoaResource, SoaResource };
 use App\Mail\NewSoaUploaded;
-use App\Models\{Account, Citizenship, CivilStatus, Contact, Department, Gender, MainAccount, Position, Suffix, User };
+use App\Models\{Account, Citizenship, CivilStatus, Contact, Department, Gender, MainAccount, Position, Soa, Suffix, User };
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\{ DB, Http, Mail, Storage };
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -85,8 +85,87 @@ class SoaController extends Controller
         $soas = (new $this->sqlDatabase(Server::SOA))->getSoas($request->validated());
 
         return Inertia::render('soas/Index', [
+            'soas' => new CommonResource(OldSoaResource::collection($soas))
+        ]);
+    }
+
+    /**
+     * Display a listing of the resource.
+     */
+    public function list(ListRequest $request)
+    {
+        $soas = (new Soa)->getSoas($request->validated());
+
+        return Inertia::render('soas/List', [
             'soas' => new CommonResource(SoaResource::collection($soas))
         ]);
+    }
+
+    /**
+     * Display a file listing of the resource.
+     */
+    public function fileList(Soa $soa, Request $request)
+    {
+        $billing = (new $this->sqlDatabase(Server::HMS))->getClaimByBillingRef($request->all());
+        //http://192.170.11.185/dmis_finance/file/rm/ //EO-2832655-003
+        // $files = Storage::disk('rm')->files('EO-3075098-001'); // 'files' is the sub-directory name
+        $files = [];
+        if (isset($billing->bl_claimnum)) {
+            $files = Storage::disk('rm')->files($billing->bl_claimnum);
+        }
+        $files = Storage::disk('rm')->files('EO-2832655-003');
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'files' => $files,
+            ]);
+        }
+    }
+
+    public function previewFile(Request $request, $file = null)
+    {
+        $file = $file ?: $request->input('file');
+
+        if (!$file) {
+            abort(400, 'File path is required');
+        }
+
+        $disk = Storage::disk('rm');
+
+        if (!$disk->exists($file)) {
+            abort(404, 'File not found');
+        }
+
+        $stream = $disk->readStream($file);
+
+        if (!is_resource($stream)) {
+            abort(404, 'File is not readable');
+        }
+
+        $mimeType = 'application/octet-stream';
+        try {
+            $mimeType = $disk->mimeType($file);
+        } catch (\Exception $e) {
+            throw new \Exception('Unable to determine file MIME type: ' . $e->getMessage());
+        }
+
+        $fileName = basename($file);
+        $fileSize = null;
+
+        try {
+            $fileSize = $disk->size($file);
+        } catch (\Exception $e) {
+            throw new \Exception('Unable to determine file size: ' . $e->getMessage());
+        }
+
+        return response()->stream(function () use ($stream) {
+            fpassthru($stream);
+            fclose($stream);
+        }, Response::HTTP_OK, array_filter([
+            'Content-Type' => $mimeType,
+            'Content-Disposition' => sprintf('inline; filename="%s"', $fileName),
+            'Content-Length' => $fileSize,
+        ]));
     }
 
     public function create(Request $request)
@@ -95,18 +174,60 @@ class SoaController extends Controller
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'account_types' => AccountType::list(),
+                'bill_types' => BillType::list(),
+                'status_types' => SoaStatus::list(),
             ]);
+        }
+    }
+
+    public function store(CreateRequest $request)
+    {
+        $validated = $request->validated();
+
+        DB::beginTransaction();
+
+        try {
+            (new Soa())->saveSoa($validated);
+
+            // Commit transaction
+            DB::commit();
+
+            // Return JSON for AJAX requests (no URL change)
+            if ($request->wantsJson() || $request->ajax()) {
+                return CustomResponse::ok('Soa Created successfully', Response::HTTP_OK);
+            }
+        } catch (\Exception $e) {
+            // Catch and handle any unexpected errors
+            DB::rollBack();
+
+            // Return JSON for AJAX requests (no URL change)
+            if ($request->wantsJson() || $request->ajax()) {
+                // Catch and handle any unexpected errors
+                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+            }
         }
     }
 
     public function getAccounts(Request $request)
     {
-        $accounts = (new $this->sqlDatabase(Server::HMS))->getAccountsByType($request->get('type'));
+        $accounts = (new $this->sqlDatabase(Server::HMS))->getAccountsByParams($request->all());
 
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
-                'accounts' => AccountResource::collection($accounts),
+                'accounts' => new CommonResource(AccountResource::collection($accounts))
+            ]);
+        }
+    }
+
+    public function getBillingRefs(Request $request)
+    {
+        $billingRefs = (new $this->sqlDatabase(Server::HMS))->getBillingRefsByParams($request->all());
+
+        // Return JSON for AJAX requests (no URL change)
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'billing_refs' => new CommonResource(BillingRefResource::collection($billingRefs))
             ]);
         }
     }
@@ -131,7 +252,7 @@ class SoaController extends Controller
         $soa = (new $this->sqlDatabase(Server::SOA))->getSoa($id);
 
         return Inertia::render('soas/Index', [
-            'soa' => SoaResource::make($soa)
+            'soa' => OldSoaResource::make($soa)
         ]);
     }
 
@@ -145,7 +266,7 @@ class SoaController extends Controller
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
-                'soa' => SoaResource::make($soa)
+                'soa' => OldSoaResource::make($soa)
             ]);
         }
     }

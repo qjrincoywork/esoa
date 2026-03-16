@@ -34,6 +34,7 @@ export function useUsers() {
         user: User;
         suffixes: Array<{ id: number | string; name: string }>;
         genders: Array<{ id: number | string; name: string }>;
+        types: Array<{ value: number | string; name: string }>;
         account_types: Array<{ value: number | string; name: string }>;
         civil_statuses: Array<{ id: number | string; name: string }>;
         citizenships: Array<{ id: number | string; name: string }>;
@@ -59,6 +60,7 @@ export function useUsers() {
           user: payload.user,
           suffixes: payload.suffixes,
           genders: payload.genders,
+          types: payload.types,
           account_types: payload.account_types,
           civil_statuses: payload.civil_statuses,
           citizenships: payload.citizenships,
@@ -106,6 +108,7 @@ export function useUsers() {
       const response = await get<{
         suffixes: Array<{ id: number | string; name: string }>;
         genders: Array<{ id: number | string; name: string }>;
+        types: Array<{ value: number | string; name: string }>;
         account_types: Array<{ value: number | string; name: string }>;
         civil_statuses: Array<{ id: number | string; name: string }>;
         citizenships: Array<{ id: number | string; name: string }>;
@@ -130,6 +133,7 @@ export function useUsers() {
         componentProps: {
           suffixes: payload.suffixes,
           genders: payload.genders,
+          types: payload.types,
           account_types: payload.account_types,
           civil_statuses: payload.civil_statuses,
           citizenships: payload.citizenships,
@@ -206,7 +210,6 @@ export function useUsers() {
       dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
     }
   };
-
 
   const deleteUser = async (user: User) => {
     const deleteOrRestore = user.deleted_at ? 'Restore' : 'Delete'

@@ -2,6 +2,7 @@ import { useModal } from '@/composables/useModal';
 import { useAjax } from '@/composables/useAjax';
 import DeleteForm from '@/components/forms/soas/DeleteForm.vue';
 import SavingForm from '@/components/forms/soas/SavingForm.vue';
+import SavingSoaForm from '@/components/forms/soas/SavingSoaForm.vue';
 import ViewForm from '@/components/forms/soas/ViewForm.vue';
 import UntagForm from '@/components/forms/soas/UntagForm.vue';
 import ManageFileForm from '@/components/forms/soas/ManageFileForm.vue';
@@ -9,32 +10,36 @@ let formApi: { getFormData: () => FormData | null } | null = null;
 import { dispatchNotification } from '@/components/notification';
 import { showLoader, hideLoader } from '@/composables/useLoader';
 import { useModulePermissions } from '@/composables/useModulePermissions';
-import { router } from '@inertiajs/vue3';
+import { router, usePage } from '@inertiajs/vue3';
+import SoaFileBrowser from '@/components/forms/soas/SoaFileBrowser.vue';
 
 export interface Soa {
   id?: number
-  soanum?: string
-  macode?: string
-  refid?: string
-  upcode?: string
-  billcode?: string
-  billtype?: string
-  billdate?: string
-  upload_date?: string
+  user_id?: number
+  soa_number?: string
+  account_code?: string
+  branch_code?: string
+  billing_ref?: string
+  bill_type?: number
+  status?: number
+  bill_date?: string
   due_date?: string
-  period_coverage?: string
-  paid_date?: string
-  amount_due?: number
-  company_branch?: string
+  period_date_from?: string
+  period_date_to?: string
+  amount?: number
+  amount_paid?: number
+  payment_adjustment?: number
+  balance?: number
   file_pdf?: string
   file_xls?: string
-  status?: string
 }
 
 export function useSoas() {
+  const page = usePage();
   const { slug } = useModulePermissions();
   const { openModal, closeModal } = useModal();
   const { get, post } = useAjax();
+  const authUser = (page.props as { auth?: { user?: { id?: number; user_detail?: unknown } } }).auth?.user;
 
   const untagSoa = async (soa: Soa) => {
     try {
@@ -264,6 +269,96 @@ export function useSoas() {
     }
   };
 
+  const newSoa = async () => {
+    try {
+      // Make AJAX request without navigation using reusable composable
+      const response = await get<{
+        account_types: Array<{ value: number | string; name: string }>;
+        bill_types: Array<{ value: number | string; name: string }>;
+        status_types: Array<{ value: number | string; name: string }>;
+      }>(
+        `/${slug.value}/create`
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch data');
+      }
+
+      const payload = response.data;
+
+      if (!payload) return;
+
+      openModal({
+        modalTitle: `Create Soa`,
+        buttonText: 'Save',
+        component: SavingSoaForm,
+        componentProps: {
+          account_types: payload.account_types,
+          bill_types: payload.bill_types ?? [],
+          status_types: payload.status_types ?? [],
+          user: authUser ?? undefined,
+          onReady: (api: { getFormData: () => FormData | null }) => {
+            formApi = api
+          }
+        },
+        size: 'xl4',
+        onSubmit: async () => {
+          if (!formApi) return;
+
+          const formData = formApi.getFormData();
+          if (!formData) return;
+
+          showLoader();
+          try {
+            const response = await post(`/${slug.value}/store`, formData);
+
+            if (!response.ok) {
+              //To be Updated the showing of validation errors in the form
+              dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+            } else {
+              dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+              closeModal();
+              // Refresh current page to update datatable props
+              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+            }
+          } catch (err) {
+            dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+          } finally {
+            hideLoader();
+          }
+        }
+      });
+    } catch (error) {
+      dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
+    }
+  };
+
+  const fileList = async (soa: Soa) => {
+    try {
+      const response = await get(`/${slug.value}/file_list`, soa);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch data');
+      }
+
+      const payload = response.data;
+
+      openModal({
+        modalTitle: `View ${soa?.soa_number + ' Files'}`,
+        buttonText: 'View',
+        component: SoaFileBrowser,
+        componentProps: {
+          soa: soa,
+          files: payload.files,
+        },
+        size: 'lg',
+        hasSubmitButton: false,
+      });
+    } catch (error) {
+      dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
+    }
+  };
+
   const getAccountsByParams = async (params: Record<string, string | number | undefined>) => {
     try {
       const response = await get(`/${slug.value}/get_accounts`, params);
@@ -277,6 +372,24 @@ export function useSoas() {
       if (!payload) return;
       // Return full paginated response: { data, meta, links } or plain array for backward compatibility
       return payload.accounts;
+    } catch (error) {
+      dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
+    }
+  };
+
+  const getBillingRefsByParams = async (params: Record<string, string | number | undefined>) => {
+    try {
+      const response = await get(`/${slug.value}/get_billing_refs`, params);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch data');
+      }
+
+      const payload = response.data;
+
+      if (!payload) return;
+      // Return full paginated response: { data, meta, links } or plain array for backward compatibility
+      return payload.billing_refs;
     } catch (error) {
       dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
     }
@@ -356,12 +469,15 @@ export function useSoas() {
     editSoa,
     viewSoa,
     createSoa,
+    fileList,
+    newSoa,
     deleteSoa,
     manageFile,
     untagSoa,
     recomputeTax,
     getAccountsByParams,
     getBranchesByParams,
+    getBillingRefsByParams,
   };
 }
 

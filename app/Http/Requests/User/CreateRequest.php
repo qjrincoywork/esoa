@@ -4,6 +4,7 @@ namespace App\Http\Requests\User;
 
 use App\Enums\AccountType;
 use App\Enums\BooleanAsInteger;
+use App\Enums\UserType;
 use App\Rules\IsDataExists;
 use Illuminate\Validation\Rule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -18,18 +19,19 @@ class CreateRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'is_vc_employee' => [
+            'type' => [
                 'required',
-                Rule::in(BooleanAsInteger::getValues()),
+                'integer',
+                Rule::in(UserType::getValues()),
             ],
             'account_type' => [
-                'required_if:is_vc_employee,' . BooleanAsInteger::FALSE,
+                'required_if:type,' . UserType::ACCOUNT_BRANCH_ADMIN,
                 'nullable',
                 'string',
                 Rule::in(AccountType::getValues()),
             ],
             'account_code' => [
-                'required_if:is_vc_employee,' . BooleanAsInteger::FALSE,
+                'required_if:type,' . UserType::ACCOUNT_BRANCH_ADMIN,
                 'nullable',
                 'string',
                 //new IsDataExists('accounts'),
@@ -41,17 +43,17 @@ class CreateRequest extends FormRequest
                 //new IsDataExists('branches'),
             ],
             'department_id' => [
-                'required_if:is_vc_employee,' . BooleanAsInteger::TRUE,
+                'required_if:type,' . UserType::VC_EMPLOYEE,
                 'integer',
                 new IsDataExists('departments'),
             ],
             'position_id' => [
-                'required_if:is_vc_employee,' . BooleanAsInteger::TRUE,
+                'required_if:type,' . UserType::VC_EMPLOYEE,
                 'integer',
                 new IsDataExists('positions'),
             ],
             'employee_no' => [
-                'required_if:is_vc_employee,' . BooleanAsInteger::TRUE,
+                'required_if:type,' . UserType::VC_EMPLOYEE,
                 'string',
                 'max:191'
             ],
@@ -120,8 +122,9 @@ class CreateRequest extends FormRequest
         return [
             'gender_id.required' => 'The Gender field is required',
             'civil_status_id.required' => 'The Civil Status field is required',
-            'citizenship_id.required_if' => 'The Citizenship field is required',
+            'citizenship_id.required' => 'The Citizenship field is required',
             'department_id.required_if' => 'The Department field is required',
+            'employee_no.required_if' => 'The Employee No. field is required',
             'position_id.required_if' => 'The Position field is required',
             'account_type.required_if' => 'The Account Type field is required',
             'account_code.required_if' => 'The Account field is required',
