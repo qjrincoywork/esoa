@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
-import { ref, watch, computed } from 'vue';
+import { ref, watch, computed, h } from 'vue';
 import { Head, router, usePage } from '@inertiajs/vue3';
 import { createColumnHelper } from '@tanstack/vue-table';
 import { type BreadcrumbItem } from '@/types';
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { createActionColumn } from '@/composables/datatable/datatableColumns';
 import { useRoles } from '@/composables/roles';
 import { useModulePermissions } from '@/composables/useModulePermissions';
+import { Key } from 'lucide-vue-next';
 
 type RolesPagination = {
     current_page: number
@@ -20,7 +21,8 @@ type RolesPagination = {
 const page = usePage();
 const { canCreate, slug, hasPermission } = useModulePermissions();
 const roles = computed(() => (page.props as any).roles as RolesPagination);
-const { createRole, editRole, deleteRole } = useRoles();
+const allPermissions = computed(() => (page.props as any).permissions);
+const { createRole, editRole, deleteRole, manageRolePermissions } = useRoles();
 const columnHelper = createColumnHelper();
 const pagination = ref({
 	current_page: roles.value.current_page,
@@ -48,15 +50,24 @@ const handlerMap: Record<string, Function> = {
 
 const columns = computed(() => {
   const subModules = page.props.sub_modules
-    .filter((m: any) => hasPermission(m.slug) && m.slug.split('.')[1] != 'create')
+    .filter((m: any) => hasPermission(m.slug) && m.slug.split('.')[1] !== 'create')
     .map((m: any) => ({
       ...m,
       handler: handlerMap[m.slug.split('.')[1]],
     }))
 
-  return subModules.length
-    ? [...baseColumns, createActionColumn(subModules)]
-    : baseColumns
+  const customActions = [
+    {
+      slug: 'manage_permissions',
+      name: 'Manage Permissions',
+      icon: Key,
+      color: 'blue',
+      handler: (role: any) => manageRolePermissions(role, allPermissions.value),
+    },
+    ...subModules,
+  ]
+
+  return [...baseColumns, createActionColumn(customActions)]
 })
 
 const breadcrumbItems: BreadcrumbItem[] = [

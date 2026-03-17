@@ -39,21 +39,6 @@ const toggleTheme = () => {
             <template v-if="breadcrumbs && breadcrumbs.length > 0">
                 <Breadcrumbs :breadcrumbs="breadcrumbs" />
             </template>
-          <!-- <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger as-child>
-                <div class="flex items-center space-x-2">
-                  <Switch
-                    :checked="isDark"
-                    @click="toggleTheme"
-                  />
-                </div>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Toggle Theme</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider> -->
         </div>
     </header>
 </template>

@@ -78,6 +78,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::get('/create', 'create')->name('create');
                 Route::post('/store', 'store')->name('store');
                 Route::post('/destroy', 'destroy')->name('destroy');
+                Route::get('/{id}/edit_permissions', 'editPermissions')->name('edit_permissions');
+                Route::post('/update_permissions', 'updatePermissions')->name('update_permissions');
         });
 
         //Permissions
