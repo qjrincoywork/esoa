@@ -2,6 +2,7 @@ import { useModal } from '@/composables/useModal';
 import { useAjax } from '@/composables/useAjax';
 import DeleteForm from '@/components/forms/roles/DeleteForm.vue';
 import SavingForm from '@/components/forms/roles/SavingForm.vue';
+import RolePermissionsForm from '@/components/forms/roles/RolePermissionsForm.vue';
 let formApi: { getFormData: () => FormData | null } | null = null;
 import { dispatchNotification } from '@/components/notification';
 import { showLoader, hideLoader } from '@/composables/useLoader';
@@ -18,6 +19,13 @@ export interface Role {
 export interface Suffixes {
   id?: number | string;
   name?: string;
+  [key: string]: any;
+}
+
+export interface Permission {
+  id?: number | string;
+  name?: string;
+  guard_name?: string;
   [key: string]: any;
 }
 
@@ -177,10 +185,70 @@ export function useRoles() {
     }
   };
 
+  const manageRolePermissions = async (role: Role & { permissions?: Permission[] }, allPermissions: Permission[]) => {
+    try {
+      // Make AJAX request without navigation using reusable composable
+      const response = await get<{
+        role: Role;
+      }>(
+        `/${slug.value}/${role.id}/edit_permissions`
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch Role data');
+      }
+
+      const payload = response.data;
+
+      if (!payload) return;
+
+      openModal({
+        modalTitle: `Manage permissions: ${role.name}`,
+        buttonText: 'Save',
+        component: RolePermissionsForm,
+        componentProps: {
+          role,
+          allPermissions,
+          access_permissions: payload.access_permissions || [],
+          onReady: (api: { getFormData: () => FormData | null }) => {
+            formApi = api
+          }
+        },
+        size: 'lg',
+        onSubmit: async () => {
+          if (!formApi) return;
+
+          const formData = formApi.getFormData();
+          if (!formData) return;
+
+          showLoader();
+          try {
+            const response = await post(`/${slug.value}/update_permissions`, formData);
+
+            if (!response.ok) {
+              dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+            } else {
+              dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+              closeModal();
+              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+            }
+          } catch (err) {
+            dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+          } finally {
+            hideLoader();
+          }
+        }
+      });
+    } catch (error) {
+      dispatchNotification({ title: 'Error', content: 'Internal Server Error', type: 'error' });
+    }
+  };
+
   return {
     editRole,
     createRole,
     deleteRole,
+    manageRolePermissions,
   };
 }
 
