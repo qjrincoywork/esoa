@@ -2,6 +2,7 @@ import { useModal } from '@/composables/useModal';
 import { useAjax } from '@/composables/useAjax';
 import DeleteForm from '@/components/forms/users/DeleteForm.vue';
 import SavingForm from '@/components/forms/users/SavingForm.vue';
+import UserRolesForm from '@/components/forms/users/UserRolesForm.vue';
 let formApi: { getFormData: () => FormData | null } | null = null;
 import { dispatchNotification } from '@/components/notification';
 import { showLoader, hideLoader } from '@/composables/useLoader';
@@ -20,6 +21,13 @@ export interface Suffixes {
   id?: number | string;
   name?: string;
   [key: string]: any;
+}
+
+export interface Role {
+  id?: number | string
+  name?: string
+  guard_name?: string
+  [key: string]: any
 }
 
 export function useUsers() {
@@ -263,12 +271,87 @@ export function useUsers() {
     }
   };
 
+  const manageUserRoles = async (user: User) => {
+    try {
+      const response = await get<{
+        user_roles: Role[]
+        all_roles: Role[]
+      }>(`/${slug.value}/${user.id}/edit_roles`)
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch user roles')
+      }
+
+      const payload = response.data
+      console.log(payload)
+      if (!payload) return
+
+      openModal({
+        modalTitle: `Assign Roles: ${user.username || user.id}`,
+        buttonText: 'Save',
+        component: UserRolesForm,
+        componentProps: {
+          user,
+          user_roles: payload.user_roles ?? [],
+          all_roles: payload.all_roles ?? [],
+          onReady: (api: { getFormData: () => FormData | null }) => {
+            formApi = api
+          },
+        },
+        size: 'lg',
+        onSubmit: async () => {
+          if (!formApi) return
+          const formData = formApi.getFormData()
+          if (!formData) return
+
+          showLoader()
+          try {
+            const response = await post(`/${slug.value}/update_roles`, formData)
+
+            if (!response.ok) {
+              dispatchNotification({
+                title: 'Error',
+                content: response.data.message,
+                type: 'error',
+              })
+            } else {
+              dispatchNotification({
+                title: 'Success',
+                content: response.data.message,
+                type: 'success',
+              })
+              closeModal()
+              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true })
+            }
+          } catch (err) {
+            dispatchNotification({
+              title: 'Error',
+              content: 'Network error',
+              type: 'error',
+            })
+            console.error(err)
+          } finally {
+            hideLoader()
+          }
+        },
+      })
+    } catch (error) {
+      dispatchNotification({
+        title: 'Error',
+        content: 'Internal Server Error',
+        type: 'error',
+      })
+      console.error('Internal Server Error:', error)
+    }
+  }
+
   return {
     editUser,
     createUser,
     deleteUser,
     getAccountsByParams,
     getBranchesByParams,
+    manageUserRoles,
   };
 }
 

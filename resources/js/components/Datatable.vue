@@ -8,8 +8,9 @@ import {
     getFilteredRowModel,
     getPaginationRowModel
 } from '@tanstack/vue-table';
-
-import { Form, Head, Link, router, usePage } from '@inertiajs/vue3';
+import { Field, FieldLabel } from "@/components/ui/field"
+import { Label } from "@/components/ui/label"
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectGroup, SelectItem } from "@/components/ui/select"
 import Modal from '@/components/Modal.vue';
 import { Button } from "@/components/ui/button";
 import { Pointer } from 'lucide-vue-next';
@@ -78,14 +79,6 @@ const props = defineProps({
         type: Function,
         default: null
     },
-    routeName: {
-        type: String,
-        default: ''
-    },
-    routeParams: {
-        type: Object,
-        default: () => ({})
-    }
 })
 
 const emit = defineEmits(['update:pagination', 'bulk-delete', 'navigate'])
@@ -98,13 +91,6 @@ const pagination = ref({
     pageSize: props.defaultPageSize
 })
 const showDeleteModal = ref(false)
-
-const getNavigationUrl = () => {
-    if (props.routeName) {
-        return route(props.routeName, props.routeParams)
-    }
-    return window.location.pathname
-}
 
 const toggleRow = index => {
     const currentIndex = expandedRows.value.indexOf(index)
@@ -240,8 +226,7 @@ const totalRows = computed(() => paginationInfo.value.total)
 const pageCount = computed(() => paginationInfo.value.pageCount)
 const isFirstPage = computed(() => currentPage.value <= 1)
 const isLastPage = computed(() => currentPage.value >= pageCount.value)
-const showPagination = computed(() => currentPage.value >= pageCount.value)
-
+const selectedRowsPerPage = ref(props.pagination.per_page)
 const goToPage = pageNumber => {
     if (!isServerPagination.value) return
     if (pageNumber < 1 || pageNumber > pageCount.value) return
@@ -356,34 +341,22 @@ watch(
     { deep: true }
 )
 
-watch(
-    () => props.pagination,
-    (newPagination, oldPagination) => {
-        if (!isServerPagination.value) return
+// Server visits are owned by parent pages (see @update:pagination) to avoid duplicate
+// Inertia requests and cancellation when both Datatable and the page trigger router.get.
 
-        if (
-            oldPagination &&
-            (newPagination.current_page !== oldPagination.current_page ||
-                newPagination.per_page !== oldPagination.per_page)
-        ) {
-            router.get(
-                getNavigationUrl(),
-                {
-                    page: newPagination.current_page,
-                    per_page:
-                        newPagination.per_page === 'all' ? 'all' : Number(newPagination.per_page)
-                },
-                {
-                    preserveState: true,
-                    preserveScroll: true,
-                    onStart: () => emit('navigate', { loading: true }),
-                    onFinish: () => emit('navigate', { loading: false })
-                }
-            )
-        }
-    },
-    { deep: true }
+watch(selectedRowsPerPage, async () => {
+    if (isServerPagination.value) {
+      updateServerPagination({
+        per_page: selectedRowsPerPage.value,
+        current_page: 1
+      })
+    } else {
+      pagination.value.pageSize = selectedRowsPerPage.value
+    }
+  },
+  { deep: true }
 )
+
 </script>
 
 <template>
@@ -410,46 +383,38 @@ watch(
         <header
             class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
             <div
-                class="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full sm:w-auto">
+                class="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full">
                 <div class="flex space-x-2 items-center">
-                    <label class="text-sm text-[var(--color-text)]">
-                        {{ table.options.meta?.showRowsSelectLabel || 'Rows per page:' }}
-                    </label>
-                    <select
-                        class="border border-[var(--color-border-strong)] rounded-md text-sm bg-[var(--color-surface)] text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-opacity-50"
-                        :style="{ '--tw-ring-color': 'var(--primary-color)' }"
-                        :value="
-                            isServerPagination
-                                ? isAllSelected
-                                    ? 'all'
-                                    : String(props.pagination.per_page)
-                                : String(pagination.pageSize)
-                        "
-                        @change="
-                            e => {
-                                const newSize =
-                                    e.target.value === 'all' ? 'all' : Number(e.target.value)
-                                if (isServerPagination) {
-                                    updateServerPagination({
-                                        per_page: newSize,
-                                        current_page: 1
-                                    })
-                                } else {
-                                    pagination.pageSize =
-                                        newSize === 'all'
-                                            ? table.getFilteredRowModel().rows.length
-                                            : newSize
-                                    pagination.pageIndex = 0
-                                }
-                            }
-                        ">
-                        <option
+                  <Label class="text-sm text-[var(--color-text)]" for="rows_per_page">{{ table.options.meta?.showRowsSelectLabel || 'Rows per page:' }}</Label>
+                  <div class="w-15">
+                    <Select
+                      id="rows_per_page"
+                      class="w-20 test border border-[var(--color-border-strong)] rounded-md text-sm bg-[var(--color-surface)] text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-opacity-50"
+                      name="rows_per_page"
+                      :value="
+                          isServerPagination
+                              ? isAllSelected
+                                  ? 'all'
+                                  : String(props.pagination.per_page)
+                              : String(pagination.pageSize)
+                      "
+                      v-model="selectedRowsPerPage"
+                    >
+                      <SelectTrigger>
+                        <SelectValue/>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectItem
                             v-for="size in pageSizeOptions"
                             :key="size"
                             :value="size === 'All' ? 'all' : size">
                             {{ size === 'All' ? 'All' : size }}
-                        </option>
-                    </select>
+                          </SelectItem>
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 <div v-if="hasSelection" class="flex items-center gap-6">

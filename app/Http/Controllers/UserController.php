@@ -6,7 +6,7 @@ use App\Enums\{ AccountType, Gender, Server, UserType };
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\User\{CreateRequest, DeleteRequest, ListRequest, UpdateRequest};
+use App\Http\Requests\User\{CreateRequest, DeleteRequest, ListRequest, UpdateRequest, UpdateRoleRequest};
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
@@ -15,6 +15,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
+use Spatie\Permission\PermissionRegistrar;
+use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
@@ -235,6 +237,60 @@ class UserController extends Controller
             if ($request->wantsJson() || $request->ajax()) {
                 return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
             }
+        }
+    }
+
+    /**
+     * Return the roles currently assigned to a user and the full roles list.
+     *
+     * Used by the user-role assignment modal.
+     */
+    public function editRoles(int $id, Request $request)
+    {
+        $user = $this->user->with('roles')->findOrFail($id);
+
+        // Only return JSON for AJAX calls (matches your modal pattern)
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'user_roles' => $user->roles->map(fn ($role) => [
+                    'id' => $role->id,
+                    'name' => $role->name,
+                    'guard_name' => $role->guard_name,
+                ]),
+                'all_roles' => Role::query()->get(['id', 'name', 'guard_name']),
+            ]);
+        }
+
+        return response()->json([
+            'user_roles' => $user->roles,
+            'all_roles' => Role::query()->get(['id', 'name', 'guard_name']),
+        ]);
+    }
+
+    /**
+     * Save role assignment changes for a user.
+     */
+    public function updateRoles(UpdateRoleRequest $request)
+    {
+        $validated = $request->validated();
+
+        DB::beginTransaction();
+
+        try {
+            $user = $this->user->findOrFail($validated['user_id']);
+
+            // Sync by role IDs to avoid name/guard resolution issues.
+            $user->roles()->sync($validated['roles'] ?? []);
+
+            DB::commit();
+
+            app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+            return CustomResponse::created('User roles updated successfully', Response::HTTP_OK);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 }

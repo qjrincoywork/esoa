@@ -185,7 +185,7 @@ export function useRoles() {
     }
   };
 
-  const manageRolePermissions = async (role: Role & { permissions?: Permission[] }, allPermissions: Permission[]) => {
+  const manageRolePermissions = async (role: Role, allPermissions: any) => {
     try {
       // Make AJAX request without navigation using reusable composable
       const response = await get<{
