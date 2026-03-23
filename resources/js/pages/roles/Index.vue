@@ -24,7 +24,11 @@ const roles = computed(() => (page.props as any).roles as RolesPagination);
 const allPermissions = computed(() => (page.props as any).permissions);
 const { createRole, editRole, deleteRole, manageRolePermissions } = useRoles();
 const columnHelper = createColumnHelper();
-const pagination = ref({
+const pagination = ref<{
+    current_page: number
+    per_page: number | 'all'
+    total: number
+}>({
 	current_page: roles.value.current_page,
 	per_page: Number(roles.value.per_page),
 	total: roles.value.total
@@ -46,6 +50,7 @@ const handlerMap: Record<string, Function> = {
   update: editRole,
   delete: deleteRole,
   destroy: deleteRole,
+  edit_permissions: (role: any) => manageRolePermissions(role, allPermissions.value),
 }
 
 const columns = computed(() => {
@@ -56,18 +61,7 @@ const columns = computed(() => {
       handler: handlerMap[m.slug.split('.')[1]],
     }))
 
-  const customActions = [
-    {
-      slug: 'manage_permissions',
-      name: 'Manage Permissions',
-      icon: Key,
-      color: 'blue',
-      handler: (role: any) => manageRolePermissions(role, allPermissions.value),
-    },
-    ...subModules,
-  ]
-
-  return [...baseColumns, createActionColumn(customActions)]
+  return [...baseColumns, createActionColumn(subModules)]
 })
 
 const breadcrumbItems: BreadcrumbItem[] = [
@@ -76,20 +70,23 @@ const breadcrumbItems: BreadcrumbItem[] = [
         href: 'roles',
     },
 ];
-// Debounced data fetching for pagination changes
+// Pagination visits are handled here (not in Datatable) so each list page performs a single request.
 const fetchTimeout = ref<number | null>(null)
+const isUpdatingFromServer = ref(false)
 watch(
     () => [pagination.value.current_page, pagination.value.per_page],
     ([currentPage, perPage], _prev) => {
+        if (isUpdatingFromServer.value) return
         if (fetchTimeout.value) {
             clearTimeout(fetchTimeout.value)
         }
         fetchTimeout.value = window.setTimeout(() => {
+            const pp = perPage === 'all' ? 'all' : Number(perPage) || Number(roles.value.per_page)
             router.get(
                 '/roles',
                 {
                     page: Number(currentPage) || 1,
-                    per_page: Number(perPage) || Number(roles.value.per_page)
+                    per_page: pp
                 },
                 {
                     preserveState: true,
@@ -98,7 +95,7 @@ watch(
                     only: ['roles']
                 }
             )
-        }, 200)
+        }, 0)
     },
     { immediate: false }
 )
@@ -107,9 +104,16 @@ watch(
     roles,
     (next) => {
         if (!next) return
+        isUpdatingFromServer.value = true
         pagination.value.current_page = next.current_page
-        pagination.value.per_page = Number(next.per_page)
+        pagination.value.per_page =
+            next.per_page === 'all' || next.per_page === 'All'
+                ? 'all'
+                : Number(next.per_page)
         pagination.value.total = next.total
+        setTimeout(() => {
+            isUpdatingFromServer.value = false
+        }, 300)
     }
 )
 </script>
