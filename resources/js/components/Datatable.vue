@@ -385,11 +385,11 @@ watch(selectedRowsPerPage, async () => {
             <div
                 class="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full">
                 <div class="flex space-x-2 items-center">
-                  <Label class="text-sm text-[var(--color-text)]" for="rows_per_page">{{ table.options.meta?.showRowsSelectLabel || 'Rows per page:' }}</Label>
+                  <Label class="text-xs text-[var(--color-text)]" for="rows_per_page">{{ table.options.meta?.showRowsSelectLabel || 'Rows per page:' }}</Label>
                   <div class="w-15">
                     <Select
                       id="rows_per_page"
-                      class="w-20 test border border-[var(--color-border-strong)] rounded-md text-sm bg-[var(--color-surface)] text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-opacity-50"
+                      class="w-15 test border border-[var(--color-border-strong)] rounded-md text-sm bg-[var(--color-surface)] text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-opacity-50"
                       name="rows_per_page"
                       :value="
                           isServerPagination

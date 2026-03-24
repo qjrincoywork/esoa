@@ -14,12 +14,7 @@ class ListRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => [
-                'nullable',
-                'string',
-                'max:100'
-            ],
-            'guard_name' => [
+            'search_string' => [
                 'nullable',
                 'string',
                 'max:100'

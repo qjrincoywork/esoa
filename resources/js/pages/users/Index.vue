@@ -222,7 +222,6 @@ watch(
                 :columns="columns"
                 :pagination="pagination"
                 :show-selection-column="true"
-                :search-fields="[]"
                 :enable-search="false"
                 empty-message="No users found"
                 empty-description="System users will appear here. Use search, pagination, or change rows per page to load data."
