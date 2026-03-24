@@ -39,30 +39,18 @@ class RoleController extends Controller
      */
     public function index(ListRequest $request)
     {
+        $params = $request->validated();
         $perPage = $params['per_page'] ?? config('vc.default_pages');
 
-        $roles = $this->role->query()
-            ->with('permissions')
-            ->latest()
-            ->paginate($perPage)
-            ->withQueryString()
-            ->through(function ($role) {
-                return [
-                    'id' => $role->id,
-                    'name' => $role->name,
-                    'guard_name' => $role->guard_name,
-                    'created_at' => $role->created_at?->diffForHumans(),
-                    'permissions' => $role->permissions->map(function ($permission) {
-                        return [
-                            'id' => $permission->id,
-                            'name' => $permission->name,
-                        ];
-                    }),
-                ];
-            });
+        $roles = $this->role
+            ->when(isset($params['search_string']), function ($query) use ($params) {
+                $query->where('name', 'LIKE', '%' . $params['search_string'] . '%');
+            })
+            ->orderBy('id', 'desc')
+            ->with('permissions');
 
         return Inertia::render('roles/Index', [
-            'roles' => $roles,
+            'roles' => $roles->paginate($perPage),
             'permissions' => Permission::all(),
         ]);
     }
