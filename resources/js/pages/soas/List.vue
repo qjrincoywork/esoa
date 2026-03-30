@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue';
+import { ref, watch, computed, h } from 'vue';
 import { Head, router, usePage } from '@inertiajs/vue3';
 import { createColumnHelper } from '@tanstack/vue-table';
 import { type BreadcrumbItem } from '@/types';
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { createActionColumn } from '@/composables/datatable/datatableColumns';
 import { useSoas } from '@/composables/soas';
 import { useModulePermissions } from '@/composables/useModulePermissions';
+import RightPane from '@/components/RightPane.vue';
 
 type SoasPagination = {
   current_page: number
@@ -31,7 +32,23 @@ const soas = computed(() => {
   }
   return propsSoas;
 });
-const { newSoa, fileList, editSoa, deleteSoa, viewSoa, manageFile, untagSoa } = useSoas();
+const {
+  newSoa,
+  fileList,
+  editSoa,
+  deleteSoa,
+  viewSoa,
+  manageFile,
+  untagSoa,
+  openSoaFilesPane,
+  rightPaneVisible,
+  rightPaneTitle,
+  rightPaneLoading,
+  rightPaneError,
+  rightPaneContentComponent,
+  rightPaneComponentProps,
+  closeRightPane,
+} = useSoas();
 const columnHelper = createColumnHelper();
 const pagination = ref({
   current_page: soas.value.current_page,
@@ -43,25 +60,42 @@ const hasInitialized = ref(false)
 const isFirstLoad = ref(true)  // Track if this is the very first data load
 const baseColumns: any[] = [
   columnHelper.accessor('soa_number', {
-    header: 'Soa Number / Billing Invoice',
+    header: 'Billing Invoice',
   }),
-  columnHelper.accessor('billing_ref', {
-    header: 'Billing Ref',
-  }),
+  // columnHelper.accessor('billing_ref', {
+  //   header: 'Billing Ref',
+  // }),
+  // columnHelper.accessor('amount', {
+  //   header: 'Amount Due',
+  // }),
   columnHelper.accessor('account_name', {
     header: 'Account',
   }),
   columnHelper.accessor('branch_name', {
     header: 'Branch',
   }),
-  columnHelper.accessor('due_date', {
-    header: 'Due Date',
+  columnHelper.accessor('created_at', {
+    header: 'Bill Date',
   }),
   columnHelper.accessor('due_in', {
     header: 'Due In',
   }),
   columnHelper.accessor('status', {
     header: 'Status',
+    // Label + color class come from SoaResource; presentation only (Datatable stays generic).
+    cell: ({ row, getValue }) => {
+      const r = row.original as { status?: string; status_color?: string }
+      return h(
+        'span',
+        {
+          class: [
+            r.status_color ?? '',
+            'px-2 py-1 rounded-md font-medium',
+          ],
+        },
+        String(getValue() ?? ''),
+      )
+    },
   }),
 ]
 
@@ -240,13 +274,25 @@ watch(
               :data="soas.data"
               :columns="columns"
               :pagination="pagination"
+              :enable-row-click="true"
               :search-fields="[]"
               :enable-search="false"
+              :row-click="openSoaFilesPane"
               empty-message="No soas found"
               empty-description="System soas will appear here. Use search, pagination, or change rows per page to load data."
               export-file-name="soas_list"
-              @update:pagination="(newPagination: typeof pagination) => { hasInitialized = true; pagination = newPagination }">
+              @update:pagination="(newPagination) => { hasInitialized = true; pagination = newPagination }">
             </Datatable>
         </div>
+
+        <RightPane
+          :open="rightPaneVisible"
+          :title="rightPaneTitle"
+          :loading="rightPaneLoading"
+          :error="rightPaneError"
+          :content-component="rightPaneContentComponent"
+          :component-props="rightPaneComponentProps"
+          @update:open="(v) => { if (!v && !rightPaneLoading) closeRightPane() }"
+          />
     </AppLayout>
 </template>

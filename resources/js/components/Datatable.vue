@@ -8,12 +8,10 @@ import {
     getFilteredRowModel,
     getPaginationRowModel
 } from '@tanstack/vue-table';
-import { Field, FieldLabel } from "@/components/ui/field"
 import { Label } from "@/components/ui/label"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectGroup, SelectItem } from "@/components/ui/select"
 import Modal from '@/components/Modal.vue';
 import { Button } from "@/components/ui/button";
-import { Pointer } from 'lucide-vue-next';
 
 const selectionColor = 'var(--selection-color)'
 
@@ -47,6 +45,9 @@ const props = defineProps({
     columns: { type: Array, required: true },
     title: { type: String, default: 'Data Table' },
     enableSearch: { type: Boolean, default: true },
+    // When enabled, clicking a table row will emit `row-click` with the original row data.
+    // This is opt-in to avoid changing existing table UX.
+    enableRowClick: { type: Boolean, default: false },
     // enableExport: { type: Boolean, default: true },// export data to csv file
     searchFields: { type: Array, default: () => [] },
     emptyMessage: { type: String, default: 'No data found' },
@@ -79,9 +80,13 @@ const props = defineProps({
         type: Function,
         default: null
     },
+    rowClick: {
+        type: Function,
+        default: () => {}
+    },
 })
 
-const emit = defineEmits(['update:pagination', 'bulk-delete', 'navigate'])
+const emit = defineEmits(['update:pagination', 'bulk-delete', 'navigate', 'row-click'])
 const sorting = ref([])
 const rowSelection = ref({})
 const searchQuery = ref('')
@@ -99,6 +104,19 @@ const toggleRow = index => {
     } else {
         expandedRows.value.push(index)
     }
+}
+
+const handleRowClick = (e, row) => {
+    if (!props.enableRowClick) return
+    const target = e.target
+    if (!target || !target.closest) return
+
+    // Avoid triggering row click when interacting with controls inside the row.
+    // This keeps action buttons/links and selection inputs working as expected.
+    if (target.closest('button, a, input, label, [role="button"]')) return
+
+    // emit('row-click', props.rowClick(row?.original ?? row))
+    props.rowClick(row?.original ?? row)
 }
 
 const isServerPagination = computed(() => Boolean(props.pagination?.total))
@@ -540,7 +558,11 @@ watch(selectedRowsPerPage, async () => {
                 <div
                     v-for="(row, index) in table.getRowModel().rows"
                     :key="row.id"
-                    class="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] shadow-sm hover:shadow-md transition-all duration-200">
+                    :class="[
+                        'bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] shadow-sm hover:shadow-md transition-all duration-200',
+                        props.enableRowClick ? 'cursor-pointer' : ''
+                    ]"
+                    @click="handleRowClick($event, row)">
                     <div class="p-2">
                         <div class="flex items-center justify-between mb-1.5">
                             <div class="flex items-center gap-1.5">
@@ -656,7 +678,7 @@ watch(selectedRowsPerPage, async () => {
                             </div>
                         </th>
 
-                        <th class="w-10 px-6 py-3"
+                        <th class="px-3 py-3 text-sm"
                             v-for="header in table.getHeaderGroups()[0].headers"
                             :key="header.id"
                             :class="[
@@ -700,7 +722,8 @@ watch(selectedRowsPerPage, async () => {
                                 : index % 2 === 0
                                   ? styles.rowEven
                                   : styles.rowOdd
-                        ]">
+                        ]"
+                        @click="handleRowClick($event, row)">
                         <td v-if="showSelectionColumn" class="px-6 py-1">
                             <div class="flex items-center">
                                 <label class="inline-flex items-center">

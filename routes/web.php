@@ -137,6 +137,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/get_billing_refs', 'getBillingRefs')->name('get_billing_refs');
             Route::get('/get_branches', 'getBranches')->name('get_branches');
             Route::get('/{id}/show', 'show')->name('show');
+            Route::get('/{id}/activities', 'activities')->name('activities');
             Route::get('/create', 'create')->name('create');
             Route::post('/store', 'store')->name('store');
             Route::get('/{id}/edit', 'edit')->name('edit');

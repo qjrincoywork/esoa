@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Enums\BillType;
 use App\Enums\Server;
 use App\Enums\SoaStatus;
 use App\Helpers\CommonHelper;
@@ -9,6 +10,7 @@ use App\Helpers\SqlDatabase;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 class SoaResource extends JsonResource
 {
@@ -23,20 +25,33 @@ class SoaResource extends JsonResource
             'id' => $this->id,
             'soa_number' => $this->soa_number,
             'billing_ref' => $this->billing_ref,
-            'bill_type' => $this->bill_type,
-            'bill_date' => CommonHelper::formatDate($this->bill_date),
-            'created_at' => CommonHelper::formatDate($this->created_at, true),
+            'bill_type' => BillType::label($this->bill_type),
+            'created_at' => CommonHelper::formatDate($this->created_at),
             'due_date' => CommonHelper::formatDate($this->due_date),
             'due_in' => $this->formatDaysDue($this->due_date),
             'period_date_from' => $this->period_date_from,
             'period_date_to' => $this->period_date_to,
-            // 'paid_date' => CommonHelper::formatDate($this->up_status_date),
-            // 'amount_due' => number_format($this->up_amount, 2),
+            'period_coverage' => Str::upper(CommonHelper::formatDate($this->period_date_from) . ' TO ' . CommonHelper::formatDate($this->period_date_to)),
             'account_name' => CommonHelper::convertStringEncoding($this->getAccountName($this->account_code)),
             'branch_name' => CommonHelper::convertStringEncoding($this->getBranchName($this->branch_code)),
+            'amount' => number_format($this->amount, 2),
             'file_pdf' => $this->file_pdf,
             'file_xls' => $this->file_xls,
+            'status_color' => SoaStatus::color($this->status),
             'status' => SoaStatus::label($this->status),
+            'soa_activities' => $this->whenLoaded('soaActivity', function () {
+                return $this->soaActivity->map(function ($activity) {
+                    return [
+                        'id' => $activity->id,
+                        'user_id' => $activity->user_id,
+                        'name' => $activity->name,
+                        'event' => $activity->event,
+                        'from' => $activity->from,
+                        'to' => $activity->to,
+                        'created_at' => CommonHelper::formatDate($activity->created_at),
+                    ];
+                })->values();
+            }, []),
         ];
     }
 
@@ -75,6 +90,12 @@ class SoaResource extends JsonResource
         $account = (new SqlDatabase(Server::HMS))->getAccount($accountCode);
 
         return $account->ac_name;
+    }
+
+    public function getAccountExpiryDate($accountCode) {
+        $account = (new SqlDatabase(Server::HMS))->getAccount($accountCode);
+
+        return CommonHelper::formatDate($account->expiry_date);
     }
 
     public function getBranchName($branchCode) {

@@ -16,6 +16,9 @@ return new class extends Migration
             $table->bigInteger('user_id');
             $table->bigInteger('soa_id');
             $table->string('name');
+            $table->string('event');
+            $table->json('from')->nullable();
+            $table->json('to');
             $table->timestamps();
             $table->softDeletes();
         });

@@ -113,7 +113,7 @@ class SoaController extends Controller
         if (isset($billing->bl_claimnum)) {
             $files = Storage::disk('rm')->files($billing->bl_claimnum);
         }
-        $files = Storage::disk('rm')->files('EO-2832655-003');
+        // $files = Storage::disk('rm')->files('EO-2832655-003');
 
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
@@ -253,6 +253,49 @@ class SoaController extends Controller
 
         return Inertia::render('soas/Index', [
             'soa' => OldSoaResource::make($soa)
+        ]);
+    }
+
+    /**
+     * Display SOA activities for the given SOA id.
+     */
+    public function activities(Request $request, int $id)
+    {
+        $soa = Soa::query()->findOrFail($id);
+
+        $perPage = (int) $request->get('per_page', config('vc.default_pages'));
+        $activities = $soa->soaActivity()
+            ->orderByDesc('created_at')
+            ->paginate($perPage)
+            ->through(function ($activity) {
+                return [
+                    'id' => $activity->id,
+                    'name' => $activity->name,
+                    'event' => $activity->event,
+                    'from' => $activity->from,
+                    'to' => $activity->to,
+                    'created_at' => CommonHelper::formatDate($activity->created_at),
+                ];
+            });
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'activities' => [
+                    'data' => $activities->items(),
+                    'current_page' => $activities->currentPage(),
+                    'per_page' => $activities->perPage(),
+                    'total' => $activities->total(),
+                ],
+            ]);
+        }
+
+        return response()->json([
+            'activities' => [
+                'data' => $activities->items(),
+                'current_page' => $activities->currentPage(),
+                'per_page' => $activities->perPage(),
+                'total' => $activities->total(),
+            ],
         ]);
     }
 

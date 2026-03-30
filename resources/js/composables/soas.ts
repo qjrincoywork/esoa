@@ -6,12 +6,14 @@ import SavingSoaForm from '@/components/forms/soas/SavingSoaForm.vue';
 import ViewForm from '@/components/forms/soas/ViewForm.vue';
 import UntagForm from '@/components/forms/soas/UntagForm.vue';
 import ManageFileForm from '@/components/forms/soas/ManageFileForm.vue';
+import { ref, shallowRef, type Component } from 'vue';
 let formApi: { getFormData: () => FormData | null } | null = null;
 import { dispatchNotification } from '@/components/notification';
 import { showLoader, hideLoader } from '@/composables/useLoader';
 import { useModulePermissions } from '@/composables/useModulePermissions';
 import { router, usePage } from '@inertiajs/vue3';
 import SoaFileBrowser from '@/components/forms/soas/SoaFileBrowser.vue';
+import SoaDetailsPaneContent from '@/components/forms/soas/SoaDetailsPaneContent.vue';
 
 export interface Soa {
   id?: number
@@ -40,6 +42,36 @@ export function useSoas() {
   const { openModal, closeModal } = useModal();
   const { get, post } = useAjax();
   const authUser = (page.props as { auth?: { user?: { id?: number; user_detail?: unknown } } }).auth?.user;
+
+  // Right pane (drawer) state for dynamic content.
+  const rightPaneVisible = ref(false);
+  const rightPaneTitle = ref('');
+  const rightPaneLoading = ref(false);
+  const rightPaneError = ref<string | null>(null);
+  const rightPaneContentComponent = shallowRef<Component | null>(null);
+  const rightPaneComponentProps = ref<Record<string, any>>({});
+
+  const closeRightPane = () => {
+    rightPaneVisible.value = false;
+    rightPaneLoading.value = false;
+    rightPaneTitle.value = '';
+    rightPaneError.value = null;
+    rightPaneContentComponent.value = null;
+    rightPaneComponentProps.value = {};
+  };
+
+  const openRightPane = (options: {
+    title: string;
+    component: Component | null;
+    componentProps?: Record<string, any>;
+  }) => {
+    rightPaneTitle.value = options.title;
+    rightPaneContentComponent.value = options.component;
+    rightPaneComponentProps.value = options.componentProps ?? {};
+    rightPaneLoading.value = false;
+    rightPaneError.value = null;
+    rightPaneVisible.value = true;
+  };
 
   const untagSoa = async (soa: Soa) => {
     try {
@@ -359,6 +391,42 @@ export function useSoas() {
     }
   };
 
+  // Open a SOA-related right pane (drawer) showing file list.
+  // This is intentionally implemented here so `soas.ts` owns the data-fetch + pane state.
+  const openSoaFilesPane = async (soa: Soa) => {
+    // Note: `soa` might be undefined if the event payload is missing.
+    // Use optional chaining for all reads to prevent runtime crashes.
+    const soaLabel = (soa as any)?.soanum ?? (soa as any)?.soa_number ?? '';
+
+    // Open immediately so the user gets instant feedback.
+    rightPaneLoading.value = true;
+    rightPaneTitle.value = `${soaLabel ? 'Billing Invoice: ' + soaLabel : 'Details'}`;
+    rightPaneVisible.value = true;
+    rightPaneError.value = null;
+    rightPaneContentComponent.value = null;
+    rightPaneComponentProps.value = {};
+
+    try {
+      openRightPane({
+        title: `${soaLabel ? 'Billing Invoice: ' + soaLabel : 'Details'}`,
+        component: SoaDetailsPaneContent,
+        componentProps: {
+          soa: soa,
+        },
+      });
+    } catch (error) {
+      // Keep the pane open so we can visually confirm row-click + endpoint issues.
+      rightPaneLoading.value = false;
+      rightPaneError.value = 'Error fetching SOA files.';
+      rightPaneContentComponent.value = null;
+      dispatchNotification({
+        title: 'Error',
+        content: 'Error fetching SOA files',
+        type: 'error',
+      });
+    }
+  };
+
   const getAccountsByParams = async (params: Record<string, string | number | undefined>) => {
     try {
       const response = await get(`/${slug.value}/get_accounts`, params);
@@ -470,6 +538,7 @@ export function useSoas() {
     viewSoa,
     createSoa,
     fileList,
+    openSoaFilesPane,
     newSoa,
     deleteSoa,
     manageFile,
@@ -478,6 +547,15 @@ export function useSoas() {
     getAccountsByParams,
     getBranchesByParams,
     getBillingRefsByParams,
+
+    // Right pane API/state
+    rightPaneVisible,
+    rightPaneTitle,
+    rightPaneLoading,
+    rightPaneError,
+    rightPaneContentComponent,
+    rightPaneComponentProps,
+    closeRightPane,
   };
 }
 

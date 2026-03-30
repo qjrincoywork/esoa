@@ -19,6 +19,14 @@ class SoaActivity extends Model
         'user_id',
         'soa_id',
         'name',
+        'event',
+        'from',
+        'to',
+    ];
+
+    protected $casts = [
+        'from' => 'array',
+        'to' => 'array',
     ];
 
     /**

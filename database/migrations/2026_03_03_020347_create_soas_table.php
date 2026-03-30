@@ -20,14 +20,10 @@ return new class extends Migration
             $table->string('billing_ref')->nullable();
             $table->integer('bill_type');
             $table->integer('status');
-            $table->date('bill_date');
             $table->date('due_date');
             $table->date('period_date_from');
             $table->date('period_date_to');
             $table->decimal('amount', 15, 2);
-            $table->decimal('amount_paid', 15, 2)->nullable();
-            $table->decimal('payment_adjustment', 15, 2)->nullable();
-            $table->decimal('balance', 15, 2)->nullable();
             $table->longText('file_pdf')->nullable();
             $table->longText('file_xls')->nullable();
             $table->timestamps();
