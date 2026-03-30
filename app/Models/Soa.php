@@ -24,14 +24,10 @@ class Soa extends Model
         'billing_ref',
         'bill_type',
         'status',
-        'bill_date',
         'due_date',
         'period_date_from',
         'period_date_to',
         'amount',
-        'amount_paid',
-        'payment_adjustment',
-        'balance',
         'file_pdf',
         'file_xls',
     ];
@@ -56,7 +52,6 @@ class Soa extends Model
     {
         return $this->hasMany(SoaActivity::class, 'soa_id');
     }
-
 
     /**
      * Retrieves a paginated list of SOA records from the database.

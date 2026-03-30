@@ -72,7 +72,7 @@ class CommonHelper
         $date = Carbon::parse($date);
 
         return $withTime
-            ? $date->format('F j, Y')
-            : $date->format('F j, Y h:i A');
+            ? $date->format('F j, Y h:i A')
+            : $date->format('F j, Y');
     }
 }

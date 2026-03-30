@@ -38,14 +38,10 @@ type Soa = {
   billing_ref?: string
   bill_type?: number
   status?: number
-  bill_date?: string
   due_date?: string
   period_date_from?: string
   period_date_to?: string
   amount?: number
-  amount_paid?: number
-  payment_adjustment?: number
-  balance?: number
   file_pdf?: string
   file_xls?: string
 }
@@ -130,14 +126,10 @@ const searchedAccountName = ref('')
 const soaNumber = ref(soa.value?.soa_number ?? '')
 const selectedBillType = ref<string | null>(soa.value?.bill_type != null ? String(soa.value.bill_type) : null)
 const selectedStatus = ref<string | null>(soa.value?.status != null ? String(soa.value?.status) : 1)
-const billDate = ref(soa.value?.bill_date ?? '')
 const dueDate = ref(soa.value?.due_date ?? '')
 const periodDateFrom = ref(soa.value?.period_date_from ?? '')
 const periodDateTo = ref(soa.value?.period_date_to ?? '')
 const amount = ref(soa.value?.amount != null ? String(soa.value.amount) : '')
-const amountPaid = ref(soa.value?.amount_paid != null ? String(soa.value.amount_paid) : '')
-const paymentAdjustment = ref(soa.value?.payment_adjustment != null ? String(soa.value.payment_adjustment) : '')
-const balance = ref(soa.value?.balance != null ? String(soa.value.balance) : '')
 const searchedBranchName = ref('')
 const searchedBillingRef = ref('')
 const selectedAccount = computed(() =>
@@ -296,14 +288,10 @@ watch(soa, (val: Soa | undefined) => {
   if (val.soa_number != null) soaNumber.value = val.soa_number;
   if (val.bill_type != null) selectedBillType.value = String(val.bill_type);
   if (val.status != null) selectedStatus.value = String(val.status);
-  if (val.bill_date != null) billDate.value = val.bill_date;
   if (val.due_date != null) dueDate.value = val.due_date;
   if (val.period_date_from != null) periodDateFrom.value = val.period_date_from;
   if (val.period_date_to != null) periodDateTo.value = val.period_date_to;
   if (val.amount != null) amount.value = String(val.amount);
-  if (val.amount_paid != null) amountPaid.value = String(val.amount_paid);
-  if (val.payment_adjustment != null) paymentAdjustment.value = String(val.payment_adjustment);
-  if (val.balance != null) balance.value = String(val.balance);
   if (val.account_code != null) accountCode.value = String(val.account_code);
   if (val.branch_code != null) branchCode.value = String(val.branch_code);
 }, { immediate: true })
@@ -465,18 +453,6 @@ watch(soa, (val: Soa | undefined) => {
     </div>
 
     <div class="grid gap-2 md:col-span-1">
-      <Label for="bill_date">Bill Date<span class="text-red-400">*</span></Label>
-      <Input
-        id="bill_date"
-        type="date"
-        class="mt-1 block w-full"
-        name="bill_date"
-        v-model="billDate"
-        :readonly="isReadOnly"
-      />
-    </div>
-
-    <div class="grid gap-2 md:col-span-1">
       <Label for="due_date">Due Date<span class="text-red-400">*</span></Label>
       <Input
         id="due_date"
@@ -546,48 +522,6 @@ watch(soa, (val: Soa | undefined) => {
         class="mt-1 block w-full"
         name="amount"
         v-model="amount"
-        placeholder="0.00"
-        :readonly="isReadOnly"
-      />
-    </div>
-
-    <div class="grid gap-2 md:col-span-1">
-      <Label for="amount_paid">Amount Paid</Label>
-      <Input
-        id="amount_paid"
-        type="number"
-        step="0.01"
-        class="mt-1 block w-full"
-        name="amount_paid"
-        v-model="amountPaid"
-        placeholder="0.00"
-        :readonly="isReadOnly"
-      />
-    </div>
-
-    <div class="grid gap-2 md:col-span-1">
-      <Label for="payment_adjustment">Payment Adjustment</Label>
-      <Input
-        id="payment_adjustment"
-        type="number"
-        step="0.01"
-        class="mt-1 block w-full"
-        name="payment_adjustment"
-        v-model="paymentAdjustment"
-        placeholder="0.00"
-        :readonly="isReadOnly"
-      />
-    </div>
-
-    <div class="grid gap-2 md:col-span-1">
-      <Label for="balance">Balance</Label>
-      <Input
-        id="balance"
-        type="number"
-        step="0.01"
-        class="mt-1 block w-full"
-        name="balance"
-        v-model="balance"
         placeholder="0.00"
         :readonly="isReadOnly"
       />

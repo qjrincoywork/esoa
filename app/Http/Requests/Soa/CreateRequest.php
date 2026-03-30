@@ -52,10 +52,6 @@ class CreateRequest extends FormRequest
                 'integer',
                 Rule::in(BillType::getValues()),
             ],
-            'bill_date' => [
-                'required',
-                'date',
-            ],
             'due_date' => [
                 'required',
                 'date',
