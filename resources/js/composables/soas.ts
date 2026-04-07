@@ -28,7 +28,9 @@ export interface Soa {
   due_date?: string
   period_date_from?: string
   period_date_to?: string
-  amount?: number
+  amount?: string | number
+  /** Numeric amount from API (e.g. SoaResource); preferred for math when present */
+  amount_raw?: number
   amount_paid?: number
   payment_adjustment?: number
   balance?: number
@@ -533,6 +535,15 @@ export function useSoas() {
     }
   };
 
+  const adjustSoaAmount = async (payload: { soa_id: number; operation: 'add' | 'deduct'; amount: number }) => {
+    return post<{
+      status?: string
+      message?: string
+      amount?: string
+      amount_raw?: number
+    }>(`/${slug.value}/adjust_amount`, payload);
+  };
+
   return {
     editSoa,
     viewSoa,
@@ -547,6 +558,7 @@ export function useSoas() {
     getAccountsByParams,
     getBranchesByParams,
     getBillingRefsByParams,
+    adjustSoaAmount,
 
     // Right pane API/state
     rightPaneVisible,

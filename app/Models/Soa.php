@@ -3,7 +3,9 @@
 namespace App\Models;
 
 use App\Enums\OrderType;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Eloquent\{Model, SoftDeletes, Relations\HasMany, Relations\HasOne, Relations\BelongsTo};
 
 class Soa extends Model
@@ -61,19 +63,56 @@ class Soa extends Model
      */
     public function getSoas($params)
     {
-        // Pagination
+        $authUser = auth()->user();
         $perPage = $params['per_page'] ?? config('vc.default_pages');
-        $result = self::with('soaActivity')
-            ->when(isset($params['soanum']), function ($query) use ($params) {
-                $query->where('up_soanum', 'LIKE', '%' . $params['soanum'] . '%');
+
+        $result = self::query()
+            ->tap(fn (Builder $q) => $this->applyListSearchFilters($q, $params))
+            ->when(isset($authUser->userDetail->account_code), function ($query) use ($authUser) {
+                $query->where('account_code', $authUser->userDetail->account_code);
+            })
+            ->when(isset($authUser->userDetail->branch_code), function ($query) use ($authUser) {
+                $query->where('branch_code', $authUser->userDetail->branch_code);
             })
             ->orderBy('id', OrderType::DESC);
 
-        if (auth()->user() && !auth()->user()->hasRole('superadmin')) {
+        if ($authUser && !$authUser->hasRole('superadmin')) {
             $result->withTrashed();
         }
 
         return $result->paginate($perPage);
+    }
+
+    /**
+     * Apply validated list filters (aligned with SavingSoaForm: account type, codes, billing ref, SOA number, status).
+     */
+    protected function applyListSearchFilters(Builder $query, array $params): void
+    {
+        if (!empty($params['soanum'] ?? null)) {
+            $query->where('soa_number', 'LIKE', '%' . $params['soanum'] . '%');
+        }
+        if (!empty($params['account_code'] ?? null)) {
+            $query->where('account_code', $params['account_code']);
+        }
+        if (!empty($params['branch_code'] ?? null)) {
+            $query->where('branch_code', $params['branch_code']);
+        }
+        if (!empty($params['billing_ref'] ?? null)) {
+            $query->where('billing_ref', $params['billing_ref']);
+        }
+        // if (!empty($params['account_type'] ?? null)) {
+        //     $type = $params['account_type'];
+        //     $query->whereExists(function ($sub) use ($type) {
+        //         $sub->select(DB::raw(1))
+        //             ->from('accounts')
+        //             ->whereColumn('accounts.code', 'soas.account_code')
+        //             ->where('accounts.account_type', $type)
+        //             ->whereNull('accounts.deleted_at');
+        //     });
+        // }
+        if (array_key_exists('status', $params) && $params['status'] !== null && $params['status'] !== '') {
+            $query->where('status', (int) $params['status']);
+        }
     }
 
     public function saveSoa(array $data) {

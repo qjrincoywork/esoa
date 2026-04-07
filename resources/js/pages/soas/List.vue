@@ -1,15 +1,34 @@
 <script setup lang="ts">
-import { ref, watch, computed, h } from 'vue';
+import { ref, watch, computed, h, nextTick, onMounted } from 'vue';
 import { Head, router, usePage } from '@inertiajs/vue3';
 import { createColumnHelper } from '@tanstack/vue-table';
 import { type BreadcrumbItem } from '@/types';
 import AppLayout from '@/layouts/AppLayout.vue';
 import Datatable from '@/components/Datatable.vue';
 import { Button } from "@/components/ui/button";
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Select, SelectTrigger, SelectContent, SelectGroup, SelectLabel, SelectItem, SelectValue } from '@/components/ui/select';
+import { SearchableCombobox, type SearchableComboboxItem } from '@/components/ui/searchable-combobox';
 import { createActionColumn } from '@/composables/datatable/datatableColumns';
 import { useSoas } from '@/composables/soas';
 import { useModulePermissions } from '@/composables/useModulePermissions';
+import { debounce } from '@/composables/utilities/helper';
 import RightPane from '@/components/RightPane.vue';
+import {
+  emptySoaListFilters,
+  soaListFiltersToParams,
+  soaListFiltersActive,
+  soaListFiltersFromUrlQuery,
+  type SoaListFilters,
+  type SoaListOption,
+} from '@/composables/soaListFilters';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
 
 type SoasPagination = {
   current_page: number
@@ -17,9 +36,10 @@ type SoasPagination = {
   total: number
   data: unknown[]
 }
+
 const page = usePage();
 const { canCreate, slug, hasPermission } = useModulePermissions();
-// Initialize with empty data - no data loaded on mount
+
 const soas = computed(() => {
   const propsSoas = (page.props as any).soas as SoasPagination | undefined;
   if (!propsSoas) {
@@ -32,6 +52,15 @@ const soas = computed(() => {
   }
   return propsSoas;
 });
+
+const statusOptions = computed<SoaListOption[]>(() => {
+  return (page.props as { soa_status_options?: SoaListOption[] }).soa_status_options ?? [];
+});
+
+const accountTypeOptions = computed<SoaListOption[]>(() => {
+  return (page.props as { soa_account_type_options?: SoaListOption[] }).soa_account_type_options ?? [];
+});
+
 const {
   newSoa,
   fileList,
@@ -41,6 +70,9 @@ const {
   manageFile,
   untagSoa,
   openSoaFilesPane,
+  getAccountsByParams,
+  getBranchesByParams,
+  getBillingRefsByParams,
   rightPaneVisible,
   rightPaneTitle,
   rightPaneLoading,
@@ -49,25 +81,67 @@ const {
   rightPaneComponentProps,
   closeRightPane,
 } = useSoas();
+
 const columnHelper = createColumnHelper();
 const pagination = ref({
   current_page: soas.value.current_page,
   per_page: Number(soas.value.per_page),
   total: soas.value.total
-})
-const searchQuery = ref('')
-const hasInitialized = ref(false)
-const isFirstLoad = ref(true)  // Track if this is the very first data load
+});
+
+const filters = ref<SoaListFilters>(soaListFiltersFromUrlQuery(page.url));
+const hasInitialized = ref(false);
+const isFirstLoad = ref(true);
+const filtersBootstrapped = ref(false);
+
+const searchedAccountName = ref('');
+const searchedBranchName = ref('');
+const searchedBillingRef = ref('');
+const accounts = ref<SearchableComboboxItem[]>([]);
+const branches = ref<SearchableComboboxItem[]>([]);
+const billing_refs = ref<SearchableComboboxItem[]>([]);
+const accountPage = ref(1);
+const accountLastPage = ref(1);
+const branchPage = ref(1);
+const branchLastPage = ref(1);
+const billingRefPage = ref(1);
+const billingRefLastPage = ref(1);
+const accountsLoadingMore = ref(false);
+const branchesLoadingMore = ref(false);
+const billingRefsLoadingMore = ref(false);
+const hasMoreAccounts = computed(() => accountPage.value < accountLastPage.value);
+const hasMoreBranches = computed(() => branchPage.value < branchLastPage.value);
+const hasMoreBillingRefs = computed(() => billingRefPage.value < billingRefLastPage.value);
+
+const selectedAccountFilter = computed(() =>
+  accounts.value?.find((a: SearchableComboboxItem) => String(a.value) === String(filters.value.account_code)),
+);
+
+const listFetchPath = computed(() => {
+  const raw = (page.url ?? '').split('?')[0] || '';
+  return raw.startsWith('/') ? raw : `/${slug.value}`;
+});
+
+const partialReloadKey = computed(() => slug.value || 'soas');
+
+const accountTypeModel = computed({
+  get: () => (filters.value.account_type === '' ? undefined : filters.value.account_type),
+  set: (v: string | undefined) => {
+    filters.value.account_type = v ?? '';
+  },
+});
+
+const statusFilterModel = computed({
+  get: () => (filters.value.status === '' ? undefined : filters.value.status),
+  set: (v: string | undefined) => {
+    filters.value.status = v ?? '';
+  },
+});
+
 const baseColumns: any[] = [
   columnHelper.accessor('soa_number', {
     header: 'Billing Invoice',
   }),
-  // columnHelper.accessor('billing_ref', {
-  //   header: 'Billing Ref',
-  // }),
-  // columnHelper.accessor('amount', {
-  //   header: 'Amount Due',
-  // }),
   columnHelper.accessor('account_name', {
     header: 'Account',
   }),
@@ -82,7 +156,6 @@ const baseColumns: any[] = [
   }),
   columnHelper.accessor('status', {
     header: 'Status',
-    // Label + color class come from SoaResource; presentation only (Datatable stays generic).
     cell: ({ row, getValue }) => {
       const r = row.original as { status?: string; status_color?: string }
       return h(
@@ -112,9 +185,10 @@ const handlerMap: Record<string, Function> = {
 }
 
 const columns = computed(() => {
-  const subModules = page.props.sub_modules
-    .filter((m: any) => hasPermission(m.slug) && m.slug.split('.')[1] != 'create')
-    .map((m: any) => ({
+  const rawModules = (page.props as { sub_modules?: { slug: string }[] }).sub_modules ?? []
+  const subModules = rawModules
+    .filter((m: { slug: string }) => hasPermission(m.slug) && m.slug.split('.')[1] != 'create')
+    .map((m: { slug: string }) => ({
       ...m,
       handler: handlerMap[m.slug.split('.')[1]],
     }))
@@ -131,51 +205,256 @@ const breadcrumbItems: BreadcrumbItem[] = [
   },
 ];
 
-// Function to fetch data from server
 const fetchSoas = () => {
-  const params: Record<string, any> = {
+  const params: Record<string, string | number> = {
     page: pagination.value.current_page,
-    per_page: pagination.value.per_page
-  }
-
-  if (searchQuery.value.trim()) {
-    params.soanum = searchQuery.value.trim()
-  }
+    per_page: pagination.value.per_page,
+    ...soaListFiltersToParams(filters.value),
+  };
 
   router.get(
-    `/${slug.value}`,
+    listFetchPath.value,
     params,
     {
       preserveState: true,
       preserveScroll: true,
       replace: true,
-      only: [slug.value]
+      only: [partialReloadKey.value]
     }
-  )
+  );
+};
+
+const markInteracted = () => {
+  hasInitialized.value = true;
+};
+
+const suppressFilterWatch = ref(false);
+
+const resetDependentLists = () => {
+  accounts.value = [];
+  branches.value = [];
+  billing_refs.value = [];
+  accountPage.value = 1;
+  accountLastPage.value = 1;
+  branchPage.value = 1;
+  branchLastPage.value = 1;
+  billingRefPage.value = 1;
+  billingRefLastPage.value = 1;
+};
+
+const clearFilters = () => {
+  if (filterWatchTimeout.value) {
+    clearTimeout(filterWatchTimeout.value);
+    filterWatchTimeout.value = null;
+  }
+  suppressFilterWatch.value = true;
+  filters.value = emptySoaListFilters();
+  searchedAccountName.value = '';
+  searchedBranchName.value = '';
+  searchedBillingRef.value = '';
+  resetDependentLists();
+  markInteracted();
+  pagination.value.current_page = 1;
+  fetchSoas();
+  nextTick(() => {
+    suppressFilterWatch.value = false;
+  });
+};
+
+const filtersActive = computed(() => soaListFiltersActive(filters.value));
+
+const filterDebounceMs = 500;
+const filterWatchTimeout = ref<number | null>(null);
+
+watch(
+  filters,
+  () => {
+    if (suppressFilterWatch.value) return;
+    hasInitialized.value = true;
+    if (filterWatchTimeout.value) {
+      clearTimeout(filterWatchTimeout.value);
+    }
+    filterWatchTimeout.value = window.setTimeout(() => {
+      pagination.value.current_page = 1;
+      fetchSoas();
+    }, filterDebounceMs);
+  },
+  { deep: true }
+);
+
+watch(
+  () => filters.value.account_type,
+  () => {
+    if (!filtersBootstrapped.value || suppressFilterWatch.value) return;
+    filters.value.account_code = '';
+    filters.value.branch_code = '';
+    filters.value.billing_ref = '';
+    searchedAccountName.value = '';
+    searchedBranchName.value = '';
+    searchedBillingRef.value = '';
+    resetDependentLists();
+  },
+);
+
+watch(
+  () => filters.value.account_code,
+  () => {
+    if (!filtersBootstrapped.value || suppressFilterWatch.value) return;
+    filters.value.branch_code = '';
+    filters.value.billing_ref = '';
+    searchedBranchName.value = '';
+    searchedBillingRef.value = '';
+    branches.value = [];
+    billing_refs.value = [];
+    branchPage.value = 1;
+    branchLastPage.value = 1;
+    billingRefPage.value = 1;
+    billingRefLastPage.value = 1;
+  },
+);
+
+const searchAccountsByParams = async (name = '', pageNum = 1, append = false) => {
+  if (!filters.value.account_type) {
+    accounts.value = [];
+    return;
+  }
+  if (append) {
+    accountsLoadingMore.value = true;
+  }
+  const result = await getAccountsByParams({
+    type: filters.value.account_type,
+    name,
+    page: pageNum,
+  });
+  if (append) {
+    accounts.value = [...(accounts.value ?? []), ...(result?.data ?? [])];
+  } else {
+    accounts.value = result?.data ?? [];
+  }
+  accountPage.value = result?.current_page ?? 1;
+  accountLastPage.value = result?.last_page ?? 1;
+  accountsLoadingMore.value = false;
+};
+
+const searchBranchesByParams = async (name = '', pageNum = 1, append = false) => {
+  if (!selectedAccountFilter.value?.value) {
+    branches.value = [];
+    return;
+  }
+  if (append) {
+    branchesLoadingMore.value = true;
+  }
+  const result = await getBranchesByParams({
+    account_code: selectedAccountFilter.value.value,
+    name,
+    page: pageNum,
+  });
+  if (append) {
+    branches.value = [...(branches.value ?? []), ...(result?.data ?? [])];
+  } else {
+    branches.value = result?.data ?? [];
+  }
+  branchPage.value = result?.current_page ?? 1;
+  branchLastPage.value = result?.last_page ?? 1;
+  branchesLoadingMore.value = false;
+};
+
+const searchBillingRefsByParams = async (name = '', pageNum = 1, append = false) => {
+  if (!selectedAccountFilter.value?.value) {
+    billing_refs.value = [];
+    return;
+  }
+  if (append) {
+    billingRefsLoadingMore.value = true;
+  }
+  const result = await getBillingRefsByParams({
+    account_code: selectedAccountFilter.value.value,
+    name,
+    page: pageNum,
+  });
+  if (append) {
+    billing_refs.value = [...(billing_refs.value ?? []), ...(result?.data ?? [])];
+  } else {
+    billing_refs.value = result?.data ?? [];
+  }
+  billingRefPage.value = result?.current_page ?? 1;
+  billingRefLastPage.value = result?.last_page ?? 1;
+  billingRefsLoadingMore.value = false;
+};
+
+const debouncedGetAccounts: (...args: unknown[]) => void = debounce((evOrName?: unknown) => {
+  const name = typeof evOrName === 'string' ? evOrName : ((evOrName as { target?: { value?: string } })?.target?.value ?? '');
+  void searchAccountsByParams(name, 1, false);
+});
+
+const debouncedGetBranches: (...args: unknown[]) => void = debounce((evOrName?: unknown) => {
+  const name = typeof evOrName === 'string' ? evOrName : ((evOrName as { target?: { value?: string } })?.target?.value ?? '');
+  void searchBranchesByParams(name, 1, false);
+});
+
+const debouncedGetBillingRefs: (...args: unknown[]) => void = debounce((evOrName?: unknown) => {
+  const name = typeof evOrName === 'string' ? evOrName : ((evOrName as { target?: { value?: string } })?.target?.value ?? '');
+  void searchBillingRefsByParams(name, 1, false);
+});
+
+function loadMoreData(kind: 'accounts' | 'branches' | 'billingRefs') {
+  switch (kind) {
+    case 'accounts':
+      if (!hasMoreAccounts.value || accountsLoadingMore.value) return;
+      void searchAccountsByParams(searchedAccountName.value, accountPage.value + 1, true);
+      break;
+    case 'branches':
+      if (!hasMoreBranches.value || branchesLoadingMore.value) return;
+      void searchBranchesByParams(searchedBranchName.value, branchPage.value + 1, true);
+      break;
+    case 'billingRefs':
+      if (!hasMoreBillingRefs.value || billingRefsLoadingMore.value) return;
+      void searchBillingRefsByParams(searchedBillingRef.value, billingRefPage.value + 1, true);
+      break;
+  }
 }
 
-// Debounced data fetching for search query changes
-const searchTimeout = ref<number | null>(null)
-watch(
-    searchQuery,
-    (newQuery, oldQuery) => {
-        // Only fetch if soa has interacted (not on initial mount)
-        if (!hasInitialized.value && oldQuery === undefined) return
+watch([() => filters.value.account_type, searchedAccountName], async () => {
+  accounts.value = [];
+  if (filters.value.account_type) {
+    if (searchedAccountName.value.length > 0) {
+      debouncedGetAccounts(searchedAccountName.value);
+    } else {
+      await searchAccountsByParams();
+    }
+  }
+}, { immediate: true });
 
-        if (searchTimeout.value) {
-            clearTimeout(searchTimeout.value)
-        }
-        searchTimeout.value = window.setTimeout(() => {
-            // Reset to first page when searching
-            pagination.value.current_page = 1
-            fetchSoas()
-        }, 500)
-    },
-    { immediate: false }
-)
+watch([selectedAccountFilter, searchedBranchName, searchedBillingRef], async () => {
+  if (selectedAccountFilter.value?.value != null) {
+    if (searchedBranchName.value.length > 0) {
+      debouncedGetBranches(searchedBranchName.value);
+    } else {
+      await searchBranchesByParams();
+    }
+    if (searchedBillingRef.value.length > 0) {
+      debouncedGetBillingRefs(searchedBillingRef.value);
+    } else {
+      await searchBillingRefsByParams();
+    }
+  } else {
+    branches.value = [];
+    billing_refs.value = [];
+  }
+}, { immediate: true });
 
-// Keep local pagination in sync when server returns new soas payload
-// Use a flag to prevent infinite loops when Datatable's watcher updates pagination
+onMounted(async () => {
+  if (filters.value.account_type) {
+    await searchAccountsByParams(searchedAccountName.value, 1, false);
+    if (filters.value.account_code) {
+      await searchBranchesByParams();
+      await searchBillingRefsByParams();
+    }
+  }
+  await nextTick();
+  filtersBootstrapped.value = true;
+});
+
 const isUpdatingFromServer = ref(false)
 watch(
     soas,
@@ -186,50 +465,33 @@ watch(
         pagination.value.per_page = Number(next.per_page)
         pagination.value.total = next.total
 
-        // Mark that we've loaded data at least once
         if (isFirstLoad.value && next.total > 0) {
             isFirstLoad.value = false
         }
 
-        // Reset flag after a tick to allow Datatable to process the update
-        // Use a longer timeout to prevent Datatable's watcher from triggering
         setTimeout(() => {
             isUpdatingFromServer.value = false
         }, 300)
     }
 )
 
-// Debounced data fetching for pagination changes
 const fetchTimeout = ref<number | null>(null)
-const isPaginationChange = ref(false)
 watch(
     () => [pagination.value.current_page, pagination.value.per_page],
-    ([currentPage, perPage], _prev) => {
-        // Only fetch if user has interacted (not on initial mount)
+    ([currentPage, perPage]) => {
         if (!hasInitialized.value) return
-        // Don't fetch if this is an update from server response
         if (isUpdatingFromServer.value) return
 
         if (fetchTimeout.value) {
             clearTimeout(fetchTimeout.value)
         }
 
-        // Mark that this is a user-initiated pagination change
-        isPaginationChange.value = true
-
         fetchTimeout.value = window.setTimeout(() => {
             pagination.value.current_page = Number(currentPage) || 1
             pagination.value.per_page = Number(perPage) || 10
 
-            // Make our request with search parameter
-            // This will happen before Datatable's watcher can trigger
             fetchSoas()
-
-            // Reset flag after request is made
-            setTimeout(() => {
-                isPaginationChange.value = false
-            }, 500)
-        }, 50) // Shorter timeout to beat Datatable's watcher
+        }, 50)
     },
     { immediate: false }
 )
@@ -239,36 +501,154 @@ watch(
     <AppLayout :breadcrumbs="breadcrumbItems">
         <Head title="Soa list" />
         <div class="bg-[var(--color-surface)] shadow-sm border border-[var(--color-border)] p-6">
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-                <Button v-if="canCreate" :onClick="newSoa">Create</Button>
-                <div class="relative w-full sm:w-64">
-                    <label class="sr-only" for="soa-search">Search soas</label>
-                    <div>
-                      <input
-                        id="soa-search"
-                        v-model="searchQuery"
-                        type="text"
-                        placeholder="Search soa number..."
-                        class="border border-[var(--color-border-strong)] rounded-md text-sm bg-[var(--color-surface)] text-[var(--color-text)] focus:ring-2 focus:ring-opacity-50 focus:border-transparent w-full px-4 py-2 pr-8"
-                        :style="{ '--tw-ring-color': 'var(--primary-color)' }"
-                        @input="hasInitialized = true" />
-                    </div>
-                    <button
-                        v-if="searchQuery"
-                        class="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] hover:text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-opacity-50"
-                        :style="{ '--tw-ring-color': 'var(--primary-color)' }"
-                        aria-label="Clear search"
-                        @click="searchQuery = ''">
-                        <svg
-                            class="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                            stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                    </button>
+            <div class="flex flex-col gap-4 mb-4">
+              <div class="flex flex-row lg:flex-row justify-between items-stretch lg:items-start gap-4">
+                <div class="flex flex-1 flex-row gap-3 min-w-0">
+                  <Button class="cursor-pointer" v-if="canCreate" :onClick="newSoa">Create</Button>
                 </div>
+              </div>
+
+              <div v-if="page.props.auth.user?.user_detail?.employee_no || page.props.auth.is_superadmin" class="grid gap-2 md:col-span-1">
+                <Accordion type="single" collapsible>
+                  <AccordionItem value="filters">
+                    <AccordionTrigger class="cursor-pointer">Filters</AccordionTrigger>
+                    <AccordionContent>
+                      <div class="flex flex-row lg:flex-row justify-between items-stretch lg:items-start gap-4">
+                          <div class="flex flex-1 flex-col gap-3 min-w-0">
+                              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                  <div class="grid gap-2 md:col-span-1">
+                                      <Label for="soa-filter-account-type">Account Type</Label>
+                                      <Select v-model="accountTypeModel">
+                                          <SelectTrigger id="soa-filter-account-type" class="w-full">
+                                              <SelectValue placeholder="All account types" />
+                                          </SelectTrigger>
+                                          <SelectContent class="w-full">
+                                              <SelectGroup>
+                                                  <SelectLabel>Account Type</SelectLabel>
+                                                  <SelectItem
+                                                      v-for="opt in accountTypeOptions"
+                                                      :key="String(opt.value)"
+                                                      :value="String(opt.value)">
+                                                      {{ opt.name }}
+                                                  </SelectItem>
+                                              </SelectGroup>
+                                          </SelectContent>
+                                      </Select>
+                                  </div>
+
+                                  <div class="md:col-span-1">
+                                      <SearchableCombobox
+                                          id="soa-filter-account"
+                                          label="Account"
+                                          :model-value="filters.account_code || null"
+                                          @update:model-value="(v) => { filters.account_code = v != null ? String(v) : '' }"
+                                          v-model:search="searchedAccountName"
+                                          :items="accounts"
+                                          placeholder="Select account…"
+                                          search-placeholder="Search account…"
+                                          empty-text="No account found."
+                                          :disabled="!filters.account_type"
+                                          :has-more="hasMoreAccounts"
+                                          :loading-more="accountsLoadingMore"
+                                          @load-more="loadMoreData('accounts')"
+                                      />
+                                  </div>
+
+                                  <div class="md:col-span-1">
+                                      <SearchableCombobox
+                                          id="soa-filter-branch"
+                                          label="Branch"
+                                          :model-value="filters.branch_code || null"
+                                          @update:model-value="(v) => { filters.branch_code = v != null ? String(v) : '' }"
+                                          v-model:search="searchedBranchName"
+                                          :items="branches"
+                                          placeholder="Select branch…"
+                                          search-placeholder="Search branch…"
+                                          empty-text="No branch found."
+                                          :disabled="!selectedAccountFilter"
+                                          :has-more="hasMoreBranches"
+                                          :loading-more="branchesLoadingMore"
+                                          @load-more="loadMoreData('branches')"
+                                      />
+                                  </div>
+
+                                  <div class="md:col-span-1">
+                                      <SearchableCombobox
+                                          id="soa-filter-billing-ref"
+                                          label="Billing Ref"
+                                          :model-value="filters.billing_ref || null"
+                                          @update:model-value="(v) => { filters.billing_ref = v != null ? String(v) : '' }"
+                                          v-model:search="searchedBillingRef"
+                                          :items="billing_refs"
+                                          placeholder="Select billing ref…"
+                                          search-placeholder="Search billing ref…"
+                                          empty-text="No billing ref found."
+                                          :disabled="!selectedAccountFilter"
+                                          :has-more="hasMoreBillingRefs"
+                                          :loading-more="billingRefsLoadingMore"
+                                          @load-more="loadMoreData('billingRefs')"
+                                      />
+                                  </div>
+
+                                  <div class="grid gap-2 md:col-span-1">
+                                      <Label for="soa-filter-soa-number">SOA Number</Label>
+                                      <Input
+                                          id="soa-filter-soa-number"
+                                          v-model="filters.soanum"
+                                          type="text"
+                                          autocomplete="off"
+                                          placeholder="SOA Number"
+                                          class="mt-0"
+                                      />
+                                  </div>
+
+                                  <div class="grid gap-2 md:col-span-1">
+                                      <Label for="soa-filter-status">Status</Label>
+                                      <Select v-model="statusFilterModel">
+                                          <SelectTrigger id="soa-filter-status" class="w-full">
+                                              <SelectValue placeholder="All statuses" />
+                                          </SelectTrigger>
+                                          <SelectContent class="w-full">
+                                              <SelectGroup>
+                                                  <SelectLabel>Status</SelectLabel>
+                                                  <SelectItem
+                                                      v-for="opt in statusOptions"
+                                                      :key="String(opt.value)"
+                                                      :value="String(opt.value)">
+                                                      {{ opt.name }}
+                                                  </SelectItem>
+                                              </SelectGroup>
+                                          </SelectContent>
+                                      </Select>
+                                  </div>
+                              </div>
+                              <div class="flex flex-wrap items-center gap-2">
+                                  <Button
+                                      v-if="filtersActive"
+                                      variant="outline"
+                                      :onClick="clearFilters">
+                                      Clear filters
+                                  </Button>
+                              </div>
+                          </div>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+              </div>
+              <div v-else class="w-md">
+                <div class="grid gap-2 md:col-span-1">
+                  <Label for="soa-filter-soa-number">SOA Number</Label>
+                  <Input
+                    id="soa-filter-soa-number"
+                    v-model="filters.soanum"
+                    type="text"
+                    autocomplete="off"
+                    placeholder="SOA Number"
+                    class="mt-0"
+                  />
+                </div>
+              </div>
             </div>
             <Datatable
               :data="soas.data"
@@ -279,9 +659,9 @@ watch(
               :enable-search="false"
               :row-click="openSoaFilesPane"
               empty-message="No soas found"
-              empty-description="System soas will appear here. Use search, pagination, or change rows per page to load data."
+              empty-description="System soas will appear here. Use filters, pagination, or change rows per page to load data."
               export-file-name="soas_list"
-              @update:pagination="(newPagination) => { hasInitialized = true; pagination = newPagination }">
+              @update:pagination="(newPagination) => { markInteracted(); pagination = newPagination }">
             </Datatable>
         </div>
 

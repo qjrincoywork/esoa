@@ -35,6 +35,7 @@ class SoaResource extends JsonResource
             'account_name' => CommonHelper::convertStringEncoding($this->getAccountName($this->account_code)),
             'branch_name' => CommonHelper::convertStringEncoding($this->getBranchName($this->branch_code)),
             'amount' => number_format($this->amount, 2),
+            'amount_raw' => (float) $this->amount,
             'file_pdf' => $this->file_pdf,
             'file_xls' => $this->file_xls,
             'status_color' => SoaStatus::color($this->status),
