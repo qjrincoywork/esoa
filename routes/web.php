@@ -144,6 +144,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/{id}/manage_file', 'manageFile')->name('manage_file');
             Route::get('/{id}/untag', 'untag')->name('untag');
             Route::post('/recompute_tax', 'recomputeTax')->name('recompute_tax');
+            Route::post('/adjust_amount', 'adjustAmount')->name('adjust_amount');
             Route::post('/update', 'update')->name('update');
             Route::post('/update_tag', 'updateTag')->name('update_tag');
             Route::post('/destroy', 'destroy')->name('destroy');

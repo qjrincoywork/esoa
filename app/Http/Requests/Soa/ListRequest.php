@@ -2,7 +2,10 @@
 
 namespace App\Http\Requests\Soa;
 
+use App\Enums\AccountType;
+use App\Enums\SoaStatus;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class ListRequest extends FormRequest
 {
@@ -14,14 +17,39 @@ class ListRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'account_type' => [
+                'nullable',
+                'string',
+                Rule::in(AccountType::getValues()),
+            ],
+            'account_code' => [
+                'nullable',
+                'string',
+                'max:191',
+            ],
+            'branch_code' => [
+                'nullable',
+                'string',
+                'max:191',
+            ],
+            'billing_ref' => [
+                'nullable',
+                'string',
+                'max:191',
+            ],
             'soanum' => [
                 'nullable',
                 'string',
-                'max:191'
+                'max:191',
+            ],
+            'status' => [
+                'nullable',
+                'integer',
+                Rule::in(SoaStatus::getValues()),
             ],
             'per_page' => [
                 'nullable',
-                'integer'
+                'integer',
             ],
         ];
     }

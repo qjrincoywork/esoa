@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { ref, watch } from 'vue';
+import { usePage } from '@inertiajs/vue3';
 import {
   Card,
   CardContent,
@@ -12,6 +13,7 @@ import {
   TabsTrigger,
 } from '@/components/ui/tabs'
 import SoaActivitiesList from '@/components/forms/soas/SoaActivitiesList.vue';
+import AmountManagementForm from '@/components/forms/soas/AmountManagementForm.vue';
 
 type SoaActivity = {
   id?: number
@@ -41,7 +43,8 @@ type Soa = {
   period_date_from?: string
   period_date_to?: string
   period_coverage?: string
-  amount?: number
+  amount?: string | number
+  amount_raw?: number
   file_pdf?: string
   file_xls?: string
   soa_activities?: SoaActivity[]
@@ -52,7 +55,21 @@ const props = defineProps({
     default: () => ({}),
   },
 });
-const soa = computed<Soa>(() => props.soa as Soa)
+const page = usePage();
+const localSoa = ref<Soa>({})
+watch(
+  () => props.soa,
+  (p) => {
+    localSoa.value = { ...(p as Soa) }
+  },
+  { immediate: true, deep: true },
+)
+
+function onAmountAdjusted(payload: { amount: string; amount_raw: number }) {
+  localSoa.value.amount = payload.amount
+  localSoa.value.amount_raw = payload.amount_raw
+}
+
 const activeTab = ref('details')
 </script>
 
@@ -66,52 +83,54 @@ const activeTab = ref('details')
         <TabsTrigger value="activities">
           Soa Activities
         </TabsTrigger>
+        <TabsTrigger value="amount_management" v-if="page.props.auth.user?.user_detail?.employee_no || page.props.auth.is_superadmin">
+          Amount Management
+        </TabsTrigger>
       </TabsList>
       <TabsContent value="details">
         <Card>
-          <!-- <CardHeader>
-            <CardTitle>Account</CardTitle>
-            <CardDescription>
-              Make changes to your account here. Click save when you're
-              done.
-            </CardDescription>
-          </CardHeader> -->
           <CardContent class="grid gap-3">
             <ul class="my-6 ml-6 list-disc [&>li]:mt-2">
-              <li>Account Name: <span class="font-bold">{{ soa.account_name }}</span></li>
-              <li v-if="soa.branch_name">Branch Name: <span class="font-bold">{{ soa.branch_name }}</span></li>
-              <li>Billing Reference: <span class="font-bold">{{ soa.billing_ref }}</span></li>
-              <li>SOA Number: <span class="font-bold">{{ soa.soa_number }}</span></li>
-              <li>Bill Type: <span class="font-bold">{{ soa.bill_type }}</span></li>
+              <li>Account Name: <span class="font-bold">{{ localSoa.account_name }}</span></li>
+              <li v-if="localSoa.branch_name">Branch Name: <span class="font-bold">{{ localSoa.branch_name }}</span></li>
+              <li>Billing Reference: <span class="font-bold">{{ localSoa.billing_ref }}</span></li>
+              <li>SOA Number: <span class="font-bold">{{ localSoa.soa_number }}</span></li>
+              <li>Bill Type: <span class="font-bold">{{ localSoa.bill_type }}</span></li>
               <li>Status: <span :class="[
                   'px-2 py-1 rounded-md text-xs font-medium',
-                  soa.status_color
-                ]">{{ soa.status }}</span>
+                  localSoa.status_color
+                ]">{{ localSoa.status }}</span>
               </li>
               <li>Due Date:
-                <span class="font-bold">{{ soa.due_date }}
+                <span class="font-bold">{{ localSoa.due_date }}
                   <Badge variant="secondary">
-                    {{ soa.due_in }}
+                    {{ localSoa.due_in }}
                   </Badge>
                 </span>
               </li>
-              <li>Bill Date: <span class="font-bold">{{ soa.created_at }} </span></li>
-              <li>Period Coverage: <span class="font-bold">{{ soa.period_coverage }}</span></li>
-              <li>Amount: <span class="font-bold">{{ soa.amount }}</span></li>
+              <li>Bill Date: <span class="font-bold">{{ localSoa.created_at }} </span></li>
+              <li>Period Coverage: <span class="font-bold">{{ localSoa.period_coverage }}</span></li>
+              <li>Amount: <span class="font-bold">{{ localSoa.amount }}</span></li>
             </ul>
           </CardContent>
-          <!-- <CardFooter>
-            <Button>Save changes</Button>
-          </CardFooter> -->
         </Card>
       </TabsContent>
       <TabsContent value="activities">
         <Card>
           <CardContent class="grid gap-6">
-            <!-- On-demand: component mounts only when Activities tab is selected -->
             <SoaActivitiesList
               v-if="activeTab === 'activities'"
-              :soa-id="soa.id ?? null" />
+              :soa-id="localSoa.id ?? null" />
+          </CardContent>
+        </Card>
+      </TabsContent>
+      <TabsContent value="amount_management">
+        <Card>
+          <CardContent class="grid gap-6">
+            <AmountManagementForm
+              v-if="activeTab === 'amount_management'"
+              :soa="localSoa"
+              @adjusted="onAmountAdjusted" />
           </CardContent>
         </Card>
       </TabsContent>

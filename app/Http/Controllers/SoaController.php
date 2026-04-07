@@ -11,7 +11,7 @@ use App\Helpers\CommonHelper;
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Soa\{CreateRequest, FileProxyRequest, ListRequest, RecomputeTaxRequest, UpdateRequest, UpdateTagRequest };
+use App\Http\Requests\Soa\{AdjustAmountRequest, CreateRequest, FileProxyRequest, ListRequest, RecomputeTaxRequest, UpdateRequest, UpdateTagRequest };
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
@@ -25,6 +25,27 @@ use Symfony\Component\HttpFoundation\Response;
 
 class SoaController extends Controller
 {
+    /**
+     * Ensure the authenticated user may modify the given Eloquent SOA (same scope as list filters).
+     */
+    protected function assertUserMayAccessModelSoa(Soa $soa): void
+    {
+        $authUser = auth()->user();
+        if (! $authUser) {
+            abort(Response::HTTP_UNAUTHORIZED);
+        }
+        if ($authUser->hasRole('superadmin')) {
+            return;
+        }
+        $detail = $authUser->userDetail;
+        if ($detail && isset($detail->account_code) && $soa->account_code !== $detail->account_code) {
+            abort(Response::HTTP_FORBIDDEN);
+        }
+        if ($detail && isset($detail->branch_code) && $soa->branch_code !== null && $soa->branch_code !== '' && $soa->branch_code !== $detail->branch_code) {
+            abort(Response::HTTP_FORBIDDEN);
+        }
+    }
+
     /**
      * SqlDatabase instance.
      *
@@ -97,7 +118,9 @@ class SoaController extends Controller
         $soas = (new Soa)->getSoas($request->validated());
 
         return Inertia::render('soas/List', [
-            'soas' => new CommonResource(SoaResource::collection($soas))
+            'soas' => new CommonResource(SoaResource::collection($soas)),
+            'soa_status_options' => SoaStatus::list(),
+            'soa_account_type_options' => AccountType::list(),
         ]);
     }
 
@@ -259,6 +282,41 @@ class SoaController extends Controller
     /**
      * Display SOA activities for the given SOA id.
      */
+    /**
+     * Add to or deduct from the Eloquent SOA amount (List / right-pane context).
+     */
+    public function adjustAmount(AdjustAmountRequest $request)
+    {
+        $validated = $request->validated();
+        $soa = Soa::query()->findOrFail($validated['soa_id']);
+
+        $this->assertUserMayAccessModelSoa($soa);
+
+        $current = (float) $soa->amount;
+        $delta = (float) $validated['amount'];
+        $new = $validated['operation'] === 'add'
+            ? round($current + $delta, 2)
+            : round($current - $delta, 2);
+
+        if ($new < 0) {
+            return CustomResponse::error('Resulting amount cannot be negative.', Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        $soa->amount = $new;
+        $soa->save();
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Amount updated.',
+                'amount' => number_format((float) $soa->amount, 2),
+                'amount_raw' => (float) $soa->amount,
+            ], Response::HTTP_OK);
+        }
+
+        return back();
+    }
+
     public function activities(Request $request, int $id)
     {
         $soa = Soa::query()->findOrFail($id);
