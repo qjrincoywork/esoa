@@ -6,8 +6,25 @@ import SavingSoaForm from '@/components/forms/soas/SavingSoaForm.vue';
 import ViewForm from '@/components/forms/soas/ViewForm.vue';
 import UntagForm from '@/components/forms/soas/UntagForm.vue';
 import ManageFileForm from '@/components/forms/soas/ManageFileForm.vue';
-import { ref, shallowRef, type Component } from 'vue';
+import { ref, shallowRef, type Component, type Ref } from 'vue';
 let formApi: { getFormData: () => FormData | null } | null = null;
+
+/** Client-side overlays for list rows until the next Inertia `soas` refresh (module singleton). */
+const soaListRowPatches: Ref<Record<number, Record<string, unknown>>> = ref({});
+
+export function patchSoaListRow(id: number, patch: Record<string, unknown>): void {
+  if (typeof id !== 'number' || !Number.isFinite(id)) return;
+  const key = id;
+  const prev = soaListRowPatches.value[key] ?? {};
+  soaListRowPatches.value = {
+    ...soaListRowPatches.value,
+    [key]: { ...prev, ...patch },
+  };
+}
+
+export function clearSoaListRowPatches(): void {
+  soaListRowPatches.value = {};
+}
 import { dispatchNotification } from '@/components/notification';
 import { showLoader, hideLoader } from '@/composables/useLoader';
 import { useModulePermissions } from '@/composables/useModulePermissions';
@@ -561,6 +578,10 @@ export function useSoas() {
           content: (response.data as { message?: string })?.message ?? 'Amount updated.',
           type: 'success',
         });
+        const data = response.data as { amount?: string; amount_raw?: number };
+        if (data.amount != null && data.amount_raw != null) {
+          patchSoaListRow(payload.soa_id, { amount: data.amount, amount_raw: data.amount_raw });
+        }
       }
 
       return response;
@@ -596,6 +617,10 @@ export function useSoas() {
     rightPaneContentComponent,
     rightPaneComponentProps,
     closeRightPane,
+
+    soaListRowPatches,
+    patchSoaListRow,
+    clearSoaListRowPatches,
   };
 }
 

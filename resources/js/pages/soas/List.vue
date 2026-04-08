@@ -40,27 +40,6 @@ type SoasPagination = {
 const page = usePage();
 const { canCreate, slug, hasPermission } = useModulePermissions();
 
-const soas = computed(() => {
-  const propsSoas = (page.props as any).soas as SoasPagination | undefined;
-  if (!propsSoas) {
-    return {
-      current_page: 1,
-      per_page: 10,
-      total: 0,
-      data: []
-    } as SoasPagination;
-  }
-  return propsSoas;
-});
-
-const statusOptions = computed<SoaListOption[]>(() => {
-  return (page.props as { soa_status_options?: SoaListOption[] }).soa_status_options ?? [];
-});
-
-const accountTypeOptions = computed<SoaListOption[]>(() => {
-  return (page.props as { soa_account_type_options?: SoaListOption[] }).soa_account_type_options ?? [];
-});
-
 const {
   newSoa,
   fileList,
@@ -80,7 +59,47 @@ const {
   rightPaneContentComponent,
   rightPaneComponentProps,
   closeRightPane,
+  soaListRowPatches,
+  clearSoaListRowPatches,
 } = useSoas();
+
+/** Inertia payload only — avoids treating client row patches as server updates. */
+const soasFromProps = computed(() => {
+  const propsSoas = (page.props as any).soas as SoasPagination | undefined;
+  if (!propsSoas) {
+    return {
+      current_page: 1,
+      per_page: 10,
+      total: 0,
+      data: [],
+    } as SoasPagination;
+  }
+  return propsSoas;
+});
+
+/** Table rows merged with `soaListRowPatches` (e.g. amount after adjust in the right pane). */
+const soas = computed(() => {
+  const base = soasFromProps.value;
+  const patches = soaListRowPatches.value;
+  const raw = (base.data ?? []) as Record<string, unknown>[];
+  const data = raw.map((row) => {
+    const id = row.id;
+    if (id == null) return row;
+    const numId = typeof id === 'number' ? id : Number(id);
+    if (Number.isNaN(numId)) return row;
+    const p = patches[numId];
+    return p ? { ...row, ...p } : row;
+  });
+  return { ...base, data };
+});
+
+const statusOptions = computed<SoaListOption[]>(() => {
+  return (page.props as { soa_status_options?: SoaListOption[] }).soa_status_options ?? [];
+});
+
+const accountTypeOptions = computed<SoaListOption[]>(() => {
+  return (page.props as { soa_account_type_options?: SoaListOption[] }).soa_account_type_options ?? [];
+});
 
 const columnHelper = createColumnHelper();
 const pagination = ref({
@@ -457,23 +476,24 @@ onMounted(async () => {
 
 const isUpdatingFromServer = ref(false)
 watch(
-    soas,
-    (next) => {
-        if (!next) return
-        isUpdatingFromServer.value = true
-        pagination.value.current_page = next.current_page
-        pagination.value.per_page = Number(next.per_page)
-        pagination.value.total = next.total
+  soasFromProps,
+  (next) => {
+    if (!next) return;
+    clearSoaListRowPatches();
+    isUpdatingFromServer.value = true;
+    pagination.value.current_page = next.current_page;
+    pagination.value.per_page = Number(next.per_page);
+    pagination.value.total = next.total;
 
-        if (isFirstLoad.value && next.total > 0) {
-            isFirstLoad.value = false
-        }
-
-        setTimeout(() => {
-            isUpdatingFromServer.value = false
-        }, 300)
+    if (isFirstLoad.value && next.total > 0) {
+      isFirstLoad.value = false;
     }
-)
+
+    setTimeout(() => {
+      isUpdatingFromServer.value = false;
+    }, 300);
+  },
+);
 
 const fetchTimeout = ref<number | null>(null)
 watch(
@@ -591,13 +611,13 @@ watch(
                                   </div>
 
                                   <div class="grid gap-2 md:col-span-1">
-                                      <Label for="soa-filter-soa-number">SOA Number</Label>
+                                      <Label for="soa-filter-soa-number">SOA Number / Billing Invoice</Label>
                                       <Input
                                           id="soa-filter-soa-number"
                                           v-model="filters.soanum"
                                           type="text"
                                           autocomplete="off"
-                                          placeholder="SOA Number"
+                                          placeholder="SOA Number / Billing Invoice"
                                           class="mt-0"
                                       />
                                   </div>
@@ -638,13 +658,13 @@ watch(
               </div>
               <div v-else class="w-md">
                 <div class="grid gap-2 md:col-span-1">
-                  <Label for="soa-filter-soa-number">SOA Number</Label>
+                  <Label for="soa-filter-soa-number">SOA Number / Billing Invoice</Label>
                   <Input
                     id="soa-filter-soa-number"
                     v-model="filters.soanum"
                     type="text"
                     autocomplete="off"
-                    placeholder="SOA Number"
+                    placeholder="SOA Number / Billing Invoice"
                     class="mt-0"
                   />
                 </div>
