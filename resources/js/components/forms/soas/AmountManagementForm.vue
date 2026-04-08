@@ -5,7 +5,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useSoas } from '@/composables/soas';
-import { showLoader, hideLoader } from '@/composables/useLoader';
 import { dispatchNotification } from '@/components/notification';
 
 type SoaPane = {
@@ -52,35 +51,34 @@ async function submit() {
     return;
   }
   submitting.value = true;
-  showLoader();
   try {
     const response = await adjustSoaAmount({
       soa_id: props.soa.id,
       operation: operation.value,
       amount: n,
     });
-    if (!response.ok) {
-      const msg = (response.data as { message?: string })?.message ?? 'Update failed.';
-      dispatchNotification({ title: 'Error', content: msg, type: 'error' });
-      return;
+    if (response?.ok) {
+      const data = response.data as { amount?: string; amount_raw?: number };
+      if (data.amount != null && data.amount_raw != null) {
+        emit('adjusted', { amount: data.amount, amount_raw: data.amount_raw });
+      }
+      valueInput.value = '';
     }
-    const data = response.data as { amount?: string; amount_raw?: number; message?: string };
-    if (data.amount != null && data.amount_raw != null) {
-      emit('adjusted', { amount: data.amount, amount_raw: data.amount_raw });
-    }
-    valueInput.value = '';
-    dispatchNotification({ title: 'Success', content: data.message ?? 'Amount updated.', type: 'success' });
-  } catch {
-    dispatchNotification({ title: 'Error', content: 'Network error.', type: 'error' });
   } finally {
     submitting.value = false;
-    hideLoader();
   }
 }
 </script>
 
 <template>
-  <div class="grid max-w-md gap-4">
+  <form class="grid max-w-md gap-4" @submit.prevent="submit">
+    <input
+      id="amount-mgmt-soa-id"
+      type="hidden"
+      name="soa_id"
+      :value="props.soa.id ?? ''"
+      aria-hidden="true" />
+
     <div class="rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm">
       <span class="text-[var(--color-text-muted)]">Current amount</span>
       <p class="text-lg font-semibold text-[var(--color-text)] tabular-nums">
@@ -119,11 +117,10 @@ async function submit() {
     </div>
 
     <Button
-      type="button"
+      type="submit"
       :disabled="!canSubmit"
-      class="w-full sm:w-auto"
-      @click="submit">
+      class="cursor-pointer w-full sm:w-auto">
       Apply
     </Button>
-  </div>
+  </form>
 </template>

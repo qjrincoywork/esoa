@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\AccountType;
 use App\Enums\BillType;
 use App\Enums\Server;
+use App\Enums\SoaAmountOperation;
 use App\Enums\SoaStatus;
 use App\Enums\UntagType;
 use App\Helpers\CommonHelper;
@@ -15,9 +16,9 @@ use App\Http\Requests\Soa\{AdjustAmountRequest, CreateRequest, FileProxyRequest,
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
-use App\Http\Resources\{BillingRefResource, OldSoaResource, SoaResource };
+use App\Http\Resources\{BillingRefResource, OldSoaResource, SoaActivityListResource, SoaResource };
 use App\Mail\NewSoaUploaded;
-use App\Models\{Account, Citizenship, CivilStatus, Contact, Department, Gender, MainAccount, Position, Soa, Suffix, User };
+use App\Models\{Account, Citizenship, CivilStatus, Contact, Department, Gender, MainAccount, Position, Soa, Suffix };
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\{ DB, Http, Mail, Storage };
 use Inertia\Inertia;
@@ -25,27 +26,6 @@ use Symfony\Component\HttpFoundation\Response;
 
 class SoaController extends Controller
 {
-    /**
-     * Ensure the authenticated user may modify the given Eloquent SOA (same scope as list filters).
-     */
-    protected function assertUserMayAccessModelSoa(Soa $soa): void
-    {
-        $authUser = auth()->user();
-        if (! $authUser) {
-            abort(Response::HTTP_UNAUTHORIZED);
-        }
-        if ($authUser->hasRole('superadmin')) {
-            return;
-        }
-        $detail = $authUser->userDetail;
-        if ($detail && isset($detail->account_code) && $soa->account_code !== $detail->account_code) {
-            abort(Response::HTTP_FORBIDDEN);
-        }
-        if ($detail && isset($detail->branch_code) && $soa->branch_code !== null && $soa->branch_code !== '' && $soa->branch_code !== $detail->branch_code) {
-            abort(Response::HTTP_FORBIDDEN);
-        }
-    }
-
     /**
      * SqlDatabase instance.
      *
@@ -63,6 +43,27 @@ class SoaController extends Controller
     public function __construct()
     {
         $this->sqlDatabase = SqlDatabase::class;
+    }
+
+    /**
+     * Ensure the authenticated user may modify the given Eloquent SOA (same scope as list filters).
+     */
+    protected function assertUserMayAccessModelSoa(Soa $soa): void
+    {
+        $authUser = auth()->user();
+        if (!$authUser) {
+            abort(Response::HTTP_UNAUTHORIZED);
+        }
+        if ($authUser->hasRole('superadmin')) {
+            return;
+        }
+        $detail = $authUser->userDetail;
+        if ($detail && isset($detail->account_code) && $soa->account_code !== $detail->account_code) {
+            abort(Response::HTTP_FORBIDDEN);
+        }
+        if ($detail && isset($detail->branch_code) && $soa->branch_code !== null && $soa->branch_code !== '' && $soa->branch_code !== $detail->branch_code) {
+            abort(Response::HTTP_FORBIDDEN);
+        }
     }
 
     /**
@@ -280,10 +281,8 @@ class SoaController extends Controller
     }
 
     /**
-     * Display SOA activities for the given SOA id.
-     */
-    /**
      * Add to or deduct from the Eloquent SOA amount (List / right-pane context).
+     * Writes a {@see SoaActivity} row for the audit trail.
      */
     public function adjustAmount(AdjustAmountRequest $request)
     {
@@ -294,16 +293,30 @@ class SoaController extends Controller
 
         $current = (float) $soa->amount;
         $delta = (float) $validated['amount'];
-        $new = $validated['operation'] === 'add'
+        $operation = $validated['operation'];
+        $new = $operation === SoaAmountOperation::ADD
             ? round($current + $delta, 2)
             : round($current - $delta, 2);
 
-        if ($new < 0) {
-            return CustomResponse::error('Resulting amount cannot be negative.', Response::HTTP_UNPROCESSABLE_ENTITY);
-        }
+        $soa->runInTransactionWithActivity(
+            function (Soa $soa) use ($new) {
+                $soa->amount = $new;
+                $soa->save();
+            },
+            SoaAmountOperation::activityEvent($operation),
+            [
+                'from' => ['amount' => $current],
+                'to' => [
+                    'amount' => $new,
+                    'operation' => $operation,
+                    'operation_label' => SoaAmountOperation::label($operation),
+                    'delta' => $delta,
+                ],
+            ],
+            $request->user()
+        );
 
-        $soa->amount = $new;
-        $soa->save();
+        $soa->refresh();
 
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
@@ -317,44 +330,32 @@ class SoaController extends Controller
         return back();
     }
 
+    /**
+     * Display SOA activities for the given SOA id.
+     */
     public function activities(Request $request, int $id)
     {
         $soa = Soa::query()->findOrFail($id);
 
         $perPage = (int) $request->get('per_page', config('vc.default_pages'));
-        $activities = $soa->soaActivity()
+        $paginator = $soa->soaActivity()
             ->orderByDesc('created_at')
-            ->paginate($perPage)
-            ->through(function ($activity) {
-                return [
-                    'id' => $activity->id,
-                    'name' => $activity->name,
-                    'event' => $activity->event,
-                    'from' => $activity->from,
-                    'to' => $activity->to,
-                    'created_at' => CommonHelper::formatDate($activity->created_at),
-                ];
-            });
+            ->paginate($perPage);
+
+        $payload = [
+            'data' => SoaActivityListResource::collection($paginator->items())->resolve($request),
+            'current_page' => $paginator->currentPage(),
+            'per_page' => $paginator->perPage(),
+            'total' => $paginator->total(),
+        ];
 
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
-                'activities' => [
-                    'data' => $activities->items(),
-                    'current_page' => $activities->currentPage(),
-                    'per_page' => $activities->perPage(),
-                    'total' => $activities->total(),
-                ],
+                'activities' => $payload,
             ]);
         }
 
-        return response()->json([
-            'activities' => [
-                'data' => $activities->items(),
-                'current_page' => $activities->currentPage(),
-                'per_page' => $activities->perPage(),
-                'total' => $activities->total(),
-            ],
-        ]);
+        return response()->json(['activities' => $payload]);
     }
 
     /**
@@ -362,12 +363,16 @@ class SoaController extends Controller
      */
     public function edit(Request $request, int $id)
     {
-        $soa = (new $this->sqlDatabase(Server::SOA))->getSoa($id);
+        $soa = Soa::query()->findOrFail($id);
+        $this->assertUserMayAccessModelSoa($soa);
 
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
-                'soa' => OldSoaResource::make($soa)
+                'soa' => SoaResource::make($soa),
+                'account_types' => AccountType::list(),
+                'bill_types' => BillType::list(),
+                'status_types' => SoaStatus::list(),
             ]);
         }
     }

@@ -77,13 +77,13 @@ const activeTab = ref('details')
   <div class="flex w-full flex-col">
     <Tabs v-model="activeTab" default-value="details">
       <TabsList>
-        <TabsTrigger value="details">
+        <TabsTrigger class="cursor-pointer" value="details">
           Details
         </TabsTrigger>
-        <TabsTrigger value="activities">
+        <TabsTrigger class="cursor-pointer" value="activities">
           Soa Activities
         </TabsTrigger>
-        <TabsTrigger value="amount_management" v-if="page.props.auth.user?.user_detail?.employee_no || page.props.auth.is_superadmin">
+        <TabsTrigger class="cursor-pointer" value="amount_management" v-if="page.props.auth.user?.user_detail?.employee_no || page.props.auth.is_superadmin">
           Amount Management
         </TabsTrigger>
       </TabsList>

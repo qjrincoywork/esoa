@@ -283,7 +283,6 @@ export function useUsers() {
       }
 
       const payload = response.data
-      console.log(payload)
       if (!payload) return
 
       openModal({

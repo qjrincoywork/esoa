@@ -187,7 +187,6 @@ const searchBranchesByParams = async (name = '', page = 1, append = false) => {
     name,
     page,
   });
-  console.log(result?.data)
   if (append) {
     branches.value = [...(branches.value ?? []), ...result?.data];
   } else {
