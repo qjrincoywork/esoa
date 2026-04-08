@@ -64,32 +64,7 @@ function getFormData(): FormData | null {
   if (!savingForm.value) return null
   return new FormData(savingForm.value)
 }
-// async function getAccountsByType(type: string | number): Promise<Account[] | null> {
-//   if (!type) return null;
-//   console.log('selectedAccountType', type);
-//   try {
-//     const response = await get(`/${slug.value}/get_accounts`,
-//       {
-//         params: {
-//           type: type,
-//         }
-//       }
-//     );
 
-//     if (!response.ok) {
-//       //To be Updated the showing of validation errors in the form
-//     } else {
-//     }
-//   } catch (err) {
-//     console.error('Error fetching accounts by type:', err);
-//   }
-//   // return accounts.value.filter(account => account.value === type);
-// }
-
-// defineExpose({
-//   savingForm,
-//   getFormData,
-// })
 // Initialize selectedAccountType when available/when prop changes
 watch(selectedAccountType, async (next) => {
   accounts.value = [];

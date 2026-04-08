@@ -9,8 +9,11 @@ type SoaActivity = {
   id?: number;
   name?: string;
   event?: string;
-  from?: unknown;
-  to?: unknown;
+  /** Human-readable event title from API */
+  event_label?: string;
+  /** Plain-language description (replaces raw JSON from API) */
+  from?: string;
+  to?: string;
   created_at?: string;
 };
 
@@ -30,21 +33,12 @@ const pagination = ref({
   total: 0,
 });
 
-const formatJson = (value: unknown) => {
-  if (value === null || value === undefined) return '-';
-  if (typeof value === 'string') return value;
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
-};
-
 const columnHelper = createColumnHelper<SoaActivity>();
 const columns = [
-  columnHelper.accessor('event', {
+  columnHelper.accessor('event_label', {
+    id: 'event_display',
     header: 'Event',
-    cell: ({ getValue }) => getValue() || '-',
+    cell: ({ row, getValue }) => getValue() || row.original.event || '-',
   }),
   columnHelper.accessor('name', {
     header: 'Name',
@@ -55,8 +49,8 @@ const columns = [
     cell: ({ getValue }) =>
       h(
         'span',
-        { class: 'line-clamp-1 break-all' },
-        formatJson(getValue())
+        { class: 'line-clamp-2 break-words text-sm' },
+        getValue() || '—'
       ),
   }),
   columnHelper.accessor('to', {
@@ -64,8 +58,8 @@ const columns = [
     cell: ({ getValue }) =>
       h(
         'span',
-        { class: 'line-clamp-1 break-all' },
-        formatJson(getValue())
+        { class: 'line-clamp-2 break-words text-sm' },
+        getValue() || '—'
       ),
   }),
   columnHelper.accessor('created_at', {

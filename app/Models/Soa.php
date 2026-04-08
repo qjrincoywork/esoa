@@ -56,6 +56,57 @@ class Soa extends Model
     }
 
     /**
+     * Persist a single audit row for this SOA. Reusable from any feature (amount, status, files, etc.).
+     *
+     * @param  array{from?: array<string, mixed>|null, to: array<string, mixed>}  $snapshot
+     */
+    public function recordActivity(string $event, array $snapshot, ?User $actor = null): SoaActivity
+    {
+        $event = trim($event);
+        if ($event === '' || strlen($event) > 191) {
+            throw new \InvalidArgumentException('Invalid SOA activity event.');
+        }
+        if (!isset($snapshot['to']) || ! is_array($snapshot['to'])) {
+            throw new \InvalidArgumentException('SOA activity snapshot must include a "to" array.');
+        }
+        $from = $snapshot['from'] ?? null;
+        if ($from !== null && ! is_array($from)) {
+            throw new \InvalidArgumentException('SOA activity "from" must be an array or null.');
+        }
+
+        $user = $actor ?? auth()->user();
+        if (!$user instanceof User) {
+            throw new \RuntimeException('SOA activity requires an authenticated user.');
+        }
+
+        $name = $user->username ?? $user->email ?? (string) $user->id;
+
+        return $this->soaActivity()->create([
+            'user_id' => (int) $user->getAuthIdentifier(),
+            'name' => $name,
+            'event' => $event,
+            'from' => $from,
+            'to' => $snapshot['to'],
+        ]);
+    }
+
+    /**
+     * Run a callback inside a DB transaction, then record an activity in the same transaction.
+     *
+     * @param  callable(self): mixed  $callback
+     * @param  array{from?: array<string, mixed>|null, to: array<string, mixed>}  $snapshot
+     */
+    public function runInTransactionWithActivity(callable $callback, string $event, array $snapshot, ?User $actor = null): mixed
+    {
+        return DB::transaction(function () use ($callback, $event, $snapshot, $actor) {
+            $result = $callback($this);
+            $this->recordActivity($event, $snapshot, $actor);
+
+            return $result;
+        });
+    }
+
+    /**
      * Retrieves a paginated list of SOA records from the database.
      *
      * @param array $params
@@ -76,7 +127,7 @@ class Soa extends Model
             })
             ->orderBy('id', OrderType::DESC);
 
-        if ($authUser && !$authUser->hasRole('superadmin')) {
+        if ($authUser && $authUser->hasRole('superadmin')) {
             $result->withTrashed();
         }
 

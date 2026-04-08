@@ -203,16 +203,20 @@ export function useSoas() {
       if (!payload) return;
 
       openModal({
-        modalTitle: `Edit ${payload.soa?.soanum || 'Soa'}`,
+        modalTitle: `Edit ${payload.soa?.soa_number || 'Soa'}`,
         buttonText: 'Update',
-        component: SavingForm,
+        component: SavingSoaForm,
         componentProps: {
+          account_types: payload.account_types,
+          bill_types: payload.bill_types ?? [],
+          status_types: payload.status_types ?? [],
+          user: authUser ?? undefined,
           soa: payload.soa,
           onReady: (api: { getFormData: () => FormData | null }) => {
             formApi = api
           }
         },
-        size: 'lg',
+        size: 'xl4',
         onSubmit: async () => {
           if (!formApi) return;
 
@@ -536,12 +540,36 @@ export function useSoas() {
   };
 
   const adjustSoaAmount = async (payload: { soa_id: number; operation: 'add' | 'deduct'; amount: number }) => {
-    return post<{
-      status?: string
-      message?: string
-      amount?: string
-      amount_raw?: number
-    }>(`/${slug.value}/adjust_amount`, payload);
+    const formData = new FormData();
+    formData.append('soa_id', String(payload.soa_id));
+    formData.append('operation', payload.operation);
+    formData.append('amount', String(payload.amount));
+
+    showLoader();
+    try {
+      const response = await post(`/${slug.value}/adjust_amount`, formData);
+
+      if (!response.ok) {
+        dispatchNotification({
+          title: 'Error',
+          content: (response.data as { message?: string })?.message ?? 'Update failed.',
+          type: 'error',
+        });
+      } else {
+        dispatchNotification({
+          title: 'Success',
+          content: (response.data as { message?: string })?.message ?? 'Amount updated.',
+          type: 'success',
+        });
+      }
+
+      return response;
+    } catch {
+      dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+      return null;
+    } finally {
+      hideLoader();
+    }
   };
 
   return {

@@ -40,18 +40,8 @@ class SoaResource extends JsonResource
             'file_xls' => $this->file_xls,
             'status_color' => SoaStatus::color($this->status),
             'status' => SoaStatus::label($this->status),
-            'soa_activities' => $this->whenLoaded('soaActivity', function () {
-                return $this->soaActivity->map(function ($activity) {
-                    return [
-                        'id' => $activity->id,
-                        'user_id' => $activity->user_id,
-                        'name' => $activity->name,
-                        'event' => $activity->event,
-                        'from' => $activity->from,
-                        'to' => $activity->to,
-                        'created_at' => CommonHelper::formatDate($activity->created_at),
-                    ];
-                })->values();
+            'soa_activities' => $this->whenLoaded('soaActivity', function () use ($request) {
+                return SoaActivityListResource::collection($this->soaActivity)->resolve($request);
             }, []),
         ];
     }

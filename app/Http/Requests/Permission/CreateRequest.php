@@ -21,7 +21,7 @@ class CreateRequest extends FormRequest
                 'max:191',
                 'min:3',
                 Rule::unique('permissions', 'name'),
-                'regex:/^[a-zA-Z][a-zA-Z0-9\s\_\-]*$/' // Must start with a letter
+                // 'regex:/^[a-zA-Z][a-zA-Z0-9\s\_\-]*$/' // Must start with a letter
             ],
             'guard_name' => [
                 'required',

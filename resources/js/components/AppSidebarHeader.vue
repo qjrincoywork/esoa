@@ -20,14 +20,14 @@ withDefaults(
     },
 );
 const { appearance, updateAppearance } = useAppearance();
-const storageApperance = localStorage.getItem('appearance');
-const isDark = storageApperance === 'dark';
-const toggleTheme = () => {
-  console.log("Theme set From:", isDark, appearance.value);
-  appearance.value = !isDark ? 'dark' : 'light';
-  updateAppearance(appearance.value);
-  console.log("Theme set to:", appearance.value);
-};
+// const storageApperance = localStorage.getItem('appearance');
+// const isDark = storageApperance === 'dark';
+// const toggleTheme = () => {
+//   console.log("Theme set From:", isDark, appearance.value);
+//   appearance.value = !isDark ? 'dark' : 'light';
+//   updateAppearance(appearance.value);
+//   console.log("Theme set to:", appearance.value);
+// };
 </script>
 
 <template>
