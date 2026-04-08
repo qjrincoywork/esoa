@@ -12,6 +12,25 @@ export interface AjaxResponse<T = any> {
 }
 
 /**
+ * Plain CSRF token for Laravel: must come from meta[name="csrf-token"] (same as @csrf).
+ * Do NOT reuse the XSRF-TOKEN cookie value for X-CSRF-TOKEN or _token — the cookie is
+ * often encrypted / meant for X-XSRF-TOKEN decryption on the server; sending it as the
+ * plain header breaks VerifyCsrfToken (419 on every request).
+ */
+function readMetaCsrfToken(): string | null {
+  if (typeof document === 'undefined') return null;
+  const t = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+  return t && t.length > 0 ? t : null;
+}
+
+function applyLaravelCsrfHeaders(target: Record<string, string>): void {
+  const token = readMetaCsrfToken();
+  if (token) {
+    target['X-CSRF-TOKEN'] = token;
+  }
+}
+
+/**
  * Reusable AJAX request composable that doesn't trigger navigation
  * Useful for fetching data without changing the URL
  */
@@ -47,24 +66,27 @@ export function useAjax() {
         // Build full URL with query params
         const fullUrl = params ? `${url}${buildQueryString(params)}` : url;
 
-        // Default headers for AJAX requests
+        // Default headers; caller headers merged first so CSRF applied last cannot be overridden
         const defaultHeaders: Record<string, string> = {
             'Accept': 'application/json',
             'X-Requested-With': 'XMLHttpRequest',
             ...headers,
         };
+        applyLaravelCsrfHeaders(defaultHeaders);
 
-        // Add CSRF token if available (Laravel)
-        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-        if (csrfToken) {
-            defaultHeaders['X-CSRF-TOKEN'] = csrfToken;
+        const requestBody: BodyInit | null = body instanceof FormData ? body : body ? JSON.stringify(body) : null;
+        if (requestBody instanceof FormData && method !== 'GET' && !requestBody.has('_token')) {
+          const plain = readMetaCsrfToken();
+          if (plain) {
+            requestBody.append('_token', plain);
+          }
         }
 
         try {
             const response = await fetch(fullUrl, {
                 method,
                 headers: defaultHeaders,
-                body: body instanceof FormData ? body : body ? JSON.stringify(body) : null,
+                body: requestBody,
                 credentials: 'same-origin',
             });
 
