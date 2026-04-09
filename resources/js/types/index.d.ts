@@ -3,6 +3,8 @@ import type { LucideIcon } from 'lucide-vue-next';
 
 export interface Auth {
   user: User;
+  is_superadmin: boolean;
+  permissions: Permissions;
 }
 
 export interface BreadcrumbItem {
@@ -46,12 +48,33 @@ export type AppPageProps<
 
 export interface User {
   id: number;
-  name: string;
+  username: string;
   email: string;
-  avatar?: string;
-  email_verified_at: string | null;
-  created_at: string;
-  updated_at: string;
+  user_detail: UserDetail;
+  is_superadmin: boolean;
+  permissions: Permissions[];
+}
+
+export interface UserDetail {
+  account_type: string;
+  type: number;
+  account_code: string;
+  branch_code: string;
+  gender_id: number;
+  civil_status_id: number;
+  citizenship_id: number;
+  department_id: number;
+  position_id: number;
+  first_name: string;
+  middle_name: string;
+  last_name: string;
+  suffix: string | number;
+  birthdate: string;
+  employee_no: string;
+}
+
+export interface Permissions {
+  permissions: Array<string>;
 }
 
 export type BreadcrumbItemType = BreadcrumbItem;

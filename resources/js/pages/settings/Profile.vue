@@ -54,7 +54,7 @@ const breadcrumbItems: BreadcrumbItem[] = [
 const page = usePage();
 const user = page.props.auth.user;
 const isSuperAdmin = page.props.auth?.is_superadmin;
-const detail = computed<UserDetail>(() => (user?.user_detail ?? user?.userDetail ?? {}) as UserDetail)
+const detail = computed<UserDetail>(() => (page.props as any).auth?.user?.user_detail as UserDetail)
 </script>
 
 <template>

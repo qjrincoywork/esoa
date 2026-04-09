@@ -2,7 +2,7 @@
 import { ref, watch, computed, h, nextTick, onMounted } from 'vue';
 import { Head, router, usePage } from '@inertiajs/vue3';
 import { createColumnHelper } from '@tanstack/vue-table';
-import { type BreadcrumbItem } from '@/types';
+import { Auth, User, UserDetail, type BreadcrumbItem } from '@/types';
 import AppLayout from '@/layouts/AppLayout.vue';
 import Datatable from '@/components/Datatable.vue';
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,9 @@ type SoasPagination = {
 }
 
 const page = usePage();
+const auth = computed(() => (page.props as any).auth as Auth);
+const user = computed(() => auth.value?.user as User);
+const userDetail = computed(() => user.value?.user_detail as UserDetail);
 const { canCreate, slug, hasPermission } = useModulePermissions();
 
 const {
@@ -528,7 +531,7 @@ watch(
                 </div>
               </div>
 
-              <div v-if="page.props.auth.user?.user_detail?.employee_no || page.props.auth.is_superadmin" class="grid gap-2 md:col-span-1">
+              <div v-if="userDetail?.employee_no || auth?.is_superadmin" class="grid gap-2 md:col-span-1">
                 <Accordion type="single" collapsible>
                   <AccordionItem value="filters">
                     <AccordionTrigger class="cursor-pointer">Filters</AccordionTrigger>
