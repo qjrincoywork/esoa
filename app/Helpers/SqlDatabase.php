@@ -137,6 +137,7 @@ class SqlDatabase
     {
         // Pagination
         $perPage = $params['per_page'] ?? config('vc.default_pages');
+        $selectedCode = $params['selected_code'] ?? null;
         $result = $this->db
             ->table('Accounts')
             ->select('ac_name', 'ac_code', 'ac_ma_code')
@@ -147,8 +148,13 @@ class SqlDatabase
                     $query->where('ac_accttype', '!=', AccountType::HMO);
                 }
             })
-            ->when(isset($params['name']), function ($query) use ($params) {
-                $query->where('ac_name', 'like', '%' . $params['name'] . '%');
+            ->when(isset($params['name']) && $params['name'] !== '', function ($query) use ($params, $selectedCode) {
+                $query->where(function ($nameQuery) use ($params, $selectedCode) {
+                    $nameQuery->where('ac_name', 'like', '%' . $params['name'] . '%');
+                    if (!empty($selectedCode)) {
+                        $nameQuery->orWhere('ac_code', $selectedCode);
+                    }
+                });
             })
             ->where(function ($q) {
                 $q->where('ac_code', 'not like', 'IN%')
@@ -157,6 +163,9 @@ class SqlDatabase
             })
             ->where('ac_status', 'A') // Active accounts only
             ->groupBy('ac_name', 'ac_code', 'ac_ma_code')
+            ->when(!empty($selectedCode), function ($query) use ($selectedCode) {
+                $query->orderByRaw("CASE WHEN ac_code = ? THEN 0 ELSE 1 END", [$selectedCode]);
+            })
             ->orderBy('ac_name');
 
         return $result->paginate($perPage);
@@ -166,6 +175,7 @@ class SqlDatabase
     {
         // Pagination
         $perPage = $params['per_page'] ?? config('vc.default_pages');
+        $selectedRef = $params['selected_ref'] ?? null;
         $result = $this->db
             ->table('Billing as a')
             ->select([
@@ -186,6 +196,20 @@ class SqlDatabase
             ->whereIn('a.bl_workstatus', ['FB', 'PX'])
             // ->where('a.bl_type', 'MEDCOLL')
             ->where('e.ac_code', $params['account_code'])
+            ->when(isset($params['name']) && $params['name'] !== '', function ($query) use ($params, $selectedRef) {
+                $query->where(function ($nameQuery) use ($params, $selectedRef) {
+                    $nameQuery->where('a.bl_refid', 'like', '%' . $params['name'] . '%')
+                        ->orWhere('a.bl_claimnum', 'like', '%' . $params['name'] . '%')
+                        ->orWhere('a.bl_policynum', 'like', '%' . $params['name'] . '%')
+                        ->orWhere('a.bl_name', 'like', '%' . $params['name'] . '%');
+                    if (!empty($selectedRef)) {
+                        $nameQuery->orWhere('a.bl_refid', $selectedRef);
+                    }
+                });
+            })
+            ->when(!empty($selectedRef), function ($query) use ($selectedRef) {
+                $query->orderByRaw("CASE WHEN a.bl_refid = ? THEN 0 ELSE 1 END", [$selectedRef]);
+            })
             ->orderBy('a.bl_dateposted', 'desc')
             ->paginate($perPage);
 
@@ -222,14 +246,23 @@ class SqlDatabase
     {
         // Pagination
         $perPage = $params['per_page'] ?? config('vc.default_pages');
+        $selectedCode = $params['selected_code'] ?? null;
         $result = $this->db
             ->table('Branches')
             ->select('br_branch_name', 'br_ac_code', 'br_code')
             ->when(isset($params['account_code']), function ($query) use ($params) {
                 $query->where('br_ac_code', $params['account_code']);
             })
-            ->when(isset($params['name']), function ($query) use ($params) {
-                $query->where('br_branch_name', 'like', '%' . $params['name'] . '%');
+            ->when(isset($params['name']) && $params['name'] !== '', function ($query) use ($params, $selectedCode) {
+                $query->where(function ($nameQuery) use ($params, $selectedCode) {
+                    $nameQuery->where('br_branch_name', 'like', '%' . $params['name'] . '%');
+                    if (!empty($selectedCode)) {
+                        $nameQuery->orWhere('br_code', $selectedCode);
+                    }
+                });
+            })
+            ->when(!empty($selectedCode), function ($query) use ($selectedCode) {
+                $query->orderByRaw("CASE WHEN br_code = ? THEN 0 ELSE 1 END", [$selectedCode]);
             })
             ->orderBy('br_branch_name');
 

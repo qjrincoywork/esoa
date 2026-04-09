@@ -33,6 +33,7 @@ type Soa = {
   id?: number
   user_id?: number
   soa_number?: string
+  account_type?: string | number
   account_code?: string
   branch_code?: string
   billing_ref?: string
@@ -85,13 +86,10 @@ const account_types = computed<AccountType[]>(() => props.account_types as Accou
 const bill_types = computed<{ value: string | number; name: string }[]>(() => (props.bill_types ?? []) as { value: string | number; name: string }[]);
 const status_types = computed<{ value: string | number; name: string }[]>(() => (props.status_types ?? []) as { value: string | number; name: string }[]);
 const user = computed<UserBasic>(() => props.user as UserBasic)
-const detail = computed<UserDetail>(() => user.value?.user_detail as UserDetail)
 
 // Expose a form ref so parent components can access without document.getElementById
 const savingForm = ref<HTMLFormElement | null>(null)
-const isReadOnly = ref(soa.value?.id ? true : false)
-// Selected account type value (bound to Select) — use string|null to match server values
-const selectedAccountType = ref<string | null>(null)
+const selectedAccountType = ref<string>(soa.value?.account_type != null ? String(soa.value.account_type) : '')
 const accounts = ref<Account[]>([])
 const branches = ref<Branch[]>([])
 const accountPage = ref(1)
@@ -106,32 +104,20 @@ const billingRefsLoadingMore = ref(false)
 const hasMoreAccounts = computed(() => accountPage.value < accountLastPage.value)
 const hasMoreBranches = computed(() => branchPage.value < branchLastPage.value)
 const hasMoreBillingRefs = computed(() => billingRefPage.value < billingRefLastPage.value)
-const isVcEmployee = ref(detail.value?.is_vc_employee != null ? Number(detail.value.is_vc_employee) : 0)
-const userId = ref(user?.value?.id ?? undefined)
-
-// Sync from props when user/detail loads (e.g. edit mode with async data)
-watch(
-  () => detail.value?.is_vc_employee,
-  (val) => {
-    if (val != null) {
-      isVcEmployee.value = Number(val)
-    }
-  },
-  { immediate: true },
-)
-const accountCode = ref(detail.value?.account_code != null ? String(detail.value.account_code) : (soa.value?.account_code ?? ''))
-const branchCode = ref(detail.value?.branch_code != null ? String(detail.value.branch_code) : (soa.value?.branch_code ?? ''))
+const accountCode = ref(soa.value?.account_code ?? '')
+const branchCode = ref(soa.value?.branch_code ?? '')
 const billingRef = ref(soa.value?.billing_ref != null ? String(soa.value.billing_ref) : (soa.value?.billing_ref ?? ''))
 const searchedAccountName = ref('')
 const soaNumber = ref(soa.value?.soa_number ?? '')
-const selectedBillType = ref<string | null>(soa.value?.bill_type != null ? String(soa.value.bill_type) : null)
-const selectedStatus = ref<string | null>(soa.value?.status != null ? String(soa.value?.status) : 1)
+const selectedBillType = ref<string | number>(soa.value?.bill_type ?? '')
+const selectedStatus = ref<string | number>(soa.value?.status ?? '')
 const dueDate = ref(soa.value?.due_date ?? '')
 const periodDateFrom = ref(soa.value?.period_date_from ?? '')
 const periodDateTo = ref(soa.value?.period_date_to ?? '')
 const amount = ref(soa.value?.amount != null ? String(soa.value.amount) : '')
 const searchedBranchName = ref('')
 const searchedBillingRef = ref('')
+const isSyncingFromSoa = ref(false)
 const selectedAccount = computed(() =>
   accounts.value?.find(account => String(account.value) === accountCode.value),
 )
@@ -161,6 +147,7 @@ const searchAccountsByParams = async (name = '', page = 1, append = false) => {
     type: selectedAccountType.value,
     name,
     page,
+    selected_code: accountCode.value || undefined,
   });
 
   if (append) {
@@ -186,6 +173,7 @@ const searchBranchesByParams = async (name = '', page = 1, append = false) => {
     account_code: selectedAccount.value?.value,
     name,
     page,
+    selected_code: branchCode.value || undefined,
   });
   if (append) {
     branches.value = [...(branches.value ?? []), ...result?.data];
@@ -210,6 +198,7 @@ const searchBillingRefsByParams = async (name = '', page = 1, append = false) =>
     account_code: selectedAccount.value?.value,
     name,
     page,
+    selected_ref: billingRef.value || undefined,
   });
 
   if (append) {
@@ -257,8 +246,10 @@ const debouncedGetBillingRefs: (...args: any[]) => void = debounce((evOrName?: a
   void searchBillingRefsByParams(name, 1, false);
 });
 watch([selectedAccountType, searchedAccountName], async () => {
-  accounts.value = [];
-  if (selectedAccountType.value != null) {
+  if (!isSyncingFromSoa.value) {
+    accounts.value = [];
+  }
+  if (selectedAccountType.value) {
     if (searchedAccountName.value.length > 0) {
       debouncedGetAccounts(searchedAccountName.value);
     } else {
@@ -282,9 +273,33 @@ watch([selectedAccount, searchedBranchName, searchedBillingRef], async () => {
   }
 }, { immediate: true })
 
+// Reset dependent fields when switching account type or account
+watch(selectedAccountType, () => {
+  if (isSyncingFromSoa.value) return
+  accountCode.value = ''
+  branchCode.value = ''
+  billingRef.value = ''
+  branches.value = []
+  billing_refs.value = []
+  searchedAccountName.value = ''
+  searchedBranchName.value = ''
+  searchedBillingRef.value = ''
+})
+watch(accountCode, () => {
+  if (isSyncingFromSoa.value) return
+  branchCode.value = ''
+  billingRef.value = ''
+  branches.value = []
+  billing_refs.value = []
+  searchedBranchName.value = ''
+  searchedBillingRef.value = ''
+})
+
 watch(soa, (val: Soa | undefined) => {
   if (!val) return;
+  isSyncingFromSoa.value = true
   if (val.soa_number != null) soaNumber.value = val.soa_number;
+  if (val.account_type != null) selectedAccountType.value = String(val.account_type);
   if (val.bill_type != null) selectedBillType.value = String(val.bill_type);
   if (val.status != null) selectedStatus.value = String(val.status);
   if (val.due_date != null) dueDate.value = val.due_date;
@@ -293,54 +308,29 @@ watch(soa, (val: Soa | undefined) => {
   if (val.amount != null) amount.value = String(val.amount);
   if (val.account_code != null) accountCode.value = String(val.account_code);
   if (val.branch_code != null) branchCode.value = String(val.branch_code);
+  if (val.billing_ref != null) billingRef.value = String(val.billing_ref);
+  isSyncingFromSoa.value = false
 }, { immediate: true })
+
 </script>
 
 <template>
   <form ref="savingForm" class="grid grid-cols-1 md:grid-cols-2 gap-3" enctype="multipart/form-data">
     <div class="md:col-span-2 hidden">
-        <Input
-          type="hidden"
-          class="mt-1 block w-full"
-          name="id"
-          :default-value="soa?.id"
-        />
-        <Input
-          type="hidden"
-          class="mt-1 block w-full"
-          name="user_id"
-          :default-value="user?.id"
-        />
-        <Input
-          id="account_code"
-          type="hidden"
-          class="mt-1 block w-full"
-          name="account_code"
-          :value="accountCode"
-        />
-        <Input
-          id="branch_code"
-          type="hidden"
-          class="mt-1 block w-full"
-          name="branch_code"
-          :value="branchCode"
-        />
-        <Input
-          id="billing_ref"
-          type="hidden"
-          class="mt-1 block w-full"
-          name="billing_ref"
-          :value="billingRef"
-        />
-        <Input type="hidden" name="bill_type" :value="selectedBillType" />
-        <Input type="hidden" name="status" :value="selectedStatus" />
+      <!-- Use native hidden inputs so FormData always reflects latest reactive values -->
+      <input type="hidden" name="id" :value="soa?.id ?? ''" />
+      <input type="hidden" name="account_type" :value="selectedAccountType ?? ''" />
+      <input type="hidden" name="account_code" :value="accountCode ?? ''" />
+      <input type="hidden" name="branch_code" :value="branchCode ?? ''" />
+      <input type="hidden" name="billing_ref" :value="billingRef ?? ''" />
+      <input type="hidden" name="bill_type" :value="String(selectedBillType ?? '')" />
+      <input type="hidden" name="status" :value="String(selectedStatus ?? '')" />
     </div>
     <div class="grid gap-2 md:col-span-1">
       <Label for="account_type">Account Type<span class="text-red-400">*</span></Label>
       <Select
         id="account_type"
         class="mt-1 block w-full"
-        name="account_type"
         v-model="selectedAccountType"
       >
         <SelectTrigger class="w-full">
@@ -422,7 +412,6 @@ watch(soa, (val: Soa | undefined) => {
         v-model="soaNumber"
         autocomplete="off"
         placeholder="SOA Number"
-        :readonly="isReadOnly"
       />
     </div>
 
@@ -459,7 +448,6 @@ watch(soa, (val: Soa | undefined) => {
         class="mt-1 block w-full"
         name="due_date"
         v-model="dueDate"
-        :readonly="isReadOnly"
       />
     </div>
 
@@ -496,7 +484,6 @@ watch(soa, (val: Soa | undefined) => {
         class="mt-1 block w-full"
         name="period_date_from"
         v-model="periodDateFrom"
-        :readonly="isReadOnly"
       />
     </div>
 
@@ -508,7 +495,6 @@ watch(soa, (val: Soa | undefined) => {
         class="mt-1 block w-full"
         name="period_date_to"
         v-model="periodDateTo"
-        :readonly="isReadOnly"
       />
     </div>
 
@@ -522,7 +508,6 @@ watch(soa, (val: Soa | undefined) => {
         name="amount"
         v-model="amount"
         placeholder="0.00"
-        :readonly="isReadOnly"
       />
     </div>
 
@@ -534,7 +519,6 @@ watch(soa, (val: Soa | undefined) => {
         accept=".pdf"
         class="mt-1 block w-full"
         name="file_pdf"
-        :disabled="isReadOnly"
       />
     </div>
 
@@ -546,7 +530,6 @@ watch(soa, (val: Soa | undefined) => {
         accept=".xls,.xlsx"
         class="mt-1 block w-full"
         name="file_xls"
-        :disabled="isReadOnly"
       />
     </div>
   </form>

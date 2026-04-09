@@ -238,6 +238,7 @@ export function useSoas() {
           if (!formApi) return;
 
           const formData = formApi.getFormData();
+          console.log(formData)
           if (!formData) return;
 
           showLoader();

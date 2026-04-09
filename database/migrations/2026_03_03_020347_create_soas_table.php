@@ -15,6 +15,7 @@ return new class extends Migration
             $table->bigIncrements('id');
             $table->bigInteger('user_id');
             $table->string('soa_number');
+            $table->string('account_type');
             $table->string('account_code');
             $table->string('branch_code')->nullable();
             $table->string('billing_ref')->nullable();

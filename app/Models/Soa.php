@@ -21,6 +21,7 @@ class Soa extends Model
     protected $fillable = [
         'user_id',
         'soa_number',
+        'account_type',
         'account_code',
         'branch_code',
         'billing_ref',
@@ -168,10 +169,10 @@ class Soa extends Model
 
     public function saveSoa(array $data) {
         if (isset($data['id'])) {
-            $user = self::find($data['id']);
-            $user->update($data);
+            $soa = self::find($data['id']);
+            $soa->update($data);
         } else {
-            $user = self::create($data);
+            $soa = self::create($data);
         }
     }
 }
