@@ -2,8 +2,11 @@
 
 namespace App\Http\Requests\Soa;
 
+use App\Enums\AccountType;
+use App\Enums\BillType;
 use App\Enums\Server;
-use App\Enums\UntagType;
+use App\Enums\Status;
+use App\Rules\IsDataExists;
 use App\Rules\IsServerDataExists;
 use Illuminate\Validation\Rule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -17,35 +20,93 @@ class UpdateRequest extends FormRequest
      */
     public function rules(): array
     {
-        $this->merge([
-            'amount_due' => str_replace(',', '', $this->amount_due),
-        ]);
         return [
             'id' => [
                 'required',
                 'integer',
-                new IsServerDataExists(Server::SOA, 'Upload', 'up_id'),
+                new IsDataExists('soas'),
             ],
-            'soanum' => [
+            'user_id' => [
+                'required',
+                'integer',
+                new IsDataExists('users'),
+            ],
+            'account_type' => [
                 'required',
                 'string',
-                new IsServerDataExists(Server::SOA, 'Upload', 'up_soanum'),
+                Rule::in(AccountType::getValues()),
             ],
-            // 'untag_type' => [
-            //     'required',
-            //     'integer',
-            //     Rule::in(UntagType::getValues()),
-            // ],
-            // 'reason' => [
-            //     'required_if:untag_type,' . UntagType::OTHERS,
-            //     'nullable',
-            //     'string',
-            //     'max:' . config('vc.default_text_limit'),
-            // ],
-            'amount_due' => [
+            'account_code' => [
+                'required',
+                'string',
+                'max:191',
+                new IsServerDataExists(Server::HMS, 'Accounts', 'ac_code'),
+            ],
+            'branch_code' => [
+                'nullable',
+                'string',
+                'max:191',
+                new IsServerDataExists(Server::HMS, 'Branches', 'br_code'),
+            ],
+            'soa_number' => [
+                'required',
+                'string',
+                'max:191',
+            ],
+            'billing_ref' => [
+                'required',
+                'string',
+                'max:191',
+            ],
+            'bill_type' => [
+                'required',
+                'integer',
+                Rule::in(BillType::getValues()),
+            ],
+            'due_date' => [
+                'required',
+                'date',
+            ],
+            'period_date_from' => [
+                'required',
+                'date',
+            ],
+            'period_date_to' => [
+                'required',
+                'date',
+            ],
+            'status' => [
+                'required',
+                'integer',
+                Rule::in(Status::getValues()),
+            ],
+            'amount' => [
                 'required',
                 'numeric',
-                // 'max:' . config('vc.default_text_limit'),
+            ],
+            'amount_paid' => [
+                'nullable',
+                'numeric',
+            ],
+            'payment_adjustment' => [
+                'nullable',
+                'numeric',
+            ],
+            'balance' => [
+                'nullable',
+                'numeric',
+            ],
+            'file_pdf' => [
+                'nullable',
+                'file',
+                'mimes:pdf',
+                'max:20480' // 2MB (size is in KB)
+            ],
+            'file_xls' => [
+                'nullable',
+                'file',
+                'mimes:xls,xlsx',
+                'max:20480' // 2MB (size is in KB)
             ],
         ];
     }
@@ -58,11 +119,7 @@ class UpdateRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'gender_id.required' => 'The Gender field is required',
-            'civil_status_id.required' => 'The Civil Status field is required',
-            'citizenship_id.required' => 'The Citizenship field is required',
-            'department_id.required' => 'The Department field is required',
-            'position_id.required' => 'The Position field is required',
+            'user_id.required' => 'The user field is required',
         ];
     }
 }

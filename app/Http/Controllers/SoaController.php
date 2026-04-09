@@ -34,15 +34,23 @@ class SoaController extends Controller
     protected $sqlDatabase;
 
     /**
+     * Soa model instance.
+     *
+     * @var Soa
+     */
+    protected $soa;
+
+    /**
      * Constructor
      *
      * @param SqlDatabase $sqlDatabase
-     *
+     * @param Soa $soa
      * @return void
      */
     public function __construct()
     {
         $this->sqlDatabase = SqlDatabase::class;
+        $this->soa = new Soa();
     }
 
     /**
@@ -116,7 +124,7 @@ class SoaController extends Controller
      */
     public function list(ListRequest $request)
     {
-        $soas = (new Soa)->getSoas($request->validated());
+        $soas = $this->soa->getSoas($request->validated());
 
         return Inertia::render('soas/List', [
             'soas' => new CommonResource(SoaResource::collection($soas)),
@@ -211,7 +219,7 @@ class SoaController extends Controller
         DB::beginTransaction();
 
         try {
-            (new Soa())->saveSoa($validated);
+            $this->soa->saveSoa($validated);
 
             // Commit transaction
             DB::commit();
@@ -287,7 +295,7 @@ class SoaController extends Controller
     public function adjustAmount(AdjustAmountRequest $request)
     {
         $validated = $request->validated();
-        $soa = Soa::query()->findOrFail($validated['soa_id']);
+        $soa = $this->soa->findOrFail($validated['soa_id']);
 
         $this->assertUserMayAccessModelSoa($soa);
 
@@ -335,7 +343,7 @@ class SoaController extends Controller
      */
     public function activities(Request $request, int $id)
     {
-        $soa = Soa::query()->findOrFail($id);
+        $soa = $this->soa->findOrFail($id);
 
         $perPage = (int) $request->get('per_page', config('vc.default_pages'));
         $paginator = $soa->soaActivity()
@@ -363,13 +371,13 @@ class SoaController extends Controller
      */
     public function edit(Request $request, int $id)
     {
-        $soa = Soa::query()->findOrFail($id);
+        $soa = $this->soa->findOrFail($id);
         $this->assertUserMayAccessModelSoa($soa);
 
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
-                'soa' => SoaResource::make($soa),
+                'soa' => $soa,
                 'account_types' => AccountType::list(),
                 'bill_types' => BillType::list(),
                 'status_types' => SoaStatus::list(),
@@ -384,13 +392,13 @@ class SoaController extends Controller
     {
         $validated = $request->validated();
 
-        DB::connection(Server::SOA)->beginTransaction();
+        DB::beginTransaction();
 
         try {
-            (new $this->sqlDatabase(Server::SOA))->saveSoa($validated);
+            $this->soa->saveSoa($validated);
 
             // Commit transaction
-            DB::connection(Server::SOA)->commit();
+            DB::commit();
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
@@ -398,7 +406,7 @@ class SoaController extends Controller
             }
         } catch (\Exception $e) {
             // Catch and handle any unexpected errors
-            DB::connection(Server::SOA)->rollBack();
+            DB::rollBack();
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {

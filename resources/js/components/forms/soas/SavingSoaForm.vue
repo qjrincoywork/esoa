@@ -89,9 +89,8 @@ const detail = computed<UserDetail>(() => user.value?.user_detail as UserDetail)
 
 // Expose a form ref so parent components can access without document.getElementById
 const savingForm = ref<HTMLFormElement | null>(null)
-const isReadOnly = ref(soa.value?.id ? true : false)
 // Selected account type value (bound to Select) — use string|null to match server values
-const selectedAccountType = ref<string | null>(null)
+const selectedAccountType = ref<string | null>(soa.value?.account_type ?? '')
 const accounts = ref<Account[]>([])
 const branches = ref<Branch[]>([])
 const accountPage = ref(1)
@@ -119,13 +118,14 @@ watch(
   },
   { immediate: true },
 )
-const accountCode = ref(detail.value?.account_code != null ? String(detail.value.account_code) : (soa.value?.account_code ?? ''))
-const branchCode = ref(detail.value?.branch_code != null ? String(detail.value.branch_code) : (soa.value?.branch_code ?? ''))
+console.log(soa.value)
+const accountCode = ref(soa.value?.account_code ?? '')
+const branchCode = ref(soa.value?.branch_code ?? '')
 const billingRef = ref(soa.value?.billing_ref != null ? String(soa.value.billing_ref) : (soa.value?.billing_ref ?? ''))
 const searchedAccountName = ref('')
 const soaNumber = ref(soa.value?.soa_number ?? '')
-const selectedBillType = ref<string | null>(soa.value?.bill_type != null ? String(soa.value.bill_type) : null)
-const selectedStatus = ref<string | null>(soa.value?.status != null ? String(soa.value?.status) : 1)
+const selectedBillType = ref<string | number>(soa.value?.bill_type ?? '')
+const selectedStatus = ref<string | number>(soa.value?.status ?? '')
 const dueDate = ref(soa.value?.due_date ?? '')
 const periodDateFrom = ref(soa.value?.period_date_from ?? '')
 const periodDateTo = ref(soa.value?.period_date_to ?? '')
@@ -150,6 +150,9 @@ onMounted(() => {
 
 // Fetch accounts by selected type, optional search name, and page (replace or append)
 const searchAccountsByParams = async (name = '', page = 1, append = false) => {
+  console.log(selectedBillType.value)
+  console.log(selectedStatus.value)
+  console.log(selectedAccount.value)
   if (!selectedAccountType.value) {
     accounts.value = [];
     return;
@@ -175,6 +178,9 @@ const searchAccountsByParams = async (name = '', page = 1, append = false) => {
 
 // Fetch branches by selected type, optional search name, and page (replace or append)
 const searchBranchesByParams = async (name = '', page = 1, append = false) => {
+  console.log(selectedBillType.value)
+  console.log(selectedStatus.value)
+  console.log(selectedAccount.value?.value)
   if (!selectedAccount.value?.value) {
     branches.value = [];
     return;
@@ -285,6 +291,7 @@ watch([selectedAccount, searchedBranchName, searchedBillingRef], async () => {
 watch(soa, (val: Soa | undefined) => {
   if (!val) return;
   if (val.soa_number != null) soaNumber.value = val.soa_number;
+  if (val.account_type != null) selectedAccountType.value = String(val.account_type);
   if (val.bill_type != null) selectedBillType.value = String(val.bill_type);
   if (val.status != null) selectedStatus.value = String(val.status);
   if (val.due_date != null) dueDate.value = val.due_date;
@@ -316,24 +323,24 @@ watch(soa, (val: Soa | undefined) => {
           type="hidden"
           class="mt-1 block w-full"
           name="account_code"
-          :value="accountCode"
+          :default-value="accountCode"
         />
         <Input
           id="branch_code"
           type="hidden"
           class="mt-1 block w-full"
           name="branch_code"
-          :value="branchCode"
+          :default-value="branchCode"
         />
         <Input
           id="billing_ref"
           type="hidden"
           class="mt-1 block w-full"
           name="billing_ref"
-          :value="billingRef"
+          :default-value="billingRef"
         />
-        <Input type="hidden" name="bill_type" :value="selectedBillType" />
-        <Input type="hidden" name="status" :value="selectedStatus" />
+        <Input type="hidden" name="bill_type" :default-value="selectedBillType" />
+        <Input type="hidden" name="status" :default-value="selectedStatus" />
     </div>
     <div class="grid gap-2 md:col-span-1">
       <Label for="account_type">Account Type<span class="text-red-400">*</span></Label>
@@ -422,7 +429,6 @@ watch(soa, (val: Soa | undefined) => {
         v-model="soaNumber"
         autocomplete="off"
         placeholder="SOA Number"
-        :readonly="isReadOnly"
       />
     </div>
 
@@ -459,7 +465,6 @@ watch(soa, (val: Soa | undefined) => {
         class="mt-1 block w-full"
         name="due_date"
         v-model="dueDate"
-        :readonly="isReadOnly"
       />
     </div>
 
@@ -496,7 +501,6 @@ watch(soa, (val: Soa | undefined) => {
         class="mt-1 block w-full"
         name="period_date_from"
         v-model="periodDateFrom"
-        :readonly="isReadOnly"
       />
     </div>
 
@@ -508,7 +512,6 @@ watch(soa, (val: Soa | undefined) => {
         class="mt-1 block w-full"
         name="period_date_to"
         v-model="periodDateTo"
-        :readonly="isReadOnly"
       />
     </div>
 
@@ -522,7 +525,6 @@ watch(soa, (val: Soa | undefined) => {
         name="amount"
         v-model="amount"
         placeholder="0.00"
-        :readonly="isReadOnly"
       />
     </div>
 
@@ -534,7 +536,6 @@ watch(soa, (val: Soa | undefined) => {
         accept=".pdf"
         class="mt-1 block w-full"
         name="file_pdf"
-        :disabled="isReadOnly"
       />
     </div>
 
@@ -546,7 +547,6 @@ watch(soa, (val: Soa | undefined) => {
         accept=".xls,.xlsx"
         class="mt-1 block w-full"
         name="file_xls"
-        :disabled="isReadOnly"
       />
     </div>
   </form>

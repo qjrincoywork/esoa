@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Soa;
 
+use App\Enums\AccountType;
 use App\Enums\BillType;
 use App\Enums\Server;
 use App\Enums\Status;
@@ -24,6 +25,11 @@ class CreateRequest extends FormRequest
                 'required',
                 'integer',
                 new IsDataExists('users'),
+            ],
+            'account_type' => [
+                'required',
+                'string',
+                Rule::in(AccountType::getValues()),
             ],
             'account_code' => [
                 'required',
