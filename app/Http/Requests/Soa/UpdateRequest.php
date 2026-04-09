@@ -20,6 +20,8 @@ class UpdateRequest extends FormRequest
      */
     public function rules(): array
     {
+        $this->merge(['user_id' => auth()->user()->id]);
+
         return [
             'id' => [
                 'required',

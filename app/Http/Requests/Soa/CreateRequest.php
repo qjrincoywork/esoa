@@ -20,6 +20,8 @@ class CreateRequest extends FormRequest
      */
     public function rules(): array
     {
+        $this->merge(['user_id' => auth()->user()->id]);
+
         return [
             'user_id' => [
                 'required',
