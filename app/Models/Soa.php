@@ -119,12 +119,12 @@ class Soa extends Model
         $perPage = $params['per_page'] ?? config('vc.default_pages');
 
         $result = self::query()
-            ->tap(fn (Builder $q) => $this->applyListSearchFilters($q, $params))
-            ->when(isset($authUser->userDetail->account_code), function ($query) use ($authUser) {
-                $query->where('account_code', $authUser->userDetail->account_code);
+            ->when($authUser->hasRole('billing_admin'), function ($query)use ($params) {
+                $query->tap(fn (Builder $q) => $this->applyListSearchFilters($q, $params));
             })
-            ->when(isset($authUser->userDetail->branch_code), function ($query) use ($authUser) {
-                $query->where('branch_code', $authUser->userDetail->branch_code);
+            ->when($authUser->hasRole('account_branch_admin'), function ($query)use ($authUser) {
+                $query->where('account_code', $authUser->userDetail->account_code ?? '');
+                $query->where('branch_code', $authUser->userDetail->branch_code ?? '');
             })
             ->orderBy('id', OrderType::DESC);
 

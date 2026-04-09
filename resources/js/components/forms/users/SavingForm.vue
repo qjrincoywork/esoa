@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, defineExpose, watch } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SearchableCombobox } from '@/components/ui/searchable-combobox';
@@ -96,7 +96,7 @@ const citizenships = computed<Citizenship[]>(() => props.citizenships as Citizen
 const departments = computed<Department[]>(() => props.departments as Department[]);
 const positions = computed<Position[]>(() => props.positions as Position[]);
 // const selectedAccountType = ref<string | null>(null)
-const selectedAccountType = ref(detail.value?.account_type != null ? String(detail.value.account_type) : 1)
+const selectedAccountType = ref<string>(detail.value?.account_type != null ? String(detail.value.account_type) : (detail.value?.account_type ?? ''))
 const account_types = computed<AccountType[]>(() => props.account_types as AccountType[]);
 const types = computed<Type[]>(() => props.types as Type[]);
 const accounts = ref<Account[]>([])
@@ -129,6 +129,7 @@ const accountCode = ref(detail.value?.account_code != null ? String(detail.value
 const branchCode = ref(detail.value?.branch_code != null ? String(detail.value.branch_code) : '')
 const searchedAccountName = ref('')
 const searchedBranchName = ref('')
+const isSyncing = ref(false)
 const selectedAccount = computed(() =>
   accounts.value?.find(account => String(account.value) === accountCode.value),
 )
@@ -166,6 +167,7 @@ const searchAccountsByParams = async (name = '', page = 1, append = false) => {
     type: selectedAccountType.value,
     name,
     page,
+    selected_code: accountCode.value || undefined,
   });
 
   if (append) {
@@ -191,6 +193,7 @@ const searchBranchesByParams = async (name = '', page = 1, append = false) => {
     account_code: selectedAccount.value?.value,
     name,
     page,
+    selected_code: branchCode.value || undefined,
   });
 
   if (append) {
@@ -227,6 +230,21 @@ const debouncedGetBranches: (...args: any[]) => void = debounce((evOrName?: any)
   const name = typeof evOrName === 'string' ? evOrName : (evOrName?.target?.value ?? '');
   void searchBranchesByParams(name, 1, false);
 });
+// Reset dependent fields when switching account type or account
+watch(selectedAccountType, () => {
+  if (isSyncing.value) return
+  accountCode.value = ''
+  branchCode.value = ''
+  branches.value = []
+  searchedAccountName.value = ''
+  searchedBranchName.value = ''
+})
+watch(accountCode, () => {
+  if (isSyncing.value) return
+  branchCode.value = ''
+  branches.value = []
+  searchedBranchName.value = ''
+})
 watch([selectedAccountType, searchedAccountName], async () => {
   accounts.value = [];
   if (selectedAccountType.value != null) {
@@ -251,27 +269,10 @@ watch([selectedAccount, searchedBranchName], async () => {
 <template>
   <form ref="userEditForm" class="grid grid-cols-1 md:grid-cols-2 gap-3">
     <div class="md:col-span-2 hidden">
-        <Input
-          id="id"
-          type="hidden"
-          class="mt-1 block w-full"
-          name="id"
-          v-model="userId"
-        />
-        <Input
-          id="account_code"
-          type="hidden"
-          class="mt-1 block w-full"
-          name="account_code"
-          :value="accountCode"
-        />
-        <Input
-          id="branch_code"
-          type="hidden"
-          class="mt-1 block w-full"
-          name="branch_code"
-          :value="branchCode"
-        />
+      <input type="hidden" name="id" :value="userId ?? ''" />
+      <input type="hidden" name="account_type" :value="selectedAccountType ?? ''" />
+      <input type="hidden" name="account_code" :value="accountCode ?? ''" />
+      <input type="hidden" name="branch_code" :value="branchCode ?? ''" />
     </div>
 
     <div class="grid gap-2 md:col-span-1">

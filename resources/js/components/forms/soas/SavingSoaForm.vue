@@ -7,27 +7,10 @@ import { useSoas } from '@/composables/soas';
 import { debounce } from '@/composables/utilities/helper';
 import { Select, SelectTrigger, SelectContent, SelectGroup, SelectLabel, SelectItem, SelectValue } from '@/components/ui/select';
 
-type UserDetail = {
-  is_vc_employee?: number
-  account_code?: string
-  branch_code?: string
-  gender_id?: number
-  civil_status_id?: number
-  citizenship_id?: number
-  department_id?: number
-  position_id?: number
-  first_name?: string
-  middle_name?: string
-  last_name?: string
-  suffix?: string | number
-  birthdate?: string
-  employee_no?: string
-}
 type UserBasic = {
   id?: number
   username?: string | number
   email?: string | number
-  user_detail?: UserDetail
 }
 type Soa = {
   id?: number

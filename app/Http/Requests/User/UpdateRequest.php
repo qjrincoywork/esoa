@@ -22,7 +22,8 @@ class UpdateRequest extends FormRequest
         return [
             'id' => [
                 'required',
-                'integer'
+                'integer',
+                'exists:users,id',
             ],
             'type' => [
                 'required',
@@ -40,6 +41,12 @@ class UpdateRequest extends FormRequest
                 'nullable',
                 'string',
                 //new IsDataExists('accounts'),
+            ],
+            'branch_code' => [
+                'nullable',
+                'string',
+                'max:191'
+                //new IsDataExists('branches'),
             ],
             'gender_id' => [
                 'required',
