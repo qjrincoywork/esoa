@@ -120,6 +120,14 @@ class SoaController extends Controller
     }
 
     /**
+     * Display the dashboard.
+     */
+    public function dashboard(Request $request)
+    {
+        return Inertia::render('soas/Dashboard');
+    }
+
+    /**
      * Display a listing of the resource.
      */
     public function list(ListRequest $request)
