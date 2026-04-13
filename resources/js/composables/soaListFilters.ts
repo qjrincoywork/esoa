@@ -8,6 +8,7 @@ export const SOA_LIST_FILTER_KEYS = [
   'billing_ref',
   'soanum',
   'status',
+  'due_in',
 ] as const
 export type SoaListFilterKey = (typeof SOA_LIST_FILTER_KEYS)[number]
 
@@ -23,6 +24,7 @@ export function emptySoaListFilters(): SoaListFilters {
     billing_ref: '',
     soanum: '',
     status: '',
+    due_in: '',
   }
 }
 
@@ -36,6 +38,7 @@ export function soaListFiltersToParams(filters: SoaListFilters): Record<string, 
   if (t(filters.billing_ref)) params.billing_ref = t(filters.billing_ref)
   if (t(filters.soanum)) params.soanum = t(filters.soanum)
   if (filters.status !== '') params.status = Number(filters.status)
+  if (filters.due_in !== '') params.due_in = Number(filters.due_in)
   return params
 }
 
@@ -54,7 +57,9 @@ export function soaListFiltersFromUrlQuery(url: string): SoaListFilters {
   f.branch_code = get('branch_code')
   f.billing_ref = get('billing_ref')
   f.soanum = get('soanum')
+  f.due_in = get('due_in')
   const st = sp.get('status')
   if (st !== null && st !== '') f.status = st
   return f
 }
+  

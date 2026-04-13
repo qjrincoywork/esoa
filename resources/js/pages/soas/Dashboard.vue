@@ -6,6 +6,15 @@ import PlaceholderPattern from '@/components/PlaceholderPattern.vue';
 import { useModulePermissions } from '@/composables/useModulePermissions';
 import { computed } from 'vue';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 
 const page = usePage();
 const auth = computed(() => (page.props as any).auth as Auth);
@@ -21,36 +30,43 @@ const breadcrumbItems: BreadcrumbItem[] = [
 ];
 const soaAgings = computed(() => (page.props as any).soa_agings?.data as SoaAgingCountResource[]);
 const redirectToSoaList = (dueIn: number) => {
-  router.get(`${slug.value}/list`, { due_in: dueIn });
+  router.get(`/${slug.value}/list`, { due_in: dueIn });
 }
 </script>
 
 <template>
   <AppLayout :breadcrumbs="breadcrumbItems">
-      <Head title="Dashboard" />
+    <Head title="Dashboard" />
 
-      <div class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4">
-        <div class="grid auto-rows-min gap-4 md:grid-cols-3" v-for="soaAging in soaAgings" :key="soaAging">
-          <div class="relative aspect-video overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-sidebar-border"
-            v-if="soaAging.count > 0"
-          >
-            <div class="flex flex-col items-center justify-center">
-              <div class="p-4 cursor-pointer"
-                @click="redirectToSoaList(soaAging.value)"
-              >
-                <h3
-                  class="scroll-m-20 text-2xl font-semibold tracking-tight"
-                  :class="soaAging.color"
-                >
-                  <span>
-                    {{ soaAging.label }}
-                    <Badge>{{ soaAging.count }}</Badge>
-                  </span>
-                </h3>
-              </div>
-            </div>
-          </div>
-        </div>
-    </div>
+      <div class="grid auto-rows-min gap-4 md:grid-cols-3 p-4">
+        <Card 
+          v-for="soaAging in soaAgings.filter(soaAging => soaAging.count > 0)" :key="soaAging"
+        >
+          <CardContent>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger>
+                  <div class="cursor-pointer"
+                    :class="soaAging.color"
+                    @click="redirectToSoaList(soaAging.value)"
+                  >
+                    <div class="flex flex-col items-center justify-center">
+                      <span
+                        class="scroll-m-20 text-2xl font-semibold tracking-tight"
+                      >
+                        {{ soaAging.label }}
+                        <Badge>{{ soaAging.count }}</Badge>
+                      </span>
+                    </div>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Click to view list</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </CardContent>
+        </Card>
+      </div>
   </AppLayout>
 </template>
