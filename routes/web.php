@@ -40,7 +40,7 @@ Route::get('/', function () {
 // });
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', function () {
-        return Inertia::render('Dashboard');
+        return Inertia::render('Home');
     })->name('dashboard');
     // Superadmin-only routes - only admins can access these
     Route::middleware(['role:superadmin'])->group(function () {
@@ -126,6 +126,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware(['check_permissions'])->group(function () {
         //user_dashboard
         Route::prefix('soas')->name('soas.')->controller(SoaController::class)->group(function () {
+            Route::get('/dashboard', 'dashboard')->name('dashboard');
             Route::get('/file_proxy', 'fileProxy')->name('file_proxy');
             Route::get('/', 'index')->name('index');
             Route::get('/list', 'list')->name('list');

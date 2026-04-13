@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Soa;
 
 use App\Enums\AccountType;
+use App\Enums\SoaAging;
 use App\Enums\SoaStatus;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -46,6 +47,11 @@ class ListRequest extends FormRequest
                 'nullable',
                 'integer',
                 Rule::in(SoaStatus::getValues()),
+            ],
+            'due_in' => [
+                'nullable',
+                'integer',
+                Rule::in(SoaAging::getValues()),
             ],
             'per_page' => [
                 'nullable',

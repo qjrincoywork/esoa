@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\AccountType;
 use App\Enums\BillType;
 use App\Enums\Server;
+use App\Enums\SoaAging;
 use App\Enums\SoaAmountOperation;
 use App\Enums\SoaStatus;
 use App\Enums\UntagType;
@@ -16,9 +17,10 @@ use App\Http\Requests\Soa\{AdjustAmountRequest, CreateRequest, FileProxyRequest,
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
-use App\Http\Resources\{BillingRefResource, OldSoaResource, SoaActivityListResource, SoaResource };
+use App\Http\Resources\{BillingRefResource, OldSoaResource, SoaActivityListResource, SoaAgingCountResource, SoaResource };
 use App\Mail\NewSoaUploaded;
 use App\Models\{Account, Citizenship, CivilStatus, Contact, Department, Gender, MainAccount, Position, Soa, Suffix };
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\{ DB, Http, Mail, Storage };
 use Inertia\Inertia;
@@ -116,6 +118,18 @@ class SoaController extends Controller
 
         return Inertia::render('soas/Index', [
             'soas' => new CommonResource(OldSoaResource::collection($soas))
+        ]);
+    }
+
+    /**
+     * Display the dashboard.
+     */
+    public function dashboard(Request $request)
+    {
+        $soaAgingCounts = $this->soa->agingCountsPastDue($request->all());
+
+        return Inertia::render('soas/Dashboard', [
+            'soa_agings' => SoaAgingCountResource::collection($soaAgingCounts),
         ]);
     }
 

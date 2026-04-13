@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Enums\OrderType;
+use App\Enums\SoaAging;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Support\Facades\DB;
@@ -119,12 +121,15 @@ class Soa extends Model
         $perPage = $params['per_page'] ?? config('vc.default_pages');
 
         $result = self::query()
-            ->when($authUser->hasRole('billing_admin'), function ($query)use ($params) {
+            ->when($authUser->hasRole('billing_admin'), function ($query) use ($params) {
                 $query->tap(fn (Builder $q) => $this->applyListSearchFilters($q, $params));
             })
-            ->when($authUser->hasRole('account_branch_admin'), function ($query)use ($authUser) {
+            ->when($authUser->hasRole('account_branch_admin'), function ($query) use ($authUser) {
                 $query->where('account_code', $authUser->userDetail->account_code ?? '');
                 $query->where('branch_code', $authUser->userDetail->branch_code ?? '');
+            })
+            ->when(isset($params['due_in']), function ($query) use ($params) {
+                $query->whereRaw('DATEDIFF(due_date, NOW()) BETWEEN ? AND ?', SoaAging::pastDueDayBucketsRange($params['due_in']));
             })
             ->orderBy('id', OrderType::DESC);
 
@@ -133,6 +138,31 @@ class Soa extends Model
         }
 
         return $result->paginate($perPage);
+    }
+
+    /**
+     * Past-due aging counts keyed by {@see SoaAging} values. Single aggregate query (no per-bucket counts).
+     *
+     * @return array<int, int>
+     */
+    public function agingCountsPastDue(array $params = []): array
+    {
+        $values = SoaAging::getValues();
+        $authUser = auth()->user();
+        if (!$authUser) {
+            return array_fill_keys($values, 0);
+        }
+        $result = [];
+        foreach ($values as $soaAging) {
+            $result[] =[
+                'value' => $soaAging,
+                'count' => self::query()
+                    ->whereRaw('DATEDIFF(due_date, NOW()) BETWEEN ? AND ?', SoaAging::pastDueDayBucketsRange($soaAging))
+                    ->count(),
+            ];
+        }
+
+        return $result;
     }
 
     /**
