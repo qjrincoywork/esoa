@@ -18,8 +18,9 @@ use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
 use App\Http\Resources\{BillingRefResource, OldSoaResource, SoaActivityListResource, SoaAgingCountResource, SoaResource };
+use App\Mail\NewBillingInvoiceUploaded;
 use App\Mail\NewSoaUploaded;
-use App\Models\{Account, Citizenship, CivilStatus, Contact, Department, Gender, MainAccount, Position, Soa, Suffix };
+use App\Models\{Account, Citizenship, CivilStatus, Contact, Department, Gender, MainAccount, Position, Soa, Suffix, UserDetail};
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\{ DB, Http, Mail, Storage };
@@ -202,6 +203,61 @@ class SoaController extends Controller
             $fileSize = $disk->size($file);
         } catch (\Exception $e) {
             throw new \Exception('Unable to determine file size: ' . $e->getMessage());
+        }
+
+        return response()->stream(function () use ($stream) {
+            fpassthru($stream);
+            fclose($stream);
+        }, Response::HTTP_OK, array_filter([
+            'Content-Type' => $mimeType,
+            'Content-Disposition' => sprintf('inline; filename="%s"', $fileName),
+            'Content-Length' => $fileSize,
+        ]));
+    }
+
+    /**
+     * Stream a PDF or Excel file stored on the billing disk for this SOA.
+     */
+    public function streamBillingAttachment(int $id, string $type)
+    {
+        $soa = $this->soa->findOrFail($id);
+        $this->assertUserMayAccessModelSoa($soa);
+
+        $path = match ($type) {
+            'pdf' => $soa->file_pdf,
+            'excel' => $soa->file_xls,
+            default => null,
+        };
+
+        if ($path === null || $path === '') {
+            abort(Response::HTTP_NOT_FOUND);
+        }
+
+        $disk = Storage::disk('billing');
+
+        if (! $disk->exists($path)) {
+            abort(Response::HTTP_NOT_FOUND);
+        }
+
+        $stream = $disk->readStream($path);
+
+        if (! is_resource($stream)) {
+            abort(Response::HTTP_NOT_FOUND);
+        }
+
+        $mimeType = 'application/octet-stream';
+        try {
+            $mimeType = $disk->mimeType($path);
+        } catch (\Exception $e) {
+            // keep default
+        }
+
+        $fileName = basename($path);
+        $fileSize = null;
+        try {
+            $fileSize = $disk->size($path);
+        } catch (\Exception $e) {
+            // omit Content-Length
         }
 
         return response()->stream(function () use ($stream) {
@@ -409,10 +465,66 @@ class SoaController extends Controller
         DB::beginTransaction();
 
         try {
-            $this->soa->saveSoa($validated);
+            if ($request->hasFile('file_pdf')) {
+                $file = $request->file('file_pdf');
+                $filename = $validated['soa_number'] . '_' . date('Ymd') . '.' . $file->getClientOriginalExtension();
+                $directory = $validated['account_code'] . "/" . $validated['branch_code'];
+                $path = $file->storeAs($directory, $filename, 'billing');
+                $validated['file_pdf'] = $path;
+            }
+            if ($request->hasFile('file_xls')) {
+                $file = $request->file('file_xls');
+                $filename = $validated['soa_number'] . '_' . date('Ymd') . '.' . $file->getClientOriginalExtension();
+                $directory = $validated['account_code'] . "/" . $validated['branch_code'];
+                $path = $file->storeAs($directory, $filename, 'billing');
+                $validated['file_xls'] = $path;
+            }
+            $soa = $this->soa->findOrFail($validated['id']);
+
+            $soa->runInTransactionWithActivity(
+                function (Soa $soa) use ($validated) {
+                    $soa->saveSoa($validated);
+                },
+                'update',
+                [
+                    'from' => $soa->toArray(),
+                    'to' => $validated,
+                ],
+                $request->user()
+            );
+
+            $soa->refresh();
 
             // Commit transaction
             DB::commit();
+
+            if (
+                (int) $soa->status === SoaStatus::ENDORSED
+                && $soa->file_pdf !== null
+                && $soa->account_code
+                && $soa->branch_code
+            ) {
+                $branch = (new $this->sqlDatabase(Server::HMS))->getBranch($soa->branch_code);
+                $soa->client_name = $branch?->br_branch_name ?? $soa->branch_code;
+                $soa->contact = config('vc.contact_email');
+                $detail = UserDetail::where('account_code', $soa->account_code)->where('branch_code', $soa->branch_code)->first();
+                $notifyEmail = $detail?->user?->email;
+
+                Mail::to($notifyEmail)->send(new NewBillingInvoiceUploaded($soa));
+
+                $soa->runInTransactionWithActivity(
+                    static fn () => null,
+                    'billing_invoice_email_sent',
+                    [
+                        'to' => [
+                            'soa_number' => $soa->soa_number,
+                            'file_pdf' => $soa->file_pdf,
+                            'notified_email' => $notifyEmail,
+                        ],
+                    ],
+                    $request->user()
+                );
+            }
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {

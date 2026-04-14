@@ -5,6 +5,7 @@ namespace App\Http\Requests\Soa;
 use App\Enums\AccountType;
 use App\Enums\BillType;
 use App\Enums\Server;
+use App\Enums\SoaStatus;
 use App\Enums\Status;
 use App\Rules\IsDataExists;
 use App\Rules\IsServerDataExists;
@@ -80,7 +81,7 @@ class UpdateRequest extends FormRequest
             'status' => [
                 'required',
                 'integer',
-                Rule::in(Status::getValues()),
+                Rule::in(SoaStatus::getValues()),
             ],
             'amount' => [
                 'required',

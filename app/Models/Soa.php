@@ -204,5 +204,7 @@ class Soa extends Model
         } else {
             $soa = self::create($data);
         }
+
+        return $soa;
     }
 }

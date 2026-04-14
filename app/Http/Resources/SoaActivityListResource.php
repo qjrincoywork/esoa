@@ -2,8 +2,12 @@
 
 namespace App\Http\Resources;
 
+use App\Enums\AccountType;
+use App\Enums\BillType;
+use App\Enums\SoaStatus;
 use App\Helpers\CommonHelper;
 use App\Models\SoaActivity;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Str;
@@ -15,6 +19,9 @@ use Illuminate\Support\Str;
  */
 class SoaActivityListResource extends JsonResource
 {
+    /** @var list<string> */
+    private const IGNORED_DIFF_KEYS = ['created_at', 'updated_at', 'deleted_at'];
+
     /**
      * @return array<string, mixed>
      */
@@ -36,8 +43,12 @@ class SoaActivityListResource extends JsonResource
         $event = (string) $this->event;
 
         return match ($event) {
-            'amount_added' => 'Amount added',
-            'amount_deducted' => 'Amount deducted',
+            'amount_added' => 'Added to SOA amount',
+            'amount_deducted' => 'Deducted from SOA amount',
+            'amount_adjusted' => 'SOA amount adjusted',
+            'update' => 'SOA details updated',
+            'billing_invoice_email_sent' => 'Billing invoice notification emailed',
+            'create', 'created', 'store' => 'SOA record created',
             default => Str::headline(str_replace('_', ' ', $event)),
         };
     }
@@ -51,6 +62,7 @@ class SoaActivityListResource extends JsonResource
 
         return match ((string) $this->event) {
             'amount_added', 'amount_deducted' => $this->describeAmountBefore($from),
+            'update' => $this->describeSoaUpdateBefore($from, $this->toArraySafeTo()),
             default => $this->describeGenericSnapshot($from),
         };
     }
@@ -64,8 +76,229 @@ class SoaActivityListResource extends JsonResource
 
         return match ((string) $this->event) {
             'amount_added', 'amount_deducted' => $this->describeAmountAfter($to),
+            'update' => $this->describeSoaUpdateAfter($this->fromArraySafe(), $to),
             default => $this->describeGenericSnapshot($to),
         };
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function fromArraySafe(): array
+    {
+        $from = $this->from;
+
+        return is_array($from) ? $from : [];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function toArraySafeTo(): array
+    {
+        $to = $this->to;
+
+        return is_array($to) ? $to : [];
+    }
+
+    /**
+     * @param  array<string, mixed>  $from
+     * @param  array<string, mixed>  $to
+     */
+    protected function describeSoaUpdateBefore(array $from, array $to): string
+    {
+        $keys = $this->changedFieldKeys($from, $to);
+        if ($keys === []) {
+            return 'No differences found between the previous record and the submitted data.';
+        }
+
+        $parts = [];
+        foreach ($keys as $key) {
+            $old = $from[$key] ?? null;
+            $parts[] = sprintf(
+                '%s was %s',
+                $this->attributeLabel($key),
+                $this->formatAttributeValue($key, $old)
+            );
+        }
+
+        return implode('; ', $parts).'.';
+    }
+
+    /**
+     * @param  array<string, mixed>  $from
+     * @param  array<string, mixed>  $to
+     */
+    protected function describeSoaUpdateAfter(array $from, array $to): string
+    {
+        $keys = $this->changedFieldKeys($from, $to);
+        if ($keys === []) {
+            return 'No differences found between the previous record and the submitted data.';
+        }
+
+        $parts = [];
+        foreach ($keys as $key) {
+            $new = $to[$key] ?? null;
+            $parts[] = sprintf(
+                '%s is now %s',
+                $this->attributeLabel($key),
+                $this->formatAttributeValue($key, $new)
+            );
+        }
+
+        return implode('; ', $parts).'.';
+    }
+
+    /**
+     * Keys present in {@see $to} that differ from {@see $from} (meaningful comparison).
+     *
+     * @param  array<string, mixed>  $from
+     * @param  array<string, mixed>  $to
+     * @return list<string>
+     */
+    protected function changedFieldKeys(array $from, array $to): array
+    {
+        $changed = [];
+        foreach ($to as $key => $newVal) {
+            if (! is_string($key) || $this->isIgnoredDiffKey($key)) {
+                continue;
+            }
+            $oldVal = $from[$key] ?? null;
+            if ($this->valuesMeaningfullyDiffer((string) $key, $oldVal, $newVal)) {
+                $changed[] = $key;
+            }
+        }
+
+        return $changed;
+    }
+
+    protected function isIgnoredDiffKey(string $key): bool
+    {
+        return in_array($key, self::IGNORED_DIFF_KEYS, true);
+    }
+
+    protected function valuesMeaningfullyDiffer(string $key, mixed $old, mixed $new): bool
+    {
+        return $this->canonicalizeForCompare($key, $old) !== $this->canonicalizeForCompare($key, $new);
+    }
+
+    protected function canonicalizeForCompare(string $key, mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+
+        if (in_array($key, ['due_date', 'period_date_from', 'period_date_to'], true)) {
+            try {
+                return Carbon::parse((string) $value)->toDateString();
+            } catch (\Throwable) {
+                return trim((string) $value);
+            }
+        }
+
+        if (in_array($key, ['amount', 'amount_paid', 'payment_adjustment', 'balance'], true) && is_numeric($value)) {
+            return (string) round((float) $value, 2);
+        }
+
+        if (in_array($key, ['file_pdf', 'file_xls'], true) && is_string($value)) {
+            $base = basename(str_replace('\\', '/', $value));
+
+            return $base !== '' ? $base : trim($value);
+        }
+
+        if (is_numeric($value) && in_array($key, ['bill_type', 'status', 'id', 'user_id'], true)) {
+            return (string) (int) $value;
+        }
+
+        return trim((string) $value);
+    }
+
+    protected function attributeLabel(string $key): string
+    {
+        return match ($key) {
+            'soa_number' => 'SOA number',
+            'account_type' => 'Account type',
+            'account_code' => 'Account code',
+            'branch_code' => 'Branch code',
+            'billing_ref' => 'Billing reference',
+            'bill_type' => 'Bill type',
+            'status' => 'Status',
+            'due_date' => 'Due date',
+            'period_date_from' => 'Period start',
+            'period_date_to' => 'Period end',
+            'amount' => 'Amount',
+            'amount_paid' => 'Amount paid',
+            'payment_adjustment' => 'Payment adjustment',
+            'balance' => 'Balance',
+            'file_pdf' => 'PDF file',
+            'file_xls' => 'Excel file',
+            'notified_email' => 'Notification sent to',
+            'user_id' => 'Assigned user',
+            default => Str::headline(str_replace('_', ' ', $key)),
+        };
+    }
+
+    /**
+     * Human-readable value for a single SOA attribute (lists, audit text, generic snapshots).
+     */
+    protected function formatAttributeValue(string $key, mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '(empty)';
+        }
+
+        if (is_bool($value)) {
+            return $value ? 'Yes' : 'No';
+        }
+
+        if (is_array($value)) {
+            if ($value === []) {
+                return '(empty)';
+            }
+
+            $encoded = json_encode($value, JSON_UNESCAPED_UNICODE);
+
+            return $encoded !== false ? $encoded : '(complex value)';
+        }
+
+        if (in_array($key, ['file_pdf', 'file_xls'], true) && is_string($value)) {
+            $base = basename(str_replace('\\', '/', $value));
+
+            return $base !== '' ? $base : $value;
+        }
+
+        if (in_array($key, ['due_date', 'period_date_from', 'period_date_to', 'created_at', 'updated_at', 'deleted_at'], true)) {
+            $formatted = CommonHelper::formatDate((string) $value);
+
+            return $formatted ?? (string) $value;
+        }
+
+        if ($key === 'bill_type' && is_numeric($value)) {
+            $int = (int) $value;
+            if (in_array($int, BillType::getValues(), true)) {
+                return BillType::label($int);
+            }
+        }
+
+        if ($key === 'status' && is_numeric($value)) {
+            $int = (int) $value;
+            if (in_array($int, SoaStatus::getValues(), true)) {
+                return SoaStatus::label($int);
+            }
+        }
+
+        if ($key === 'account_type') {
+            $s = (string) $value;
+            if (in_array($s, AccountType::getValues(), true)) {
+                return AccountType::label($s).' ('.$s.')';
+            }
+        }
+
+        if (($key === 'amount' || str_contains($key, 'amount') || in_array($key, ['payment_adjustment', 'balance'], true)) && is_numeric($value)) {
+            return number_format((float) $value, 2);
+        }
+
+        return (string) $value;
     }
 
     /**
@@ -79,7 +312,7 @@ class SoaActivityListResource extends JsonResource
 
         $formatted = number_format((float) $from['amount'], 2);
 
-        return "Balance before this change: {$formatted}.";
+        return "Balance before this change was {$formatted}.";
     }
 
     /**
@@ -113,15 +346,14 @@ class SoaActivityListResource extends JsonResource
     {
         $segments = [];
         foreach ($data as $key => $value) {
-            $label = Str::headline(str_replace('_', ' ', (string) $key));
+            if (! is_string($key) || $this->isIgnoredDiffKey($key)) {
+                continue;
+            }
+            $label = $this->attributeLabel($key);
             if (is_array($value)) {
-                $segments[] = "{$label}: ".json_encode($value);
-            } elseif (is_bool($value)) {
-                $segments[] = "{$label}: ".($value ? 'Yes' : 'No');
-            } elseif (is_numeric($value) && str_contains((string) $key, 'amount')) {
-                $segments[] = "{$label}: ".number_format((float) $value, 2);
+                $segments[] = "{$label}: ".($this->formatAttributeValue($key, $value));
             } else {
-                $segments[] = "{$label}: ".(string) $value;
+                $segments[] = "{$label}: ".$this->formatAttributeValue($key, $value);
             }
         }
 

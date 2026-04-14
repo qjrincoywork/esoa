@@ -105,6 +105,27 @@ const selectedAccount = computed(() =>
   accounts.value?.find(account => String(account.value) === accountCode.value),
 )
 
+function fileBasename(path: string): string {
+  const normalized = path.replace(/\\/g, '/')
+  const segment = normalized.split('/').pop()
+  return segment || path
+}
+
+/** Existing uploads (native file inputs cannot show these; we show name + link instead). */
+const existingPdf = computed(() => {
+  const id = soa.value?.id
+  const path = soa.value?.file_pdf
+  if (id == null || !path) return null
+  return { name: fileBasename(String(path)), href: `/soas/${id}/attachment/pdf` }
+})
+
+const existingExcel = computed(() => {
+  const id = soa.value?.id
+  const path = soa.value?.file_xls
+  if (id == null || !path) return null
+  return { name: fileBasename(String(path)), href: `/soas/${id}/attachment/excel` }
+})
+
 // Helper to extract FormData from this form (exposed to parent)
 function getFormData(): FormData | null {
   if (!savingForm.value) return null
@@ -496,24 +517,60 @@ watch(soa, (val: Soa | undefined) => {
 
     <div class="grid gap-2 md:col-span-1">
       <Label for="file_pdf">PDF File</Label>
+      <p
+        v-if="existingPdf"
+        class="mt-1 text-xs text-[var(--color-text-muted)]"
+      >
+        Current:
+        <a
+          :href="existingPdf.href"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="font-medium text-[var(--color-text)] underline underline-offset-2 hover:opacity-90"
+        >
+          {{ existingPdf.name }}
+        </a>
+      </p>
       <Input
+        :key="`pdf-${soa?.id ?? 'new'}`"
         id="file_pdf"
         type="file"
         accept=".pdf"
         class="mt-1 block w-full"
         name="file_pdf"
       />
+      <p class="text-xs text-[var(--color-text-muted)]">
+        Optional — upload only if you want to replace the current PDF.
+      </p>
     </div>
 
     <div class="grid gap-2 md:col-span-1">
       <Label for="file_xls">Excel File</Label>
+      <p
+        v-if="existingExcel"
+        class="mt-1 text-xs text-[var(--color-text-muted)]"
+      >
+        Current:
+        <a
+          :href="existingExcel.href"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="font-medium text-[var(--color-text)] underline underline-offset-2 hover:opacity-90"
+        >
+          {{ existingExcel.name }}
+        </a>
+      </p>
       <Input
+        :key="`xls-${soa?.id ?? 'new'}`"
         id="file_xls"
         type="file"
         accept=".xls,.xlsx"
         class="mt-1 block w-full"
         name="file_xls"
       />
+      <p class="text-xs text-[var(--color-text-muted)]">
+        Optional — upload only if you want to replace the current Excel file.
+      </p>
     </div>
   </form>
 </template>
