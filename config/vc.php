@@ -18,4 +18,5 @@ return [
     'default_password' => 'VALUCARE123',
     'contact_email' => 'billingsection@valuecarehealth.com',
     'contact_number' => '+639123456789',
+    'ignored_diff_keys' => ['created_at', 'updated_at', 'deleted_at'],
 ];

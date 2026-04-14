@@ -7,6 +7,7 @@ use App\Enums\BillType;
 use App\Enums\Server;
 use App\Enums\SoaStatus;
 use App\Enums\Status;
+use App\Models\Soa;
 use App\Rules\IsDataExists;
 use App\Rules\IsServerDataExists;
 use Illuminate\Validation\Rule;
@@ -22,6 +23,18 @@ class UpdateRequest extends FormRequest
     public function rules(): array
     {
         $this->merge(['user_id' => auth()->user()->id]);
+        $filePdfRules = [
+            'required_if:status,' . SoaStatus::ENDORSED,
+        ];
+
+        if ($this->hasFile('file_pdf')) {
+            $filePdfRules = [
+                ...$filePdfRules,
+                'file',
+                'mimes:pdf',
+                'max:20480', // 2MB (size is in KB)
+            ];
+        }
 
         return [
             'id' => [
@@ -52,30 +65,30 @@ class UpdateRequest extends FormRequest
                 new IsServerDataExists(Server::HMS, 'Branches', 'br_code'),
             ],
             'soa_number' => [
-                'required',
+                'required_unless:status,' . SoaStatus::ENDORSED,
                 'string',
                 'max:191',
             ],
             'billing_ref' => [
-                'required',
+                'required_unless:status,' . SoaStatus::ENDORSED,
                 'string',
                 'max:191',
             ],
             'bill_type' => [
-                'required',
+                'required_unless:status,' . SoaStatus::ENDORSED,
                 'integer',
                 Rule::in(BillType::getValues()),
             ],
             'due_date' => [
-                'required',
+                'required_unless:status,' . SoaStatus::ENDORSED,
                 'date',
             ],
             'period_date_from' => [
-                'required',
+                'required_unless:status,' . SoaStatus::ENDORSED,
                 'date',
             ],
             'period_date_to' => [
-                'required',
+                'required_unless:status,' . SoaStatus::ENDORSED,
                 'date',
             ],
             'status' => [
@@ -84,7 +97,7 @@ class UpdateRequest extends FormRequest
                 Rule::in(SoaStatus::getValues()),
             ],
             'amount' => [
-                'required',
+                'required_unless:status,' . SoaStatus::ENDORSED,
                 'numeric',
             ],
             'amount_paid' => [
@@ -99,19 +112,32 @@ class UpdateRequest extends FormRequest
                 'nullable',
                 'numeric',
             ],
-            'file_pdf' => [
-                'nullable',
-                'file',
-                'mimes:pdf',
-                'max:20480' // 2MB (size is in KB)
-            ],
+            'file_pdf' => $filePdfRules,
             'file_xls' => [
                 'nullable',
+                'required_without:file_pdf',
                 'file',
                 'mimes:xls,xlsx',
                 'max:20480' // 2MB (size is in KB)
             ],
         ];
+    }
+
+
+    protected function prepareForValidation(): void
+    {
+        if ($this->hasFile('file_pdf')) {
+            return;
+        }
+
+        $existingFilePdf = Soa::whereKey($this->input('id'))->value('file_pdf');
+        if (!$existingFilePdf) {
+            return;
+        }
+
+        $this->merge([
+            'file_pdf' => $existingFilePdf,
+        ]);
     }
 
     /**
@@ -123,6 +149,8 @@ class UpdateRequest extends FormRequest
     {
         return [
             'user_id.required' => 'The user field is required',
+            'file_pdf.required_if' => 'The PDF file field is required',
+            'file_xls.required_without' => 'The XLS file field is required',
         ];
     }
 }

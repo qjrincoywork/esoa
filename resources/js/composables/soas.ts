@@ -399,7 +399,7 @@ export function useSoas() {
       const payload = response.data;
 
       openModal({
-        modalTitle: `View ${soa?.soa_number + ' Files'}`,
+        modalTitle: `View ${soa?.soa_number + ' Records Management Attachments'}`,
         buttonText: 'View',
         component: SoaFileBrowser,
         componentProps: {
@@ -411,6 +411,23 @@ export function useSoas() {
       });
     } catch (error) {
       dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
+    }
+  };
+
+  const billingAttachments = (soa: Soa) => {
+    if (soa?.id == null) {
+      dispatchNotification({ title: 'Error', content: 'Invalid SOA', type: 'error' });
+      return;
+    }
+    const path = `/${slug.value}/${soa.id}/attachment/pdf`;
+    const url = new URL(path, window.location.origin).href;
+    const opened = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!opened) {
+      dispatchNotification({
+        title: 'Error',
+        content: 'Could not open a new tab.',
+        type: 'error',
+      });
     }
   };
 
@@ -598,6 +615,7 @@ export function useSoas() {
     viewSoa,
     createSoa,
     fileList,
+    billingAttachments,
     openSoaFilesPane,
     newSoa,
     deleteSoa,

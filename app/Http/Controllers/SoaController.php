@@ -155,12 +155,12 @@ class SoaController extends Controller
     {
         $billing = (new $this->sqlDatabase(Server::HMS))->getClaimByBillingRef($request->all());
         //http://192.170.11.185/dmis_finance/file/rm/ //EO-2832655-003
-        // $files = Storage::disk('rm')->files('EO-3075098-001'); // 'files' is the sub-directory name
+        // $files = Storage::disk(env('RM_DISK', 'public'))->files('EO-3075098-001'); // 'files' is the sub-directory name
         $files = [];
         if (isset($billing->bl_claimnum)) {
-            $files = Storage::disk('rm')->files($billing->bl_claimnum);
+            $files = Storage::disk(env('RM_DISK', 'public'))->files($billing->bl_claimnum);
         }
-        $files = Storage::disk('rm')->files('EO-2832655-003');
+        // $files = Storage::disk(env('RM_DISK', 'public'))->files('EO-2832655-003');
 
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
@@ -233,7 +233,7 @@ class SoaController extends Controller
             abort(Response::HTTP_NOT_FOUND);
         }
 
-        $disk = Storage::disk('billing');
+        $disk = Storage::disk(env('BILLING_DISK', 'public'));
 
         if (! $disk->exists($path)) {
             abort(Response::HTTP_NOT_FOUND);
@@ -462,77 +462,101 @@ class SoaController extends Controller
     {
         $validated = $request->validated();
 
-        DB::beginTransaction();
-
+        $connection = DB::connection('mysql');
+        $connection->beginTransaction();
         try {
+            $soa = $this->soa->findOrFail($validated['id']);
+            $soaNumber = $validated['soa_number'] ?? $soa->soa_number;
+
+            // Handle PDF upload
             if ($request->hasFile('file_pdf')) {
                 $file = $request->file('file_pdf');
-                $filename = $validated['soa_number'] . '_' . date('Ymd') . '.' . $file->getClientOriginalExtension();
+                $filename = $soaNumber . '_' . date('Y-m-d') . '.' . $file->getClientOriginalExtension();
                 $directory = $validated['account_code'] . "/" . $validated['branch_code'];
-                $path = $file->storeAs($directory, $filename, 'billing');
+
+                $path = $file->storeAs($directory, $filename, env('BILLING_DISK', 'public'));
                 $validated['file_pdf'] = $path;
             }
+
+            // Handle XLS upload
             if ($request->hasFile('file_xls')) {
                 $file = $request->file('file_xls');
-                $filename = $validated['soa_number'] . '_' . date('Ymd') . '.' . $file->getClientOriginalExtension();
+                $filename = $soaNumber . '_' . date('Y-m-d') . '.' . $file->getClientOriginalExtension();
                 $directory = $validated['account_code'] . "/" . $validated['branch_code'];
-                $path = $file->storeAs($directory, $filename, 'billing');
+
+                $path = $file->storeAs($directory, $filename, env('BILLING_DISK', 'public'));
                 $validated['file_xls'] = $path;
             }
-            $soa = $this->soa->findOrFail($validated['id']);
+            $original = collect($soa->getOriginal())->filter(function ($value, $key) {
+                return !in_array($key, config('vc.ignored_diff_keys'));
+            });
 
-            $soa->runInTransactionWithActivity(
-                function (Soa $soa) use ($validated) {
-                    $soa->saveSoa($validated);
-                },
-                'update',
-                [
-                    'from' => $soa->toArray(),
-                    'to' => $validated,
-                ],
-                $request->user()
-            );
+            $soa->update($validated);
 
-            $soa->refresh();
+            $changes = collect($soa->getChanges())->filter(function ($value, $key) {
+                return !in_array($key, config('vc.ignored_diff_keys'));
+            })->toArray();
+            $specifiedOriginal = collect($original)
+                ->only(array_keys($changes))
+                ->toArray();
 
-            // Commit transaction
-            DB::commit();
-
-            if (
-                (int) $soa->status === SoaStatus::ENDORSED
-                && $soa->file_pdf !== null
-                && $soa->account_code
-                && $soa->branch_code
-            ) {
-                $branch = (new $this->sqlDatabase(Server::HMS))->getBranch($soa->branch_code);
-                $soa->client_name = $branch?->br_branch_name ?? $soa->branch_code;
-                $soa->contact = config('vc.contact_email');
-                $detail = UserDetail::where('account_code', $soa->account_code)->where('branch_code', $soa->branch_code)->first();
-                $notifyEmail = $detail?->user?->email;
-
-                Mail::to($notifyEmail)->send(new NewBillingInvoiceUploaded($soa));
-
-                $soa->runInTransactionWithActivity(
-                    static fn () => null,
-                    'billing_invoice_email_sent',
+            if (!empty($changes)) {
+                $soa->recordActivity(
+                    'update',
                     [
-                        'to' => [
-                            'soa_number' => $soa->soa_number,
-                            'file_pdf' => $soa->file_pdf,
-                            'notified_email' => $notifyEmail,
-                        ],
+                        'from' => $specifiedOriginal,
+                        'to' => $changes,
                     ],
                     $request->user()
                 );
-            }
 
-            // Return JSON for AJAX requests (no URL change)
-            if ($request->wantsJson() || $request->ajax()) {
-                return CustomResponse::ok('Soa Updated successfully', Response::HTTP_OK);
+                $soa->refresh();
+
+                // Prepare data BEFORE commit
+                $shouldSendEmail =
+                    (int) $soa->status === SoaStatus::ENDORSED &&
+                    $soa->file_pdf !== null &&
+                    $soa->account_code &&
+                    $soa->branch_code;
+
+                // Commit transaction
+                $connection->commit();
+
+                if ($shouldSendEmail) {
+                    $branch = (new $this->sqlDatabase(Server::HMS))->getBranch($soa->branch_code);
+                    $soa->client_name = $branch?->br_branch_name ?? $soa->branch_code;
+                    $soa->contact = config('vc.contact_email');
+
+                    $detail = UserDetail::where('account_code', $soa->account_code)
+                        ->where('branch_code', $soa->branch_code)
+                        ->first();
+                    if (!$detail) {
+                        throw new \Exception('User detail not found');
+                    }
+                    $notifyEmail = $detail->user->email;
+                    Mail::to($notifyEmail)->send(new NewBillingInvoiceUploaded($soa));
+
+                    $soa->recordActivity(
+                        'billing_invoice_email_sent',
+                        [
+                            'to' => [
+                                'soa_number' => $soa->soa_number,
+                                'file_pdf' => $soa->file_pdf,
+                                'notified_email' => $notifyEmail,
+                            ],
+                        ],
+                        $request->user()
+                    );
+                }
+
+                // Return response
+                if ($request->wantsJson() || $request->ajax()) {
+                    return CustomResponse::ok('Soa Updated successfully', Response::HTTP_OK);
+                }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             // Catch and handle any unexpected errors
-            DB::rollBack();
+            $connection->rollBack();
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {

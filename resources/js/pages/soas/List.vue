@@ -46,6 +46,7 @@ const { canCreate, slug, hasPermission } = useModulePermissions();
 const {
   newSoa,
   fileList,
+  billingAttachments,
   editSoa,
   deleteSoa,
   viewSoa,
@@ -203,6 +204,7 @@ const handlerMap: Record<string, Function> = {
   destroy: deleteSoa,
   manage_file: manageFile,
   file_list: fileList,
+  billing_attachments: billingAttachments,
   untag: untagSoa,
 }
 

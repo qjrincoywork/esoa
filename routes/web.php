@@ -143,7 +143,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/store', 'store')->name('store');
             Route::get('/{id}/edit', 'edit')->name('edit');
             Route::get('/{id}/attachment/{type}', 'streamBillingAttachment')
-                ->name('billing_attachment')
+                ->name('billing_attachments')
                 ->where('type', 'pdf|excel');
             Route::get('/{id}/manage_file', 'manageFile')->name('manage_file');
             Route::get('/{id}/untag', 'untag')->name('untag');
