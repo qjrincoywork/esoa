@@ -15,5 +15,7 @@ return [
 
     'default_pages' => 10,
     'default_text_limit' => 800,
-    'default_password' => 'VALUCARE123'
+    'default_password' => 'VALUCARE123',
+    'contact_email' => 'billingsection@valuecarehealth.com',
+    'contact_number' => '+639123456789',
 ];

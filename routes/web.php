@@ -142,6 +142,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/create', 'create')->name('create');
             Route::post('/store', 'store')->name('store');
             Route::get('/{id}/edit', 'edit')->name('edit');
+            Route::get('/{id}/attachment/{type}', 'streamBillingAttachment')
+                ->name('billing_attachment')
+                ->where('type', 'pdf|excel');
             Route::get('/{id}/manage_file', 'manageFile')->name('manage_file');
             Route::get('/{id}/untag', 'untag')->name('untag');
             Route::post('/recompute_tax', 'recomputeTax')->name('recompute_tax');

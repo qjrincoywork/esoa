@@ -7,14 +7,14 @@ return [
     'greetings' => 'Hello',
     'new_billing_invoice_uploaded' => [
         'subject' => '[eSOA: :soanum] A new Billing Invoice has been uploaded.',
-        'greetings' => 'Dear Valued Customer,',
+        'greetings' => 'Dear :client_name,',
         'line_1' => 'A new Billing Invoice was uploaded to your eSOA Account.',
         'line_2' => 'Your invoice :soanum is now available in the Customer Portal, ready for review and processing. ',
         'line_3' => 'Please be advised that this invoice is considered final. Any amendments will be handled separately and processed within seven (7) calendar days from receipt of request. Any deletion to the masterlist will be processed through the issuance of a Credit Memo (CM), while for any additional member not included in the original billing, a separate invoice will be issued accordingly.',
         'line_4' => 'To ensure uninterrupted service, we encourage you to make payment on or before the invoice due date.',
         'line_5' => 'Thank you for your continued support and trust in Valucare Health.',
-        'line_6' => 'Sincerely,',
-        'line_7' => 'If you have any concerns, please reach out to us at: :contact.',
+        'line_6' => 'If you have any concerns, please reach out to us at: :contact.',
+        'line_7' => 'Sincerely,',
         'line_8' => 'BILLING & COLLECTION DEPARTMENT',
     ],
     'billing_invoice_final_reminder' => [

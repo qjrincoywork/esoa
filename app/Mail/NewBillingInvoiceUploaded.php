@@ -8,6 +8,7 @@ use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
+use App\Models\Soa;
 
 class NewBillingInvoiceUploaded extends Mailable
 {
@@ -23,7 +24,7 @@ class NewBillingInvoiceUploaded extends Mailable
     /**
      * Create a new message instance.
      */
-    public function __construct($soa)
+    public function __construct(Soa $soa)
     {
         $this->soa = $soa;
     }
