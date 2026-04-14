@@ -127,7 +127,7 @@ class SoaController extends Controller
      */
     public function dashboard(Request $request)
     {
-        $soaAgingCounts = $this->soa->agingCountsPastDue($request->all());
+        $soaAgingCounts = $this->soa->agingCountsPastDue();
 
         return Inertia::render('soas/Dashboard', [
             'soa_agings' => SoaAgingCountResource::collection($soaAgingCounts),
@@ -160,7 +160,7 @@ class SoaController extends Controller
         if (isset($billing->bl_claimnum)) {
             $files = Storage::disk('rm')->files($billing->bl_claimnum);
         }
-        // $files = Storage::disk('rm')->files('EO-2832655-003');
+        $files = Storage::disk('rm')->files('EO-2832655-003');
 
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([

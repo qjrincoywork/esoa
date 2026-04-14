@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\OrderType;
 use App\Enums\SoaAging;
+use App\Enums\SoaStatus;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -121,7 +122,7 @@ class Soa extends Model
         $perPage = $params['per_page'] ?? config('vc.default_pages');
 
         $result = self::query()
-            ->when($authUser->hasRole('billing_admin'), function ($query) use ($params) {
+            ->when(!empty($params), function ($query) use ($params) {
                 $query->tap(fn (Builder $q) => $this->applyListSearchFilters($q, $params));
             })
             ->when($authUser->hasRole('account_branch_admin'), function ($query) use ($authUser) {
@@ -145,7 +146,7 @@ class Soa extends Model
      *
      * @return array<int, int>
      */
-    public function agingCountsPastDue(array $params = []): array
+    public function agingCountsPastDue(): array
     {
         $values = SoaAging::getValues();
         $authUser = auth()->user();
@@ -154,10 +155,15 @@ class Soa extends Model
         }
         $result = [];
         foreach ($values as $soaAging) {
-            $result[] =[
+            $result[] = [
                 'value' => $soaAging,
                 'count' => self::query()
+                    ->when($authUser->hasRole('account_branch_admin'), function ($query) use ($authUser) {
+                        $query->where('account_code', $authUser->userDetail->account_code ?? '');
+                        $query->where('branch_code', $authUser->userDetail->branch_code ?? '');
+                    })
                     ->whereRaw('DATEDIFF(due_date, NOW()) BETWEEN ? AND ?', SoaAging::pastDueDayBucketsRange($soaAging))
+                    ->where('status', '!=', SoaStatus::PAID)
                     ->count(),
             ];
         }
@@ -182,16 +188,9 @@ class Soa extends Model
         if (!empty($params['billing_ref'] ?? null)) {
             $query->where('billing_ref', $params['billing_ref']);
         }
-        // if (!empty($params['account_type'] ?? null)) {
-        //     $type = $params['account_type'];
-        //     $query->whereExists(function ($sub) use ($type) {
-        //         $sub->select(DB::raw(1))
-        //             ->from('accounts')
-        //             ->whereColumn('accounts.code', 'soas.account_code')
-        //             ->where('accounts.account_type', $type)
-        //             ->whereNull('accounts.deleted_at');
-        //     });
-        // }
+        if (!empty($params['account_type'] ?? null)) {
+            $query->where('account_type', $params['account_type']);
+        }
         if (array_key_exists('status', $params) && $params['status'] !== null && $params['status'] !== '') {
             $query->where('status', (int) $params['status']);
         }

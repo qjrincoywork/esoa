@@ -39,7 +39,7 @@ const redirectToSoaList = (dueIn: number) => {
     <Head title="Dashboard" />
 
       <div class="grid auto-rows-min gap-4 md:grid-cols-3 p-4">
-        <Card 
+        <Card
           v-for="soaAging in soaAgings.filter(soaAging => soaAging.count > 0)" :key="soaAging"
         >
           <CardContent>
