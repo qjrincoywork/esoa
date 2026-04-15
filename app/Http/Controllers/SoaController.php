@@ -160,7 +160,7 @@ class SoaController extends Controller
         if (isset($billing->bl_claimnum)) {
             $files = Storage::disk(env('RM_DISK', 'public'))->files($billing->bl_claimnum);
         }
-        // $files = Storage::disk(env('RM_DISK', 'public'))->files('EO-2832655-003');
+        $files = Storage::disk(env('RM_DISK', 'public'))->files('EO-2832655-003');
 
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
