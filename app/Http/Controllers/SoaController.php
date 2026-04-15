@@ -17,7 +17,7 @@ use App\Http\Requests\Soa\{AdjustAmountRequest, CreateRequest, FileProxyRequest,
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
-use App\Http\Resources\{BillingRefResource, OldSoaResource, SoaActivityListResource, SoaAgingCountResource, SoaResource };
+use App\Http\Resources\{AccountBranchMemberResource, BillingRefResource, OldSoaResource, SoaActivityListResource, SoaAgingCountResource, SoaResource };
 use App\Mail\NewBillingInvoiceUploaded;
 use App\Mail\NewSoaUploaded;
 use App\Models\{Account, Citizenship, CivilStatus, Contact, Department, Gender, MainAccount, Position, Soa, Suffix, UserDetail};
@@ -135,6 +135,20 @@ class SoaController extends Controller
     }
 
     /**
+     * Display a listing of the account / branch members.
+     */
+    public function accountBranchMembers(Request $request, string $account_code, string $branch_code)
+    {
+        $members = (new $this->sqlDatabase(Server::HMS))->getCardHolderDetailsByParams($request->all());
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'members' => new CommonResource(AccountBranchMemberResource::collection($members)),
+            ]);
+        }
+    }
+
+    /**
      * Display a listing of the resource.
      */
     public function list(ListRequest $request)
@@ -160,7 +174,8 @@ class SoaController extends Controller
         if (isset($billing->bl_claimnum)) {
             $files = Storage::disk(env('RM_DISK', 'public'))->files($billing->bl_claimnum);
         }
-        $files = Storage::disk(env('RM_DISK', 'public'))->files('EO-2832655-003');
+        $files = Storage::disk(env('RM_DISK', 'public'))->files('EO-3083836-011');
+        // $files = Storage::disk(env('RM_DISK', 'public'))->files('EO-2832655-003');
 
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([

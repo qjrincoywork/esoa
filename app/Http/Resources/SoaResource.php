@@ -32,6 +32,8 @@ class SoaResource extends JsonResource
             'period_date_from' => $this->period_date_from,
             'period_date_to' => $this->period_date_to,
             'period_coverage' => Str::upper(CommonHelper::formatDate($this->period_date_from) . ' TO ' . CommonHelper::formatDate($this->period_date_to)),
+            'account_code' => $this->account_code,
+            'branch_code' => $this->branch_code,
             'account_name' => CommonHelper::convertStringEncoding($this->getAccountName($this->account_code)),
             'branch_name' => CommonHelper::convertStringEncoding($this->getBranchName($this->branch_code)),
             'amount' => number_format($this->amount, 2),

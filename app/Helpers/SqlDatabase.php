@@ -3,6 +3,7 @@
 namespace App\Helpers;
 
 use App\Enums\AccountType;
+use App\Enums\OrderType;
 use Illuminate\Support\Facades\DB;
 
 class SqlDatabase
@@ -232,6 +233,56 @@ class SqlDatabase
             ->where('a.bl_refid', $params['billing_ref'])
             ->orderBy('a.bl_dateposted', 'desc')
             ->first();
+
+        return $result;
+    }
+
+    public function getCardHolderDetailsByParams($params)
+    {
+        // Pagination
+        $perPage = $params['per_page'] ?? config('vc.default_pages');
+        $result = $this->db
+            ->table('CHOLDERS as c')
+            ->select([
+                'b.bl_claimnum',
+                'b.bl_policynum',
+                'c.ch_id',
+                'c.ch_policynum',
+                'c.ch_accountid',
+                'c.ch_branch_code',
+                'c.ch_firstname',
+                'c.ch_lastname',
+                'c.ch_middlename',
+                'c.ch_suffix',
+            ])
+            ->leftJoin('Billing as b', 'c.ch_policynum', '=', 'b.bl_policynum')
+            ->when(!empty($params['claimnum']), function ($query) use ($params) {
+                $query->where('b.bl_claimnum', $params['claimnum']);
+            })
+            ->when(!empty($params['policynum']), function ($query) use ($params) {
+                $query->where('c.ch_policynum', $params['policynum']);
+            })
+            ->when(!empty($params['account_code']), function ($query) use ($params) {
+                $query->where('c.ch_accountid', $params['account_code'] ?? '');
+            })
+            ->when(!empty($params['branch_code']), function ($query) use ($params) {
+                $query->where('c.ch_branch_code', $params['branch_code'] ?? '');
+            })
+            ->when(!empty($params['firstname']), function ($query) use ($params) {
+                $query->where('c.ch_firstname', $params['firstname']);
+            })
+            ->when(!empty($params['lastname']), function ($query) use ($params) {
+                $query->where('c.ch_lastname', $params['lastname']);
+            })
+            ->when(!empty($params['middlename']), function ($query) use ($params) {
+                $query->where('c.ch_middlename', $params['middlename']);
+            })
+            ->where('c.ch_lapsed', '!=', 'C')
+            // ->where(function ($query) {
+            //     $query->where('c.ch_expirydate', '>', now())
+            //           ->orWhereNull('c.ch_expirydate');
+            // })
+            ->paginate($perPage);
 
         return $result;
     }

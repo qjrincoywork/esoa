@@ -145,6 +145,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/{id}/attachment/{type}', 'streamBillingAttachment')
                 ->name('billing_attachments')
                 ->where('type', 'pdf|excel');
+            Route::get('/{account_code}/{branch_code}/members', 'accountBranchMembers')->name('account_branch_members');
             Route::get('/{id}/manage_file', 'manageFile')->name('manage_file');
             Route::get('/{id}/untag', 'untag')->name('untag');
             Route::post('/recompute_tax', 'recomputeTax')->name('recompute_tax');
