@@ -61,7 +61,6 @@ const localSoa = ref<Soa>({})
 watch(
   () => props.soa,
   (p) => {
-    console.log('soa', p);
     localSoa.value = { ...(p as Soa) }
   },
   { immediate: true, deep: true },
@@ -145,7 +144,8 @@ const activeTab = ref('details')
             <AccountBranchMembers
               v-if="activeTab === 'members'"
               :account_code="localSoa.account_code ?? null"
-              :branch_code="localSoa.branch_code ?? null" />
+              :branch_code="localSoa.branch_code ?? null"
+              :soa="localSoa" />
           </CardContent>
         </Card>
       </TabsContent>

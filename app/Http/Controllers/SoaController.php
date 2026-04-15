@@ -139,7 +139,11 @@ class SoaController extends Controller
      */
     public function accountBranchMembers(Request $request, string $account_code, string $branch_code)
     {
-        $members = (new $this->sqlDatabase(Server::HMS))->getCardHolderDetailsByParams($request->all());
+        $members = (new $this->sqlDatabase(Server::HMS))->getCardHolderDetailsByParams(
+            $request->all(),
+            $account_code,
+            $branch_code
+        );
 
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([

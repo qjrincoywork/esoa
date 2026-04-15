@@ -237,7 +237,7 @@ class SqlDatabase
         return $result;
     }
 
-    public function getCardHolderDetailsByParams($params)
+    public function getCardHolderDetailsByParams($params, $account_code, $branch_code)
     {
         // Pagination
         $perPage = $params['per_page'] ?? config('vc.default_pages');
@@ -256,17 +256,17 @@ class SqlDatabase
                 'c.ch_suffix',
             ])
             ->leftJoin('Billing as b', 'c.ch_policynum', '=', 'b.bl_policynum')
+            ->when(!empty($account_code), function ($query) use ($account_code) {
+                $query->where('c.ch_accountid', $account_code);
+            })
+            ->when(!empty($branch_code), function ($query) use ($branch_code) {
+                $query->where('c.ch_branch_code', $branch_code);
+            })
             ->when(!empty($params['claimnum']), function ($query) use ($params) {
                 $query->where('b.bl_claimnum', $params['claimnum']);
             })
             ->when(!empty($params['policynum']), function ($query) use ($params) {
                 $query->where('c.ch_policynum', $params['policynum']);
-            })
-            ->when(!empty($params['account_code']), function ($query) use ($params) {
-                $query->where('c.ch_accountid', $params['account_code'] ?? '');
-            })
-            ->when(!empty($params['branch_code']), function ($query) use ($params) {
-                $query->where('c.ch_branch_code', $params['branch_code'] ?? '');
             })
             ->when(!empty($params['firstname']), function ($query) use ($params) {
                 $query->where('c.ch_firstname', $params['firstname']);
