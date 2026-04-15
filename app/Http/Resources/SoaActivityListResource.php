@@ -19,9 +19,6 @@ use Illuminate\Support\Str;
  */
 class SoaActivityListResource extends JsonResource
 {
-    /** @var list<string> */
-    private const IGNORED_DIFF_KEYS = ['created_at', 'updated_at', 'deleted_at'];
-
     /**
      * @return array<string, mixed>
      */
@@ -174,7 +171,7 @@ class SoaActivityListResource extends JsonResource
 
     protected function isIgnoredDiffKey(string $key): bool
     {
-        return in_array($key, self::IGNORED_DIFF_KEYS, true);
+        return in_array($key, config('vc.ignored_diff_keys'), true);
     }
 
     protected function valuesMeaningfullyDiffer(string $key, mixed $old, mixed $new): bool

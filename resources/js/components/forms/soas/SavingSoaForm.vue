@@ -101,6 +101,7 @@ const amount = ref(soa.value?.amount != null ? String(soa.value.amount) : '')
 const searchedBranchName = ref('')
 const searchedBillingRef = ref('')
 const isSyncingFromSoa = ref(false)
+const isEndorsed = computed(() => soa.value?.status == 2)
 const selectedAccount = computed(() =>
   accounts.value?.find(account => String(account.value) === accountCode.value),
 )
@@ -330,7 +331,7 @@ watch(soa, (val: Soa | undefined) => {
       <input type="hidden" name="bill_type" :value="String(selectedBillType ?? '')" />
       <input type="hidden" name="status" :value="String(selectedStatus ?? '')" />
     </div>
-    <div class="grid gap-2 md:col-span-1">
+    <div v-if="!isEndorsed" class="grid gap-2 md:col-span-1">
       <Label for="account_type">Account Type<span class="text-red-400">*</span></Label>
       <Select
         id="account_type"
@@ -355,7 +356,7 @@ watch(soa, (val: Soa | undefined) => {
       </Select>
     </div>
 
-    <div class="md:col-span-1">
+    <div v-if="!isEndorsed" class="md:col-span-1">
       <SearchableCombobox
         id="account"
         label="Account"
@@ -373,7 +374,7 @@ watch(soa, (val: Soa | undefined) => {
       />
     </div>
 
-    <div class="md:col-span-1">
+    <div v-if="!isEndorsed" class="md:col-span-1">
       <SearchableCombobox
         id="branch"
         label="Branch"
@@ -390,7 +391,7 @@ watch(soa, (val: Soa | undefined) => {
       />
     </div>
 
-    <div class="md:col-span-1">
+    <div v-if="!isEndorsed" class="md:col-span-1">
       <SearchableCombobox
         id="billing_ref"
         label="Billing Ref"
@@ -407,7 +408,7 @@ watch(soa, (val: Soa | undefined) => {
       />
     </div>
 
-    <div class="grid gap-2 md:col-span-1">
+    <div v-if="!isEndorsed" class="grid gap-2 md:col-span-1">
       <Label for="soa_number">SOA Number<span class="text-red-400">*</span></Label>
       <Input
         id="soa_number"
@@ -419,7 +420,7 @@ watch(soa, (val: Soa | undefined) => {
       />
     </div>
 
-    <div class="grid gap-2 md:col-span-1">
+    <div v-if="!isEndorsed" class="grid gap-2 md:col-span-1">
       <Label for="bill_type">Bill Type<span class="text-red-400">*</span></Label>
       <Select
         id="bill_type"
@@ -444,7 +445,7 @@ watch(soa, (val: Soa | undefined) => {
       </Select>
     </div>
 
-    <div class="grid gap-2 md:col-span-1">
+    <div v-if="!isEndorsed" class="grid gap-2 md:col-span-1">
       <Label for="due_date">Due Date<span class="text-red-400">*</span></Label>
       <Input
         id="due_date"
@@ -480,7 +481,7 @@ watch(soa, (val: Soa | undefined) => {
       </Select>
     </div>
 
-    <div class="grid gap-2 md:col-span-1">
+    <div v-if="!isEndorsed" class="grid gap-2 md:col-span-1">
       <Label for="period_date_from">Period Date From</Label>
       <Input
         id="period_date_from"
@@ -491,7 +492,7 @@ watch(soa, (val: Soa | undefined) => {
       />
     </div>
 
-    <div class="grid gap-2 md:col-span-1">
+    <div v-if="!isEndorsed" class="grid gap-2 md:col-span-1">
       <Label for="period_date_to">Period Date To</Label>
       <Input
         id="period_date_to"
@@ -502,7 +503,7 @@ watch(soa, (val: Soa | undefined) => {
       />
     </div>
 
-    <div class="grid gap-2 md:col-span-1">
+    <div v-if="!isEndorsed" class="grid gap-2 md:col-span-1">
       <Label for="amount">Amount<span class="text-red-400">*</span></Label>
       <Input
         id="amount"
@@ -539,9 +540,6 @@ watch(soa, (val: Soa | undefined) => {
         class="mt-1 block w-full"
         name="file_pdf"
       />
-      <p class="text-xs text-[var(--color-text-muted)]">
-        Optional — upload only if you want to replace the current PDF.
-      </p>
     </div>
 
     <div class="grid gap-2 md:col-span-1">
@@ -568,9 +566,6 @@ watch(soa, (val: Soa | undefined) => {
         class="mt-1 block w-full"
         name="file_xls"
       />
-      <p class="text-xs text-[var(--color-text-muted)]">
-        Optional — upload only if you want to replace the current Excel file.
-      </p>
     </div>
   </form>
 </template>
