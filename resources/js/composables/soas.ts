@@ -1,7 +1,6 @@
 import { useModal } from '@/composables/useModal';
 import { useAjax } from '@/composables/useAjax';
 import DeleteForm from '@/components/forms/soas/DeleteForm.vue';
-import SavingForm from '@/components/forms/soas/SavingForm.vue';
 import SavingSoaForm from '@/components/forms/soas/SavingSoaForm.vue';
 import ViewForm from '@/components/forms/soas/ViewForm.vue';
 import UntagForm from '@/components/forms/soas/UntagForm.vue';
@@ -243,65 +242,6 @@ export function useSoas() {
           showLoader();
           try {
             const response = await post(`/${slug.value}/update`, formData);
-
-            if (!response.ok) {
-              //To be Updated the showing of validation errors in the form
-              dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
-            } else {
-              dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
-              closeModal();
-              // Refresh current page to update datatable props
-              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
-            }
-          } catch (err) {
-            dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
-          } finally {
-            hideLoader();
-          }
-        }
-      });
-    } catch (error) {
-      dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
-    }
-  };
-
-  const createSoa = async () => {
-    try {
-      // Make AJAX request without navigation using reusable composable
-      const response = await get<{
-        account_types: Array<{ value: number | string; name: string }>;
-      }>(
-        `/${slug.value}/create`
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch data');
-      }
-
-      const payload = response.data;
-
-      if (!payload) return;
-
-      openModal({
-        modalTitle: `Create Soa`,
-        buttonText: 'Save',
-        component: SavingForm,
-        componentProps: {
-          account_types: payload.account_types,
-          onReady: (api: { getFormData: () => FormData | null }) => {
-            formApi = api
-          }
-        },
-        size: 'xl4',
-        onSubmit: async () => {
-          if (!formApi) return;
-
-          const formData = formApi.getFormData();
-          if (!formData) return;
-
-          showLoader();
-          try {
-            const response = await post(`/${slug.value}/store`, formData);
 
             if (!response.ok) {
               //To be Updated the showing of validation errors in the form
@@ -613,7 +553,6 @@ export function useSoas() {
   return {
     editSoa,
     viewSoa,
-    createSoa,
     fileList,
     billingAttachments,
     openSoaFilesPane,
