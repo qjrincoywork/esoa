@@ -1,4 +1,5 @@
 import { useModal } from '@/composables/useModal';
+import { usePane } from '@/composables/usePane';
 import { useAjax } from '@/composables/useAjax';
 import DeleteForm from '@/components/forms/soas/DeleteForm.vue';
 import SavingSoaForm from '@/components/forms/soas/SavingSoaForm.vue';
@@ -58,6 +59,7 @@ export function useSoas() {
   const page = usePage();
   const { slug } = useModulePermissions();
   const { openModal, closeModal } = useModal();
+  const { openPane, closePane } = usePane();
   const { get, post } = useAjax();
   const authUser = (page.props as { auth?: { user?: { id?: number; user_detail?: unknown } } }).auth?.user;
 
@@ -328,27 +330,36 @@ export function useSoas() {
     }
   };
 
-  const fileList = async (soa: Soa) => {
+  const fileList = async (soa: Soa, item: any) => {
     try {
-      const response = await get(`/${slug.value}/file_list`, soa);
+      const params = {
+        soa_id: soa.id,
+        billing_ref: soa.billing_ref,
+        claimnum: item.claimnum,
+        policynum: item.policynum,
+      };
+      const response = await get(`/${slug.value}/file_list`, params);
 
       if (!response.ok) {
         throw new Error('Failed to fetch data');
       }
 
       const payload = response.data;
-
-      openModal({
-        modalTitle: `View ${soa?.soa_number + ' Records Management Attachments'}`,
-        buttonText: 'View',
+      // openModal({
+      //   modalTitle: `Records Management Attachments`,
+      //   buttonText: 'Close',
+      //   component: SoaFileBrowser,
+      //   componentProps: { soa: soa, files: payload.files ?? [] },
+      //   size: 'lg',
+      //   hasSubmitButton: false,
+      // });
+      openPane({
+        title: `Records Management Attachments`,
+        side: 'top',
         component: SoaFileBrowser,
-        componentProps: {
-          soa: soa,
-          files: payload.files,
-        },
-        size: 'lg',
-        hasSubmitButton: false,
+        componentProps: { soa: soa, files: payload.files ?? [] },
       });
+      console.log(payload);
     } catch (error) {
       dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
     }

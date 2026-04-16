@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch, computed } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { createColumnHelper } from '@tanstack/vue-table';
 import Datatable from '@/components/Datatable.vue';
 import { useAjax } from '@/composables/useAjax';
@@ -10,7 +10,6 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { createActionColumn } from '@/composables/datatable/datatableColumns';
 import { useSoas } from '@/composables/soas';
-import { usePage } from '@inertiajs/vue3';
 
 type MemberDetail = {
   id?: number;
@@ -37,7 +36,6 @@ const props = defineProps<{
 }>();
 
 const { get } = useAjax();
-const page = usePage();
 const { slug, hasPermission } = useModulePermissions();
 const { fileList } = useSoas();
 const loading = ref(false);
@@ -52,7 +50,7 @@ const pagination = ref({
 const searchField = ref<MemberSearchField>('policynum');
 const searchText = ref('');
 const filtersActive = computed(() => searchText.value.trim().length > 0);
-const filterDebounceMs = 500;
+const filterDebounceMs = 1000;
 const filterWatchTimeout = ref<number | null>(null);
 
 watch(
@@ -79,41 +77,41 @@ const baseColumns = [
   columnHelper.accessor('policynum', {
     id: 'policynum',
     header: 'Policy Number',
-    cell: ({ row, getValue }) => getValue() || '—',
+    cell: ({ getValue }) => getValue() || '—',
   }),
   columnHelper.accessor('lastname', {
     id: 'lastname',
     header: 'Last Name',
-    cell: ({ row, getValue }) => getValue() || '—',
+    cell: ({ getValue }) => getValue() || '—',
   }),
   columnHelper.accessor('firstname', {
     id: 'firstname',
     header: 'First Name',
-    cell: ({ row, getValue }) => getValue() || '—',
+    cell: ({ getValue }) => getValue() || '—',
   }),
   columnHelper.accessor('middlename', {
     id: 'middlename',
     header: 'Middle Name',
-    cell: ({ row, getValue }) => getValue() || '—',
+    cell: ({ getValue }) => getValue() || '—',
   }),
 ];
 
-const handlerMap: Record<string, () => void> = {
-  file_list: () => {
-    if (!props.soa) return;
-    fileList(props.soa);
-  },
-};
+const canViewFileList = computed(() => hasPermission(`${slug.value}.file_list`));
 
 const columns = computed(() => {
-  const rawModules = (page.props as { sub_modules?: { slug: string }[] }).sub_modules ?? [];
-  const subModules = rawModules
-    .filter((m) => hasPermission(m.slug))
-    .filter((m) => m.slug.split('.')[1] === 'file_list')
-    .map((m) => ({
-      ...m,
-      handler: handlerMap[m.slug.split('.')[1]] ?? (() => undefined),
-    }));
+  if (!canViewFileList.value) {
+    return baseColumns;
+  }
+
+  const subModules = [
+    {
+      slug: `${slug.value}.file_list`,
+      name: 'Files',
+      icon: 'FolderOpen',
+      color: 'blue',
+      handler: (item: any) => fileList(props.soa as any, item),
+    },
+  ];
 
   return subModules.length ? [...baseColumns, createActionColumn(subModules as any)] : baseColumns;
 });
@@ -207,8 +205,6 @@ watch(
   },
   { immediate: true }
 );
-
-onMounted(fetchMembers);
 </script>
 
 <template>

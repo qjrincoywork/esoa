@@ -27,7 +27,7 @@ const styles = {
     rowSelected: 'bg-[var(--selection-color-light)] dark:bg-[var(--selection-color-dark)]',
     focusRing: 'focus:outline-none focus:ring-2 focus:ring-opacity-50',
     dropdown:
-        'absolute right-0 z-10 mt-2 w-48 origin-top-right rounded-md bg-[var(--color-surface)] shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none'
+        'absolute right-0 mt-2 w-48 origin-top-right rounded-md bg-[var(--color-surface)] shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none'
 }
 
 const icons = {

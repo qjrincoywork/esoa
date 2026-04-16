@@ -13,7 +13,7 @@ use App\Helpers\CommonHelper;
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Soa\{AdjustAmountRequest, CreateRequest, FileProxyRequest, ListRequest, RecomputeTaxRequest, UpdateRequest, UpdateTagRequest };
+use App\Http\Requests\Soa\{AdjustAmountRequest, CreateRequest, FileListRequest, FileProxyRequest, ListRequest, RecomputeTaxRequest, UpdateRequest, UpdateTagRequest };
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
@@ -169,17 +169,17 @@ class SoaController extends Controller
     /**
      * Display a file listing of the resource.
      */
-    public function fileList(Soa $soa, Request $request)
+    public function fileList(FileListRequest $request)
     {
-        $billing = (new $this->sqlDatabase(Server::HMS))->getClaimByBillingRef($request->all());
+        $validated = $request->validated();
         //http://192.170.11.185/dmis_finance/file/rm/ //EO-2832655-003
         // $files = Storage::disk(env('RM_DISK', 'public'))->files('EO-3075098-001'); // 'files' is the sub-directory name
         $files = [];
-        if (isset($billing->bl_claimnum)) {
-            $files = Storage::disk(env('RM_DISK', 'public'))->files($billing->bl_claimnum);
+        if (isset($validated['claimnum'])) {
+            $files = Storage::disk(env('RM_DISK', 'public'))->files($validated['claimnum']);
         }
-        $files = Storage::disk(env('RM_DISK', 'public'))->files('EO-3083836-011');
         // $files = Storage::disk(env('RM_DISK', 'public'))->files('EO-2832655-003');
+        $files = Storage::disk(env('RM_DISK', 'public'))->files('EO-2832623-033');
 
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([

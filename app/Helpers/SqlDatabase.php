@@ -194,15 +194,15 @@ class SqlDatabase
             ->leftJoin('Accounts as e', function ($join) {
                 $join->on(DB::raw('SUBSTRING(a.bl_policynum,1,11)'), '=', 'e.ac_code');
             })
-            ->whereIn('a.bl_workstatus', ['FB', 'PX'])
+            // ->whereIn('a.bl_workstatus', ['FB', 'PX'])
             // ->where('a.bl_type', 'MEDCOLL')
             ->where('e.ac_code', $params['account_code'])
             ->when(isset($params['name']) && $params['name'] !== '', function ($query) use ($params, $selectedRef) {
                 $query->where(function ($nameQuery) use ($params, $selectedRef) {
-                    $nameQuery->where('a.bl_refid', 'like', '%' . $params['name'] . '%')
-                        ->orWhere('a.bl_claimnum', 'like', '%' . $params['name'] . '%')
-                        ->orWhere('a.bl_policynum', 'like', '%' . $params['name'] . '%')
-                        ->orWhere('a.bl_name', 'like', '%' . $params['name'] . '%');
+                    $nameQuery->where('a.bl_refid', 'like', '%' . $params['name'] . '%');
+                        // ->orWhere('a.bl_claimnum', 'like', '%' . $params['name'] . '%')
+                        // ->orWhere('a.bl_policynum', 'like', '%' . $params['name'] . '%')
+                        // ->orWhere('a.bl_name', 'like', '%' . $params['name'] . '%');
                     if (!empty($selectedRef)) {
                         $nameQuery->orWhere('a.bl_refid', $selectedRef);
                     }
