@@ -133,7 +133,7 @@ function onLoadMore() {
             :placeholder="searchPlaceholder"
           />
           <CommandList>
-            <CommandEmpty>{{ emptyText }}</CommandEmpty>
+            <CommandEmpty v-if="!items.length">{{ emptyText }}</CommandEmpty>
             <CommandGroup>
               <CommandItem
                 v-for="item in items"
