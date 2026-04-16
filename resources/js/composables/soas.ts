@@ -6,7 +6,7 @@ import SavingSoaForm from '@/components/forms/soas/SavingSoaForm.vue';
 import ViewForm from '@/components/forms/soas/ViewForm.vue';
 import UntagForm from '@/components/forms/soas/UntagForm.vue';
 import ManageFileForm from '@/components/forms/soas/ManageFileForm.vue';
-import { ref, shallowRef, type Component, type Ref } from 'vue';
+import { ref, shallowRef, toRef, type Component, type Ref } from 'vue';
 let formApi: { getFormData: () => FormData | null } | null = null;
 
 /** Client-side overlays for list rows until the next Inertia `soas` refresh (module singleton). */
@@ -59,39 +59,31 @@ export function useSoas() {
   const page = usePage();
   const { slug } = useModulePermissions();
   const { openModal, closeModal } = useModal();
-  const { openPane, closePane } = usePane();
+  const {
+    openPane,
+    closePane,
+    setPaneLoading,
+    setPaneError,
+    setPaneContent,
+    rightPane,
+    topPane,
+  } = usePane();
   const { get, post } = useAjax();
   const authUser = (page.props as { auth?: { user?: { id?: number; user_detail?: unknown } } }).auth?.user;
 
-  // Right pane (drawer) state for dynamic content.
-  const rightPaneVisible = ref(false);
-  const rightPaneTitle = ref('');
-  const rightPaneLoading = ref(false);
-  const rightPaneError = ref<string | null>(null);
-  const rightPaneContentComponent = shallowRef<Component | null>(null);
-  const rightPaneComponentProps = ref<Record<string, any>>({});
+  const rightPaneVisible = toRef(rightPane, 'open');
+  const rightPaneTitle = toRef(rightPane, 'title');
+  const rightPaneLoading = toRef(rightPane, 'loading');
+  const rightPaneError = toRef(rightPane, 'error');
+  const rightPaneContentComponent = toRef(rightPane, 'contentComponent');
+  const rightPaneComponentProps = toRef(rightPane, 'componentProps');
 
-  const closeRightPane = () => {
-    rightPaneVisible.value = false;
-    rightPaneLoading.value = false;
-    rightPaneTitle.value = '';
-    rightPaneError.value = null;
-    rightPaneContentComponent.value = null;
-    rightPaneComponentProps.value = {};
-  };
-
-  const openRightPane = (options: {
-    title: string;
-    component: Component | null;
-    componentProps?: Record<string, any>;
-  }) => {
-    rightPaneTitle.value = options.title;
-    rightPaneContentComponent.value = options.component;
-    rightPaneComponentProps.value = options.componentProps ?? {};
-    rightPaneLoading.value = false;
-    rightPaneError.value = null;
-    rightPaneVisible.value = true;
-  };
+  const topPaneVisible = toRef(topPane, 'open');
+  const topPaneTitle = toRef(topPane, 'title');
+  const topPaneLoading = toRef(topPane, 'loading');
+  const topPaneError = toRef(topPane, 'error');
+  const topPaneContentComponent = toRef(topPane, 'contentComponent');
+  const topPaneComponentProps = toRef(topPane, 'componentProps');
 
   const untagSoa = async (soa: Soa) => {
     try {
@@ -331,6 +323,7 @@ export function useSoas() {
   };
 
   const fileList = async (soa: Soa, item: any) => {
+    showLoader();
     try {
       const params = {
         soa_id: soa.id,
@@ -345,23 +338,16 @@ export function useSoas() {
       }
 
       const payload = response.data;
-      // openModal({
-      //   modalTitle: `Records Management Attachments`,
-      //   buttonText: 'Close',
-      //   component: SoaFileBrowser,
-      //   componentProps: { soa: soa, files: payload.files ?? [] },
-      //   size: 'lg',
-      //   hasSubmitButton: false,
-      // });
       openPane({
         title: `Records Management Attachments`,
         side: 'top',
         component: SoaFileBrowser,
         componentProps: { soa: soa, files: payload.files ?? [] },
       });
-      console.log(payload);
     } catch (error) {
       dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
+    } finally {
+      hideLoader();
     }
   };
 
@@ -385,20 +371,11 @@ export function useSoas() {
   // Open a SOA-related right pane (drawer) showing file list.
   // This is intentionally implemented here so `soas.ts` owns the data-fetch + pane state.
   const openSoaFilesPane = async (soa: Soa) => {
-    // Note: `soa` might be undefined if the event payload is missing.
-    // Use optional chaining for all reads to prevent runtime crashes.
     const soaLabel = (soa as any)?.soanum ?? (soa as any)?.soa_number ?? '';
 
-    // Open immediately so the user gets instant feedback.
-    rightPaneLoading.value = true;
-    rightPaneTitle.value = `${soaLabel ? 'Billing Invoice: ' + soaLabel : 'Details'}`;
-    rightPaneVisible.value = true;
-    rightPaneError.value = null;
-    rightPaneContentComponent.value = null;
-    rightPaneComponentProps.value = {};
-
     try {
-      openRightPane({
+      openPane({
+        side: 'right',
         title: `${soaLabel ? 'Billing Invoice: ' + soaLabel : 'Details'}`,
         component: SoaDetailsPaneContent,
         componentProps: {
@@ -406,10 +383,9 @@ export function useSoas() {
         },
       });
     } catch (error) {
-      // Keep the pane open so we can visually confirm row-click + endpoint issues.
-      rightPaneLoading.value = false;
-      rightPaneError.value = 'Error fetching SOA files.';
-      rightPaneContentComponent.value = null;
+      setPaneLoading('right', false);
+      setPaneError('right', 'Error fetching SOA files.');
+      setPaneContent('right', null);
       dispatchNotification({
         title: 'Error',
         content: 'Error fetching SOA files',
@@ -577,14 +553,20 @@ export function useSoas() {
     getBillingRefsByParams,
     adjustSoaAmount,
 
-    // Right pane API/state
+    openPane,
+    closePane,
+    topPaneVisible,
+    topPaneTitle,
+    topPaneLoading,
+    topPaneError,
+    topPaneContentComponent,
+    topPaneComponentProps,
     rightPaneVisible,
     rightPaneTitle,
     rightPaneLoading,
     rightPaneError,
     rightPaneContentComponent,
     rightPaneComponentProps,
-    closeRightPane,
 
     soaListRowPatches,
     patchSoaListRow,

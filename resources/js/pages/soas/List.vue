@@ -15,6 +15,8 @@ import { useSoas } from '@/composables/soas';
 import { useModulePermissions } from '@/composables/useModulePermissions';
 import { debounce } from '@/composables/utilities/helper';
 import RightPane from '@/components/RightPane.vue';
+import TopPane from '@/components/TopPane.vue';
+
 import {
   emptySoaListFilters,
   soaListFiltersToParams,
@@ -56,13 +58,20 @@ const {
   getAccountsByParams,
   getBranchesByParams,
   getBillingRefsByParams,
+  openPane,
+  closePane,
+  topPaneVisible,
+  topPaneTitle,
+  topPaneLoading,
+  topPaneError,
+  topPaneContentComponent,
+  topPaneComponentProps,
   rightPaneVisible,
   rightPaneTitle,
   rightPaneLoading,
   rightPaneError,
   rightPaneContentComponent,
   rightPaneComponentProps,
-  closeRightPane,
   soaListRowPatches,
   clearSoaListRowPatches,
 } = useSoas();
@@ -211,7 +220,10 @@ const handlerMap: Record<string, Function> = {
 const columns = computed(() => {
   const rawModules = (page.props as { sub_modules?: { slug: string }[] }).sub_modules ?? []
   const subModules = rawModules
-    .filter((m: { slug: string }) => hasPermission(m.slug) && m.slug.split('.')[1] != 'create')
+    .filter((m: { slug: string }) => hasPermission(m.slug)
+      && m.slug.split('.')[1] != 'create'
+      && m.slug.split('.')[1] != 'file_list'
+    )
     .map((m: { slug: string }) => ({
       ...m,
       handler: handlerMap[m.slug.split('.')[1]],
@@ -697,7 +709,18 @@ watch(
           :error="rightPaneError"
           :content-component="rightPaneContentComponent"
           :component-props="rightPaneComponentProps"
-          @update:open="(v) => { if (!v && !rightPaneLoading) closeRightPane() }"
+          @update:open="(v) => { if (!v && !rightPaneLoading) closePane('right') }"
           />
+
+        <TopPane
+          :open="topPaneVisible"
+          :title="topPaneTitle"
+          :side="'top'"
+          :loading="topPaneLoading"
+          :error="topPaneError"
+          :content-component="topPaneContentComponent"
+          :component-props="topPaneComponentProps"
+          @update:open="(v) => { if (!v && !topPaneLoading) closePane('top') }"
+        />
     </AppLayout>
 </template>
