@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Component } from 'vue';
-import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 
 type SheetSide = 'top' | 'right' | 'bottom' | 'left';
 
@@ -39,6 +39,9 @@ const emit = defineEmits<{
                         {{ props.title }}
                     </SheetTitle>
                 </div>
+                <SheetDescription class="sr-only">
+                    {{ props.title || 'Pane' }} content.
+                </SheetDescription>
 
                 <div class="flex-1 overflow-y-auto p-4">
                     <div
