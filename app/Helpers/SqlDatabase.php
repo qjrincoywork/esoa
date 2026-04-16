@@ -3,6 +3,7 @@
 namespace App\Helpers;
 
 use App\Enums\AccountType;
+use App\Enums\OrderType;
 use Illuminate\Support\Facades\DB;
 
 class SqlDatabase
@@ -193,15 +194,15 @@ class SqlDatabase
             ->leftJoin('Accounts as e', function ($join) {
                 $join->on(DB::raw('SUBSTRING(a.bl_policynum,1,11)'), '=', 'e.ac_code');
             })
-            ->whereIn('a.bl_workstatus', ['FB', 'PX'])
+            // ->whereIn('a.bl_workstatus', ['FB', 'PX'])
             // ->where('a.bl_type', 'MEDCOLL')
             ->where('e.ac_code', $params['account_code'])
             ->when(isset($params['name']) && $params['name'] !== '', function ($query) use ($params, $selectedRef) {
                 $query->where(function ($nameQuery) use ($params, $selectedRef) {
-                    $nameQuery->where('a.bl_refid', 'like', '%' . $params['name'] . '%')
-                        ->orWhere('a.bl_claimnum', 'like', '%' . $params['name'] . '%')
-                        ->orWhere('a.bl_policynum', 'like', '%' . $params['name'] . '%')
-                        ->orWhere('a.bl_name', 'like', '%' . $params['name'] . '%');
+                    $nameQuery->where('a.bl_refid', 'like', '%' . $params['name'] . '%');
+                        // ->orWhere('a.bl_claimnum', 'like', '%' . $params['name'] . '%')
+                        // ->orWhere('a.bl_policynum', 'like', '%' . $params['name'] . '%')
+                        // ->orWhere('a.bl_name', 'like', '%' . $params['name'] . '%');
                     if (!empty($selectedRef)) {
                         $nameQuery->orWhere('a.bl_refid', $selectedRef);
                     }
@@ -232,6 +233,56 @@ class SqlDatabase
             ->where('a.bl_refid', $params['billing_ref'])
             ->orderBy('a.bl_dateposted', 'desc')
             ->first();
+
+        return $result;
+    }
+
+    public function getCardHolderDetailsByParams($params, $account_code, $branch_code)
+    {
+        // Pagination
+        $perPage = $params['per_page'] ?? config('vc.default_pages');
+        $result = $this->db
+            ->table('CHOLDERS as c')
+            ->select([
+                'b.bl_claimnum',
+                'b.bl_policynum',
+                'c.ch_id',
+                'c.ch_policynum',
+                'c.ch_accountid',
+                'c.ch_branch_code',
+                'c.ch_firstname',
+                'c.ch_lastname',
+                'c.ch_middlename',
+                'c.ch_suffix',
+            ])
+            ->leftJoin('Billing as b', 'c.ch_policynum', '=', 'b.bl_policynum')
+            ->when(!empty($account_code), function ($query) use ($account_code) {
+                $query->where('c.ch_accountid', $account_code);
+            })
+            ->when(!empty($branch_code), function ($query) use ($branch_code) {
+                $query->where('c.ch_branch_code', $branch_code);
+            })
+            ->when(!empty($params['claimnum']), function ($query) use ($params) {
+                $query->where('b.bl_claimnum', $params['claimnum']);
+            })
+            ->when(!empty($params['policynum']), function ($query) use ($params) {
+                $query->where('c.ch_policynum', $params['policynum']);
+            })
+            ->when(!empty($params['firstname']), function ($query) use ($params) {
+                $query->where('c.ch_firstname', $params['firstname']);
+            })
+            ->when(!empty($params['lastname']), function ($query) use ($params) {
+                $query->where('c.ch_lastname', $params['lastname']);
+            })
+            ->when(!empty($params['middlename']), function ($query) use ($params) {
+                $query->where('c.ch_middlename', $params['middlename']);
+            })
+            ->where('c.ch_lapsed', '!=', 'C')
+            // ->where(function ($query) {
+            //     $query->where('c.ch_expirydate', '>', now())
+            //           ->orWhereNull('c.ch_expirydate');
+            // })
+            ->paginate($perPage);
 
         return $result;
     }

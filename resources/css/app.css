@@ -148,6 +148,16 @@
 
 /* Start Default Theme */
 :root {
+    --z-base: 0;
+    --z-right-pane: 100;
+    --z-top-pane: 150;
+    --z-left-pane: 200; 
+    --z-bottom-pane: 250;
+    --z-modal: 300;
+    --z-notification: 400;
+    --z-loader: 500;
+    --z-global-modal: 600;
+    --z-tooltip: 700;
     --background: hsl(0 0% 100%);
     --foreground: hsl(0 0% 3.9%);
     --card: hsl(0 0% 100%);
@@ -239,7 +249,12 @@
     max-width: var(--container-7xl);
   }
 
+  .base-z-index {
+    z-index: var(--z-base);
+    position: relative;
+  }
   .right-pane {
+    z-index: var(--z-right-pane);
     position: fixed;
     top: 0;
     right: 0;
@@ -248,9 +263,68 @@
     border-left: var(--sidebar-border);
     /* box-shadow: -4px 0 12px rgba(0,0,0,0.1); */
   }
+  .top-pane {
+    z-index: var(--z-top-pane);
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    background: var(--background);
+    border-top: var(--sidebar-border);
+  }
+  .left-pane {
+    z-index: var(--z-left-pane);
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    background: var(--background);
+    border-left: var(--sidebar-border);
+  }
+  .bottom-pane {
+    z-index: var(--z-bottom-pane);
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    background: var(--background);
+    border-bottom: var(--sidebar-border);
+  }
+  .modal {
+    z-index: var(--z-modal);
+    position: fixed;
+  }
+  .notification {
+    z-index: var(--z-notification);
+    position: fixed;
+  }
+  .loader {
+    z-index: var(--z-loader);
+    position: fixed;
+  }
+  .global-modal {
+    z-index: var(--z-global-modal);
+    position: fixed;
+  }
+  .tooltip {
+    z-index: var(--z-tooltip);
+  }
 }
 
 .dark {
+    --z-base: 0;
+    --z-right-pane: 100;
+    --z-top-pane: 150;
+    --z-left-pane: 200; 
+    --z-bottom-pane: 250;
+    --z-modal: 300;
+    --z-notification: 400;
+    --z-loader: 500;
+    --z-global-modal: 600;
+    --z-tooltip: 700;
     --background: hsl(0 0% 3.9%);
     --foreground: hsl(0 0% 98%);
     --card: hsl(0 0% 3.9%);
@@ -285,7 +359,12 @@
     --sidebar-ring: hsl(217.2 91.2% 59.8%);
     --sidebar: hsl(240 5.9% 10%);
 
+  .base-z-index {
+    z-index: var(--z-base);
+    position: relative;
+  }
   .right-pane {
+    z-index: var(--z-right-pane);
     position: fixed;
     top: 0;
     right: 0;
@@ -293,6 +372,55 @@
     background: var(--background);
     border-left: var(--sidebar-border);
     /* box-shadow: -4px 0 12px rgba(0,0,0,0.1); */
+  }
+  .top-pane {
+    z-index: var(--z-top-pane);
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    background: var(--background);
+    border-top: var(--sidebar-border);
+  }
+  .left-pane {
+    z-index: var(--z-left-pane);
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    background: var(--background);
+    border-left: var(--sidebar-border);
+  }
+  .bottom-pane {
+    z-index: var(--z-bottom-pane);
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    background: var(--background);
+    border-bottom: var(--sidebar-border);
+  }
+  .modal {
+    z-index: var(--z-modal);
+    position: fixed;
+  }
+  .notification {
+    z-index: var(--z-notification);
+    position: fixed;
+  }
+  .loader {
+    z-index: var(--z-loader);
+    position: fixed;
+  }
+  .global-modal {
+    z-index: var(--z-global-modal);
+    position: fixed;
+  }
+  .tooltip {
+    z-index: var(--z-tooltip);
   }
 }
 /* End Default Theme */
