@@ -151,7 +151,7 @@
     --z-base: 0;
     --z-right-pane: 100;
     --z-top-pane: 150;
-    --z-left-pane: 200; 
+    --z-left-pane: 200;
     --z-bottom-pane: 250;
     --z-modal: 300;
     --z-notification: 400;
@@ -269,7 +269,7 @@
     top: 0;
     left: 0;
     width: 100%;
-    height: 100vh;
+    height: 80%;
     background: var(--background);
     border-top: var(--sidebar-border);
   }
@@ -278,7 +278,6 @@
     position: fixed;
     top: 0;
     left: 0;
-    width: 100%;
     height: 100vh;
     background: var(--background);
     border-left: var(--sidebar-border);
@@ -289,7 +288,7 @@
     bottom: 0;
     left: 0;
     width: 100%;
-    height: 100vh;
+    height: 80%;
     background: var(--background);
     border-bottom: var(--sidebar-border);
   }
@@ -318,7 +317,7 @@
     --z-base: 0;
     --z-right-pane: 100;
     --z-top-pane: 150;
-    --z-left-pane: 200; 
+    --z-left-pane: 200;
     --z-bottom-pane: 250;
     --z-modal: 300;
     --z-notification: 400;
@@ -379,7 +378,7 @@
     top: 0;
     left: 0;
     width: 100%;
-    height: 100vh;
+    height: 80%;
     background: var(--background);
     border-top: var(--sidebar-border);
   }
@@ -388,7 +387,6 @@
     position: fixed;
     top: 0;
     left: 0;
-    width: 100%;
     height: 100vh;
     background: var(--background);
     border-left: var(--sidebar-border);
@@ -399,7 +397,7 @@
     bottom: 0;
     left: 0;
     width: 100%;
-    height: 100vh;
+    height: 80%;
     background: var(--background);
     border-bottom: var(--sidebar-border);
   }

@@ -1,4 +1,4 @@
-import { ref, shallowRef, type Component } from 'vue';
+import { reactive, type Component } from 'vue';
 
 export type PaneSide = 'top' | 'right' | 'bottom' | 'left';
 
@@ -11,102 +11,96 @@ export interface PaneOptions {
   error?: string | null;
 }
 
-const open = ref(false);
-const title = ref('');
-const side = ref<PaneSide>('right');
-const loading = ref(false);
-const error = ref<string | null>(null);
-const contentComponent = shallowRef<Component | null>(null);
-const componentProps = ref<Record<string, unknown>>({});
+interface PaneState {
+  open: boolean;
+  title: string;
+  loading: boolean;
+  error: string | null;
+  contentComponent: Component | null;
+  componentProps: Record<string, unknown>;
+}
 
-function resetPaneState() {
-  title.value = '';
-  side.value = 'right';
-  loading.value = false;
-  error.value = null;
-  contentComponent.value = null;
-  componentProps.value = {};
+const createPaneState = (): PaneState => ({
+  open: false,
+  title: '',
+  loading: false,
+  error: null,
+  contentComponent: null,
+  componentProps: {},
+});
+
+const panes = reactive<Record<PaneSide, PaneState>>({
+  top: createPaneState(),
+  right: createPaneState(),
+  bottom: createPaneState(),
+  left: createPaneState(),
+});
+
+function resetPaneState(pane: PaneState) {
+  pane.open = false;
+  pane.title = '';
+  pane.loading = false;
+  pane.error = null;
+  pane.contentComponent = null;
+  pane.componentProps = {};
 }
 
 export function usePane() {
-  // Right pane (drawer) state for dynamic content.
-  const paneVisible = ref(false);
-  const paneTitle = ref('');
-  const paneSide = ref<PaneSide>('right');
-  const paneLoading = ref(false);
-  const paneError = ref<string | null>(null);
-  const paneContentComponent = shallowRef<Component | null>(null);
-  const paneComponentProps = ref<Record<string, any>>({});
-  
-  const closePane = () => {
-    paneVisible.value = false;
-    paneLoading.value = false;
-    paneTitle.value = '';
-    paneError.value = null;
-    paneContentComponent.value = null;
-    paneComponentProps.value = {};
+  const openPane = (options: PaneOptions = {}) => {
+    const side = options.side ?? 'right';
+    const pane = panes[side];
+
+    pane.title = options.title ?? '';
+    pane.loading = options.loading ?? false;
+    pane.error = options.error ?? null;
+    pane.contentComponent = options.component ?? null;
+    pane.componentProps = options.componentProps ?? {};
+    pane.open = true;
   };
 
-  const openPane = (options: {
-    title: string;
-    side: PaneSide;
-    component: Component | null;
-    componentProps?: Record<string, any>;
-  }) => {
-    paneTitle.value = options.title;
-    paneSide.value = options.side ?? 'right';
-    paneContentComponent.value = options.component;
-    paneComponentProps.value = options.componentProps ?? {};
-    paneLoading.value = false;
-    paneError.value = null;
-    paneVisible.value = true;
-  };
-  // const openPane = (options: PaneOptions = {}) => {
-  //   console.log(options);
-  //   title.value = options.title ?? '';
-  //   side.value = options.side ?? 'right';
-  //   loading.value = options.loading ?? false;
-  //   error.value = options.error ?? null;
-  //   contentComponent.value = options.component ?? null;
-  //   componentProps.value = options.componentProps ?? {};
-  //   open.value = true;
-  // };
+  const closePane = (side?: PaneSide) => {
+    if (side) {
+      resetPaneState(panes[side]);
+      return;
+    }
 
-  // const closePane = () => {
-  //   open.value = false;
-  //   setTimeout(() => {
-  //     resetPaneState();
-  //   }, 150);
-  // };
-
-  const setPaneLoading = (value: boolean) => {
-    loading.value = value;
+    resetPaneState(panes.top);
+    resetPaneState(panes.right);
+    resetPaneState(panes.bottom);
+    resetPaneState(panes.left);
   };
 
-  const setPaneError = (value: string | null) => {
-    error.value = value;
+  const setPaneLoading = (side: PaneSide, value: boolean) => {
+    panes[side].loading = value;
+  };
+
+  const setPaneError = (side: PaneSide, value: string | null) => {
+    panes[side].error = value;
   };
 
   const setPaneContent = (
+    side: PaneSide,
     component: Component | null,
     props: Record<string, unknown> = {},
   ) => {
-    contentComponent.value = component;
-    componentProps.value = props;
+    panes[side].contentComponent = component;
+    panes[side].componentProps = props;
   };
 
+  const topPane = panes.top;
+  const rightPane = panes.right;
+  const bottomPane = panes.bottom;
+  const leftPane = panes.left;
+
   return {
-    open,
-    title,
-    side,
-    loading,
-    error,
-    contentComponent,
-    componentProps,
     openPane,
     closePane,
     setPaneLoading,
     setPaneError,
     setPaneContent,
+    topPane,
+    rightPane,
+    bottomPane,
+    leftPane,
   };
 }

@@ -48,6 +48,12 @@ export function createActionColumn(customActions: ActionColumnOptions) {
           const label = action.name || action.slug || 'Action';
           const css = `cursor-pointer p-1 text-${action.color}-600 hover:text-${action.color}-800 transition-colors rounded`;
 
+          if (item.status?.toLowerCase() == 'paid' && action.slug === 'soas.edit') {
+            continue; // Skip actions for paid items
+          }
+          if ((item.file_pdf == '' || item.file_pdf == null) && action.slug === 'soas.billing_attachments') {
+            continue; // Skip billing_attachments for paid items without PDF
+          }
           const button = h(
             'button',
             {

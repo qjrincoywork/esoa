@@ -106,7 +106,7 @@ const columns = computed(() => {
   const subModules = [
     {
       slug: `${slug.value}.file_list`,
-      name: 'Files',
+      name: 'Records Management Attachments',
       icon: 'FolderOpen',
       color: 'blue',
       handler: (item: any) => fileList(props.soa as any, item),

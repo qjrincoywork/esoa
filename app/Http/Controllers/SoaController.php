@@ -179,7 +179,6 @@ class SoaController extends Controller
             $files = Storage::disk(env('RM_DISK', 'public'))->files($validated['claimnum']);
         }
         // $files = Storage::disk(env('RM_DISK', 'public'))->files('EO-2832655-003');
-        $files = Storage::disk(env('RM_DISK', 'public'))->files('EO-2832623-033');
 
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
@@ -485,6 +484,12 @@ class SoaController extends Controller
         $connection->beginTransaction();
         try {
             $soa = $this->soa->findOrFail($validated['id']);
+            if (!$soa) {
+                throw new \Exception('SOA record not found.');
+            }
+            if ($soa->status == SoaStatus::PAID) {
+                throw new \Exception('SOA has already been paid.');
+            }
             $soaNumber = $validated['soa_number'] ?? $soa->soa_number;
 
             // Handle PDF upload
