@@ -1,4 +1,4 @@
-import { reactive, type Component } from 'vue';
+import { shallowReactive, type Component } from 'vue';
 
 export type PaneSide = 'top' | 'right' | 'bottom' | 'left';
 
@@ -29,12 +29,12 @@ const createPaneState = (): PaneState => ({
   componentProps: {},
 });
 
-const panes = reactive<Record<PaneSide, PaneState>>({
-  top: createPaneState(),
-  right: createPaneState(),
-  bottom: createPaneState(),
-  left: createPaneState(),
-});
+const panes = {
+  top: shallowReactive(createPaneState()),
+  right: shallowReactive(createPaneState()),
+  bottom: shallowReactive(createPaneState()),
+  left: shallowReactive(createPaneState()),
+} as Record<PaneSide, PaneState>;
 
 function resetPaneState(pane: PaneState) {
   pane.open = false;
