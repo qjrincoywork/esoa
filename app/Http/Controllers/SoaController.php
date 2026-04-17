@@ -13,7 +13,7 @@ use App\Helpers\CommonHelper;
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Soa\{AdjustAmountRequest, CreateRequest, FileListRequest, FileProxyRequest, ListRequest, RecomputeTaxRequest, UpdateRequest, UpdateTagRequest };
+use App\Http\Requests\Soa\{AccountBranchMembersRequest, AdjustAmountRequest, CreateRequest, FileListRequest, FileProxyRequest, ListRequest, RecomputeTaxRequest, UpdateRequest, UpdateTagRequest };
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
@@ -137,13 +137,10 @@ class SoaController extends Controller
     /**
      * Display a listing of the account / branch members.
      */
-    public function accountBranchMembers(Request $request, string $account_code, string $branch_code)
+    public function accountBranchMembers(AccountBranchMembersRequest $request, string $account_code, string $branch_code)
     {
-        $members = (new $this->sqlDatabase(Server::HMS))->getCardHolderDetailsByParams(
-            $request->all(),
-            $account_code,
-            $branch_code
-        );
+        $validated = $request->validated();
+        $members = (new $this->sqlDatabase(Server::HMS))->getCardHolderDetailsByParams($validated);
 
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
@@ -172,13 +169,15 @@ class SoaController extends Controller
     public function fileList(FileListRequest $request)
     {
         $validated = $request->validated();
+        $billing = (new $this->sqlDatabase(Server::HMS))->getBillingByParams($validated);
         //http://192.170.11.185/dmis_finance/file/rm/ //EO-2832655-003
-        // $files = Storage::disk(env('RM_DISK', 'public'))->files('EO-3075098-001'); // 'files' is the sub-directory name
         $files = [];
-        if (isset($validated['claimnum'])) {
-            $files = Storage::disk(env('RM_DISK', 'public'))->files($validated['claimnum']);
+        if (!empty($billing) && !empty($billing->claimnum)) {
+            $files = Storage::disk(env('RM_DISK', 'public'))->files($billing->claimnum);
         }
+        // $files = Storage::disk(env('RM_DISK', 'public'))->files('EO-3024023-001'); // 'files' is the sub-directory name
         // $files = Storage::disk(env('RM_DISK', 'public'))->files('EO-2832655-003');
+        // $files = Storage::disk(env('RM_DISK', 'public'))->files('EO-3082257-029');
 
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
@@ -195,7 +194,7 @@ class SoaController extends Controller
             abort(400, 'File path is required');
         }
 
-        $disk = Storage::disk('rm');
+        $disk = Storage::disk(env('RM_DISK', 'public'));
 
         if (!$disk->exists($file)) {
             abort(404, 'File not found');

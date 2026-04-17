@@ -15,7 +15,7 @@ class AccountResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'name' => $this->ac_name,
+            'name' => $this->ac_name . ' (' . $this->ac_code . ')',
             'value' => $this->ac_code,
         ];
     }

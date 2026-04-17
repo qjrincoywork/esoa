@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { createActionColumn } from '@/composables/datatable/datatableColumns';
 import { useSoas } from '@/composables/soas';
+import { billing_attachments } from '@/routes/soas';
 
 type MemberDetail = {
   id?: number;
@@ -134,7 +135,7 @@ const clearFilters = () => {
 };
 
 const fetchMembers = async () => {
-  if (!props.account_code || !props.branch_code) {
+  if (!props.account_code) {
     members.value = [];
     pagination.value.total = 0;
     return;
@@ -144,8 +145,11 @@ const fetchMembers = async () => {
   error.value = '';
 
   const params: Record<string, string | number> = {
+    account_code: props.account_code,
+    branch_code: props.branch_code ?? '',
     page: pagination.value.current_page,
     per_page: pagination.value.per_page,
+    billing_ref: props.soa?.billing_ref ?? '',
   };
 
   const term = searchText.value.trim();
@@ -160,6 +164,7 @@ const fetchMembers = async () => {
         current_page?: number;
         per_page?: number;
         total?: number;
+        billing_ref?: string;
       };
     }>(`/${slug.value}/${props.account_code}/${props.branch_code}/members`, params);
 

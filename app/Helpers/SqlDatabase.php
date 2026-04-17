@@ -167,6 +167,10 @@ class SqlDatabase
             ->when(!empty($selectedCode), function ($query) use ($selectedCode) {
                 $query->orderByRaw("CASE WHEN ac_code = ? THEN 0 ELSE 1 END", [$selectedCode]);
             })
+            ->where(function ($query) {
+                $query->where('ac_candate', '>', now())
+                    ->orWhereNull('ac_candate');
+            })
             ->orderBy('ac_name');
 
         return $result->paginate($perPage);
@@ -217,7 +221,7 @@ class SqlDatabase
         return $result;
     }
 
-    public function getClaimByBillingRef($params)
+    public function getBillingByParams($params)
     {
         $result = $this->db
             ->table('Billing as a')
@@ -230,14 +234,19 @@ class SqlDatabase
                 'a.bl_dateposted',
                 'a.bl_workstatus',
             ])
-            ->where('a.bl_refid', $params['billing_ref'])
+            ->when(!empty($params['billing_ref']), function ($query) use ($params) {
+                $query->where('a.bl_refid', $params['billing_ref']);
+            })
+            ->when(!empty($params['policynum']), function ($query) use ($params) {
+                $query->where('a.bl_policynum', $params['policynum']);
+            })
             ->orderBy('a.bl_dateposted', 'desc')
             ->first();
 
         return $result;
     }
 
-    public function getCardHolderDetailsByParams($params, $account_code, $branch_code)
+    public function getCardHolderDetailsByParams($params)
     {
         // Pagination
         $perPage = $params['per_page'] ?? config('vc.default_pages');
@@ -256,11 +265,14 @@ class SqlDatabase
                 'c.ch_suffix',
             ])
             ->leftJoin('Billing as b', 'c.ch_policynum', '=', 'b.bl_policynum')
-            ->when(!empty($account_code), function ($query) use ($account_code) {
-                $query->where('c.ch_accountid', $account_code);
+            // ->when(!empty($params['billing_ref']), function ($query) use ($params) {
+            //     $query->where('b.bl_refid', $params['billing_ref']);
+            // })
+            ->when(!empty($params['account_code']), function ($query) use ($params) {
+                $query->where('c.ch_accountid', $params['account_code']);
             })
-            ->when(!empty($branch_code), function ($query) use ($branch_code) {
-                $query->where('c.ch_branch_code', $branch_code);
+            ->when(!empty($params['branch_code']), function ($query) use ($params) {
+                $query->where('c.ch_branch_code', $params['branch_code']);
             })
             ->when(!empty($params['claimnum']), function ($query) use ($params) {
                 $query->where('b.bl_claimnum', $params['claimnum']);
@@ -277,7 +289,7 @@ class SqlDatabase
             ->when(!empty($params['middlename']), function ($query) use ($params) {
                 $query->where('c.ch_middlename', $params['middlename']);
             })
-            ->where('c.ch_lapsed', '!=', 'C')
+            // ->where('c.ch_lapsed', '!=', 'C')
             // ->where(function ($query) {
             //     $query->where('c.ch_expirydate', '>', now())
             //           ->orWhereNull('c.ch_expirydate');
