@@ -83,6 +83,11 @@ class UpdateRequest extends FormRequest
                 'required_unless:status,' . SoaStatus::ENDORSED,
                 'date',
             ],
+            'status' => [
+                'required',
+                'integer',
+                Rule::in(SoaStatus::getValues()),
+            ],
             'period_date_from' => [
                 'required_unless:status,' . SoaStatus::ENDORSED,
                 'date',
@@ -90,11 +95,6 @@ class UpdateRequest extends FormRequest
             'period_date_to' => [
                 'required_unless:status,' . SoaStatus::ENDORSED,
                 'date',
-            ],
-            'status' => [
-                'required',
-                'integer',
-                Rule::in(SoaStatus::getValues()),
             ],
             'amount' => [
                 'required_unless:status,' . SoaStatus::ENDORSED,

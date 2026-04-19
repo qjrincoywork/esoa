@@ -176,7 +176,7 @@ class SoaController extends Controller
             $files = Storage::disk(env('RM_DISK', 'public'))->files($billing->claimnum);
         }
         // $files = Storage::disk(env('RM_DISK', 'public'))->files('EO-3024023-001'); // 'files' is the sub-directory name
-        // $files = Storage::disk(env('RM_DISK', 'public'))->files('EO-2832655-003');
+        $files = Storage::disk(env('RM_DISK', 'public'))->files('EO-2832655-003');
         // $files = Storage::disk(env('RM_DISK', 'public'))->files('EO-3082257-029');
 
         if ($request->wantsJson() || $request->ajax()) {

@@ -96,6 +96,7 @@ const activeTab = ref('details')
           <CardContent class="grid gap-3">
             <ul class="my-6 ml-6 list-disc [&>li]:mt-2">
               <li>Account Name: <span class="font-bold">{{ localSoa.account_name }}</span></li>
+              <li v-if="localSoa.account_code">Account Code: <span class="font-bold">{{ localSoa.account_code }}</span></li>
               <li v-if="localSoa.branch_name">Branch Name: <span class="font-bold">{{ localSoa.branch_name }}</span></li>
               <li>Billing Reference: <span class="font-bold">{{ localSoa.billing_ref }}</span></li>
               <li>SOA Number: <span class="font-bold">{{ localSoa.soa_number }}</span></li>

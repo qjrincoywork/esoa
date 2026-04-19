@@ -64,6 +64,11 @@ class CreateRequest extends FormRequest
                 'required',
                 'date',
             ],
+            'status' => [
+                'required',
+                'integer',
+                Rule::in(Status::getValues()),
+            ],
             'period_date_from' => [
                 'required',
                 'date',
@@ -71,11 +76,6 @@ class CreateRequest extends FormRequest
             'period_date_to' => [
                 'required',
                 'date',
-            ],
-            'status' => [
-                'required',
-                'integer',
-                Rule::in(Status::getValues()),
             ],
             'amount' => [
                 'required',
