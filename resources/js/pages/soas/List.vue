@@ -16,6 +16,7 @@ import { useModulePermissions } from '@/composables/useModulePermissions';
 import { debounce } from '@/composables/utilities/helper';
 import RightPane from '@/components/RightPane.vue';
 import TopPane from '@/components/TopPane.vue';
+import { Search } from 'lucide-vue-next';
 
 import {
   emptySoaListFilters,

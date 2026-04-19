@@ -93,7 +93,7 @@ const billingRef = ref(soa.value?.billing_ref != null ? String(soa.value.billing
 const searchedAccountName = ref('')
 const soaNumber = ref(soa.value?.soa_number ?? '')
 const selectedBillType = ref<string | number>(soa.value?.bill_type ?? '')
-const selectedStatus = ref<string | number>(soa.value?.status ?? '')
+const selectedStatus = ref<string | number>(soa.value?.status ?? 1)
 const dueDate = ref(soa.value?.due_date ?? '')
 const periodDateFrom = ref(soa.value?.period_date_from ?? '')
 const periodDateTo = ref(soa.value?.period_date_to ?? '')
@@ -409,14 +409,14 @@ watch(soa, (val: Soa | undefined) => {
     </div>
 
     <div v-if="!isEndorsed" class="grid gap-2 md:col-span-1">
-      <Label for="soa_number">SOA Number<span class="text-red-400">*</span></Label>
+      <Label for="soa_number">SOA Number / Billing Invoice<span class="text-red-400">*</span></Label>
       <Input
         id="soa_number"
         class="mt-1 block w-full"
         name="soa_number"
         v-model="soaNumber"
         autocomplete="off"
-        placeholder="SOA Number"
+        placeholder="SOA Number / Billing Invoice"
       />
     </div>
 

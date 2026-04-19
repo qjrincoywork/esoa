@@ -196,6 +196,7 @@ export function useSoas() {
   };
 
   const editSoa = async (soa: Soa) => {
+    showLoader();
     try {
       // Make AJAX request without navigation using reusable composable
       const response = await get<{
@@ -255,6 +256,8 @@ export function useSoas() {
       });
     } catch (error) {
       dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
+    } finally {
+      hideLoader();
     }
   };
 
