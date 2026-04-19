@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, defineExpose } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { Input } from '@/components/ui/input';
 
 type Navigation = {
