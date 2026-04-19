@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, defineExpose, watch } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
