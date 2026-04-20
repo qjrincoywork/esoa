@@ -2,8 +2,10 @@
 
 namespace App\Helpers;
 
+use App\Enums\Server;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
+use App\Helpers\SqlDatabase;
 
 class CommonHelper
 {
@@ -74,5 +76,135 @@ class CommonHelper
         return $withTime
             ? $date->format('F j, Y h:i A')
             : $date->format('F j, Y');
+    }
+
+    /**
+     * Get filtered original values, excluding ignored keys.
+     *
+     * @param  object  $model
+     * @return array
+     */
+    public static function getFilteredOriginal($model): array
+    {
+        return collect($model->getOriginal())
+            ->filter(function ($value, $key) {
+                return !in_array($key, config('vc.ignored_diff_keys', []));
+            })
+            ->toArray();
+    }
+
+    /**
+     * Get filtered changed values, excluding ignored keys.
+     *
+     * @param  object  $model
+     * @return array
+     */
+    public static function getFilteredChanges($model): array
+    {
+        return collect($model->getChanges())
+            ->filter(function ($value, $key) {
+                return !in_array($key, config('vc.ignored_diff_keys', []));
+            })
+            ->toArray();
+    }
+
+    /**
+     * Check if a model has account code and request has file uploaded.
+     *
+     * @param  object  $model
+     * @param  object  $request
+     * @param  string  $fileField
+     * @return bool
+     */
+    public static function hasFileAttachmentAndAccount($model, $request, string $fileField = 'file_pdf'): bool
+    {
+        return $request->hasFile($fileField) && !empty($model->account_code);
+    }
+
+    /**
+     * Store uploaded files with SOA number in filename.
+     *
+     * @param  string  $soaNumber
+     * @param  string  $accountCode
+     * @param  string|null  $branchCode
+     * @param  object  $request
+     * @param  array  $validated
+     * @param  array  $fileTypes
+     * @return void
+     */
+    public static function storeUploadedFiles(
+        string $soaNumber,
+        string $accountCode,
+        ?string $branchCode,
+        $request,
+        array &$validated,
+        array $fileTypes = ['file_pdf', 'file_xls']
+    ): void {
+        $directory = $accountCode . (!empty($branchCode) ? "/" . $branchCode : "");
+
+        foreach ($fileTypes as $fileType) {
+            if ($request->hasFile($fileType)) {
+                $file = $request->file($fileType);
+                $filename = $soaNumber . '_' . now()->format('Ymd_His') . '.' . $file->getClientOriginalExtension();
+                $validated[$fileType] = $file->storeAs($directory, $filename, env('BILLING_DISK', 'public'));
+            }
+        }
+    }
+
+    /**
+     * Set client name from account or branch data.
+     *
+     * @param  object  $model
+     * @return void
+     */
+    public static function setClientName($model): void
+    {
+        $account = (new SqlDatabase(Server::HMS))->getAccount($model->account_code);
+        $model->client_name = $account->ac_name ?? $model->account_code;
+
+        if (!empty($model->branch_code)) {
+            $branch = (new SqlDatabase(Server::HMS))->getBranch($model->branch_code);
+            $model->client_name = $branch?->br_branch_name ?? $model->branch_code;
+        }
+    }
+
+    /**
+     * Send billing invoice email and record activity.
+     *
+     * @param  object  $model
+     * @param  object  $user
+     * @param  string  $mailClass
+     * @return void
+     */
+    public static function sendBillingInvoiceEmail($model, $user, string $mailClass): void
+    {
+        self::setClientName($model);
+        $model->contact = config('vc.contact_email');
+
+        $notifyEmail = config('vc.billing_notification_email', 'billing@example.com');
+        Mail::to($notifyEmail)->send(new $mailClass($model));
+
+        $model->recordActivity('billing_invoice_email_sent', [
+            'to' => [
+                'soa_number' => $model->soa_number,
+                'file_pdf' => $model->file_pdf,
+                'notified_email' => $notifyEmail,
+            ],
+        ], $user);
+    }
+
+    /**
+     * Validate if a resource is in paid status.
+     *
+     * @param  object  $model
+     * @param  mixed  $paidStatus
+     * @throws \Exception
+     * @return void
+     */
+    public static function validateNotPaid($model, $paidStatus): void
+    {
+        if ($model->status === $paidStatus) {
+            throw new \Exception('Record has already been paid.');
+        }
     }
 }
