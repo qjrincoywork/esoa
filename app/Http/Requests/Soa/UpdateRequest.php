@@ -24,7 +24,8 @@ class UpdateRequest extends FormRequest
     {
         $this->merge(['user_id' => auth()->user()->id]);
         $filePdfRules = [
-            'required_if:status,' . SoaStatus::ENDORSED,
+            'required',
+            // 'required_if:status,' . SoaStatus::ENDORSED,
         ];
 
         if ($this->hasFile('file_pdf')) {
@@ -115,7 +116,6 @@ class UpdateRequest extends FormRequest
             'file_pdf' => $filePdfRules,
             'file_xls' => [
                 'nullable',
-                'required_without:file_pdf',
                 'file',
                 'mimes:xls,xlsx',
                 'max:20480' // 2MB (size is in KB)

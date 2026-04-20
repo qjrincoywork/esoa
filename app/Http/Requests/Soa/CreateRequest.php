@@ -94,7 +94,7 @@ class CreateRequest extends FormRequest
                 'numeric',
             ],
             'file_pdf' => [
-                'nullable',
+                'required',
                 'file',
                 'mimes:pdf',
                 'max:20480' // 2MB (size is in KB)

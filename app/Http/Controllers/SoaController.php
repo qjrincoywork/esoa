@@ -170,13 +170,13 @@ class SoaController extends Controller
     {
         $validated = $request->validated();
         $billing = (new $this->sqlDatabase(Server::HMS))->getBillingByParams($validated);
-        //http://192.170.11.185/dmis_finance/file/rm/ //EO-2832655-003
+        //http://192.170.11.185/dmis_finance/file/rm/ //EO-2832655-003, EO-3085829-004
         $files = [];
         if (!empty($billing) && !empty($billing->claimnum)) {
             $files = Storage::disk(env('RM_DISK', 'public'))->files($billing->claimnum);
         }
         // $files = Storage::disk(env('RM_DISK', 'public'))->files('EO-3024023-001'); // 'files' is the sub-directory name
-        $files = Storage::disk(env('RM_DISK', 'public'))->files('EO-2832655-003');
+        // $files = Storage::disk(env('RM_DISK', 'public'))->files('EO-2832655-003');
         // $files = Storage::disk(env('RM_DISK', 'public'))->files('EO-3082257-029');
 
         if ($request->wantsJson() || $request->ajax()) {
@@ -303,13 +303,51 @@ class SoaController extends Controller
     {
         $validated = $request->validated();
 
-        DB::beginTransaction();
+        $connection = DB::connection('mysql');
+        $connection->beginTransaction();
 
         try {
-            $this->soa->saveSoa($validated);
+            $soa = $this->soa->saveSoa($validated);
+
+            // Prepare data BEFORE commit
+            $shouldSendEmail =
+                $soa->file_pdf !== null &&
+                $soa->account_code;
+
+            if ($shouldSendEmail) {
+                $account = (new SqlDatabase(Server::HMS))->getAccount($soa->account_code);
+                $soa->client_name = $account->ac_name ?? $soa->ac_code;
+                if (!empty($soa->branch_code)) {
+                    $branch = (new $this->sqlDatabase(Server::HMS))->getBranch($soa->branch_code);
+                    $soa->client_name = $branch?->br_branch_name ?? $soa->branch_code;
+                }
+                $soa->contact = config('vc.contact_email');
+
+                // $detail = UserDetail::where('account_code', $soa->account_code)
+                //     ->where('branch_code', $soa->branch_code)
+                //     ->first();
+                // if (!$detail) {
+                //     throw new \Exception('User detail not found');
+                // }
+                // $notifyEmail = $detail->user->email;
+                $notifyEmail = 'quirjohnincoy.work@gmail.com';
+                Mail::to($notifyEmail)->send(new NewBillingInvoiceUploaded($soa));
+
+                $soa->recordActivity(
+                    'billing_invoice_email_sent',
+                    [
+                        'to' => [
+                            'soa_number' => $soa->soa_number,
+                            'file_pdf' => $soa->file_pdf,
+                            'notified_email' => $notifyEmail,
+                        ],
+                    ],
+                    $request->user()
+                );
+            }
 
             // Commit transaction
-            DB::commit();
+            $connection->commit();
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
@@ -317,7 +355,7 @@ class SoaController extends Controller
             }
         } catch (\Exception $e) {
             // Catch and handle any unexpected errors
-            DB::rollBack();
+            $connection->rollBack();
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
@@ -550,13 +588,14 @@ class SoaController extends Controller
                     $soa->client_name = $branch?->br_branch_name ?? $soa->branch_code;
                     $soa->contact = config('vc.contact_email');
 
-                    $detail = UserDetail::where('account_code', $soa->account_code)
-                        ->where('branch_code', $soa->branch_code)
-                        ->first();
-                    if (!$detail) {
-                        throw new \Exception('User detail not found');
-                    }
-                    $notifyEmail = $detail->user->email;
+                    // $detail = UserDetail::where('account_code', $soa->account_code)
+                    //     ->where('branch_code', $soa->branch_code)
+                    //     ->first();
+                    // if (!$detail) {
+                    //     throw new \Exception('User detail not found');
+                    // }
+                    // $notifyEmail = $detail->user->email;
+                    $notifyEmail = 'quirjohnincoy.work@gmail.com';
                     Mail::to($notifyEmail)->send(new NewBillingInvoiceUploaded($soa));
 
                     $soa->recordActivity(
