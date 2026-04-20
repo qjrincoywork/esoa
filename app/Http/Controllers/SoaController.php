@@ -532,8 +532,8 @@ class SoaController extends Controller
             // Handle PDF upload
             if ($request->hasFile('file_pdf')) {
                 $file = $request->file('file_pdf');
-                $filename = $soaNumber . '_' . date('Y-m-d') . '.' . $file->getClientOriginalExtension();
-                $directory = $validated['account_code'] . "/" . $validated['branch_code'];
+                $filename = $soaNumber . '_' . date('Ymd_His') . '.' . $file->getClientOriginalExtension();
+                $directory = $validated['account_code'] . (!empty($validated['branch_code']) ? "/" . $validated['branch_code'] : "");
 
                 $path = $file->storeAs($directory, $filename, env('BILLING_DISK', 'public'));
                 $validated['file_pdf'] = $path;
@@ -542,8 +542,8 @@ class SoaController extends Controller
             // Handle XLS upload
             if ($request->hasFile('file_xls')) {
                 $file = $request->file('file_xls');
-                $filename = $soaNumber . '_' . date('Y-m-d') . '.' . $file->getClientOriginalExtension();
-                $directory = $validated['account_code'] . "/" . $validated['branch_code'];
+                $filename = $soaNumber . '_' . date('Ymd_His') . '.' . $file->getClientOriginalExtension();
+                $directory = $validated['account_code'] . (!empty($validated['branch_code']) ? "/" . $validated['branch_code'] : "");
 
                 $path = $file->storeAs($directory, $filename, env('BILLING_DISK', 'public'));
                 $validated['file_xls'] = $path;
@@ -561,7 +561,7 @@ class SoaController extends Controller
                 ->only(array_keys($changes))
                 ->toArray();
 
-            if (!empty($changes)) {
+            if (!empty($changes) || $request->hasFile('file_pdf')) {
                 $soa->recordActivity(
                     'update',
                     [
@@ -575,17 +575,16 @@ class SoaController extends Controller
 
                 // Prepare data BEFORE commit
                 $shouldSendEmail =
-                    (int) $soa->status === SoaStatus::ENDORSED &&
                     $soa->file_pdf !== null &&
-                    $soa->account_code &&
-                    $soa->branch_code;
-
-                // Commit transaction
-                $connection->commit();
+                    $soa->account_code;
 
                 if ($shouldSendEmail) {
-                    $branch = (new $this->sqlDatabase(Server::HMS))->getBranch($soa->branch_code);
-                    $soa->client_name = $branch?->br_branch_name ?? $soa->branch_code;
+                    $account = (new SqlDatabase(Server::HMS))->getAccount($soa->account_code);
+                    $soa->client_name = $account->ac_name ?? $soa->ac_code;
+                    if (!empty($soa->branch_code)) {
+                        $branch = (new $this->sqlDatabase(Server::HMS))->getBranch($soa->branch_code);
+                        $soa->client_name = $branch?->br_branch_name ?? $soa->branch_code;
+                    }
                     $soa->contact = config('vc.contact_email');
 
                     // $detail = UserDetail::where('account_code', $soa->account_code)
@@ -610,6 +609,9 @@ class SoaController extends Controller
                         $request->user()
                     );
                 }
+
+                // Commit transaction
+                $connection->commit();
 
                 // Return response
                 if ($request->wantsJson() || $request->ajax()) {

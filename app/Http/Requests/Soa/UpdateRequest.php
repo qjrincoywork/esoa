@@ -23,10 +23,15 @@ class UpdateRequest extends FormRequest
     public function rules(): array
     {
         $this->merge(['user_id' => auth()->user()->id]);
-        $filePdfRules = [
-            'required',
-            // 'required_if:status,' . SoaStatus::ENDORSED,
-        ];
+
+        $existingFilePdf = Soa::whereKey($this->input('id'))->value('file_pdf');
+        $filePdfRules = [];
+        if (!$existingFilePdf) {
+            $filePdfRules = [
+                'required',
+                // 'required_if:status,' . SoaStatus::ENDORSED,
+            ];
+        }
 
         if ($this->hasFile('file_pdf')) {
             $filePdfRules = [
@@ -123,22 +128,17 @@ class UpdateRequest extends FormRequest
         ];
     }
 
+    // protected function prepareForValidation(): void
+    // {
+    //     $existingFilePdf = Soa::whereKey($this->input('id'))->value('file_pdf');
+    //     // if (!$existingFilePdf || !$this->hasFile('file_pdf')) {
+    //     //     return;
+    //     // }
 
-    protected function prepareForValidation(): void
-    {
-        if ($this->hasFile('file_pdf')) {
-            return;
-        }
-
-        $existingFilePdf = Soa::whereKey($this->input('id'))->value('file_pdf');
-        if (!$existingFilePdf) {
-            return;
-        }
-
-        $this->merge([
-            'file_pdf' => $existingFilePdf,
-        ]);
-    }
+    //     $this->merge([
+    //         'file_pdf' => $this->hasFile('file_pdf') ? $this->file('file_pdf') : $existingFilePdf ?? null,
+    //     ]);
+    // }
 
     /**
      * Get the error messages for the defined validation rules.
