@@ -48,6 +48,13 @@ class UpdateRequest extends FormRequest
                 'max:191'
                 //new IsDataExists('branches'),
             ],
+            'agent_code' => [
+                'nullable',
+                'required_if:type,' . UserType::BROKER,
+                'string',
+                'max:191'
+                //new IsDataExists('agents'),
+            ],
             'gender_id' => [
                 'required',
                 'integer',
@@ -139,6 +146,7 @@ class UpdateRequest extends FormRequest
             'position_id.required_if' => 'The Position field is required',
             'account_type.required_if' => 'The Account Type field is required',
             'account_code.required_if' => 'The Account field is required',
+            'agent_code.required_if' => 'The Agent Code field is required',
         ];
     }
 }

@@ -3,8 +3,10 @@
 namespace App\Models;
 
 use App\Enums\OrderType;
+use App\Enums\Server;
 use App\Enums\SoaAging;
 use App\Enums\SoaStatus;
+use App\Helpers\SqlDatabase;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -124,6 +126,11 @@ class Soa extends Model
         $result = self::query()
             ->when(!empty($params), function ($query) use ($params) {
                 $query->tap(fn (Builder $q) => $this->applyListSearchFilters($q, $params));
+            })
+            ->when($authUser->hasRole('broker'), function ($query) use ($authUser) {
+                $agentAccounts = (new SqlDatabase(Server::HMS))
+                    ->getAccountsOfAgent($authUser->userDetail->agent_code ?? '');
+                $query->whereIn('account_code', $agentAccounts);
             })
             ->when($authUser->hasRole('account_branch_admin'), function ($query) use ($authUser) {
                 $query->where('account_code', $authUser->userDetail->account_code ?? '');

@@ -22,6 +22,7 @@ type UserDetail = {
   type?: number
   account_code?: string
   branch_code?: string
+  agent_code?: string
   gender_id?: number
   civil_status_id?: number
   citizenship_id?: number
@@ -302,7 +303,7 @@ watch([selectedAccount, searchedBranchName], async () => {
       </Select>
     </div>
 
-    <div v-if="!isShowFields" class="grid gap-2 md:col-span-1">
+    <div v-if="userType == 2" class="grid gap-2 md:col-span-1">
       <Label for="account_type">Account Type<span class="text-red-400">*</span></Label>
       <Select
         id="account_type"
@@ -329,7 +330,7 @@ watch([selectedAccount, searchedBranchName], async () => {
       </Select>
     </div>
 
-    <div v-if="!isShowFields" class="md:col-span-1">
+    <div v-if="userType == 2" class="md:col-span-1">
       <SearchableCombobox
         id="account"
         label="Account"
@@ -347,7 +348,7 @@ watch([selectedAccount, searchedBranchName], async () => {
       />
     </div>
 
-    <div v-if="!isShowFields" class="md:col-span-1">
+    <div v-if="userType == 2" class="md:col-span-1">
       <SearchableCombobox
         id="branch"
         label="Branch"
@@ -364,7 +365,7 @@ watch([selectedAccount, searchedBranchName], async () => {
       />
     </div>
 
-    <div v-if="isShowFields" class="grid gap-2 md:col-span-1">
+    <div v-if="userType == 1" class="grid gap-2 md:col-span-1">
       <Label for="department">Department<span class="text-red-400">*</span></Label>
       <Select
           id="department"
@@ -390,7 +391,7 @@ watch([selectedAccount, searchedBranchName], async () => {
       </Select>
     </div>
 
-    <div v-if="isShowFields" class="grid gap-2 md:col-span-1">
+    <div v-if="userType == 1" class="grid gap-2 md:col-span-1">
       <Label for="position">Position<span class="text-red-400">*</span></Label>
       <Select
         id="position"
@@ -416,7 +417,7 @@ watch([selectedAccount, searchedBranchName], async () => {
       </Select>
     </div>
 
-    <div v-if="isShowFields" class="grid gap-2 md:col-span-1">
+    <div v-if="userType == 1" class="grid gap-2 md:col-span-1">
       <Label for="employee_no">Employee No<span class="text-red-400">*</span></Label>
       <Input
         id="employee_no"
@@ -425,6 +426,18 @@ watch([selectedAccount, searchedBranchName], async () => {
         :default-value="detail?.employee_no"
         autocomplete="employee_no"
         placeholder="Employee No"
+      />
+    </div>
+
+    <div v-if="userType == 3" class="grid gap-2 md:col-span-1">
+      <Label for="agent_code">Agent Code<span class="text-red-400">*</span></Label>
+      <Input
+        id="agent_code"
+        class="mt-1 block w-full"
+        name="agent_code"
+        :default-value="detail?.agent_code"
+        autocomplete="agent_code"
+        placeholder="Agent Code"
       />
     </div>
 
