@@ -176,6 +176,33 @@ class SqlDatabase
         return $result->paginate($perPage);
     }
 
+    /**
+     * Retrieves the account codes associated with a specific agent.
+     *
+     * This method queries the 'Accounts' table to fetch active account codes
+     * for the given agent code, excluding accounts that have been cancelled
+     * (where cancellation date is in the past or null).
+     *
+     * @param string $agentCode The agent code to filter accounts by.
+     * @return \Illuminate\Support\Collection A collection of account codes (ac_code).
+     */
+    public function getAccountsOfAgent($agentCode)
+    {
+        $accounts = $this->db
+            ->table('Accounts')
+            ->select('ac_code')
+            ->where('ac_agcode', $agentCode)
+            ->where('ac_status', 'A') // Active accounts only
+            ->where(function ($query) {
+                $query->where('ac_candate', '>', now())
+                    ->orWhereNull('ac_candate');
+            })
+            ->pluck('ac_code');
+
+        return $accounts;
+    }
+
+
     public function getBillingRefsByParams($params)
     {
         // Pagination

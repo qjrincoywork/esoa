@@ -17,6 +17,7 @@ return new class extends Migration
             $table->string('account_type')->nullable();
             $table->longText('account_code')->nullable();
             $table->longText('branch_code')->nullable();
+            $table->longText('agent_code')->nullable();
             $table->integer('type');
             $table->integer('gender_id');
             $table->integer('civil_status_id');
