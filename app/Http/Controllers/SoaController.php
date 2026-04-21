@@ -172,8 +172,8 @@ class SoaController extends Controller
         $billing = (new $this->sqlDatabase(Server::HMS))->getBillingByParams($validated);
         //http://192.170.11.185/dmis_finance/file/rm/ //EO-2832655-003, EO-3085829-004
         $files = [];
-        if (!empty($billing) && !empty($billing->claimnum)) {
-            $files = Storage::disk(env('RM_DISK', 'public'))->files($billing->claimnum);
+        if (!empty($billing) && !empty($billing->bl_claimnum)) {
+            $files = Storage::disk(env('RM_DISK', 'public'))->files($billing->bl_claimnum);
         }
         // $files = Storage::disk(env('RM_DISK', 'public'))->files('EO-3024023-001'); // 'files' is the sub-directory name
         // $files = Storage::disk(env('RM_DISK', 'public'))->files('EO-2832655-003');
@@ -305,6 +305,15 @@ class SoaController extends Controller
 
         try {
             $soa = DB::transaction(function () use ($validated, $request) {
+                $soaNumber = $validated['soa_number'];
+                CommonHelper::storeUploadedFiles(
+                    $soaNumber,
+                    $validated['account_code'],
+                    $validated['branch_code'] ?? null,
+                    $request,
+                    $validated
+                );
+
                 $soa = $this->soa->saveSoa($validated);
 
                 if (CommonHelper::hasFileAttachmentAndAccount($soa, $request)) {
