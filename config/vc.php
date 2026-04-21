@@ -17,6 +17,7 @@ return [
     'default_text_limit' => 800,
     'default_password' => 'VALUCARE123',
     'contact_email' => 'billingsection@valuecarehealth.com',
+    'billing_notification_email' => env('BILLING_NOTIFICATION_EMAIL', 'billingsection@valuecarehealth.com'),
     'contact_number' => '+639123456789',
     'ignored_diff_keys' => ['created_at', 'updated_at', 'deleted_at'],
 ];

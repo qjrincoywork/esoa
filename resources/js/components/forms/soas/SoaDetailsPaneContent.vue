@@ -81,11 +81,11 @@ const activeTab = ref('details')
         <TabsTrigger class="cursor-pointer" value="details">
           Details
         </TabsTrigger>
-        <TabsTrigger class="cursor-pointer" value="members">
-          Account / Branch Members
-        </TabsTrigger>
         <TabsTrigger class="cursor-pointer" value="amount_management" v-if="page.props.auth.user?.user_detail?.employee_no || page.props.auth.is_superadmin">
           Amount Management
+        </TabsTrigger>
+        <TabsTrigger class="cursor-pointer" value="members">
+          Account / Branch Members
         </TabsTrigger>
         <TabsTrigger class="cursor-pointer" value="activities">
           Soa Activities
@@ -121,7 +121,7 @@ const activeTab = ref('details')
         </Card>
       </TabsContent>
       <TabsContent value="activities">
-        <Card>
+        <Card class="w-fit">
           <CardContent class="grid gap-6">
             <SoaActivitiesList
               v-if="activeTab === 'activities'"

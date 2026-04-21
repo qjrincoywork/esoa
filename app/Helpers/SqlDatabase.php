@@ -265,9 +265,9 @@ class SqlDatabase
                 'c.ch_suffix',
             ])
             ->leftJoin('Billing as b', 'c.ch_policynum', '=', 'b.bl_policynum')
-            // ->when(!empty($params['billing_ref']), function ($query) use ($params) {
-            //     $query->where('b.bl_refid', $params['billing_ref']);
-            // })
+            ->when(!empty($params['billing_ref']), function ($query) use ($params) {
+                $query->where('b.bl_refid', $params['billing_ref']);
+            })
             ->when(!empty($params['account_code']), function ($query) use ($params) {
                 $query->where('c.ch_accountid', $params['account_code']);
             })
