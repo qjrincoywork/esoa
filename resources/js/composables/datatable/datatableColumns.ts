@@ -24,7 +24,11 @@ export function createActionColumn(customActions: ActionColumnOptions) {
     id: 'actions',
     header: 'Actions',
     cell: ({ row }) => {
-      const item = row.original as { id?: number | string };
+      const item = row.original as {
+        id?: number | string
+        status?: string;
+        file_pdf?: string | null;
+      };
       const actions = [];
 
       // Utility to wrap a button with tooltip

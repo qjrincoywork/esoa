@@ -14,6 +14,8 @@ return [
     'api_auth_token' => 'API_AUTH_TOKEN',
 
     'default_pages' => 10,
+    'max_string_limit' => 191,
+    'max_file_size' => 2048, // in KB
     'default_text_limit' => 800,
     'default_password' => 'VALUCARE123',
     'contact_email' => 'billingsection@valuecarehealth.com',

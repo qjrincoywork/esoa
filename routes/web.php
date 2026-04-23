@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\{
     AdminController,
+    ConcernController,
     NavigationController,
     NavigationModuleController,
     PermissionController,
@@ -152,6 +153,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/adjust_amount', 'adjustAmount')->name('adjust_amount');
             Route::post('/update', 'update')->name('update');
             Route::post('/update_tag', 'updateTag')->name('update_tag');
+            Route::post('/destroy', 'destroy')->name('destroy');
+        });
+
+        Route::prefix('concerns')->name('concerns.')->controller(ConcernController::class)->group(function () {
+            Route::get('/', 'index')->name('index');
+            Route::get('/{id}/show', 'show')->name('show');
+            Route::get('/create', 'create')->name('create');
+            Route::post('/store', 'store')->name('store');
+            Route::get('/{id}/edit', 'edit')->name('edit');
+            Route::get('/{id}/untag', 'untag')->name('untag');
+            Route::post('/update', 'update')->name('update');
             Route::post('/destroy', 'destroy')->name('destroy');
         });
     });

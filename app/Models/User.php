@@ -69,6 +69,27 @@ class User extends Authenticatable implements AuthorizableContract
         return $this->hasOne(UserDetail::class, 'user_id');
     }
 
+    public function concerns(): HasMany
+    {
+        return $this->hasMany(Concern::class, 'user_id');
+    }
+
+    public function billingInvoices(): HasMany
+    {
+        return $this->hasMany(Soa::class, 'user_id');
+    }
+
+    public function soaActivities(): HasMany
+    {
+        return $this->hasMany(SoaActivity::class, 'user_id');
+    }
+
+    /**
+     * Get users with optional filters and pagination.
+     *
+     * @param array $params
+     * @return \Illuminate\Pagination\Paginator
+     */
     public function getUsers(array $params)
     {
         // Pagination
