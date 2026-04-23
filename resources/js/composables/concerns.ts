@@ -1,12 +1,15 @@
 import { useModal } from '@/composables/useModal';
+import { usePane } from '@/composables/usePane';
 import { useAjax } from '@/composables/useAjax';
 import DeleteForm from '@/components/forms/concerns/DeleteForm.vue';
 import SavingConcernForm from '@/components/forms/concerns/SavingConcernForm.vue';
-import { ref, type Ref } from 'vue';
+import { ref, shallowRef, toRef, type Component, type Ref } from 'vue';
 import { dispatchNotification } from '@/components/notification';
 import { showLoader, hideLoader } from '@/composables/useLoader';
 import { useModulePermissions } from '@/composables/useModulePermissions';
 import { router, usePage } from '@inertiajs/vue3';
+import ConcernDetailsPaneContent from '@/components/forms/concerns/ConcernDetailsPaneContent.vue';
+import { clearSoaListRowPatches, patchSoaListRow } from './soas';
 
 let formApi: { getFormData: () => FormData | null } | null = null;
 
@@ -22,12 +25,44 @@ export interface Concern {
   deleted_at?: string
 }
 
+/** Client-side overlays for list rows until the next Inertia `concerns` refresh (module singleton). */
+const listRowPatches: Ref<Record<number, Record<string, unknown>>> = ref({});
+
+export function patchListRow(id: number, patch: Record<string, unknown>): void {
+  if (typeof id !== 'number' || !Number.isFinite(id)) return;
+  const key = id;
+  const prev = listRowPatches.value[key] ?? {};
+  listRowPatches.value = {
+    ...listRowPatches.value,
+    [key]: { ...prev, ...patch },
+  };
+}
+
+export function clearListRowPatches(): void {
+  listRowPatches.value = {};
+}
+
 export function useConcerns() {
   const page = usePage();
   const { slug } = useModulePermissions();
   const { openModal, closeModal } = useModal();
+  const {
+    openPane,
+    closePane,
+    setPaneLoading,
+    setPaneError,
+    setPaneContent,
+    rightPane,
+    topPane,
+  } = usePane();
   const { get, post } = useAjax();
   const auth = (page.props.auth);
+  const rightPaneVisible = toRef(rightPane, 'open');
+  const rightPaneTitle = toRef(rightPane, 'title');
+  const rightPaneLoading = toRef(rightPane, 'loading');
+  const rightPaneError = toRef(rightPane, 'error');
+  const rightPaneContentComponent = toRef(rightPane, 'contentComponent');
+  const rightPaneComponentProps = toRef(rightPane, 'componentProps');
 
   const newConcern = async () => {
     try {
@@ -44,7 +79,6 @@ export function useConcerns() {
       }
 
       const payload = response.data;
-      console.log(page.props);
 
       if (!payload) return;
       openModal({
@@ -91,8 +125,11 @@ export function useConcerns() {
   const editConcern = async (concern: Concern) => {
     showLoader();
     try {
+      // Make AJAX request without navigation using reusable composable
       const response = await get<{
         concern: Concern;
+        concern_types: Array<{ value: number | string; name: string }>;
+        ticket_statuses: Array<{ value: number | string; name: string }>;
       }>(
         `/${slug.value}/${concern.id}/edit`
       );
@@ -106,11 +143,14 @@ export function useConcerns() {
       if (!payload) return;
 
       openModal({
-        modalTitle: `Edit ${payload.concern?.title || 'Concern'}`,
+        modalTitle: `Edit ${concern?.title || 'Concern'}`,
         buttonText: 'Update',
         component: SavingConcernForm,
         componentProps: {
           concern: payload.concern,
+          concern_types: payload.concern_types,
+          ticket_statuses: payload.ticket_statuses ?? [],
+          auth: auth ?? undefined,
           onReady: (api: { getFormData: () => FormData | null }) => {
             formApi = api;
           }
@@ -140,6 +180,26 @@ export function useConcerns() {
         }
       });
     } catch (error) {
+      dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
+    } finally {
+      hideLoader();
+    }
+  };
+
+  const viewConcern = async (concern: Concern) => {
+    showLoader();
+    try {
+      // const payload = response.data;
+      openPane({
+        title: `Concern Details - ${concern.title}`,
+        side: 'right',
+        component: ConcernDetailsPaneContent,
+        componentProps: { concern: concern },
+      });
+    } catch (error) {
+      setPaneLoading('right', false);
+      setPaneError('right', 'Error fetching data.');
+      setPaneContent('right', null);
       dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
     } finally {
       hideLoader();
@@ -200,6 +260,20 @@ export function useConcerns() {
   return {
     newConcern,
     editConcern,
+    viewConcern,
     deleteConcern,
+
+    openPane,
+    closePane,
+    rightPaneVisible,
+    rightPaneTitle,
+    rightPaneLoading,
+    rightPaneError,
+    rightPaneContentComponent,
+    rightPaneComponentProps,
+
+    listRowPatches,
+    patchSoaListRow,
+    clearSoaListRowPatches,
   };
 }

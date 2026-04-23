@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -45,50 +45,59 @@ const props = defineProps({
     default: () => [],
   },
   onReady: {
-    type: Function as unknown as () => ((api: { getFormData: () => FormData | null }) => void) | undefined,
+    type: Function as unknown as () => ((api: { getFormData: () => FormData | null; formRef: HTMLFormElement | null }) => void) | undefined,
     required: false,
   },
 });
+const concern = computed<Concern>(() => props.concern as Concern)
 
 const form = ref({
-  user_id: props.concern.user_id || '',
-  billing_invoice: props.concern.billing_invoice || '',
-  type: props.concern.type || '',
-  title: props.concern.title || '',
-  description: props.concern.description || '',
-  status: props.concern.status || '',
+  id: concern.value?.id || '',
+  billing_invoice: concern.value?.billing_invoice || '',
+  type: concern.value?.type || '',
+  title: concern.value?.title || '',
+  description: concern.value?.description || '',
+  status: concern.value?.status || '',
   attachment: null as File | null,
 });
 
+const selectedStatus = ref<string | number>(concern.value.status != null ? String(concern.value.status) : '')
+const selectedType = ref<string | number>(concern.value.type != null ? String(concern.value.type) : '')
 const types = computed(() => props.concern_types || []); // Assuming concern_types is passed as a prop
 const statuses = computed(() => props.ticket_statuses || []); // Assuming ticket_statuses is passed as a prop
-
 const concernForm = ref<HTMLFormElement | null>(null);
+
 
 function getFormData(): FormData | null {
   if (!concernForm.value) return null;
   return new FormData(concernForm.value);
 }
 
-defineExpose({
-  getFormData,
-});
+// defineExpose({
+//   getFormData,
+// });
 
 onMounted(() => {
   if (typeof props.onReady === 'function') {
-    props.onReady({ getFormData });
+    props.onReady({ getFormData, formRef: concernForm.value });
   }
 });
 </script>
 
 <template>
   <form ref="concernForm" class="grid grid-cols-1 md:grid-cols-1 gap-3" enctype="multipart/form-data">
-    <input v-if="concern.id" type="hidden" name="id" :value="concern.id ?? ''" />
+    <div class="md:col-span-2 hidden">
+      <!-- Use native hidden inputs so FormData always reflects latest reactive values -->
+      <input v-if="concern?.id" type="hidden" name="id" :value="concern?.id" />
+      <input type="hidden" name="type" :value="selectedType" />
+      <input type="hidden" name="status" :value="selectedStatus" />
+    </div>
     <div class="grid gap-2 md:col-span-1">
       <Label for="billing_invoice">Billing Invoice<span class="text-red-400">*</span></Label>
       <Input
         class="mt-1 block w-full"
         id="billing_invoice"
+        name="billing_invoice"
         v-model="form.billing_invoice"
       />
     </div>
@@ -96,7 +105,7 @@ onMounted(() => {
       <Label for="type">Type<span class="text-red-400">*</span></Label>
       <Select
         class="mt-1 block w-full"
-        v-model="form.type"
+        v-model="selectedType"
       >
         <SelectTrigger class="w-full">
           <SelectValue placeholder="Select type" />
@@ -117,6 +126,7 @@ onMounted(() => {
       <Input
         class="mt-1 block w-full"
         id="title"
+        name="title"
         v-model="form.title"
       />
     </div>
@@ -126,14 +136,15 @@ onMounted(() => {
         placeholder="Type the description here."
         class="mt-1 block w-full"
         id="description"
+        name="description"
         v-model="form.description"
       />
     </div>
-    <div class="grid gap-2 md:col-span-1" v-if="auth.is_superadmin">
+    <div class="grid gap-2 md:col-span-1" v-if="auth?.is_superadmin">
       <Label for="status">Status<span class="text-red-400">*</span></Label>
       <Select
         class="mt-1 block w-full"
-        v-model="form.status"
+        v-model="selectedStatus"
       >
         <SelectTrigger class="w-full">
           <SelectValue placeholder="Select status" />
@@ -156,7 +167,6 @@ onMounted(() => {
         id="attachment"
         name="attachment"
         type="file"
-        @change="(e) => form.attachment = (e.target as HTMLInputElement).files?.[0] || null"
       />
     </div>
   </form>

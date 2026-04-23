@@ -43,7 +43,6 @@ onMounted(() => {
 <template>
   <form ref="concernDeleteForm">
     <div class="hidden">
-      <input type="hidden" name="_method" value="DELETE" />
       <input type="hidden" name="id" :value="concern.id" />
     </div>
     <p>Are you sure you want to {{ message.toLowerCase() }} this concern?</p>

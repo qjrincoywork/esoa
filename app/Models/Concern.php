@@ -46,4 +46,24 @@ class Concern extends Model
     {
         return $this->belongsTo(Soa::class, 'billing_invoice', 'soa_number');
     }
+
+    public function getConcerns($request)
+    {
+        $authUser = auth()->user();
+        $concerns = self::with(['user', 'soa'])
+            ->when($authUser->hasRole('broker') || $authUser->hasRole('account_branch_admin'), function ($query) use ($authUser) {
+                    $query->where('user_id', $authUser->id);
+                }
+            )
+            ->when($authUser->hasRole('superadmin'), function ($query) {
+                $query->withTrashed();
+            })
+            ->when(isset($request->search), function ($query) use ($request) {
+                $query->where('title', 'like', '%' . $request->search . '%')
+                      ->orWhere('description', 'like', '%' . $request->search . '%');
+            })
+            ->paginate($request->per_page);
+
+        return $concerns;
+    }
 }

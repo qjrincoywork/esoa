@@ -711,7 +711,7 @@ watch(
           :content-component="rightPaneContentComponent"
           :component-props="rightPaneComponentProps"
           @update:open="(v) => { if (!v && !rightPaneLoading) closePane('right') }"
-          />
+        />
 
         <TopPane
           :open="topPaneVisible"

@@ -6,6 +6,8 @@ use App\Enums\Server;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Mail;
 use App\Helpers\SqlDatabase;
+use Illuminate\Database\Eloquent\Model;
+use Symfony\Component\HttpFoundation\Response;
 
 class CommonHelper
 {
@@ -205,6 +207,24 @@ class CommonHelper
     {
         if ($model->status === $paidStatus) {
             throw new \Exception('Record has already been paid.');
+        }
+    }
+
+    public static function assertUserMayAccessModel($model): void
+    {
+        $authUser = auth()->user();
+        if (!$authUser) {
+            abort(Response::HTTP_UNAUTHORIZED);
+        }
+        if ($model->user_id !== $authUser->id) {
+            abort(Response::HTTP_FORBIDDEN);
+        }
+        if (
+            $authUser->hasRole('superadmin')
+            || $authUser->hasRole('billing_admin')
+            || ($model->user_id === $authUser->id)
+        ) {
+            return;
         }
     }
 }
