@@ -33,6 +33,13 @@ class ConcernResource extends JsonResource
             'status' => TicketStatus::label($this->status),
             'status_color' => TicketStatus::color($this->status),
             'attachment' => $this->attachment,
+            'attachment_preview_token' => $this->attachment && $request->user()
+                ? CommonHelper::createFilePreviewToken(
+                    env('CONCERNS_DISK', 'public'),
+                    $this->attachment,
+                    (int) $request->user()->id
+                )
+                : null,
             'created_by' => $this->resource->user->username ?? null,
             'created_at' => CommonHelper::formatDate($this->created_at),
         ];

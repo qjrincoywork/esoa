@@ -557,7 +557,7 @@ watch(soa, (val: Soa | undefined) => {
           :href="existingPdf.href"
           target="_blank"
           rel="noopener noreferrer"
-          class="font-medium text-[var(--color-text)] underline underline-offset-2 hover:opacity-90"
+          class="cursor-pointer font-medium text-[var(--color-text)] underline underline-offset-2 hover:opacity-90"
         >
           {{ existingPdf.name }}
         </a>
@@ -583,7 +583,7 @@ watch(soa, (val: Soa | undefined) => {
           :href="existingExcel.href"
           target="_blank"
           rel="noopener noreferrer"
-          class="font-medium text-[var(--color-text)] underline underline-offset-2 hover:opacity-90"
+          class="cursor-pointer font-medium text-[var(--color-text)] underline underline-offset-2 hover:opacity-90"
         >
           {{ existingExcel.name }}
         </a>

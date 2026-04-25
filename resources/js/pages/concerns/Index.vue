@@ -18,6 +18,7 @@ const {
   viewConcern,
   editConcern,
   deleteConcern,
+  previewFile,
   openPane,
   closePane,
   rightPaneVisible,
@@ -68,6 +69,7 @@ const handlerMap: Record<string, Function> = {
   update: editConcern,
   delete: deleteConcern,
   destroy: deleteConcern,
+  preview_file: previewFile,
 }
 
 const columns = computed(() => {

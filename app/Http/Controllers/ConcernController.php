@@ -65,21 +65,17 @@ class ConcernController extends Controller
      */
     public function store(CreateRequest $request)
     {
+        DB::connection('mysql')->beginTransaction();
         try {
-            DB::beginTransaction();
+            $validated = $request->validated();
+            CommonHelper::storeUploadedFile($request, $validated, 'attachment');
+            Concern::create($validated);
 
-            $data = $request->validated();
-            if ($request->hasFile('attachment')) {
-                // $data['attachment'] = $request->file('attachment')->store('concerns', 'public');
-            }
-
-            Concern::create($data);
-
-            DB::commit();
+            DB::connection('mysql')->commit();
 
             return response()->json(['message' => 'Concern created successfully.']);
         } catch (\Exception $e) {
-            DB::rollBack();
+            DB::connection('mysql')->rollBack();
 
             return response()->json(['message' => 'Failed to create concern: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
@@ -98,11 +94,32 @@ class ConcernController extends Controller
     }
 
     /**
+     * Preview a stored concern attachment.
+     */
+    public function previewFile(Request $request)
+    {
+        return CommonHelper::previewStoredFileFromToken(
+            (string) $request->query('token', ''),
+            env('CONCERNS_DISK', 'public'),
+            $request->user()?->id
+        );
+    }
+
+    /**
      * Show the form for editing the specified resource.
      */
     public function edit($id, Request $request)
     {
         $concern = $this->concern->findOrFail($id);
+        if ($concern) {
+            $concern->attachment_preview_token = $concern->attachment && $request->user()
+                ? CommonHelper::createFilePreviewToken(
+                    env('CONCERNS_DISK', 'public'),
+                    $concern->attachment,
+                    (int) $request->user()->id
+                )
+                : null;
+        }
 
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
@@ -119,23 +136,18 @@ class ConcernController extends Controller
      */
     public function update(UpdateRequest $request)
     {
+        DB::connection('mysql')->beginTransaction();
         try {
-            DB::beginTransaction();
-
             $concern = Concern::findOrFail($request->id);
+            $validated = $request->validated();
+            CommonHelper::storeUploadedFile($request, $validated, 'attachment');
+            $concern->update($validated);
 
-            $data = $request->validated();
-            if ($request->hasFile('attachment')) {
-                // $data['attachment'] = $request->file('attachment')->store('concerns', 'public');
-            }
-
-            $concern->update($data);
-
-            DB::commit();
+            DB::connection('mysql')->commit();
 
             return response()->json(['message' => 'Concern updated successfully.']);
         } catch (\Exception $e) {
-            DB::rollBack();
+            DB::connection('mysql')->rollBack();
 
             return response()->json(['message' => 'Failed to update concern: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }

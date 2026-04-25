@@ -28,6 +28,7 @@ export function createActionColumn(customActions: ActionColumnOptions) {
         id?: number | string
         status?: string;
         file_pdf?: string | null;
+        attachment?: string | null;
       };
       const actions = [];
 
@@ -57,6 +58,9 @@ export function createActionColumn(customActions: ActionColumnOptions) {
           }
           if ((item.file_pdf == '' || item.file_pdf == null) && action.slug === 'soas.billing_attachments') {
             continue; // Skip billing_attachments for paid items without PDF
+          }
+          if ((item.attachment == '' || item.attachment == null) && action.slug === 'concerns.preview_file') {
+            continue; // Skip without attachment
           }
           const button = h(
             'button',

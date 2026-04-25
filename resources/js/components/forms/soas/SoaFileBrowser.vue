@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { useModulePermissions } from '@/composables/useModulePermissions';
 import { Button } from "@/components/ui/button";
 
-const folders = ref([])
+const folders = ref<string[]>([])
 const loading = ref(false)
+type FileEntry = {
+  name: string
+  preview_token: string
+}
 type Soa = {
   id?: number
   user_id?: number
@@ -31,47 +34,21 @@ const props = defineProps({
     default: () => ({}),
   },
   files: {
-    type: Object as unknown as () => [],
-    default: () => ({}),
+    type: Array as unknown as () => FileEntry[],
+    default: () => [],
   },
   onReady: {
     type: Function as unknown as () => ((api: { getFormData: () => FormData | null; formRef: HTMLFormElement | null }) => void) | undefined,
     required: false,
   },
 });
-const soa = computed<Soa>(() => props.soa as Soa)
-const files = computed<[]>(() => props?.files)
+const files = computed<FileEntry[]>(() => props?.files ?? [])
 
-/* Extract filename from path */
-const nameOnly = (path) => {
-  return path.split('/').pop()
-}
-
-/* Preview file via POST payload */
-const previewFile = (file) => {
-  const form = document.createElement('form')
-  form.method = 'POST'
-  form.action = '/soas/preview_file'
-  form.target = '_blank'
-
-  const input = document.createElement('input')
-  input.type = 'hidden'
-  input.name = 'file'
-  input.value = file
-  form.appendChild(input)
-
-  const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-  if (token) {
-    const csrf = document.createElement('input')
-    csrf.type = 'hidden'
-    csrf.name = '_token'
-    csrf.value = token
-    form.appendChild(csrf)
-  }
-
-  document.body.appendChild(form)
-  form.submit()
-  document.body.removeChild(form)
+/* Preview file via short-lived token */
+const previewFile = (file: FileEntry) => {
+  if (!file?.preview_token) return
+  const url = `/soas/preview_file?token=${encodeURIComponent(file.preview_token)}`
+  window.open(url, '_blank', 'noopener,noreferrer')
 }
 </script>
 
@@ -91,7 +68,7 @@ const previewFile = (file) => {
         :key="folder"
         class="folder"
       >
-        📁 {{ nameOnly(folder) }}
+        📁 {{ folder }}
       </div>
     </div>
 
@@ -102,13 +79,13 @@ const previewFile = (file) => {
       </div>
       <div
         v-for="file in files"
-        :key="file"
+        :key="file.preview_token"
         class="file"
       >
 
       <div v-if="file">
         <span class="mr-2">
-          📄 {{ nameOnly(file) }}
+          📄 {{ file.name }}
         </span>
 
         <Button

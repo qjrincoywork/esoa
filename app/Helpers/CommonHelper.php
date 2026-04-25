@@ -4,9 +4,11 @@ namespace App\Helpers;
 
 use App\Enums\Server;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Mail;
 use App\Helpers\SqlDatabase;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\Response;
 
 class CommonHelper
@@ -153,6 +155,16 @@ class CommonHelper
         }
     }
 
+    public static function storeUploadedFile($request, array &$validated, $fileField, $directory = null, $model = null): void {
+        if ($request->hasFile($fileField)) {
+            $file = $request->file($fileField);
+            $preString = !empty($model) ? $model->id . '_' : '';
+            $directory = $directory ?? auth()->user()->username;
+            $filename = $preString . now()->format('Ymd_His') . '.' . $file->getClientOriginalExtension();
+            $validated[$fileField] = $file->storeAs($directory, $filename, env('CONCERNS_DISK', 'public'));
+        }
+    }
+
     /**
      * Set client name from account or branch data.
      *
@@ -226,5 +238,168 @@ class CommonHelper
         ) {
             return;
         }
+    }
+
+    /**
+     * Stream a stored file as inline preview response.
+     */
+    public static function previewStoredFile(string $diskName, ?string $filePath)
+    {
+        $safePath = self::sanitizePreviewPath($filePath);
+        if (!$safePath) {
+            abort(Response::HTTP_BAD_REQUEST, 'File path is required');
+        }
+
+        $disk = Storage::disk($diskName);
+
+        if (!$disk->exists($safePath)) {
+            abort(Response::HTTP_NOT_FOUND, 'File not found');
+        }
+
+        $stream = $disk->readStream($safePath);
+        if (!is_resource($stream)) {
+            abort(Response::HTTP_NOT_FOUND, 'File is not readable');
+        }
+
+        $mimeType = 'application/octet-stream';
+        try {
+            $mimeType = $disk->mimeType($safePath) ?? $mimeType;
+        } catch (\Throwable $e) {
+            // Keep default mime type when unavailable.
+        }
+
+        $fileName = basename($safePath);
+        $fileSize = null;
+        try {
+            $fileSize = $disk->size($safePath);
+        } catch (\Throwable $e) {
+            // Omit content length when unavailable.
+        }
+
+        return response()->stream(function () use ($stream) {
+            fpassthru($stream);
+            fclose($stream);
+        }, Response::HTTP_OK, array_filter([
+            'Content-Type' => $mimeType,
+            'Content-Disposition' => sprintf('inline; filename="%s"', $fileName),
+            'Content-Length' => $fileSize,
+        ]));
+    }
+
+    /**
+     * Create an encrypted short-lived token for file preview.
+     */
+    public static function createFilePreviewToken(
+        string $diskName,
+        string $filePath,
+        int $userId,
+        ?int $ttlMinutes = null
+    ): string {
+        $safePath = self::sanitizePreviewPath($filePath);
+        if (!$safePath) {
+            throw new \InvalidArgumentException('Invalid file path.');
+        }
+
+        $expiresAt = now()->addMinutes($ttlMinutes ?? config('vc.file_preview_token_ttl_minutes'))->timestamp;
+
+        return Crypt::encryptString(json_encode([
+            'disk' => $diskName,
+            'path' => $safePath,
+            'uid' => $userId,
+            'exp' => $expiresAt,
+        ], JSON_THROW_ON_ERROR));
+    }
+
+    /**
+     * Decrypt and validate file preview token payload.
+     *
+     * @return array{disk: string, path: string, uid: int, exp: int}
+     */
+    public static function parseFilePreviewToken(string $token): array
+    {
+        try {
+            $decoded = json_decode(Crypt::decryptString($token), true, 512, JSON_THROW_ON_ERROR);
+        } catch (\Throwable $e) {
+            abort(Response::HTTP_FORBIDDEN, 'Invalid preview token.');
+        }
+
+        if (
+            !is_array($decoded)
+            || !isset($decoded['disk'], $decoded['path'], $decoded['uid'], $decoded['exp'])
+            || !is_string($decoded['disk'])
+            || !is_string($decoded['path'])
+            || !is_numeric($decoded['uid'])
+            || !is_numeric($decoded['exp'])
+        ) {
+            abort(Response::HTTP_FORBIDDEN, 'Invalid preview token.');
+        }
+
+        $path = self::sanitizePreviewPath($decoded['path']);
+        if (!$path) {
+            abort(Response::HTTP_FORBIDDEN, 'Invalid preview token.');
+        }
+
+        return [
+            'disk' => $decoded['disk'],
+            'path' => $path,
+            'uid' => (int) $decoded['uid'],
+            'exp' => (int) $decoded['exp'],
+        ];
+    }
+
+    /**
+     * Validate token against user+disk and stream the file.
+     */
+    public static function previewStoredFileFromToken(
+        string $token,
+        string $expectedDisk,
+        ?int $currentUserId
+    ) {
+        if ($token === '') {
+            abort(Response::HTTP_BAD_REQUEST, 'Preview token is required.');
+        }
+
+        $payload = self::parseFilePreviewToken($token);
+
+        if ($payload['disk'] !== $expectedDisk) {
+            abort(Response::HTTP_FORBIDDEN, 'Invalid preview token.');
+        }
+
+        if ($payload['exp'] < now()->timestamp) {
+            abort(Response::HTTP_FORBIDDEN, 'Preview token expired.');
+        }
+
+        if ($currentUserId === null || $payload['uid'] !== $currentUserId) {
+            abort(Response::HTTP_FORBIDDEN);
+        }
+
+        return self::previewStoredFile($expectedDisk, $payload['path']);
+    }
+
+    /**
+     * Normalize and validate a relative storage path for preview.
+     */
+    private static function sanitizePreviewPath(?string $filePath): ?string
+    {
+        if ($filePath === null) {
+            return null;
+        }
+
+        $normalized = trim(str_replace('\\', '/', $filePath));
+        if ($normalized === '') {
+            return null;
+        }
+
+        // Require disk-relative paths and block traversal/null-byte patterns.
+        if (
+            str_starts_with($normalized, '/')
+            || str_contains($normalized, '../')
+            || str_contains($normalized, '..\\')
+            || str_contains($normalized, "\0")
+        ) {
+            abort(Response::HTTP_FORBIDDEN, 'Invalid file path');
+        }
+
+        return $normalized;
     }
 }

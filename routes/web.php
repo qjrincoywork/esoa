@@ -132,8 +132,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/', 'index')->name('index');
             Route::get('/list', 'list')->name('list');
             Route::get('/file_list', 'fileList')->name('file_list');
-            Route::post('/preview_file', 'previewFile')->name('preview_file');
-            Route::get('/preview_file/{file}', 'previewFile')->name('preview_file_with_param');
+            Route::get('/preview_file', 'previewFile')->name('preview_file');
             Route::get('/tax_computation', 'taxComputation')->name('tax_computation');
             Route::get('/get_accounts', 'getAccounts')->name('get_accounts');
             Route::get('/get_billing_refs', 'getBillingRefs')->name('get_billing_refs');
@@ -158,6 +157,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::prefix('concerns')->name('concerns.')->controller(ConcernController::class)->group(function () {
             Route::get('/', 'index')->name('index');
+            Route::get('/preview_file', 'previewFile')->name('preview_file');
             Route::get('/{id}/show', 'show')->name('show');
             Route::get('/create', 'create')->name('create');
             Route::post('/store', 'store')->name('store');
