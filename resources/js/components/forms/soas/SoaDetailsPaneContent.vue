@@ -35,6 +35,7 @@ type Soa = {
   branch_name?: string
   branch_code?: string
   billing_ref?: string
+  billing_ref_names?: string
   bill_type?: number
   status?: number
   status_color?: string
@@ -98,7 +99,7 @@ const activeTab = ref('details')
               <li>Account Name: <span class="font-bold">{{ localSoa.account_name }}</span></li>
               <li v-if="localSoa.account_code">Account Code: <span class="font-bold">{{ localSoa.account_code }}</span></li>
               <li v-if="localSoa.branch_name">Branch Name: <span class="font-bold">{{ localSoa.branch_name }}</span></li>
-              <li>Billing Reference: <span class="font-bold">{{ localSoa.billing_ref }}</span></li>
+              <li>Billing Reference/s: <p class="font-bold text-wrap">{{ localSoa.billing_ref_names }}</p></li>
               <li>SOA Number: <span class="font-bold">{{ localSoa.soa_number }}</span></li>
               <li>Bill Type: <span class="font-bold">{{ localSoa.bill_type }}</span></li>
               <li>Status: <span :class="[

@@ -32,8 +32,8 @@ const props = withDefaults(
   defineProps<{
     /** List of options. Each item must have `value` and `name` (or `label`). */
     items: SearchableComboboxItem[];
-    /** Selected value (v-model). */
-    modelValue?: string | number | null;
+    /** Selected value (v-model). For multiple mode, use array. */
+    modelValue?: string | number | (string | number)[] | null;
     /** Search query (v-model:search). Parent can watch this for debounced API calls. */
     search?: string;
     /** Placeholder when nothing is selected. */
@@ -54,6 +54,8 @@ const props = withDefaults(
     required?: boolean;
     /** Optional id for the trigger (used by label for attribute). */
     id?: string;
+    /** Enable multiple selection mode. */
+    multiple?: boolean;
   }>(),
   {
     modelValue: null,
@@ -65,11 +67,12 @@ const props = withDefaults(
     hasMore: false,
     loadingMore: false,
     required: false,
+    multiple: false,
   },
 );
 
 const emit = defineEmits<{
-  'update:modelValue': [value: string | number | null];
+  'update:modelValue': [value: string | number | (string | number)[] | null];
   'update:search': [value: string];
   loadMore: [];
 }>();
@@ -81,12 +84,25 @@ const searchProxy = computed({
   set: (val: string) => emit('update:search', val),
 });
 
-const selectedItem = computed(() =>
-  props.items?.find((item) => String(item.value) === String(props.modelValue)),
-);
+const selectedItems = computed(() => {
+  if (props.multiple) {
+    const arr = (props.modelValue as (string | number)[] | null) ?? [];
+    const selectedSet = new Set(arr.map((value) => String(value)));
+    return props.items?.filter((item) => selectedSet.has(String(item.value))) ?? [];
+  }
+  return props.modelValue ? [props.items?.find((item) => String(item.value) === String(props.modelValue))].filter(Boolean) : [];
+});
 
 const displayText = computed(() => {
-  const item = selectedItem.value;
+  if (props.multiple) {
+    const items = selectedItems.value;
+    if (!items.length) return props.placeholder;
+    if (items.length <= 2) {
+      return items.map((item) => item?.name ?? item?.label ?? String(item?.value)).join(', ');
+    }
+    return `${items.length} selected`;
+  }
+  const item = selectedItems.value[0];
   if (!item) return props.placeholder;
   return (item.name ?? item.label ?? String(item.value)) as string;
 });
@@ -95,9 +111,30 @@ function getItemDisplay(item: SearchableComboboxItem): string {
   return (item.name ?? item.label ?? String(item.value)) as string;
 }
 
+function isSelected(value: string | number): boolean {
+  if (props.multiple) {
+    const arr = (props.modelValue as (string | number)[] | null) ?? [];
+    return arr.some((item) => String(item) === String(value));
+  }
+  return String(props.modelValue) === String(value);
+}
+
 function onSelect(value: string) {
-  emit('update:modelValue', value);
-  open.value = false;
+  if (props.multiple) {
+    const arr = [...((props.modelValue as (string | number)[] | null) ?? [])];
+    const selectedItem = props.items.find((item) => String(item.value) === value);
+    const normalizedValue = selectedItem?.value ?? value;
+    const idx = arr.findIndex((item) => String(item) === value);
+    if (idx >= 0) {
+      arr.splice(idx, 1);
+    } else {
+      arr.push(normalizedValue);
+    }
+    emit('update:modelValue', arr);
+  } else {
+    emit('update:modelValue', value);
+    open.value = false;
+  }
 }
 
 function onLoadMore() {
@@ -141,13 +178,23 @@ function onLoadMore() {
                 :value="String(item.value)"
                 @select="(ev) => onSelect(String(ev.detail?.value ?? ''))"
               >
-                {{ getItemDisplay(item) }}
-                <CheckIcon
-                  :class="cn(
-                    'ml-auto',
-                    String(item.value) === String(modelValue) ? 'opacity-100' : 'opacity-0',
-                  )"
-                />
+                <div class="flex items-center w-full">
+                  <CheckIcon
+                    v-if="multiple"
+                    :class="cn(
+                      'mr-2 h-4 w-4',
+                      isSelected(String(item.value)) ? 'opacity-100' : 'opacity-0',
+                    )"
+                  />
+                  <span class="flex-1">{{ getItemDisplay(item) }}</span>
+                  <CheckIcon
+                    v-if="!multiple"
+                    :class="cn(
+                      'ml-auto',
+                      isSelected(String(item.value)) ? 'opacity-100' : 'opacity-0',
+                    )"
+                  />
+                </div>
               </CommandItem>
               <div
                 v-if="hasMore"

@@ -4,6 +4,7 @@ namespace App\Helpers;
 
 use App\Enums\AccountType;
 use App\Enums\OrderType;
+use App\Enums\Server;
 use Illuminate\Support\Facades\DB;
 
 class SqlDatabase
@@ -207,7 +208,16 @@ class SqlDatabase
     {
         // Pagination
         $perPage = $params['per_page'] ?? config('vc.default_pages');
-        $selectedRef = $params['selected_ref'] ?? null;
+        $selectedRefs = $params['selected_refs'] ?? null;
+
+        // Handle both single string and array of selected refs
+        if (is_string($selectedRefs)) {
+            $selectedRefs = array_filter(explode(',', $selectedRefs));
+        } elseif (!is_array($selectedRefs)) {
+            $selectedRefs = $selectedRefs ? [$selectedRefs] : [];
+        }
+        $selectedRefs = array_filter($selectedRefs);
+
         $result = $this->db
             ->table('Billing as a')
             ->select([
@@ -215,6 +225,7 @@ class SqlDatabase
                 'a.bl_type',
                 'a.bl_claimnum',
                 'a.bl_policynum',
+                'a.bl_balance',
                 'a.bl_name',
                 'a.bl_dateposted',
                 'a.bl_workstatus',
@@ -225,22 +236,29 @@ class SqlDatabase
             ->leftJoin('Accounts as e', function ($join) {
                 $join->on(DB::raw('SUBSTRING(a.bl_policynum,1,11)'), '=', 'e.ac_code');
             })
-            // ->whereIn('a.bl_workstatus', ['FB', 'PX'])
-            // ->where('a.bl_type', 'MEDCOLL')
             ->where('e.ac_code', $params['account_code'])
-            ->when(isset($params['name']) && $params['name'] !== '', function ($query) use ($params, $selectedRef) {
-                $query->where(function ($nameQuery) use ($params, $selectedRef) {
+            ->when(isset($params['name']) && !empty($params['name']), function ($query) use ($params, $selectedRefs) {
+                $query->where(function ($nameQuery) use ($params, $selectedRefs) {
                     $nameQuery->where('a.bl_refid', 'like', '%' . $params['name'] . '%');
-                        // ->orWhere('a.bl_claimnum', 'like', '%' . $params['name'] . '%')
-                        // ->orWhere('a.bl_policynum', 'like', '%' . $params['name'] . '%')
-                        // ->orWhere('a.bl_name', 'like', '%' . $params['name'] . '%');
-                    if (!empty($selectedRef)) {
-                        $nameQuery->orWhere('a.bl_refid', $selectedRef);
+                    // Include selected refs in results
+                    if (!empty($selectedRefs)) {
+                        $nameQuery->orWhereIn('a.bl_refid', $selectedRefs);
                     }
                 });
             })
-            ->when(!empty($selectedRef), function ($query) use ($selectedRef) {
-                $query->orderByRaw("CASE WHEN a.bl_refid = ? THEN 0 ELSE 1 END", [$selectedRef]);
+            ->when(!empty($params['account_type']) && ($params['account_type'] != AccountType::HMO), function ($query) {
+                $query->whereNotIn('a.bl_refid', function ($query) {
+                    $query->select('a.bl_refid')
+                        ->from('Billing as a')
+                        ->leftJoin('Billing_Process as b', 'a.bl_refid', '=', 'b.blp_refid')
+                        ->whereIn('a.bl_workstatus', ['FB', 'PX'])
+                        ->where('a.bl_type', 'MEDCOLL')
+                        ->where('b.blp_tobebilledby', 'BILLING');
+                });
+            })
+            ->when(!empty($selectedRefs), function ($query) use ($selectedRefs) {
+                // Order selected refs first
+                $query->orderByRaw("CASE WHEN a.bl_refid IN ('" . implode("','", $selectedRefs) . "') THEN 0 ELSE 1 END");
             })
             ->orderBy('a.bl_dateposted', 'desc')
             ->paginate($perPage);
@@ -250,6 +268,7 @@ class SqlDatabase
 
     public function getBillingByParams($params)
     {
+        $perPage = $params['per_page'] ?? config('vc.default_pages');
         $result = $this->db
             ->table('Billing as a')
             ->select([
@@ -257,18 +276,22 @@ class SqlDatabase
                 'a.bl_type',
                 'a.bl_claimnum',
                 'a.bl_policynum',
+                'a.bl_balance',
                 'a.bl_name',
                 'a.bl_dateposted',
                 'a.bl_workstatus',
             ])
             ->when(!empty($params['billing_ref']), function ($query) use ($params) {
-                $query->where('a.bl_refid', $params['billing_ref']);
+                $billRefs = is_string($params['billing_ref'])
+                    ? explode(',', $params['billing_ref'])
+                    : $params['billing_ref'];
+                $query->whereIn('a.bl_refid', $billRefs);
             })
             ->when(!empty($params['policynum']), function ($query) use ($params) {
                 $query->where('a.bl_policynum', $params['policynum']);
             })
             ->orderBy('a.bl_dateposted', 'desc')
-            ->first();
+            ->paginate($perPage);
 
         return $result;
     }
@@ -293,7 +316,10 @@ class SqlDatabase
             ])
             ->leftJoin('Billing as b', 'c.ch_policynum', '=', 'b.bl_policynum')
             ->when(!empty($params['billing_ref']), function ($query) use ($params) {
-                $query->where('b.bl_refid', $params['billing_ref']);
+                $billRefs = is_string($params['billing_ref'])
+                    ? explode(',', $params['billing_ref'])
+                    : $params['billing_ref'];
+                $query->whereIn('b.bl_refid', $billRefs);
             })
             ->when(!empty($params['account_code']), function ($query) use ($params) {
                 $query->where('c.ch_accountid', $params['account_code']);

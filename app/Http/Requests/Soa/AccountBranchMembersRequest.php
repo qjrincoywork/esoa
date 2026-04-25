@@ -27,7 +27,7 @@ class AccountBranchMembersRequest extends FormRequest
             'billing_ref' => [
                 'required',
                 'string',
-                'max:191',
+                'max:' . config('vc.max_string_limit'),
             ],
         ];
     }

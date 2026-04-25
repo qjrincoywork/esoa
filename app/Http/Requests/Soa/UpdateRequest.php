@@ -22,8 +22,6 @@ class UpdateRequest extends FormRequest
      */
     public function rules(): array
     {
-        $this->merge(['user_id' => auth()->user()->id]);
-
         $existingFilePdf = Soa::whereKey($this->input('id'))->value('file_pdf');
         $filePdfRules = [];
         if (!$existingFilePdf) {
@@ -75,10 +73,19 @@ class UpdateRequest extends FormRequest
                 'string',
                 'max:191',
             ],
+            // 'billing_ref' => [
+            //     'required_unless:status,' . SoaStatus::ENDORSED,
+            //     'string',
+            //     // 'max:500',
+            // ],
             'billing_ref' => [
                 'required_unless:status,' . SoaStatus::ENDORSED,
+                'array',
+            ],
+            'billing_ref.*' => [
+                'required',
                 'string',
-                'max:191',
+                'max:' . config('vc.max_string_limit'),
             ],
             'bill_type' => [
                 'required_unless:status,' . SoaStatus::ENDORSED,
@@ -152,5 +159,13 @@ class UpdateRequest extends FormRequest
             'file_pdf.required_if' => 'The PDF file field is required',
             'file_xls.required_without' => 'The XLS file field is required',
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'billing_ref' => json_decode($this->input('billing_ref'), true),
+            'user_id' => auth()->user()->id,
+        ]);
     }
 }

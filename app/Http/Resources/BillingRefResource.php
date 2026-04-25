@@ -15,8 +15,10 @@ class BillingRefResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'name' => $this->bl_refid,
+            'name' => $this->bl_refid . ' - ' . number_format($this->bl_balance, 2),
             'value' => $this->bl_refid,
+            'balance' => number_format($this->bl_balance, 2),
+            'balance_raw' => (float) $this->bl_balance,
         ];
     }
 }
