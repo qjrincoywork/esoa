@@ -59,7 +59,7 @@ const activeTab = ref('details')
               <li>Billing Invoice: <span class="font-bold">{{ localConcern.billing_invoice }}</span></li>
               <li>Title: <span class="font-bold">{{ localConcern.title }}</span></li>
               <li>Type: <span class="font-bold">{{ localConcern.type }}</span></li>
-              <li>Description: <p class="leading-7 [&:not(:first-child)]:mt-6">{{ localConcern.description }}</p></li>
+              <li>Description: <p class="leading-7 [&:not(:first-child)]:mt-6 whitespace-pre-line">{{ localConcern.description }}</p></li>
               <li>Status: <span :class="[
                   'px-2 py-1 rounded-md text-xs font-medium',
                   localConcern.status_color

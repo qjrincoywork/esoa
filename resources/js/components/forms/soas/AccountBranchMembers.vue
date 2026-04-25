@@ -27,7 +27,7 @@ type MemberSearchField = 'policynum' | 'firstname' | 'lastname';
 type SoaActionPayload = {
   id?: number;
   soa_number?: string;
-  billing_ref?: string;
+  billing_ref?: [];
 };
 
 const props = defineProps<{
@@ -149,7 +149,7 @@ const fetchMembers = async () => {
     branch_code: props.branch_code ?? '',
     page: pagination.value.current_page,
     per_page: pagination.value.per_page,
-    billing_ref: props.soa?.billing_ref ?? '',
+    billing_ref: props.soa?.billing_ref ?? [],
   };
 
   const term = searchText.value.trim();
@@ -164,7 +164,7 @@ const fetchMembers = async () => {
         current_page?: number;
         per_page?: number;
         total?: number;
-        billing_ref?: string;
+        billing_ref?: [];
       };
     }>(`/${slug.value}/${props.account_code}/${props.branch_code}/members`, params);
 

@@ -18,7 +18,7 @@ return new class extends Migration
             $table->string('account_type');
             $table->string('account_code');
             $table->string('branch_code')->nullable();
-            $table->string('billing_ref')->nullable();
+            $table->json('billing_ref')->nullable();
             $table->integer('bill_type');
             $table->integer('status');
             $table->date('due_date');

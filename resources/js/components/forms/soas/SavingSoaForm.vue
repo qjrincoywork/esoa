@@ -32,7 +32,7 @@ type Soa = {
 type Account = { value: string | number; name: string }
 type AccountType = { value: string | number; name: string }
 type Branch = { value: string | number; name: string }
-type BillingRef = { value: string | number; name: string }
+type BillingRef = { value: string | number; name: string; balance_raw?: number | string }
 
 const { getAccountsByParams, getBranchesByParams, getBillingRefsByParams } = useSoas();
 const props = defineProps({
@@ -89,7 +89,9 @@ const hasMoreBranches = computed(() => branchPage.value < branchLastPage.value)
 const hasMoreBillingRefs = computed(() => billingRefPage.value < billingRefLastPage.value)
 const accountCode = ref(soa.value?.account_code ?? '')
 const branchCode = ref(soa.value?.branch_code ?? '')
-const billingRef = ref(soa.value?.billing_ref != null ? String(soa.value.billing_ref) : (soa.value?.billing_ref ?? ''))
+const billingRef = ref<(string | number)[]>(soa.value?.billing_ref != null
+  ? String(soa.value.billing_ref).split(',').filter(Boolean)
+  : [])
 const searchedAccountName = ref('')
 const soaNumber = ref(soa.value?.soa_number ?? '')
 const selectedBillType = ref<string | number>(soa.value?.bill_type ?? '')
@@ -105,6 +107,16 @@ const isEndorsed = computed(() => soa.value?.status == 2)
 const selectedAccount = computed(() =>
   accounts.value?.find(account => String(account.value) === accountCode.value),
 )
+const selectedBillingRefsTotal = computed(() => {
+  if (!billingRef.value.length || !billing_refs.value.length) return 0
+
+  const selectedValues = new Set(billingRef.value.map((value: string | number) => String(value)))
+  return billing_refs.value.reduce((sum: number, item: BillingRef) => {
+    if (!selectedValues.has(String(item.value))) return sum
+    const numericBalance = Number(item.balance_raw ?? 0)
+    return Number.isFinite(numericBalance) ? sum + numericBalance : sum
+  }, 0)
+})
 
 function fileBasename(path: string): string {
   const normalized = path.replace(/\\/g, '/')
@@ -148,12 +160,15 @@ const searchAccountsByParams = async (name = '', page = 1, append = false) => {
   if (append) {
     accountsLoadingMore.value = true;
   }
-  const result = await getAccountsByParams({
-    type: selectedAccountType.value,
+  const params = {
+    account_code: selectedAccount.value?.value,
     name,
     page,
-    selected_code: accountCode.value || undefined,
-  });
+  };
+  if (accountCode.value != null) {
+    params.selected_code = accountCode.value;
+  }
+  const result = await getAccountsByParams(params);
 
   if (append) {
     accounts.value = [...(accounts.value ?? []), ...result?.data];
@@ -174,12 +189,15 @@ const searchBranchesByParams = async (name = '', page = 1, append = false) => {
   if (append) {
     branchesLoadingMore.value = true;
   }
-  const result = await getBranchesByParams({
+  const params = {
     account_code: selectedAccount.value?.value,
     name,
     page,
-    selected_code: branchCode.value || undefined,
-  });
+  };
+  if (branchCode.value != null) {
+    params.selected_code = branchCode.value;
+  }
+  const result = await getBranchesByParams(params);
   if (append) {
     branches.value = [...(branches.value ?? []), ...result?.data];
   } else {
@@ -199,12 +217,20 @@ const searchBillingRefsByParams = async (name = '', page = 1, append = false) =>
   if (append) {
     billingRefsLoadingMore.value = true;
   }
-  const result = await getBillingRefsByParams({
+
+  // Pass all selected refs as comma-separated string for multiple selection
+  const selectedRefsParam = billingRef.value.length ? billingRef.value.join(',') : null;
+
+  const params = {
+    account_type: selectedAccountType.value,
     account_code: selectedAccount.value?.value,
     name,
     page,
-    selected_ref: billingRef.value || undefined,
-  });
+  };
+  if (selectedRefsParam != null) {
+    params.selected_refs = selectedRefsParam;
+  }
+  const result = await getBillingRefsByParams(params);
 
   if (append) {
     billing_refs.value = [...(billing_refs.value ?? []), ...result?.data];
@@ -283,7 +309,7 @@ watch(selectedAccountType, () => {
   if (isSyncingFromSoa.value) return
   accountCode.value = ''
   branchCode.value = ''
-  billingRef.value = ''
+  billingRef.value = []
   branches.value = []
   billing_refs.value = []
   searchedAccountName.value = ''
@@ -293,12 +319,15 @@ watch(selectedAccountType, () => {
 watch(accountCode, () => {
   if (isSyncingFromSoa.value) return
   branchCode.value = ''
-  billingRef.value = ''
+  billingRef.value = []
   branches.value = []
   billing_refs.value = []
   searchedBranchName.value = ''
   searchedBillingRef.value = ''
 })
+watch(selectedBillingRefsTotal, (total: number) => {
+  amount.value = total > 0 ? total.toFixed(2) : ''
+}, { immediate: true })
 
 watch(soa, (val: Soa | undefined) => {
   if (!val) return;
@@ -313,7 +342,7 @@ watch(soa, (val: Soa | undefined) => {
   if (val.amount != null) amount.value = String(val.amount);
   if (val.account_code != null) accountCode.value = String(val.account_code);
   if (val.branch_code != null) branchCode.value = String(val.branch_code);
-  if (val.billing_ref != null) billingRef.value = String(val.billing_ref);
+  if (val.billing_ref != null) billingRef.value = String(val.billing_ref).split(',').filter(Boolean);
   isSyncingFromSoa.value = false
 }, { immediate: true })
 
@@ -327,7 +356,7 @@ watch(soa, (val: Soa | undefined) => {
       <input type="hidden" name="account_type" :value="selectedAccountType ?? ''" />
       <input type="hidden" name="account_code" :value="accountCode ?? ''" />
       <input type="hidden" name="branch_code" :value="branchCode ?? ''" />
-      <input type="hidden" name="billing_ref" :value="billingRef ?? ''" />
+      <input type="hidden" name="billing_ref" :value="billingRef.length ? JSON.stringify(billingRef) : ''" />
       <input type="hidden" name="bill_type" :value="String(selectedBillType ?? '')" />
       <input type="hidden" name="status" :value="String(selectedStatus ?? '')" />
     </div>
@@ -404,6 +433,7 @@ watch(soa, (val: Soa | undefined) => {
         :disabled="!selectedAccount"
         :has-more="hasMoreBillingRefs"
         :loading-more="billingRefsLoadingMore"
+        :multiple="true"
         @load-more="loadMoreData('billingRefs')"
       />
     </div>

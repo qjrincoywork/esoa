@@ -25,6 +25,7 @@ class SoaResource extends JsonResource
             'id' => $this->id,
             'soa_number' => $this->soa_number,
             'billing_ref' => $this->billing_ref,
+            'billing_ref_names' => $this->getBillingRefNames($this->billing_ref),
             'bill_type' => BillType::label($this->bill_type),
             'created_at' => CommonHelper::formatDate($this->created_at),
             'due_date' => CommonHelper::formatDate($this->due_date),
@@ -46,6 +47,15 @@ class SoaResource extends JsonResource
                 return SoaActivityListResource::collection($this->soaActivity)->resolve($request);
             }, []),
         ];
+    }
+
+    public function getBillingRefNames($billingRef) {
+        $billingRefNames = [];
+        foreach ($billingRef as $ref) {
+            $billingRefNames[] = $ref;
+        }
+
+        return implode(', ', $billingRefNames);
     }
 
     /**

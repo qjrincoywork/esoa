@@ -8,6 +8,7 @@ use App\Enums\Server;
 use App\Enums\Status;
 use App\Rules\IsDataExists;
 use App\Rules\IsServerDataExists;
+use App\Rules\SoaAmountIsValid;
 use Illuminate\Validation\Rule;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -20,8 +21,6 @@ class CreateRequest extends FormRequest
      */
     public function rules(): array
     {
-        $this->merge(['user_id' => auth()->user()->id]);
-
         return [
             'user_id' => [
                 'required',
@@ -52,8 +51,12 @@ class CreateRequest extends FormRequest
             ],
             'billing_ref' => [
                 'required',
+                'array',
+            ],
+            'billing_ref.*' => [
+                'required',
                 'string',
-                'max:191',
+                'max:' . config('vc.max_string_limit'),
             ],
             'bill_type' => [
                 'required',
@@ -80,6 +83,7 @@ class CreateRequest extends FormRequest
             'amount' => [
                 'required',
                 'numeric',
+                new SoaAmountIsValid(),
             ],
             'amount_paid' => [
                 'nullable',
@@ -118,5 +122,13 @@ class CreateRequest extends FormRequest
         return [
             'user_id.required' => 'The user field is required',
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'billing_ref' => json_decode($this->input('billing_ref'), true),
+            'user_id' => auth()->user()->id,
+        ]);
     }
 }

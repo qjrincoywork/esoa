@@ -40,6 +40,10 @@ class Soa extends Model
         'file_xls',
     ];
 
+    protected $casts = [
+        'billing_ref' => 'array',
+    ];
+
     /**
      * Method: user
      * This method defines the relationship between the User model and the UserDetail model.
@@ -204,6 +208,14 @@ class Soa extends Model
     }
 
     public function saveSoa(array $data) {
+        // Handle multiple billing_refs (JSON array from form)
+        if (isset($data['billing_ref']) && is_string($data['billing_ref'])) {
+            $decoded = json_decode($data['billing_ref'], true);
+            if (is_array($decoded)) {
+                $data['billing_ref'] = implode(',', $decoded);
+            }
+        }
+
         if (isset($data['id'])) {
             $soa = self::find($data['id']);
             $soa->update($data);
