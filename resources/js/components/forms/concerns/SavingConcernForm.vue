@@ -21,6 +21,7 @@ type Concern = {
   description?: string
   status?: string
   attachment?: string
+  attachment_preview_token?: string
 }
 
 // const emit = defineEmits<{
@@ -82,6 +83,9 @@ onMounted(() => {
     props.onReady({ getFormData, formRef: concernForm.value });
   }
 });
+const openTab = () => {
+  window.open(`/concerns/preview_file?token=${encodeURIComponent(concern.value?.attachment_preview_token)}`, '_blank', 'noopener,noreferrer')
+}
 </script>
 
 <template>
@@ -162,6 +166,20 @@ onMounted(() => {
     </div>
     <div class="grid gap-2 md:col-span-1">
       <Label for="attachment">Attachment</Label>
+      <p
+        v-if="concern.attachment"
+        class="mt-1 text-xs text-[var(--color-text-muted)]"
+      >
+        Current:
+        <a
+          :onClick="openTab"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="cursor-pointer font-medium text-[var(--color-text)] underline underline-offset-2 hover:opacity-90"
+        >
+          {{ concern.attachment.split('/').pop() }}
+        </a>
+      </p>
       <Input
         class="mt-1 block w-full"
         id="attachment"

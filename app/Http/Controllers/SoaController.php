@@ -173,7 +173,18 @@ class SoaController extends Controller
         //http://192.170.11.185/dmis_finance/file/rm/ //EO-2832655-003, EO-3085829-004
         $files = [];
         if (!empty($billing) && !empty($billing->bl_claimnum)) {
-            $files = Storage::disk(env('RM_DISK', 'public'))->files($billing->bl_claimnum);
+            $paths = Storage::disk(env('RM_DISK', 'public'))->files($billing->bl_claimnum);
+            $userId = (int) auth()->id();
+            $files = array_map(function (string $path) use ($userId) {
+                return [
+                    'name' => basename($path),
+                    'preview_token' => CommonHelper::createFilePreviewToken(
+                        env('RM_DISK', 'public'),
+                        $path,
+                        $userId
+                    ),
+                ];
+            }, $paths);
         }
         // $files = Storage::disk(env('RM_DISK', 'public'))->files('EO-3024023-001'); // 'files' is the sub-directory name
         // $files = Storage::disk(env('RM_DISK', 'public'))->files('EO-2832655-003');
@@ -186,50 +197,13 @@ class SoaController extends Controller
         }
     }
 
-    public function previewFile(Request $request, $file = null)
+    public function previewFile(Request $request)
     {
-        $file = $file ?: $request->input('file');
-
-        if (!$file) {
-            abort(400, 'File path is required');
-        }
-
-        $disk = Storage::disk(env('RM_DISK', 'public'));
-
-        if (!$disk->exists($file)) {
-            abort(404, 'File not found');
-        }
-
-        $stream = $disk->readStream($file);
-
-        if (!is_resource($stream)) {
-            abort(404, 'File is not readable');
-        }
-
-        $mimeType = 'application/octet-stream';
-        try {
-            $mimeType = $disk->mimeType($file);
-        } catch (\Exception $e) {
-            throw new \Exception('Unable to determine file MIME type: ' . $e->getMessage());
-        }
-
-        $fileName = basename($file);
-        $fileSize = null;
-
-        try {
-            $fileSize = $disk->size($file);
-        } catch (\Exception $e) {
-            throw new \Exception('Unable to determine file size: ' . $e->getMessage());
-        }
-
-        return response()->stream(function () use ($stream) {
-            fpassthru($stream);
-            fclose($stream);
-        }, Response::HTTP_OK, array_filter([
-            'Content-Type' => $mimeType,
-            'Content-Disposition' => sprintf('inline; filename="%s"', $fileName),
-            'Content-Length' => $fileSize,
-        ]));
+        return CommonHelper::previewStoredFileFromToken(
+            (string) $request->query('token', ''),
+            env('RM_DISK', 'public'),
+            $request->user()?->id
+        );
     }
 
     /**

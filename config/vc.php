@@ -14,6 +14,7 @@ return [
     'api_auth_token' => 'API_AUTH_TOKEN',
 
     'default_pages' => 10,
+    'file_preview_token_ttl_minutes' => 10,//FILE_PREVIEW_TOKEN_TTL_MINUTES
     'max_string_limit' => 191,
     'max_file_size' => 2048, // in KB
     'default_text_limit' => 800,

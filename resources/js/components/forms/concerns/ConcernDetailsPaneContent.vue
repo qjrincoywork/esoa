@@ -12,6 +12,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/ui/tabs'
+import { Button } from '@/components/ui/button'
 
 type Concern = {
   id?: number
@@ -21,6 +22,8 @@ type Concern = {
   description?: string
   status?: string
   status_color?: string
+  attachment?: string
+  attachment_preview_token?: string
   created_by?: string
   created_at?: string
 }
@@ -42,6 +45,9 @@ watch(
 )
 
 const activeTab = ref('details')
+const openTab = () => {
+  window.open(`/concerns/preview_file?token=${encodeURIComponent(localConcern.value?.attachment_preview_token)}`, '_blank', 'noopener,noreferrer')
+}
 </script>
 
 <template>
@@ -67,6 +73,9 @@ const activeTab = ref('details')
               </li>
               <li>Created By: <span class="font-bold">{{ localConcern.created_by }}</span></li>
               <li>Created At: <span class="font-bold">{{ localConcern.created_at }}</span></li>
+              <li v-if="localConcern.attachment">
+                <Button :onClick="openTab" class="cursor-pointer">View File {{ localConcern.attachment.split('/').pop() }}</Button>
+              </li>
             </ul>
           </CardContent>
         </Card>

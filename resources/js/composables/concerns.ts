@@ -22,6 +22,7 @@ export interface Concern {
   description?: string
   status?: string
   attachment?: string
+  attachment_preview_token?: string | null
   deleted_at?: string
 }
 
@@ -205,6 +206,23 @@ export function useConcerns() {
       hideLoader();
     }
   };
+  const previewFile = async (concern: Concern) => {
+    showLoader();
+    try {
+      if (!concern.attachment_preview_token) {
+        throw new Error('Missing preview token');
+      }
+      window.open(
+        `/${slug.value}/preview_file?token=${encodeURIComponent(concern.attachment_preview_token)}`,
+        '_blank',
+        'noopener,noreferrer'
+      )
+    } catch (error) {
+      dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
+    } finally {
+      hideLoader();
+    }
+  };
 
   const deleteConcern = async (concern: Concern) => {
     const deleteOrRestore = concern.deleted_at ? 'Restore' : 'Delete';
@@ -262,6 +280,7 @@ export function useConcerns() {
     editConcern,
     viewConcern,
     deleteConcern,
+    previewFile,
 
     openPane,
     closePane,
