@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, watch, computed, h } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { Head, router, usePage } from '@inertiajs/vue3';
 import { createColumnHelper } from '@tanstack/vue-table';
-import { Auth, User, UserDetail, type BreadcrumbItem } from '@/types';
+import { type BreadcrumbItem } from '@/types';
 import AppLayout from '@/layouts/AppLayout.vue';
 import Datatable from '@/components/Datatable.vue';
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,14 @@ import { createActionColumn } from '@/composables/datatable/datatableColumns';
 import { useModulePermissions } from '@/composables/useModulePermissions';
 import { useAccountPayments } from '@/composables/account_payments';
 import RightPane from '@/components/RightPane.vue';
+import {
+  emptyAccountPaymentListFilters,
+  accountPaymentListFiltersToParams,
+  accountPaymentListFiltersActive,
+  accountPaymentListFiltersFromUrlQuery,
+  type AccountPaymentListFilters,
+  type AccountPaymentListOption,
+} from '@/composables/accountPaymentListFilters';
 import {
   Accordion,
   AccordionContent,
@@ -28,9 +36,6 @@ type AccountPaymentPagination = {
 }
 
 const page = usePage();
-const auth = computed(() => (page.props as any).auth as Auth);
-const user = computed(() => auth.value?.user as User);
-const userDetail = computed(() => user.value?.user_detail as UserDetail);
 const { canCreate, slug, hasPermission } = useModulePermissions();
 const {
   newAccountPayment,
@@ -61,6 +66,7 @@ const accountPaymentsFromProps = computed(() => {
 });
 
 const accountPayments = computed(() => accountPaymentsFromProps.value);
+const filters = ref<AccountPaymentListFilters>(accountPaymentListFiltersFromUrlQuery(page.url));
 const hasInitialized = ref(false);
 const isUpdatingFromServer = ref(false);
 const columnHelper = createColumnHelper();
@@ -70,8 +76,8 @@ const pagination = ref({
   total: accountPayments.value.total,
 });
 
-const modeOfPaymentOptions = computed(() => {
-  return (page.props as { mode_of_payment_options?: { value: string | number; name: string }[] }).mode_of_payment_options ?? [];
+const modeOfPaymentOptions = computed<AccountPaymentListOption[]>(() => {
+  return (page.props as { mode_of_payment_options?: AccountPaymentListOption[] }).mode_of_payment_options ?? [];
 });
 
 const listFetchPath = computed(() => {
@@ -82,15 +88,16 @@ const listFetchPath = computed(() => {
 const partialReloadKey = computed(() => slug.value || 'account_payments');
 
 const modeOfPaymentFilterModel = computed({
-  get: () => (page.props as any).mode_of_payment ?? '',
+  get: () => (filters.value.mode_of_payment === '' ? undefined : filters.value.mode_of_payment),
   set: (v: string | undefined) => {
-    const url = new URL(window.location.href);
-    if (v) {
-      url.searchParams.set('mode_of_payment', v);
-    } else {
-      url.searchParams.delete('mode_of_payment');
-    }
-    router.get(url.toString(), {}, { replace: true, preserveState: true });
+    filters.value.mode_of_payment = v ?? '';
+  },
+});
+
+const depositDateFilterModel = computed({
+  get: () => filters.value.deposit_date,
+  set: (v: string | undefined) => {
+    filters.value.deposit_date = v ?? '';
   },
 });
 
@@ -141,11 +148,8 @@ const fetchAccountPayments = () => {
   const params: Record<string, string | number> = {
     page: pagination.value.current_page,
     per_page: pagination.value.per_page,
+    ...accountPaymentListFiltersToParams(filters.value),
   };
-
-  if (modeOfPaymentFilterModel.value) {
-    params.mode_of_payment = modeOfPaymentFilterModel.value;
-  }
 
   router.get(listFetchPath.value, params, {
     preserveState: true,
@@ -159,16 +163,17 @@ const markInteracted = () => {
   hasInitialized.value = true;
 };
 
-const filtersActive = computed(() => !!modeOfPaymentFilterModel.value);
+const filtersActive = computed(() => accountPaymentListFiltersActive(filters.value));
 
 const clearFilters = () => {
+  filters.value = emptyAccountPaymentListFilters();
   markInteracted();
   pagination.value.current_page = 1;
   fetchAccountPayments();
 };
 
 watch(
-  modeOfPaymentFilterModel,
+  filters,
   () => {
     hasInitialized.value = true;
     pagination.value.current_page = 1;
@@ -179,6 +184,7 @@ watch(
       fetchAccountPayments();
     }, 500);
   },
+  { deep: true }
 );
 
 watch(
@@ -198,8 +204,8 @@ watch(
 const filterWatchTimeout = ref<number | null>(null);
 const paginationWatchTimeout = ref<number | null>(null);
 watch(
-  () => [pagination.value.current_page, pagination.value.per_page],
-  ([currentPage, perPage]) => {
+  () => [pagination.value.current_page, pagination.value.per_page] as const,
+  ([currentPage, perPage]: readonly [number, number]) => {
     if (!hasInitialized.value || isUpdatingFromServer.value) return;
     if (paginationWatchTimeout.value) {
       clearTimeout(paginationWatchTimeout.value);
@@ -239,6 +245,28 @@ const breadcrumbItems: BreadcrumbItem[] = [
                 <div class="flex flex-row lg:flex-row justify-between items-stretch lg:items-start gap-4">
                   <div class="flex flex-1 flex-col gap-3 min-w-0">
                     <div class="grid gap-2 md:col-span-1">
+                      <Label for="account-payment-filter-deposit-date">Deposit Date</Label>
+                      <Input
+                        id="account-payment-filter-deposit-date"
+                        v-model="depositDateFilterModel"
+                        type="date"
+                        autocomplete="off"
+                        placeholder="Deposit Date"
+                        class="mt-0"
+                      />
+                    </div>
+                    <div class="grid gap-2 md:col-span-1">
+                      <Label for="account-payment-filter-created-by">Created By</Label>
+                      <Input
+                        id="account-payment-filter-created-by"
+                        v-model="filters.created_by"
+                        type="text"
+                        autocomplete="off"
+                        placeholder="Created By"
+                        class="mt-0"
+                      />
+                    </div>
+                    <div class="grid gap-2 md:col-span-1">
                       <Label for="account-payment-filter-mode">Mode of Payment</Label>
                       <Select v-model="modeOfPaymentFilterModel">
                         <SelectTrigger id="account-payment-filter-mode" class="w-full">
@@ -260,7 +288,7 @@ const breadcrumbItems: BreadcrumbItem[] = [
                     </div>
                   </div>
                 </div>
-                <div class="flex flex-wrap items-center gap-2">
+                <div class="flex flex-wrap items-center gap-2 mt-3">
                   <Button
                     v-if="filtersActive"
                     variant="outline"

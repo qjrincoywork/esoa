@@ -16,6 +16,7 @@ class ListRequest extends FormRequest
         return [
             'deposit_date' => 'nullable|date',
             'mode_of_payment' => 'nullable|integer',
+            'created_by' => 'nullable|string|max:255',
             'remittance_advice' => 'nullable|string|max:255',
             'remarks' => 'nullable|string|max:1000',
             'per_page' => 'nullable|integer|min:1|max:100',

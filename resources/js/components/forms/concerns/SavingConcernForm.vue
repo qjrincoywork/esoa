@@ -61,6 +61,8 @@ const form = ref({
   attachment: null as File | null,
 });
 
+const user = computed(() => props.auth?.user as User);
+const userDetail = computed(() => user.value?.user_detail as UserDetail);
 const selectedStatus = ref<string | number>(concern.value.status != null ? String(concern.value.status) : '')
 const selectedType = ref<string | number>(concern.value.type != null ? String(concern.value.type) : '')
 const types = computed(() => props.concern_types || []); // Assuming concern_types is passed as a prop

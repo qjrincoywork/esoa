@@ -328,7 +328,7 @@ const breadcrumbItems: BreadcrumbItem[] = [
                     </div>
                   </div>
                 </div>
-                <div class="flex flex-wrap items-center gap-2">
+                <div class="flex flex-wrap items-center gap-2 mt-3">
                   <Button
                     v-if="filtersActive"
                     variant="outline"

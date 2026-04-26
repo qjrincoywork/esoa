@@ -55,6 +55,10 @@ class AccountPayment extends Model
             ->when(array_key_exists('mode_of_payment', $params) && $params['mode_of_payment'] !== null && $params['mode_of_payment'] !== '', function ($query) use ($params) {
                 $query->where('mode_of_payment', (int) $params['mode_of_payment']);
             })
+            ->when(!empty($params['created_by'] ?? null), function ($query) use ($params) {
+                $createdBy = trim((string) $params['created_by']);
+                $query->whereRelation('user', 'username', 'like', '%' . $createdBy . '%');
+            })
             ->when(!empty($params['remittance_advice'] ?? null), function ($query) use ($params) {
                 $query->where('remittance_advice', 'like', '%' . $params['remittance_advice'] . '%');
             })
