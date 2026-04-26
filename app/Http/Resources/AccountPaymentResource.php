@@ -32,6 +32,7 @@ class AccountPaymentResource extends JsonResource
                     (int) $request->user()->id
                 )
                 : null,
+            'deleted_at' => $this->deleted_at,
         ];
     }
 }

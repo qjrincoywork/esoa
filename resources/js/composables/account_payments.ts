@@ -1,7 +1,7 @@
 import { useModal } from '@/composables/useModal';
 import { usePane } from '@/composables/usePane';
 import { useAjax } from '@/composables/useAjax';
-import DeleteForm from '@/components/forms/concerns/DeleteForm.vue';
+import DeleteForm from '@/components/forms/account_payments/DeleteForm.vue';
 import SavingAccountPaymentForm from '@/components/forms/account_payments/SavingAccountPaymentForm.vue';
 import { ref, shallowRef, toRef, type Component, type Ref } from 'vue';
 import { dispatchNotification } from '@/components/notification';
@@ -23,7 +23,7 @@ export interface AccountPayment {
   remarks?: string
   created_by?: string
   created_at?: string
-  deleted_at?: string
+  deleted_at?: string | null
 }
 
 /** Client-side overlays for list rows until the next Inertia `account_payments` refresh (module singleton). */
@@ -198,13 +198,21 @@ export function useAccountPayments() {
   };
 
   const deleteAccountPayment = async (accountPayment: AccountPayment) => {
+    const deleteOrRestore = accountPayment.deleted_at ? 'Restore' : 'Delete';
+    const color = accountPayment.deleted_at ? 'green' : 'red';
+    const buttonClass = `bg-${color}-600
+      hover:bg-${color}-700
+      focus:ring-${color}-500
+      dark:bg-${color}-500
+      dark:hover:bg-${color}-600`;
+
     openModal({
-      modalTitle: 'Delete Account Payment',
-      buttonText: 'Delete',
+      modalTitle: `${deleteOrRestore} Remittance Advice`,
+      buttonText: deleteOrRestore,
+      buttonClass: buttonClass,
       component: DeleteForm,
       componentProps: {
-        title: 'Delete Account Payment',
-        message: `Are you sure you want to delete this account payment?`,
+        accountPayment: accountPayment,
       },
       size: 'sm',
       onSubmit: async () => {
