@@ -47,7 +47,7 @@ class Concern extends Model
         return $this->belongsTo(Soa::class, 'billing_invoice', 'soa_number');
     }
 
-    public function getConcerns($request)
+    public function getConcerns($params)
     {
         $authUser = auth()->user();
         $concerns = self::with(['user', 'soa'])
@@ -58,11 +58,19 @@ class Concern extends Model
             ->when($authUser->hasRole('superadmin'), function ($query) {
                 $query->withTrashed();
             })
-            ->when(isset($request->search), function ($query) use ($request) {
-                $query->where('title', 'like', '%' . $request->search . '%')
-                      ->orWhere('description', 'like', '%' . $request->search . '%');
+            ->when(!empty($params['title'] ?? null), function ($query) use ($params) {
+                $query->where('title', 'like', '%' . $params['title'] . '%');
             })
-            ->paginate($request->per_page);
+            ->when(!empty($params['description'] ?? null), function ($query) use ($params) {
+                $query->where('description', 'like', '%' . $params['description'] . '%');
+            })
+            ->when(array_key_exists('type', $params) && !empty($params['type']), function ($query) use ($params) {
+                $query->where('type', (int) $params['type']);
+            })
+            ->when(array_key_exists('status', $params) && !empty($params['status']), function ($query) use ($params) {
+                $query->where('status', (int) $params['status']);
+            })
+            ->paginate($params['per_page']);
 
         return $concerns;
     }

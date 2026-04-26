@@ -2,7 +2,10 @@
 
 namespace App\Http\Requests\Concern;
 
+use App\Enums\ConcernType;
+use App\Enums\TicketStatus;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class ListRequest extends FormRequest
 {
@@ -14,8 +17,32 @@ class ListRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'search' => 'nullable|string|max:255',
-            'per_page' => 'nullable|integer|min:1|max:100',
+            'title' => [
+                'nullable',
+                'string',
+                'max:' . config('vc.max_string_limit'),
+            ],
+            'description' => [
+                'nullable',
+                'string',
+                'max:' . config('vc.max_text_limit'),
+            ],
+            'type' => [
+                'nullable',
+                'integer',
+                Rule::in(ConcernType::getValues()),
+            ],
+            'status' => [
+                'nullable',
+                'integer',
+                Rule::in(TicketStatus::getValues()),
+            ],
+            'per_page' => [
+                'nullable',
+                'integer',
+                'min:' . config('vc.default_pages'),
+                'max:' . config('vc.max_per_pages'),
+            ],
         ];
     }
 

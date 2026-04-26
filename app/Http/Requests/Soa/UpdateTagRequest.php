@@ -37,7 +37,7 @@ class UpdateTagRequest extends FormRequest
                 'required_if:untag_type,' . UntagType::OTHERS,
                 'nullable',
                 'string',
-                'max:' . config('vc.default_text_limit'),
+                'max:' . config('vc.max_text_limit'),
             ],
         ];
     }
