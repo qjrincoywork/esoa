@@ -95,7 +95,7 @@ const billingRef = ref<(string | number)[]>(soa.value?.billing_ref != null
 const searchedAccountName = ref('')
 const soaNumber = ref(soa.value?.soa_number ?? '')
 const selectedBillType = ref<string | number>(soa.value?.bill_type ?? '')
-const selectedStatus = ref<string | number>(soa.value?.status ?? 1)
+const selectedStatus = ref<string | number>(soa.value?.status ?? '1')
 const dueDate = ref(soa.value?.due_date ?? '')
 const periodDateFrom = ref(soa.value?.period_date_from ?? '')
 const periodDateTo = ref(soa.value?.period_date_to ?? '')

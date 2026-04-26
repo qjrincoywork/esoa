@@ -542,7 +542,7 @@ watch(
             <div class="flex flex-col gap-4 mb-4">
               <div class="flex flex-row lg:flex-row justify-between items-stretch lg:items-start gap-4">
                 <div class="flex flex-1 flex-row gap-3 min-w-0">
-                  <Button class="cursor-pointer" v-if="canCreate" :onClick="newSoa">Create</Button>
+                  <Button class="cursor-pointer" v-if="canCreate" :onClick="newSoa">Upload</Button>
                 </div>
               </div>
 

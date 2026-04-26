@@ -40,7 +40,7 @@ class UpdateRequest extends FormRequest
             'description' => [
                 'required',
                 'string',
-                'max:' . config('vc.default_text_limit'),
+                'max:' . config('vc.max_text_limit'),
             ],
             'status' => [
                 'required',

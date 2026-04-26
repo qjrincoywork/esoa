@@ -39,10 +39,13 @@ class ConcernController extends Controller
      */
     public function index(ListRequest $request)
     {
-        $concerns = $this->concern->getConcerns($request);
+        $validated = $request->validated();
+        $concerns = $this->concern->getConcerns($validated);
 
         return Inertia::render('concerns/Index', [
             'concerns' => new CommonResource(ConcernResource::collection($concerns)),
+            'concern_types' => ConcernType::list(),
+            'ticket_statuses' => TicketStatus::list(),
         ]);
     }
 
