@@ -74,6 +74,11 @@ class User extends Authenticatable implements AuthorizableContract
         return $this->hasMany(Concern::class, 'user_id');
     }
 
+    public function accountPayments(): HasMany
+    {
+        return $this->hasMany(AccountPayment::class, 'user_id');
+    }
+
     public function billingInvoices(): HasMany
     {
         return $this->hasMany(Soa::class, 'user_id');

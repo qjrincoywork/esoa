@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\{
+    AccountPaymentController,
     AdminController,
     ConcernController,
     NavigationController,
@@ -163,6 +164,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/store', 'store')->name('store');
             Route::get('/{id}/edit', 'edit')->name('edit');
             Route::get('/{id}/untag', 'untag')->name('untag');
+            Route::post('/update', 'update')->name('update');
+            Route::post('/destroy', 'destroy')->name('destroy');
+        });
+
+        Route::prefix('account_payments')->name('account_payments.')->controller(AccountPaymentController::class)->group(function () {
+            Route::get('/', 'index')->name('index');
+            Route::get('/preview_file', 'previewFile')->name('preview_file');
+            Route::get('/{id}/show', 'show')->name('show');
+            Route::get('/create', 'create')->name('create');
+            Route::post('/store', 'store')->name('store');
+            Route::get('/{id}/edit', 'edit')->name('edit');
             Route::post('/update', 'update')->name('update');
             Route::post('/destroy', 'destroy')->name('destroy');
         });
