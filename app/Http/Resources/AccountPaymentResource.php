@@ -18,7 +18,7 @@ class AccountPaymentResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'deposit_date' => $this->deposit_date,
+            'deposit_date' => CommonHelper::formatDate($this->deposit_date),
             'mode_of_payment' => AccountPaymentMode::label($this->mode_of_payment),
             'mode_of_payment_value' => $this->mode_of_payment,
             'remittance_advice' => $this->remittance_advice,

@@ -59,6 +59,10 @@ return [
             'driver' => 'local',
             'root' => '\\\\192.170.11.185\\dmis_finance\\file\\concerns',
         ],
+        'payments' => [
+            'driver' => 'local',
+            'root' => '\\\\192.170.11.185\\dmis_finance\\file\\payments',
+        ],
 
         's3' => [
             'driver' => 's3',

@@ -42,7 +42,7 @@ class AccountPaymentController extends Controller
         $validated = $request->validated();
         $accountPayments = $this->accountPayment->getAccountPayments($validated);
 
-        return Inertia::render('account-payments/Index', [
+        return Inertia::render('account_payments/Index', [
             'account_payments' => new CommonResource(AccountPaymentResource::collection($accountPayments)),
             'mode_of_payment_options' => AccountPaymentMode::list(),
         ]);
@@ -94,7 +94,7 @@ class AccountPaymentController extends Controller
     {
         $accountPayment->load(['user']);
 
-        return Inertia::render('account-payments/Show', [
+        return Inertia::render('account_payments/Show', [
             'account_payment' => $accountPayment,
         ]);
     }
@@ -140,10 +140,10 @@ class AccountPaymentController extends Controller
      */
     public function update(UpdateRequest $request)
     {
+        $validated = $request->validated();
         DB::connection('mysql')->beginTransaction();
         try {
-            $accountPayment = AccountPayment::findOrFail($request->id);
-            $validated = $request->validated();
+            $accountPayment = AccountPayment::findOrFail($validated['id']);
             CommonHelper::storeUploadedFile(
                 $request,
                 $validated,
@@ -170,7 +170,7 @@ class AccountPaymentController extends Controller
     public function destroy(DeleteRequest $request)
     {
         $validated = $request->validated();
-        DB::beginTransaction();
+        DB::connection('mysql')->beginTransaction();
         try {
             $accountPayment = AccountPayment::withTrashed()->findOrFail($validated['id']);
 
@@ -182,13 +182,13 @@ class AccountPaymentController extends Controller
                 $message = 'Deleted';
             }
 
-            DB::commit();
+            DB::connection('mysql')->commit();
 
             if ($request->wantsJson() || $request->ajax()) {
                 return CustomResponse::ok('Account payment ' . $message . ' successfully', Response::HTTP_OK);
             }
         } catch (\Exception $e) {
-            DB::rollBack();
+            DB::connection('mysql')->rollBack();
 
             if ($request->wantsJson() || $request->ajax()) {
                 return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);

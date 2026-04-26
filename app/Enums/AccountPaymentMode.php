@@ -10,6 +10,7 @@ final class AccountPaymentMode extends Enum
     public const ONLINE_TRANSFER = 2;
     public const CHECK = 3;
     public const CASH = 4;
+    public const OTHERS = 5;
 
     public static function label($value): string
     {
@@ -18,6 +19,7 @@ final class AccountPaymentMode extends Enum
             self::ONLINE_TRANSFER => 'Online Transfer',
             self::CHECK => 'Check',
             self::CASH => 'Cash',
+            self::OTHERS => 'Others',
             default => 'Unknown',
         };
     }
@@ -29,6 +31,7 @@ final class AccountPaymentMode extends Enum
             ['value' => self::ONLINE_TRANSFER, 'name' => self::label(self::ONLINE_TRANSFER)],
             ['value' => self::CHECK, 'name' => self::label(self::CHECK)],
             ['value' => self::CASH, 'name' => self::label(self::CASH)],
+            ['value' => self::OTHERS, 'name' => self::label(self::OTHERS)],
         ];
     }
 }

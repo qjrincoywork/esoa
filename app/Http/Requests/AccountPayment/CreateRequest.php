@@ -33,7 +33,7 @@ class CreateRequest extends FormRequest
             'remittance_advice' => [
                 'required',
                 'file',
-                'mimes:pdf,jpg,jpeg,png',
+                'mimes:pdf,jpg,jpeg,png,xls,xlsx',
                 'max:' . config('vc.max_file_size'),
             ],
             'remarks' => [
