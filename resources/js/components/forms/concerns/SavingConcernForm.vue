@@ -5,12 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-
-type UserBasic = {
-  id?: number
-  username?: string | number
-  email?: string | number
-}
+import { Auth, User, UserDetail } from '@/types';
 
 type Concern = {
   id?: number
@@ -30,7 +25,11 @@ type Concern = {
 
 const props = defineProps({
   auth: {
-    type: Object as unknown as () => UserBasic,
+    type: Object as unknown as () => Auth,
+    default: () => ({}),
+  },
+  user: {
+    type: Object as unknown as () => User,
     default: () => ({}),
   },
   concern: {
@@ -62,6 +61,8 @@ const form = ref({
   attachment: null as File | null,
 });
 
+const user = computed(() => props.auth?.user as User);
+const userDetail = computed(() => user.value?.user_detail as UserDetail);
 const selectedStatus = ref<string | number>(concern.value.status != null ? String(concern.value.status) : '')
 const selectedType = ref<string | number>(concern.value.type != null ? String(concern.value.type) : '')
 const types = computed(() => props.concern_types || []); // Assuming concern_types is passed as a prop
@@ -144,7 +145,7 @@ const openTab = () => {
         v-model="form.description"
       />
     </div>
-    <div class="grid gap-2 md:col-span-1" v-if="auth?.is_superadmin">
+    <div class="grid gap-2 md:col-span-1" v-if="userDetail?.employee_no ||auth?.is_superadmin">
       <Label for="status">Status<span class="text-red-400">*</span></Label>
       <Select
         class="mt-1 block w-full"

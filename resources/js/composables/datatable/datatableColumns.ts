@@ -29,6 +29,7 @@ export function createActionColumn(customActions: ActionColumnOptions) {
         status?: string;
         file_pdf?: string | null;
         attachment?: string | null;
+        remittance_advice?: string | null;
       };
       const actions = [];
 
@@ -62,6 +63,13 @@ export function createActionColumn(customActions: ActionColumnOptions) {
           if ((item.attachment == '' || item.attachment == null) && action.slug === 'concerns.preview_file') {
             continue; // Skip without attachment
           }
+          if ((item.remittance_advice == '' || item.remittance_advice == null) && action.slug === 'account_payments.preview_file') {
+            continue; // Skip without remittance_advice
+          }
+          if (item.status?.toLowerCase() == 'closed' && action.slug === 'concerns.edit') {
+            continue; // Skip actions for closed items
+          }
+
           const button = h(
             'button',
             {

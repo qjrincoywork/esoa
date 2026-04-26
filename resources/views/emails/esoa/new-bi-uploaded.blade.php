@@ -14,7 +14,15 @@
       {{ __('labels.new_billing_invoice_uploaded.line_1') }}
     </p>
     <p style="margin: 0; color: #555555; font-size: 14px; line-height: 1.6;">
-      {!! str_replace(':soanum', '<strong style="color: #333333; font-weight: 700;">' . $soa->soa_number . '</strong>', __('labels.new_billing_invoice_uploaded.line_2', ['soanum' => ':soanum'])) !!}
+      {!! str_replace(':soanum', "<strong style='color: #333333; font-weight: 700;'>"
+        . "<a href='" . route('soas.billing_attachments', ['id' => $soa->id, 'type' => 'pdf']) . "'
+            target='_blank'
+            rel='noopener noreferrer'
+            title='Click to open the billing invoice'
+          >"
+        . $soa->soa_number
+        . '</strong></a>', __('labels.new_billing_invoice_uploaded.line_2', ['soanum' => ':soanum']))
+      !!}
     </p>
   </div>
 

@@ -155,13 +155,13 @@ class CommonHelper
         }
     }
 
-    public static function storeUploadedFile($request, array &$validated, $fileField, $directory = null, $model = null): void {
+    public static function storeUploadedFile($request, array &$validated, $fileField, $directory = null, $model = null, $disk = null): void {
         if ($request->hasFile($fileField)) {
             $file = $request->file($fileField);
             $preString = !empty($model) ? $model->id . '_' : '';
             $directory = $directory ?? auth()->user()->username;
             $filename = $preString . now()->format('Ymd_His') . '.' . $file->getClientOriginalExtension();
-            $validated[$fileField] = $file->storeAs($directory, $filename, env('CONCERNS_DISK', 'public'));
+            $validated[$fileField] = $file->storeAs($directory, $filename, $disk ?? env('CONCERNS_DISK', 'public'));
         }
     }
 

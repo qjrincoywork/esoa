@@ -70,6 +70,7 @@ class Concern extends Model
             ->when(array_key_exists('status', $params) && !empty($params['status']), function ($query) use ($params) {
                 $query->where('status', (int) $params['status']);
             })
+            ->latest('id')
             ->paginate($params['per_page']);
 
         return $concerns;
