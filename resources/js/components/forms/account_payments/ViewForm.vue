@@ -58,14 +58,8 @@ const openFilePreview = () => {
     <CardContent class="grid gap-3">
       <ul class="my-6 ml-6 list-disc [&>li]:mt-2">
         <li>Deposit Date: <span class="font-bold">{{ accountPayment.deposit_date }}</span></li>
-        <li>Mode of Payment: <span class="font-bold">{{ accountPayment.mode_of_payment_value }}</span></li>
-        <!-- <li>Remittance Advice: <span class="font-bold">{{ accountPayment.remittance_advice }}</span></li> -->
+        <li>Mode of Payment: <span class="font-bold">{{ accountPayment.mode_of_payment }}</span></li>
         <li>Remarks: <span class="font-bold">{{ accountPayment.remarks }}</span></li>
-        <!-- <li>Status: <span :class="[
-            'px-2 py-1 rounded-md text-xs font-medium',
-            accountPayment.status_color
-          ]">{{ accountPayment.status }}</span>
-        </li> -->
         <li>Created By: <span class="font-bold">{{ accountPayment.created_by }}</span></li>
         <li>Created At: <span class="font-bold">{{ accountPayment.created_at }}</span></li>
         <li v-if="accountPayment.remittance_advice">

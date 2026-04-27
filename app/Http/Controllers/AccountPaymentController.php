@@ -93,6 +93,7 @@ class AccountPaymentController extends Controller
     public function show(AccountPayment $accountPayment)
     {
         $accountPayment->load(['user']);
+        $accountPayment = AccountPaymentResource::make($accountPayment);
 
         return Inertia::render('account_payments/Show', [
             'account_payment' => $accountPayment,
