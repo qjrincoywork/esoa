@@ -220,7 +220,7 @@ watch(
 
 const breadcrumbItems: BreadcrumbItem[] = [
   {
-    title: 'Account Payments',
+    title: 'Remittance Advices',
     href: slug.value,
   },
 ];
@@ -228,7 +228,7 @@ const breadcrumbItems: BreadcrumbItem[] = [
 
 <template>
   <AppLayout :breadcrumbs="breadcrumbItems">
-    <Head title="Account Payments" />
+    <Head title="Remittance Advices" />
 
     <div class="bg-[var(--color-surface)] shadow-sm border border-[var(--color-border)] p-6">
       <div class="flex flex-col gap-4 mb-4">
@@ -310,7 +310,7 @@ const breadcrumbItems: BreadcrumbItem[] = [
         :columns="columns"
         :pagination="pagination"
         :search-fields="[]"
-        empty-message="No account payments found"
+        empty-message="No data found"
         empty-description="Try adjusting filters or pagination settings."
         @update:pagination="(newPagination) => { markInteracted(); pagination = newPagination }"
       />

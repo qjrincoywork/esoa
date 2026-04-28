@@ -30,10 +30,26 @@ final class SoaStatus extends Enum
 
     public static function list(): array
     {
-        return [
-            ['value' => self::UNPAID, 'name' => self::label(self::UNPAID)],
-            ['value' => self::ENDORSED, 'name' => self::label(self::ENDORSED)],
-            ['value' => self::PAID, 'name' => self::label(self::PAID)],
-        ];
+        $list = [];
+        if (auth()->user()?->hasRole('superadmin')) {
+            $list = [
+                ['value' => self::UNPAID, 'name' => self::label(self::UNPAID)],
+                ['value' => self::ENDORSED, 'name' => self::label(self::ENDORSED)],
+                ['value' => self::PAID, 'name' => self::label(self::PAID)],
+            ];
+        }
+        if (auth()->user()?->hasRole('account_branch_admin')) {
+            $list = [
+                ['value' => self::ENDORSED, 'name' => self::label(self::ENDORSED)],
+            ];
+        }
+        if (auth()->user()?->hasRole('billing_admin')) {
+            $list = [
+                ['value' => self::UNPAID, 'name' => self::label(self::UNPAID)],
+                ['value' => self::PAID, 'name' => self::label(self::PAID)],
+            ];
+        }
+
+        return $list;
     }
 }

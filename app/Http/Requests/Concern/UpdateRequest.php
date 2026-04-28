@@ -16,43 +16,58 @@ class UpdateRequest extends FormRequest
      */
     public function rules(): array
     {
-        return [
-            'id' => [
-                'required',
-                'integer',
-                'exists:concerns,id',
-            ],
-            'billing_invoice' => [
-                'required',
-                'string',
-                'max:' . config('vc.max_string_limit'),
-            ],
-            'type' => [
-                'required',
-                'string',
-                Rule::in(ConcernType::getValues()),
-            ],
-            'title' => [
-                'required',
-                'string',
-                'max:' . config('vc.max_string_limit'),
-            ],
-            'description' => [
-                'required',
-                'string',
-                'max:' . config('vc.max_text_limit'),
-            ],
-            'status' => [
-                'required',
-                'string',
-                Rule::in(TicketStatus::getValues()),
-            ],
-            'attachment' => [
-                'nullable',
-                'file',
-                'mimes:pdf,jpg,jpeg,png',
-                'max:' . config('vc.max_file_size'),
-            ],
-        ];
+        if (auth()->user()?->hasRole('billing_admin')) {
+            return [
+                'id' => [
+                    'required',
+                    'integer',
+                    'exists:concerns,id',
+                ],
+                'status' => [
+                    'required',
+                    'string',
+                    Rule::in(TicketStatus::getValues()),
+                ],
+            ];
+        } else {
+            return [
+                'id' => [
+                    'required',
+                    'integer',
+                    'exists:concerns,id',
+                ],
+                'billing_invoice' => [
+                    'required',
+                    'string',
+                    'max:' . config('vc.max_string_limit'),
+                ],
+                'type' => [
+                    'required',
+                    'string',
+                    Rule::in(ConcernType::getValues()),
+                ],
+                'title' => [
+                    'required',
+                    'string',
+                    'max:' . config('vc.max_string_limit'),
+                ],
+                'description' => [
+                    'required',
+                    'string',
+                    'max:' . config('vc.max_text_limit'),
+                ],
+                'status' => [
+                    'required',
+                    'string',
+                    Rule::in(TicketStatus::getValues()),
+                ],
+                'attachment' => [
+                    'nullable',
+                    'file',
+                    'mimes:pdf,jpg,jpeg,png',
+                    'max:' . config('vc.max_file_size'),
+                ],
+            ];
+        }
     }
 }

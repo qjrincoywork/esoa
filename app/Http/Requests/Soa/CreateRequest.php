@@ -6,7 +6,6 @@ use App\Enums\AccountType;
 use App\Enums\BillType;
 use App\Enums\Server;
 use App\Enums\SoaStatus;
-use App\Enums\Status;
 use App\Rules\IsDataExists;
 use App\Rules\IsServerDataExists;
 use App\Rules\SoaAmountIsValid;

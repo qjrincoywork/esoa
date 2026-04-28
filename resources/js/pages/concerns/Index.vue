@@ -240,7 +240,7 @@ watch(
 
 const breadcrumbItems: BreadcrumbItem[] = [
   {
-    title: 'Concern list',
+    title: 'Concerns',
     href: slug.value,
   },
 ];
@@ -248,7 +248,7 @@ const breadcrumbItems: BreadcrumbItem[] = [
 
 <template>
   <AppLayout :breadcrumbs="breadcrumbItems">
-    <Head title="Concern list" />
+    <Head title="Concerns" />
 
     <div class="bg-[var(--color-surface)] shadow-sm border border-[var(--color-border)] p-6">
       <div class="flex flex-col gap-4 mb-4">
