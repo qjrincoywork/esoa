@@ -51,8 +51,10 @@ class SoaResource extends JsonResource
 
     public function getBillingRefNames($billingRef) {
         $billingRefNames = [];
-        foreach ($billingRef as $ref) {
-            $billingRefNames[] = $ref;
+        if (!empty($billingRef)) {
+            foreach ($billingRef as $ref) {
+                $billingRefNames[] = $ref;
+            }
         }
 
         return implode(', ', $billingRefNames);

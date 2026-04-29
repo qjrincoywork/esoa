@@ -480,7 +480,10 @@ class SoaController extends Controller
                 $changes = CommonHelper::getFilteredChanges($soa);
                 $specifiedOriginal = collect($original)->only(array_keys($changes))->toArray();
 
-                if (!empty($changes) || $request->hasFile('file_pdf')) {
+                if (
+                    (!empty($changes) || $request->hasFile('file_pdf'))
+                    && $soa->status == SoaStatus::UNPAID
+                ) {
                     $soa->recordActivity('update', [
                         'from' => $specifiedOriginal,
                         'to' => $changes,

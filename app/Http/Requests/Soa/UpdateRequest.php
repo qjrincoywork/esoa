@@ -79,11 +79,12 @@ class UpdateRequest extends FormRequest
             //     // 'max:500',
             // ],
             'billing_ref' => [
-                'required_unless:status,' . SoaStatus::ENDORSED,
+                'nullable',
+                // 'required_unless:status,' . SoaStatus::ENDORSED,
                 'array',
             ],
             'billing_ref.*' => [
-                'required',
+                'nullable',
                 'string',
                 'max:' . config('vc.max_string_limit'),
             ],

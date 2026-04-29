@@ -237,7 +237,7 @@ const columns = computed(() => {
 
 const breadcrumbItems: BreadcrumbItem[] = [
   {
-    title: 'Soa list',
+    title: 'Billing Invoices',
     href: slug.value,
   },
 ];
@@ -537,7 +537,7 @@ watch(
 
 <template>
     <AppLayout :breadcrumbs="breadcrumbItems">
-        <Head title="Soa list" />
+        <Head title="Billing Invoices" />
         <div class="bg-[var(--color-surface)] shadow-sm border border-[var(--color-border)] p-6">
             <div class="flex flex-col gap-4 mb-4">
               <div class="flex flex-row lg:flex-row justify-between items-stretch lg:items-start gap-4">

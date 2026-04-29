@@ -133,12 +133,14 @@ class Soa extends Model
             })
             ->when($authUser->hasRole('broker'), function ($query) use ($authUser) {
                 $agentAccounts = (new SqlDatabase(Server::HMS))
-                    ->getAccountsOfAgent($authUser->userDetail->agent_code ?? '');
+                    ->getAccountsOfAgent($authUser->userDetail?->agent_code ?? null);
                 $query->whereIn('account_code', $agentAccounts);
             })
             ->when($authUser->hasRole('account_branch_admin'), function ($query) use ($authUser) {
-                $query->where('account_code', $authUser->userDetail->account_code ?? '');
-                $query->where('branch_code', $authUser->userDetail->branch_code ?? '');
+                $query->where('account_code', $authUser->userDetail?->account_code ?? null);
+                if (!empty($authUser->userDetail?->branch_code)) {
+                    $query->where('branch_code', $authUser->userDetail?->branch_code);
+                }
             })
             ->when(isset($params['due_in']), function ($query) use ($params) {
                 $query->whereRaw('DATEDIFF(due_date, NOW()) BETWEEN ? AND ?', SoaAging::pastDueDayBucketsRange($params['due_in']));
