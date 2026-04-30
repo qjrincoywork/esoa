@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue';
+import { usePage } from '@inertiajs/vue3';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SearchableCombobox } from '@/components/ui/searchable-combobox';
 import { useSoas } from '@/composables/soas';
 import { debounce } from '@/composables/utilities/helper';
+import { Auth, User, UserDetail } from '@/types';
 import { Select, SelectTrigger, SelectContent, SelectGroup, SelectLabel, SelectItem, SelectValue } from '@/components/ui/select';
 
 type UserBasic = {
@@ -36,10 +38,6 @@ type BillingRef = { value: string | number; name: string; balance_raw?: number |
 
 const { getAccountsByParams, getBranchesByParams, getBillingRefsByParams } = useSoas();
 const props = defineProps({
-  user: {
-    type: Object as unknown as () => UserBasic,
-    default: () => ({}),
-  },
   soa: {
     type: Object as unknown as () => Soa,
     default: () => ({}),
@@ -68,7 +66,10 @@ const billing_refs = ref<BillingRef[]>([])
 const account_types = computed<AccountType[]>(() => props.account_types as AccountType[]);
 const bill_types = computed<{ value: string | number; name: string }[]>(() => (props.bill_types ?? []) as { value: string | number; name: string }[]);
 const status_types = computed<{ value: string | number; name: string }[]>(() => (props.status_types ?? []) as { value: string | number; name: string }[]);
-const user = computed<UserBasic>(() => props.user as UserBasic)
+const page = usePage();
+const auth = computed(() => (page.props as any).auth as Auth);
+const user = computed(() => auth.value?.user as User);
+const userDetail = computed(() => user.value?.user_detail as UserDetail);
 
 // Expose a form ref so parent components can access without document.getElementById
 const savingForm = ref<HTMLFormElement | null>(null)
@@ -138,7 +139,12 @@ const existingExcel = computed(() => {
   if (id == null || !path) return null
   return { name: fileBasename(String(path)), href: `/soas/${id}/attachment/excel` }
 })
-
+const filteredStatusTypes = computed(() => {
+  if (userDetail.value?.employee_no) {
+    return status_types.value?.filter(s => s.value !== 2)
+  }
+  return status_types.value?.filter(s => s.value == 2)
+});
 // Helper to extract FormData from this form (exposed to parent)
 function getFormData(): FormData | null {
   if (!savingForm.value) return null
@@ -500,7 +506,7 @@ watch(soa, (val: Soa | undefined) => {
           <SelectGroup>
             <SelectLabel>Status</SelectLabel>
             <SelectItem
-              v-for="st in status_types"
+              v-for="st in filteredStatusTypes"
               :key="st.value"
               :value="String(st.value)"
             >
