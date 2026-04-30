@@ -72,6 +72,7 @@ class UpdateRequest extends FormRequest
                 'required_unless:status,' . SoaStatus::ENDORSED,
                 'string',
                 'max:191',
+                Rule::unique('soas', 'soa_number')->ignore($this->id)
             ],
             // 'billing_ref' => [
             //     'required_unless:status,' . SoaStatus::ENDORSED,

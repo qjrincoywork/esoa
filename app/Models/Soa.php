@@ -145,7 +145,7 @@ class Soa extends Model
             ->when(isset($params['due_in']), function ($query) use ($params) {
                 $query->whereRaw('DATEDIFF(due_date, NOW()) BETWEEN ? AND ?', SoaAging::pastDueDayBucketsRange($params['due_in']));
             })
-            ->orderBy('id', OrderType::DESC);
+            ->orderBy('created_at', OrderType::DESC);
 
         if ($authUser && $authUser->hasRole('superadmin')) {
             $result->withTrashed();

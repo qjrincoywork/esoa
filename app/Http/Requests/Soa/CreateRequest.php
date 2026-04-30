@@ -48,6 +48,7 @@ class CreateRequest extends FormRequest
                 'required',
                 'string',
                 'max:191',
+                Rule::unique('soas', 'soa_number'),
             ],
             'billing_ref' => [
                 'nullable',
