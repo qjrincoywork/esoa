@@ -43,6 +43,10 @@ class ImportUploadsJob implements ShouldQueue
                     !empty($upload->up_accode)
                     && !empty($upload->up_soanum)
                 ) {
+                    $soa = Soa::where('soa_number', $upload->up_soanum)->first();
+                    if ($soa) {
+                        continue;
+                    }
                     $directory = $upload->up_accode . (!empty($upload->up_branchcode) ? "/" . $upload->up_branchcode : "");
                     $filePathPDF = !empty($upload->up_filepdf) ? $directory . '/' . $upload->up_filepdf : null;
                     $filePathXls = !empty($upload->up_filexls) ? $directory . '/' . $upload->up_filexls : null;
@@ -133,10 +137,14 @@ class ImportUploadsJob implements ShouldQueue
                         'soa_number' => $upload->up_soanum,
                         'account_type' => AccountType::TPA_HMO,
                         'account_code' => $upload->up_accode,
-                        'branch_code' => $upload->up_branchcode ?? null,
+                        'branch_code' => !empty($upload->up_branchcode)
+                            ? $upload->up_branchcode
+                            : null,
                         // 'billing_ref' => $upload->up_refid,
                         'bill_type' => BillType::oldValue($upload->up_billtype),
-                        'status' => SoaStatus::UNPAID,
+                        'status' => !empty($upload->up_endorsedtoacct)
+                            ? SoaStatus::ENDORSED
+                            : SoaStatus::UNPAID,
                         'due_date' => $upload->up_due_date,
                         'period_date_from' => $upload->up_poc_start,
                         'period_date_to' => $upload->up_poc_end,

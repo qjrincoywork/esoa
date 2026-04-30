@@ -117,6 +117,9 @@ class AdminController extends Controller
     public function importSoa()
     {
         try {
+            $total = 0;
+            $limit = 5000;
+
             DB::connection('soa')
                 ->table('Upload')
                 ->select([
@@ -142,13 +145,30 @@ class AdminController extends Controller
                 ->whereNotNull('up_macode')
                 ->where('up_macode', '!=', '')
                 // u.up_date >= '2023-01-01' AND u.up_date <= '2024-12-30'
-                ->whereBetween('up_date', ['2025-01-01', '2026-12-30'])
-                ->orderBy('up_id')
-                ->limit(4000)
-                ->chunk(2000, function ($chunk) {
-                    Log::info('Start SOA: ' . $chunk->count());
-                    // dispatch job for each 2000 rows
-                    ImportUploadsJob::dispatch($chunk);
+                ->where(function ($query) {
+                    //   ->whereBetween('up_poc_start', ['2023-01-01', '2026-12-30'])
+                    $query->whereBetween('up_date', ['2025-01-01', '2026-12-30'])
+                          ->where('up_poc_start', '>=', '2023-01-01');
+                })
+                ->orderBy('up_date')
+                // ->limit(5000)
+                // ->chunk(2000, function ($chunk) {
+                //     Log::info('Start SOA: ' . $chunk->count());
+                //     // dispatch job for each 2000 rows
+                //     ImportUploadsJob::dispatch($chunk);
+                // })
+                ->chunk(2000, function ($chunk) use (&$total, $limit) {
+                    if ($total >= $limit) {
+                        Log::info('Stop SOA Job');
+                        return false; // stop further chunks
+                    }
+
+                    $remaining = $limit - $total;
+                    $chunk = $chunk->take($remaining);
+                    foreach ($chunk as $row) {
+                        ImportUploadsJob::dispatch($row);
+                    }
+                    $total += $chunk->count();
                 });
 
             Log::info('End SOA Job');
