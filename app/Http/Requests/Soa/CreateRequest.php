@@ -2,15 +2,10 @@
 
 namespace App\Http\Requests\Soa;
 
-use App\Enums\AccountType;
-use App\Enums\BillType;
-use App\Enums\Server;
-use App\Enums\SoaStatus;
-use App\Rules\IsDataExists;
-use App\Rules\IsServerDataExists;
-use App\Rules\SoaAmountIsValid;
-use Illuminate\Validation\Rule;
+use App\Enums\{ AccountType, BillType, Server };
+use App\Rules\{ IsDataExists, IsServerDataExists, SoaAmountIsValid, SoaStatusIsValid };
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class CreateRequest extends FormRequest
 {
@@ -71,7 +66,7 @@ class CreateRequest extends FormRequest
             'status' => [
                 'required',
                 'integer',
-                Rule::in(SoaStatus::getValues()),
+                new SoaStatusIsValid(),
             ],
             'period_date_from' => [
                 'required',
@@ -84,7 +79,7 @@ class CreateRequest extends FormRequest
             'amount' => [
                 'required',
                 'numeric',
-                new SoaAmountIsValid(),
+                // new SoaAmountIsValid(),
             ],
             'amount_paid' => [
                 'nullable',

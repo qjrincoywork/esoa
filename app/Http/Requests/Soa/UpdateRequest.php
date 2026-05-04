@@ -2,16 +2,11 @@
 
 namespace App\Http\Requests\Soa;
 
-use App\Enums\AccountType;
-use App\Enums\BillType;
-use App\Enums\Server;
-use App\Enums\SoaStatus;
-use App\Enums\Status;
+use App\Enums\{ AccountType, BillType, Server, SoaStatus };
 use App\Models\Soa;
-use App\Rules\IsDataExists;
-use App\Rules\IsServerDataExists;
-use Illuminate\Validation\Rule;
+use App\Rules\{ IsDataExists, IsServerDataExists, SoaStatusIsValid };
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateRequest extends FormRequest
 {
@@ -101,7 +96,7 @@ class UpdateRequest extends FormRequest
             'status' => [
                 'required',
                 'integer',
-                Rule::in(SoaStatus::getValues()),
+                new SoaStatusIsValid(),
             ],
             'period_date_from' => [
                 'required_unless:status,' . SoaStatus::ENDORSED,
