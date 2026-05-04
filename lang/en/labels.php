@@ -17,6 +17,14 @@ return [
         'line_7' => 'Sincerely,',
         'line_8' => 'BILLING & COLLECTION DEPARTMENT',
     ],
+    'billing_invoice_endorsed' => [
+        'subject' => '[eSOA: :soanum] A Billing Invoice Has Been Endorsed.',
+        'greetings' => 'Hello,',
+        'line_1' => 'A Billing Invoice Has Been Endorsed.',
+        'line_2' => 'Billing invoice :soanum is available in the Customer Portal, ready for review and checking. ',
+        'line_3' => 'Thank you for your continued support and trust in Valucare Health.',
+        'line_4' => 'If you have any concerns, please reach out to us at: :contact.',
+    ],
     'billing_invoice_final_reminder' => [
         'subject' => '[eSOA: :soanum] Billing Invoice Final Reminder',
         'greetings' => 'Dear Valued Customer,',

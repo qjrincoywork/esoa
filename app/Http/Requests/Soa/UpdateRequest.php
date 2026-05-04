@@ -17,119 +17,141 @@ class UpdateRequest extends FormRequest
      */
     public function rules(): array
     {
-        $existingFilePdf = Soa::whereKey($this->input('id'))->value('file_pdf');
-        $filePdfRules = [];
-        if (!$existingFilePdf) {
-            $filePdfRules = [
-                'required',
-                // 'required_if:status,' . SoaStatus::ENDORSED,
+        $isAccountBranchAdmin = empty(auth()->user()->userDetail->employee_no);
+        if ($isAccountBranchAdmin) {
+            $rules = [
+                'id' => [
+                    'required',
+                    'integer',
+                    new IsDataExists('soas'),
+                ],
+                'user_id' => [
+                    'required',
+                    'integer',
+                    new IsDataExists('users'),
+                ],
+                'status' => [
+                    'required',
+                    'integer',
+                    new SoaStatusIsValid(),
+                ],
+            ];
+        } else {
+            $existingFilePdf = Soa::whereKey($this->input('id'))->value('file_pdf');
+            $filePdfRules = [];
+            if (!$existingFilePdf) {
+                $filePdfRules = [
+                    'required',
+                    // 'required_if:status,' . SoaStatus::ENDORSED,
+                ];
+            }
+            if ($this->hasFile('file_pdf')) {
+                $filePdfRules = [
+                    ...$filePdfRules,
+                    'file',
+                    'mimes:pdf',
+                    'max:20480', // 2MB (size is in KB)
+                ];
+            }
+
+            $rules = [
+                'id' => [
+                    'required',
+                    'integer',
+                    new IsDataExists('soas'),
+                ],
+                'user_id' => [
+                    'required',
+                    'integer',
+                    new IsDataExists('users'),
+                ],
+                'account_type' => [
+                    'required',
+                    'string',
+                    Rule::in(AccountType::getValues()),
+                ],
+                'account_code' => [
+                    'required',
+                    'string',
+                    'max:191',
+                    new IsServerDataExists(Server::HMS, 'Accounts', 'ac_code'),
+                ],
+                'branch_code' => [
+                    'nullable',
+                    'string',
+                    'max:191',
+                    new IsServerDataExists(Server::HMS, 'Branches', 'br_code'),
+                ],
+                'soa_number' => [
+                    'required_unless:status,' . SoaStatus::ENDORSED,
+                    'string',
+                    'max:191',
+                    Rule::unique('soas', 'soa_number')->ignore($this->id)
+                ],
+                // 'billing_ref' => [
+                //     'required_unless:status,' . SoaStatus::ENDORSED,
+                //     'string',
+                //     // 'max:500',
+                // ],
+                'billing_ref' => [
+                    'nullable',
+                    // 'required_unless:status,' . SoaStatus::ENDORSED,
+                    'array',
+                ],
+                'billing_ref.*' => [
+                    'nullable',
+                    'string',
+                    'max:' . config('vc.max_string_limit'),
+                ],
+                'bill_type' => [
+                    'required_unless:status,' . SoaStatus::ENDORSED,
+                    'integer',
+                    Rule::in(BillType::getValues()),
+                ],
+                'due_date' => [
+                    'required_unless:status,' . SoaStatus::ENDORSED,
+                    'date',
+                ],
+                'status' => [
+                    'required',
+                    'integer',
+                    new SoaStatusIsValid(),
+                ],
+                'period_date_from' => [
+                    'required_unless:status,' . SoaStatus::ENDORSED,
+                    'date',
+                ],
+                'period_date_to' => [
+                    'required_unless:status,' . SoaStatus::ENDORSED,
+                    'date',
+                ],
+                'amount' => [
+                    'required_unless:status,' . SoaStatus::ENDORSED,
+                    'numeric',
+                ],
+                'amount_paid' => [
+                    'nullable',
+                    'numeric',
+                ],
+                'payment_adjustment' => [
+                    'nullable',
+                    'numeric',
+                ],
+                'balance' => [
+                    'nullable',
+                    'numeric',
+                ],
+                'file_pdf' => $filePdfRules,
+                'file_xls' => [
+                    'nullable',
+                    'file',
+                    'mimes:xls,xlsx',
+                    'max:20480' // 2MB (size is in KB)
+                ],
             ];
         }
 
-        if ($this->hasFile('file_pdf')) {
-            $filePdfRules = [
-                ...$filePdfRules,
-                'file',
-                'mimes:pdf',
-                'max:20480', // 2MB (size is in KB)
-            ];
-        }
-
-        return [
-            'id' => [
-                'required',
-                'integer',
-                new IsDataExists('soas'),
-            ],
-            'user_id' => [
-                'required',
-                'integer',
-                new IsDataExists('users'),
-            ],
-            'account_type' => [
-                'required',
-                'string',
-                Rule::in(AccountType::getValues()),
-            ],
-            'account_code' => [
-                'required',
-                'string',
-                'max:191',
-                new IsServerDataExists(Server::HMS, 'Accounts', 'ac_code'),
-            ],
-            'branch_code' => [
-                'nullable',
-                'string',
-                'max:191',
-                new IsServerDataExists(Server::HMS, 'Branches', 'br_code'),
-            ],
-            'soa_number' => [
-                'required_unless:status,' . SoaStatus::ENDORSED,
-                'string',
-                'max:191',
-                Rule::unique('soas', 'soa_number')->ignore($this->id)
-            ],
-            // 'billing_ref' => [
-            //     'required_unless:status,' . SoaStatus::ENDORSED,
-            //     'string',
-            //     // 'max:500',
-            // ],
-            'billing_ref' => [
-                'nullable',
-                // 'required_unless:status,' . SoaStatus::ENDORSED,
-                'array',
-            ],
-            'billing_ref.*' => [
-                'nullable',
-                'string',
-                'max:' . config('vc.max_string_limit'),
-            ],
-            'bill_type' => [
-                'required_unless:status,' . SoaStatus::ENDORSED,
-                'integer',
-                Rule::in(BillType::getValues()),
-            ],
-            'due_date' => [
-                'required_unless:status,' . SoaStatus::ENDORSED,
-                'date',
-            ],
-            'status' => [
-                'required',
-                'integer',
-                new SoaStatusIsValid(),
-            ],
-            'period_date_from' => [
-                'required_unless:status,' . SoaStatus::ENDORSED,
-                'date',
-            ],
-            'period_date_to' => [
-                'required_unless:status,' . SoaStatus::ENDORSED,
-                'date',
-            ],
-            'amount' => [
-                'required_unless:status,' . SoaStatus::ENDORSED,
-                'numeric',
-            ],
-            'amount_paid' => [
-                'nullable',
-                'numeric',
-            ],
-            'payment_adjustment' => [
-                'nullable',
-                'numeric',
-            ],
-            'balance' => [
-                'nullable',
-                'numeric',
-            ],
-            'file_pdf' => $filePdfRules,
-            'file_xls' => [
-                'nullable',
-                'file',
-                'mimes:xls,xlsx',
-                'max:20480' // 2MB (size is in KB)
-            ],
-        ];
+        return $rules;
     }
 
     // protected function prepareForValidation(): void

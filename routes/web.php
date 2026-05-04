@@ -14,14 +14,17 @@ use App\Http\Controllers\{
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
+use App\Models\Soa;
 
 // Route::get('/', function () {
 //     return Inertia::render('Welcome', [
 //         'canRegister' => Features::enabled(false),
 //     ]);
 // })->name('home');
-// Route::get('/', function () {
-//     return redirect()->route('login');
+// Route::get('/test-email', function () {
+//     return view('emails.esoa.billing-invoice-endorsed', [
+//         'soa' => Soa::findOrFail(2961),
+//     ]);
 // });
 Route::get('/', function () {
     return Inertia::render('auth/Login', [
@@ -35,7 +38,7 @@ Route::get('/', function () {
 Route::prefix('admin')->name('admin.')
     // ->middleware('check_permissions')
     ->controller(AdminController::class)->group(function () {
-        Route::get('/import_soa', 'importSoa')->name('importSoa');
+        // Route::get('/import_soa', 'importSoa')->name('importSoa');
         // Route::get('/start_import', 'startImport')->name('startImport');
         // Route::get('/import_main_accounts', 'importMainAccounts')->name('importMainAccounts');
         // Route::get('/import_accounts', 'importAccounts')->name('importAccounts');

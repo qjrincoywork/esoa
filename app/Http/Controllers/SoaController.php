@@ -18,8 +18,7 @@ use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
 use App\Http\Resources\{AccountBranchMemberResource, BillingRefResource, OldSoaResource, SoaActivityListResource, SoaAgingCountResource, SoaResource };
-use App\Mail\NewBillingInvoiceUploaded;
-use App\Mail\NewSoaUploaded;
+use App\Mail\{ BillingInvoiceEndorsed, NewBillingInvoiceUploaded, NewSoaUploaded };
 use App\Models\{Account, Citizenship, CivilStatus, Contact, Department, Gender, MainAccount, Position, Soa, Suffix, UserDetail};
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -466,13 +465,16 @@ class SoaController extends Controller
                 CommonHelper::validateNotPaid($soa, SoaStatus::PAID);
 
                 $soaNumber = $validated['soa_number'] ?? $soa->soa_number;
-                CommonHelper::storeUploadedFiles(
-                    $soaNumber,
-                    $validated['account_code'],
-                    $validated['branch_code'] ?? null,
-                    $request,
-                    $validated
-                );
+                $isAccountBranchAdmin = empty(auth()->user()->userDetail->employee_no);
+                if (!$isAccountBranchAdmin) {
+                    CommonHelper::storeUploadedFiles(
+                        $soaNumber,
+                        $validated['account_code'],
+                        $validated['branch_code'] ?? null,
+                        $request,
+                        $validated
+                    );
+                }
 
                 $original = CommonHelper::getFilteredOriginal($soa);
                 $soa->update($validated);
@@ -480,10 +482,7 @@ class SoaController extends Controller
                 $changes = CommonHelper::getFilteredChanges($soa);
                 $specifiedOriginal = collect($original)->only(array_keys($changes))->toArray();
 
-                if (
-                    (!empty($changes) || $request->hasFile('file_pdf'))
-                    && $soa->status == SoaStatus::UNPAID
-                ) {
+                if (!empty($changes)) {
                     $soa->recordActivity('update', [
                         'from' => $specifiedOriginal,
                         'to' => $changes,
@@ -491,8 +490,17 @@ class SoaController extends Controller
 
                     $soa->refresh();
 
-                    if (CommonHelper::hasFileAttachmentAndAccount($soa, $request)) {
-                        CommonHelper::sendBillingInvoiceEmail($soa, $request->user(), NewBillingInvoiceUploaded::class);
+                    if ($request->hasFile('file_pdf') && $soa->status == SoaStatus::UNPAID) {
+                        if (CommonHelper::hasFileAttachmentAndAccount($soa, $request)) {
+                            CommonHelper::sendBillingInvoiceEmail($soa, $request->user(), NewBillingInvoiceUploaded::class);
+                        }
+                    }
+
+                    if (
+                        $soa->status == SoaStatus::ENDORSED
+                        && $request->user()->hasRole('account_branch_admin')
+                    ) {
+                        CommonHelper::sendBillingInvoiceEmail($soa, $request->user(), BillingInvoiceEndorsed::class);
                     }
                 }
 
