@@ -16,13 +16,14 @@ class SoaStatusIsValid implements ValidationRule
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
         $filteredStatusTypes = [];
-        if (auth()->user()->userDetail->employee_no) {
-            $filteredStatusTypes = SoaStatus::getValues()->filter(function ($status) {
-                return $status != SoaStatus::ENDORSED;
+        $isAccountBranchAdmin = empty(auth()->user()->userDetail->employee_no);
+        if ($isAccountBranchAdmin) {
+            $filteredStatusTypes = array_filter(SoaStatus::getValues(), function ($value) {
+                return $value == SoaStatus::ENDORSED;
             });
         } else {
-            $filteredStatusTypes = SoaStatus::getValues()->filter(function ($status) {
-                return $status == SoaStatus::ENDORSED;
+            $filteredStatusTypes = array_filter(SoaStatus::getValues(), function ($value) {
+                return $value != SoaStatus::ENDORSED;
             });
         }
         if (!in_array($value, $filteredStatusTypes)) {

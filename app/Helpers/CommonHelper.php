@@ -195,14 +195,26 @@ class CommonHelper
         self::setClientName($model);
         $model->contact = config('vc.contact_email');
 
-        $notifyEmail = config('vc.billing_notification_email', 'billing@example.com');
-        Mail::to($notifyEmail)->send(new $mailClass($model));
+        $isAccountBranchAdmin = $user->hasRole('account_branch_admin');
+        $billingNotificationEmail = config('vc.billing_notification_email', 'billing@example.com');
+
+        $toEmail = $isAccountBranchAdmin
+            ? $billingNotificationEmail
+            : $user->email;
+
+        $ccEmail = $isAccountBranchAdmin
+            ? $user->email
+            : $billingNotificationEmail;
+
+        Mail::to($toEmail)
+            ->cc($ccEmail)
+            ->send(new $mailClass($model));
 
         $model->recordActivity('billing_invoice_email_sent', [
             'to' => [
                 'soa_number' => $model->soa_number,
                 'file_pdf' => $model->file_pdf,
-                'notified_email' => $notifyEmail,
+                'notified_email' => $toEmail,
             ],
         ], $user);
     }

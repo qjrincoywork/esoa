@@ -3,6 +3,7 @@ import { usePane } from '@/composables/usePane';
 import { useAjax } from '@/composables/useAjax';
 import DeleteForm from '@/components/forms/soas/DeleteForm.vue';
 import SavingSoaForm from '@/components/forms/soas/SavingSoaForm.vue';
+import AccountBranchUpdateForm from '@/components/forms/soas/AccountBranchUpdateForm.vue';
 import ViewForm from '@/components/forms/soas/ViewForm.vue';
 import UntagForm from '@/components/forms/soas/UntagForm.vue';
 import ManageFileForm from '@/components/forms/soas/ManageFileForm.vue';
@@ -212,21 +213,33 @@ export function useSoas() {
       const payload = response.data;
 
       if (!payload) return;
-
-      openModal({
-        modalTitle: `Edit ${payload.soa?.soa_number || 'Soa'}`,
-        buttonText: 'Update',
-        component: SavingSoaForm,
-        componentProps: {
+      const isAccountBranchAdmin = authUser?.user_detail?.employee_no == '' || authUser?.user_detail?.employee_no == null;
+      const formComponent = isAccountBranchAdmin ? AccountBranchUpdateForm : SavingSoaForm;
+      const formComponentProps = isAccountBranchAdmin
+        ? {
+            soa: payload.soa,
+            status_types: payload.status_types ?? [],
+            user: authUser ?? undefined,
+            onReady: (api: { getFormData: () => FormData | null }) => {
+              formApi = api
+            }
+          }
+        : {
+          soa: payload.soa,
           account_types: payload.account_types,
           bill_types: payload.bill_types ?? [],
           status_types: payload.status_types ?? [],
           user: authUser ?? undefined,
-          soa: payload.soa,
           onReady: (api: { getFormData: () => FormData | null }) => {
             formApi = api
           }
-        },
+        };
+
+      openModal({
+        modalTitle: `Edit ${payload.soa?.soa_number || 'Soa'}`,
+        buttonText: 'Update',
+        component: formComponent,
+        componentProps: formComponentProps,
         size: 'xl',
         onSubmit: async () => {
           if (!formApi) return;
