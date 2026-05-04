@@ -130,6 +130,7 @@ class Soa extends Model
         $result = self::query()
             ->when(!empty($params), function ($query) use ($params) {
                 $query->tap(fn (Builder $q) => $this->applyListSearchFilters($q, $params));
+                $query->tap(fn (Builder $q) => $this->applyListSearchFiltersDueIn($q, $params));
             })
             ->when($authUser->hasRole('broker'), function ($query) use ($authUser) {
                 $agentAccounts = (new SqlDatabase(Server::HMS))
@@ -141,9 +142,6 @@ class Soa extends Model
                 if (!empty($authUser->userDetail?->branch_code)) {
                     $query->where('branch_code', $authUser->userDetail?->branch_code);
                 }
-            })
-            ->when(isset($params['due_in']), function ($query) use ($params) {
-                $query->whereRaw('DATEDIFF(due_date, NOW()) BETWEEN ? AND ?', SoaAging::pastDueDayBucketsRange($params['due_in']));
             })
             ->orderBy('created_at', OrderType::DESC);
 
@@ -172,10 +170,12 @@ class Soa extends Model
                 'value' => $soaAging,
                 'count' => self::query()
                     ->when($authUser->hasRole('account_branch_admin'), function ($query) use ($authUser) {
-                        $query->where('account_code', $authUser->userDetail->account_code ?? '');
-                        $query->where('branch_code', $authUser->userDetail->branch_code ?? '');
+                        $query->where('account_code', $authUser->userDetail?->account_code ?? null);
+                        if (!empty($authUser->userDetail?->branch_code)) {
+                            $query->where('branch_code', $authUser->userDetail?->branch_code);
+                        }
                     })
-                    ->whereRaw('DATEDIFF(due_date, NOW()) BETWEEN ? AND ?', SoaAging::pastDueDayBucketsRange($soaAging))
+                    ->tap(fn (Builder $q) => $this->applyListSearchFiltersDueIn($q, ['due_in' => $soaAging]))
                     ->where('status', '!=', SoaStatus::PAID)
                     ->count(),
             ];
@@ -206,6 +206,35 @@ class Soa extends Model
         }
         if (array_key_exists('status', $params) && $params['status'] !== null && $params['status'] !== '') {
             $query->where('status', (int) $params['status']);
+        }
+    }
+
+    /**
+     * Apply validated list filters (aligned with SoaAging: due in aging).
+     */
+    protected function applyListSearchFiltersDueIn(Builder $query, array $params): void
+    {
+        if (array_key_exists('due_in', $params) && $params['due_in'] !== null && $params['due_in'] !== '') {
+            $query->when($params['due_in'] == SoaAging::PAST_DUE, function ($query) use ($params) {
+                $range = SoaAging::pastDueDayBucketsRange($params['due_in']);
+                $query->whereRaw('DATEDIFF(due_date, NOW()) < ?', end($range) ?? 0);
+            })
+            ->when($params['due_in'] == SoaAging::DUE_WITHIN_30_DAYS, function ($query) use ($params) {
+                $query->whereRaw('DATEDIFF(due_date, NOW()) BETWEEN ? AND ?', SoaAging::pastDueDayBucketsRange($params['due_in']));
+            })
+            ->when($params['due_in'] == SoaAging::DUE_WITHIN_60_DAYS, function ($query) use ($params) {
+                $query->whereRaw('DATEDIFF(due_date, NOW()) BETWEEN ? AND ?', SoaAging::pastDueDayBucketsRange($params['due_in']));
+            })
+            ->when($params['due_in'] == SoaAging::DUE_WITHIN_90_DAYS, function ($query) use ($params) {
+                $query->whereRaw('DATEDIFF(due_date, NOW()) BETWEEN ? AND ?', SoaAging::pastDueDayBucketsRange($params['due_in']));
+            })
+            ->when($params['due_in'] == SoaAging::DUE_WITHIN_120_DAYS, function ($query) use ($params) {
+                $query->whereRaw('DATEDIFF(due_date, NOW()) BETWEEN ? AND ?', SoaAging::pastDueDayBucketsRange($params['due_in']));
+            })
+            ->when($params['due_in'] == SoaAging::DUE_WITHIN_MORE_THAN_120_DAYS, function ($query) use ($params) {
+                $range = SoaAging::pastDueDayBucketsRange($params['due_in']);
+                $query->whereRaw('DATEDIFF(due_date, NOW()) > ?', reset($range) ?? 0);
+            });
         }
     }
 

@@ -45,7 +45,7 @@ const redirectToSoaList = (dueIn: number) => {
           <CardContent>
             <TooltipProvider>
               <Tooltip>
-                <TooltipTrigger>
+                <TooltipTrigger class="w-full h-full">
                   <div class="cursor-pointer"
                     :class="soaAging.color"
                     @click="redirectToSoaList(soaAging.value)"
