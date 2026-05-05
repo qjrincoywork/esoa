@@ -206,6 +206,7 @@ class SoaActivityListResource extends JsonResource
         if (is_numeric($value) && in_array($key, ['bill_type', 'status', 'id', 'user_id'], true)) {
             return (string) (int) $value;
         }
+        $value = is_array($value) ? implode(', ', $value) : $value;
 
         return trim((string) $value);
     }
