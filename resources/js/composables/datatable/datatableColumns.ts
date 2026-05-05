@@ -1,11 +1,16 @@
-import { h } from 'vue';
-import { router } from '@inertiajs/vue3';
+import { h, computed } from 'vue';
+import { router, usePage } from '@inertiajs/vue3';
 import { createColumnHelper } from '@tanstack/vue-table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import Icon from '@/components/Icon.vue';
 import { dispatchNotification } from '@/components/notification';
+import { Auth, User, UserDetail, type BreadcrumbItem } from '@/types';
 
 const columnHelper = createColumnHelper<any>()
+const page = usePage();
+const auth = computed(() => (page.props as any).auth as Auth);
+const user = computed(() => auth.value?.user as User);
+const userDetail = computed(() => user.value?.user_detail as UserDetail);
 
 export interface ActionColumnOptions {
   customActions?: Array<{
@@ -54,7 +59,14 @@ export function createActionColumn(customActions: ActionColumnOptions) {
           const label = action.name || action.slug || 'Action';
           const css = `cursor-pointer p-1 text-${action.color}-600 hover:text-${action.color}-800 transition-colors rounded`;
 
-          if (item.status?.toLowerCase() == 'paid' && action.slug === 'soas.edit') {
+          if (
+            (item.status?.toLowerCase() == 'paid' && action.slug == 'soas.edit')
+            || (
+              (userDetail.value?.employee_no == null || userDetail.value?.employee_no == '')
+              && item.status?.toLowerCase() == 'endorsed'
+              && action.slug == 'soas.edit'
+            )
+          ) {
             continue; // Skip actions for paid items
           }
           if ((item.file_pdf == '' || item.file_pdf == null) && action.slug === 'soas.billing_attachments') {
