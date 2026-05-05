@@ -43,6 +43,7 @@ class CreateRequest extends FormRequest
                 'required',
                 'string',
                 'max:191',
+                'regex:/^[A-Za-z0-9-]+$/',
                 Rule::unique('soas', 'soa_number'),
             ],
             'billing_ref' => [
@@ -117,6 +118,7 @@ class CreateRequest extends FormRequest
     {
         return [
             'user_id.required' => 'The user field is required',
+            'soa_number.regex' => 'The SOA number may only contain letters, numbers, and hyphens.',
         ];
     }
 
