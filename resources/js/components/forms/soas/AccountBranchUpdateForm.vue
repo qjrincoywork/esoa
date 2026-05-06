@@ -48,32 +48,12 @@ const userDetail = computed(() => user.value?.user_detail as UserDetail);
 
 // Expose a form ref so parent components can access without document.getElementById
 const savingForm = ref<HTMLFormElement | null>(null)
-const selectedStatus = ref<string | number>(soa.value?.status ?? '1')
+const selectedStatus = ref<string | number>(soa.value?.status ?? '2')
 const isSyncingFromSoa = ref(false)
-const isAccountBranchAdmin = userDetail?.employee_no == '' || userDetail?.employee_no == null;
+const isAccountBranchAdmin = userDetail.value?.employee_no == '' || userDetail.value?.employee_no == null;
 
-function fileBasename(path: string): string {
-  const normalized = path.replace(/\\/g, '/')
-  const segment = normalized.split('/').pop()
-  return segment || path
-}
-
-/** Existing uploads (native file inputs cannot show these; we show name + link instead). */
-const existingPdf = computed(() => {
-  const id = soa.value?.id
-  const path = soa.value?.file_pdf
-  if (id == null || !path) return null
-  return { name: fileBasename(String(path)), href: `/soas/${id}/attachment/pdf` }
-})
-
-const existingExcel = computed(() => {
-  const id = soa.value?.id
-  const path = soa.value?.file_xls
-  if (id == null || !path) return null
-  return { name: fileBasename(String(path)), href: `/soas/${id}/attachment/excel` }
-})
 const filteredStatusTypes = computed(() => {
-  return isAccountBranchAdmin ? status_types.value?.filter(s => s.value == 2) : []
+  return isAccountBranchAdmin ? status_types.value?.filter(s => (s.value == 2 || s.value == 4)) : []
 });
 // Helper to extract FormData from this form (exposed to parent)
 function getFormData(): FormData | null {
@@ -128,46 +108,6 @@ watch(soa, (val: Soa | undefined) => {
           </SelectGroup>
         </SelectContent>
       </Select>
-    </div>
-
-    <div
-      v-if="existingPdf"
-      class="grid gap-2 md:col-span-1"
-    >
-      <Label for="file_pdf">PDF File</Label>
-      <p
-        class="mt-1 text-xs text-[var(--color-text-muted)]"
-      >
-        Current:
-        <a
-          :href="existingPdf.href"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="cursor-pointer font-medium text-[var(--color-text)] underline underline-offset-2 hover:opacity-90"
-        >
-          {{ existingPdf.name }}
-        </a>
-      </p>
-    </div>
-
-    <div
-      v-if="existingExcel"
-      class="grid gap-2 md:col-span-1"
-    >
-      <Label for="file_xls">Excel File</Label>
-      <p
-        class="mt-1 text-xs text-[var(--color-text-muted)]"
-      >
-        Current:
-        <a
-          :href="existingExcel.href"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="cursor-pointer font-medium text-[var(--color-text)] underline underline-offset-2 hover:opacity-90"
-        >
-          {{ existingExcel.name }}
-        </a>
-      </p>
     </div>
   </form>
 </template>

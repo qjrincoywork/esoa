@@ -31,7 +31,7 @@ class SoaActivityListResource extends JsonResource
             'event_label' => $this->resolveEventLabel(),
             'from' => $this->describeFrom(),
             'to' => $this->describeTo(),
-            'created_at' => CommonHelper::formatDate($this->created_at),
+            'created_at' => CommonHelper::formatDate($this->created_at, true),
         ];
     }
 

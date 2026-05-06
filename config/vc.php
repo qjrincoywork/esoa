@@ -13,6 +13,7 @@ return [
     'api_key' => env('VC_API_KEY'),
     'api_auth_token' => 'API_AUTH_TOKEN',
 
+    'peso_sign' => '₱',
     'default_pages' => 10,
     'max_per_pages' => 100,
     'file_preview_token_ttl_minutes' => 10,//FILE_PREVIEW_TOKEN_TTL_MINUTES
