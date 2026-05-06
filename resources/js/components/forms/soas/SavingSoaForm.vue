@@ -207,7 +207,7 @@ const searchBranchesByParams = async (name = '', page = 1, append = false) => {
   if (append) {
     branches.value = [...(branches.value ?? []), ...result?.data];
   } else {
-    branches.value = result?.data;
+    branches.value = result?.data ?? [];
   }
   branchPage.value = result?.current_page;
   branchLastPage.value = result?.last_page;
@@ -241,7 +241,7 @@ const searchBillingRefsByParams = async (name = '', page = 1, append = false) =>
   if (append) {
     billing_refs.value = [...(billing_refs.value ?? []), ...result?.data];
   } else {
-    billing_refs.value = result?.data;
+    billing_refs.value = result?.data ?? [];
   }
   billingRefPage.value = result?.current_page;
   billingRefLastPage.value = result?.last_page;
@@ -269,19 +269,19 @@ function loadMoreData(input: string) {
 const debouncedGetAccounts: (...args: any[]) => void = debounce((evOrName?: any) => {
   const name = typeof evOrName === 'string' ? evOrName : (evOrName?.target?.value ?? '');
   void searchAccountsByParams(name, 1, false);
-});
+}, 2000);
 
 // Debounced wrapper (created once) to avoid recreating debounce on every keypress
 const debouncedGetBranches: (...args: any[]) => void = debounce((evOrName?: any) => {
   const name = typeof evOrName === 'string' ? evOrName : (evOrName?.target?.value ?? '');
   void searchBranchesByParams(name, 1, false);
-});
+}, 2000);
 
 // Debounced wrapper (created once) to avoid recreating debounce on every keypress
 const debouncedGetBillingRefs: (...args: any[]) => void = debounce((evOrName?: any) => {
   const name = typeof evOrName === 'string' ? evOrName : (evOrName?.target?.value ?? '');
   void searchBillingRefsByParams(name, 1, false);
-});
+}, 2000);
 watch([selectedAccountType, searchedAccountName], async () => {
   if (!isSyncingFromSoa.value) {
     accounts.value = [];

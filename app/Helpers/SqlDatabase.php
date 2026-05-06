@@ -123,7 +123,6 @@ class SqlDatabase
                     ->select('billing_id')
                     ->from('billing_recompute');
             })
-            // ->limit(1)
             ->first();
 
         return $result;
@@ -298,11 +297,15 @@ class SqlDatabase
 
     public function getCardHolderDetailsByParams($params)
     {
+        $authUser = auth()->user();
         // Pagination
         $perPage = $params['per_page'] ?? config('vc.default_pages');
         $result = $this->db
-            ->table('CHOLDERS as c')
-            ->select([
+            ->table('cholders as c')
+            ->leftJoin('billing as b', function ($join) use ($params) {
+                $join->on('c.ch_policynum', '=', 'b.bl_policynum');
+            })
+            ->select(
                 'b.bl_claimnum',
                 'b.bl_policynum',
                 'c.ch_id',
@@ -312,20 +315,24 @@ class SqlDatabase
                 'c.ch_firstname',
                 'c.ch_lastname',
                 'c.ch_middlename',
-                'c.ch_suffix',
-            ])
-            ->leftJoin('Billing as b', 'c.ch_policynum', '=', 'b.bl_policynum')
+                'c.ch_suffix'
+            )
             ->when(!empty($params['billing_ref']), function ($query) use ($params) {
                 $billRefs = is_string($params['billing_ref'])
                     ? explode(',', $params['billing_ref'])
                     : $params['billing_ref'];
                 $query->whereIn('b.bl_refid', $billRefs);
             })
-            ->when(!empty($params['account_code']), function ($query) use ($params) {
-                $query->where('c.ch_accountid', $params['account_code']);
+            ->when($authUser->hasRole('broker'), function ($query) use ($authUser) {
+                $agentAccounts = (new SqlDatabase(Server::HMS))
+                    ->getAccountsOfAgent($authUser->userDetail?->agent_code ?? null);
+                $query->whereIn('c.ch_accountid', $agentAccounts);
             })
-            ->when(!empty($params['branch_code']), function ($query) use ($params) {
-                $query->where('c.ch_branch_code', $params['branch_code']);
+            ->when($authUser->hasRole('account_branch_admin'), function ($query) use ($authUser) {
+                $query->where('c.ch_accountid', $authUser->userDetail?->account_code ?? null);
+                if (!empty($authUser->userDetail?->branch_code)) {
+                    $query->where('c.ch_branch_code', $authUser->userDetail?->branch_code);
+                }
             })
             ->when(!empty($params['claimnum']), function ($query) use ($params) {
                 $query->where('b.bl_claimnum', $params['claimnum']);
@@ -342,11 +349,6 @@ class SqlDatabase
             ->when(!empty($params['middlename']), function ($query) use ($params) {
                 $query->where('c.ch_middlename', $params['middlename']);
             })
-            // ->where('c.ch_lapsed', '!=', 'C')
-            // ->where(function ($query) {
-            //     $query->where('c.ch_expirydate', '>', now())
-            //           ->orWhereNull('c.ch_expirydate');
-            // })
             ->paginate($perPage);
 
         return $result;
@@ -355,7 +357,6 @@ class SqlDatabase
     /**
      * Retrieves branches based on the specified type.
      *
-     * @param string $type The type of branches to retrieve
      * @return \Illuminate\Pagination\Paginator
      */
     public function getBranchesByParams($params)

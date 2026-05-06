@@ -258,7 +258,7 @@ export function useSoas() {
               dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
               closeModal();
               // Refresh current page to update datatable props
-              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+              router.get(window.location.href, {}, { preserveState: false, preserveScroll: true, replace: true });
             }
           } catch (err) {
             dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });

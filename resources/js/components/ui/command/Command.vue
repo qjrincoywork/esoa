@@ -69,6 +69,12 @@ watch(() => filterState.search, () => {
   filterItems()
 })
 
+watch([allItems, allGroups], () => {
+  if (filterState.search) {
+    filterItems()
+  }
+}, { deep: true })
+
 provideCommandContext({
   allItems,
   allGroups,

@@ -175,8 +175,8 @@ function onLoadMore() {
               <CommandItem
                 v-for="item in items"
                 :key="String(item.value)"
-                :value="String(item.value)"
-                @select="(ev) => onSelect(String(ev.detail?.value ?? ''))"
+                :value="getItemDisplay(item)"
+                @select="() => onSelect(String(item.value))"
               >
                 <div class="flex items-center w-full">
                   <CheckIcon
