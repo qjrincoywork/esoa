@@ -13,7 +13,7 @@ use App\Helpers\CommonHelper;
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Soa\{AccountBranchMembersRequest, AdjustAmountRequest, CreateRequest, FileListRequest, FileProxyRequest, ListRequest, RecomputeTaxRequest, UpdateRequest, UpdateTagRequest };
+use App\Http\Requests\Soa\{AccountBranchMembersRequest, AdjustAmountRequest, CreateRequest, FileListRequest, FileProxyRequest, ListRequest, RecordViewedRequest, RecomputeTaxRequest, UpdateRequest, UpdateTagRequest };
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
@@ -211,6 +211,7 @@ class SoaController extends Controller
     public function streamBillingAttachment(int $id, string $type)
     {
         $soa = $this->soa->findOrFail($id);
+        $this->recordBillingInvoiceViewedIfEligible($soa, request()->user());
         $this->assertUserMayAccessModelSoa($soa);
 
         $path = match ($type) {
@@ -430,6 +431,58 @@ class SoaController extends Controller
         }
 
         return response()->json(['activities' => $payload]);
+    }
+
+    /**
+     * Record a single "billing invoice viewed" activity (account_branch_admin only).
+     * Ensures only one activity per SOA for this event.
+     */
+    public function recordViewed(RecordViewedRequest $request, int $id)
+    {
+        $soa = $this->soa->findOrFail($id);
+        $this->recordBillingInvoiceViewedIfEligible($soa, $request->user());
+
+        return response()->noContent();
+    }
+
+    /**
+     * Record viewed activity from email link, then redirect to PDF attachment.
+     */
+    public function viewBillingInvoice(RecordViewedRequest $request, int $id)
+    {
+        $soa = $this->soa->findOrFail($id);
+        $this->recordBillingInvoiceViewedIfEligible($soa, $request->user());
+
+        return redirect()->route('soas.billing_attachments', [
+            'id' => $soa->id,
+            'type' => 'pdf',
+        ]);
+    }
+
+    /**
+     * Persist a single billing-invoice viewed activity for account_branch_admin users.
+     */
+    private function recordBillingInvoiceViewedIfEligible(Soa $soa, $user): void
+    {
+        if (!$user || !$user->hasRole('account_branch_admin')) {
+            return;
+        }
+
+        $event = 'billing_invoice_viewed';
+        $alreadyRecorded = $soa->soaActivity()
+            ->where('event', $event)
+            ->exists();
+
+        if ($alreadyRecorded) {
+            return;
+        }
+
+        $soa->recordActivity($event, [
+            'to' => [
+                'soa_number' => $soa->soa_number,
+                'message' => 'Billing invoice is viewed',
+            ],
+        ], $user);
     }
 
     /**

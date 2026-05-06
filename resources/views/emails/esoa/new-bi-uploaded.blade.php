@@ -15,7 +15,7 @@
     </p>
     <p style="margin: 0; color: #555555; font-size: 14px; line-height: 1.6;">
       {!! str_replace(':soanum', "<strong style='color: #333333; font-weight: 700;'>"
-        . "<a href='" . route('soas.billing_attachments', ['id' => $soa->id, 'type' => 'pdf']) . "'
+        . "<a href='" . route('soas.view_billing_invoice', ['id' => $soa->id]) . "'
             target='_blank'
             rel='noopener noreferrer'
             title='Click to open the billing invoice'
