@@ -390,6 +390,13 @@ export function useSoas() {
     const soaLabel = (soa as any)?.soanum ?? (soa as any)?.soa_number ?? '';
 
     try {
+      // Record "viewed" activity for account_branch_admin users only (best-effort).
+      // Backend enforces role + de-duplication (one per SOA).
+      const isAccountBranchAdmin = authUser?.user_detail?.employee_no == '' || authUser?.user_detail?.employee_no == null;
+      if (isAccountBranchAdmin && soa?.id != null) {
+        void post(`/${slug.value}/${soa.id}/record_viewed`, {});
+      }
+
       openPane({
         side: 'right',
         title: `${soaLabel ? 'Billing Invoice: ' + soaLabel : 'Details'}`,
