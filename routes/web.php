@@ -29,7 +29,7 @@ use App\Models\Soa;
 Route::get('/', function () {
     return Inertia::render('auth/Login', [
         'canResetPassword' => Features::enabled(Features::resetPasswords()),
-        'canRegister' => Features::enabled(false),
+        'canRegister' => false,
         'status' => request()->session()->get('status'),
     ]);
 })->name('home');
