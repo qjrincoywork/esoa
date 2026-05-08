@@ -13,6 +13,7 @@ use App\Http\Requests\AccountPayment\{
 };
 use App\Http\Resources\AccountPaymentResource;
 use App\Http\Resources\CommonResource;
+use App\Mail\AccountPaymentNotification;
 use App\Models\AccountPayment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -76,8 +77,10 @@ class AccountPaymentController extends Controller
                 null,
                 env('ACCOUNT_PAYMENTS_DISK', 'public')
             );
-            AccountPayment::create($validated);
+            $accountPayment = AccountPayment::create($validated);
             DB::connection('mysql')->commit();
+
+            CommonHelper::sendNotificationEmail($accountPayment, $request->user(), AccountPaymentNotification::class);
 
             return response()->json(['message' => 'Account payment created successfully.']);
         } catch (\Exception $e) {
@@ -156,6 +159,8 @@ class AccountPaymentController extends Controller
             $accountPayment->update($validated);
 
             DB::connection('mysql')->commit();
+
+            CommonHelper::sendNotificationEmail($accountPayment, $request->user(), AccountPaymentNotification::class);
 
             return response()->json(['message' => 'Account payment updated successfully.']);
         } catch (\Exception $e) {
