@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Helpers\CommonHelper;
 use App\Models\AccountPayment;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
@@ -23,7 +24,7 @@ class AccountPaymentNotification extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Account payment notification for ' . ($this->accountPayment->deposit_date ?? 'record')
+            subject: 'Account payment notification for ' . (CommonHelper::formatDate($this->accountPayment->deposit_date) ?? 'record')
         );
     }
 

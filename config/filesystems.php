@@ -49,19 +49,19 @@ return [
 
         'rm' => [
             'driver' => 'local',
-            'root' => '\\\\192.170.11.185\\dmis_finance\\file\\rm',
+            'root' => env('ROOT_FOLDER') . 'rm',
         ],
         'billing' => [
             'driver' => 'local',
-            'root' => '\\\\192.170.11.185\\dmis_finance\\file\\billing',
+            'root' => env('ROOT_FOLDER') . DIRECTORY_SEPARATOR . 'billing' . DIRECTORY_SEPARATOR . 'billing_invoices',
         ],
         'concerns' => [
             'driver' => 'local',
-            'root' => '\\\\192.170.11.185\\dmis_finance\\file\\concerns',
+            'root' => env('ROOT_FOLDER') . DIRECTORY_SEPARATOR . 'billing' . DIRECTORY_SEPARATOR . 'concerns',
         ],
         'payments' => [
             'driver' => 'local',
-            'root' => '\\\\192.170.11.185\\dmis_finance\\file\\payments',
+            'root' => env('ROOT_FOLDER') . DIRECTORY_SEPARATOR . 'billing' . DIRECTORY_SEPARATOR . 'payments',
         ],
 
         's3' => [

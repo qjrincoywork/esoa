@@ -63,12 +63,11 @@ const form = ref({
 
 const user = computed(() => props.auth?.user as User);
 const userDetail = computed(() => user.value?.user_detail as UserDetail);
-const selectedStatus = ref<string | number>(concern.value.status != null ? String(concern.value.status) : '')
-const selectedType = ref<string | number>(concern.value.type != null ? String(concern.value.type) : '')
+const selectedStatus = ref<string | number>(concern.value.status != null ? String(concern.value.status) : '1')
+const selectedType = ref<string | number>(concern.value.type != null ? String(concern.value.type) : '1')
 const types = computed(() => props.concern_types || []); // Assuming concern_types is passed as a prop
 const statuses = computed(() => props.ticket_statuses || []); // Assuming ticket_statuses is passed as a prop
 const concernForm = ref<HTMLFormElement | null>(null);
-
 
 function getFormData(): FormData | null {
   if (!concernForm.value) return null;
@@ -91,7 +90,7 @@ const openTab = () => {
 
 <template>
   <form ref="concernForm" class="grid grid-cols-1 md:grid-cols-1 gap-3" enctype="multipart/form-data">
-    <div v-if="auth?.is_superadmin">
+    <div v-if="auth?.is_superadmin || concern?.id == null">
       <div class="md:col-span-2 hidden">
         <!-- Use native hidden inputs so FormData always reflects latest reactive values -->
         <input v-if="concern?.id" type="hidden" name="id" :value="concern?.id" />
@@ -146,7 +145,7 @@ const openTab = () => {
           v-model="form.description"
         />
       </div>
-      <div class="grid gap-2 md:col-span-1">
+      <div v-if="auth?.is_superadmin" class="grid gap-2 md:col-span-1">
         <Label for="status">Status<span class="text-red-400">*</span></Label>
         <Select
           class="mt-1 block w-full"
