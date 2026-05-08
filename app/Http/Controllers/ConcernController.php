@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\{ConcernType, TicketStatus};
 use App\Helpers\CommonHelper;
 use App\Helpers\CustomResponse;
+use App\Mail\ConcernNotification;
 use App\Models\Concern;
 use App\Http\Requests\Concern\{CreateRequest, DeleteRequest, ListRequest, UpdateRequest};
 use App\Http\Resources\CommonResource;
@@ -72,9 +73,11 @@ class ConcernController extends Controller
         try {
             $validated = $request->validated();
             CommonHelper::storeUploadedFile($request, $validated, 'attachment');
-            Concern::create($validated);
+            $concern = Concern::create($validated);
 
             DB::connection('mysql')->commit();
+
+            CommonHelper::sendNotificationEmail($concern, $request->user(), ConcernNotification::class);
 
             return response()->json(['message' => 'Concern created successfully.']);
         } catch (\Exception $e) {
@@ -147,6 +150,8 @@ class ConcernController extends Controller
             $concern->update($validated);
 
             DB::connection('mysql')->commit();
+
+            CommonHelper::sendNotificationEmail($concern, $request->user(), ConcernNotification::class);
 
             return response()->json(['message' => 'Concern updated successfully.']);
         } catch (\Exception $e) {

@@ -220,6 +220,28 @@ class CommonHelper
     }
 
     /**
+     * Send a generic notification email to the configured contact address and CC the request creator.
+     *
+     * @param  object  $model
+     * @param  object  $user
+     * @param  string  $mailClass
+     * @param  string|null  $toEmail
+     * @return void
+     */
+    public static function sendNotificationEmail($model, $user, string $mailClass, ?string $toEmail = null): void
+    {
+        $toEmail = $toEmail ?? config('vc.contact_email');
+
+        if (empty($toEmail) || empty($user?->email)) {
+            return;
+        }
+
+        Mail::to($toEmail)
+            ->cc($user->email)
+            ->send(new $mailClass($model));
+    }
+
+    /**
      * Validate if a resource is in paid status.
      *
      * @param  object  $model
