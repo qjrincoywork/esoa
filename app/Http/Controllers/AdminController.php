@@ -10,7 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\{ Bus, DB, Log, Schema };
 use Inertia\Inertia;
 use Spatie\Permission\Models\{ Permission, Role };
-use App\Jobs\{ ImportAccountsJob, ImportBranchesJob, ImportMainAccountsJob };
+use App\Jobs\{ ImportAccountsJob, ImportBranchesJob, ImportMainAccountsJob, ImportUploadsJob};
 
 class AdminController extends Controller
 {
@@ -107,6 +107,71 @@ class AdminController extends Controller
                 });
 
             Log::info('End Main Account Job');
+        } catch (\Exception $e) {
+            Log::error('Job failed: ' . $e->getMessage());
+            Log::error($e->getTraceAsString());
+            throw $e;
+        }
+    }
+
+    public function importSoa()
+    {
+        try {
+            $total = 0;
+            $limit = 5000;
+
+            DB::connection('soa')
+                ->table('Upload')
+                ->select([
+                    'up_id',
+                    'up_soanum',
+                    'up_macode',
+                    'up_branchcode',
+                    'up_accode',
+                    'up_amount',
+                    'up_filepdf',
+                    'up_filexls',
+                    'up_billtype',
+                    'up_date',
+                    'up_due_date',
+                    'up_poc_start',
+                    'up_poc_end',
+                    'up_status',
+                    'up_status_date',
+                    'up_endorsedtoacct',
+                ])
+                ->whereNull('up_delete_date')
+                ->where('up_status', 0)
+                ->whereNotNull('up_macode')
+                ->where('up_macode', '!=', '')
+                // u.up_date >= '2023-01-01' AND u.up_date <= '2024-12-30'
+                ->where(function ($query) {
+                    //   ->whereBetween('up_poc_start', ['2023-01-01', '2026-12-30'])
+                    $query->whereBetween('up_date', ['2025-01-01', '2026-12-30'])
+                          ->where('up_poc_start', '>=', '2023-01-01');
+                })
+                ->orderBy('up_date')
+                // ->limit(5000)
+                // ->chunk(2000, function ($chunk) {
+                //     Log::info('Start SOA: ' . $chunk->count());
+                //     // dispatch job for each 2000 rows
+                //     ImportUploadsJob::dispatch($chunk);
+                // })
+                ->chunk(2000, function ($chunk) use (&$total, $limit) {
+                    if ($total >= $limit) {
+                        Log::info('Stop SOA Job');
+                        return false; // stop further chunks
+                    }
+
+                    $remaining = $limit - $total;
+                    $chunk = $chunk->take($remaining);
+                    foreach ($chunk as $row) {
+                        ImportUploadsJob::dispatch($row);
+                    }
+                    $total += $chunk->count();
+                });
+
+            Log::info('End SOA Job');
         } catch (\Exception $e) {
             Log::error('Job failed: ' . $e->getMessage());
             Log::error($e->getTraceAsString());

@@ -2,9 +2,15 @@
 
 namespace App\Http\Resources;
 
+use App\Enums\BillType;
+use App\Enums\Server;
+use App\Enums\SoaStatus;
+use App\Helpers\CommonHelper;
+use App\Helpers\SqlDatabase;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Str;
 
 class SoaResource extends JsonResource
 {
@@ -16,65 +22,42 @@ class SoaResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'id' => $this->up_id,
-            'soanum' => $this->up_soanum,
-            'macode' => $this->up_macode,
-            'refid' => $this->up_refid,
-            'upcode' => $this->up_accode,
-            'billcode' => $this->up_billcode,
-            'billtype' => $this->up_billtype,
-            'billdate' => $this->formatDate($this->up_billdate),
-            'upload_date' => $this->formatDate($this->up_date, true),
-            'due_date' => $this->formatDate($this->up_due_date),
-            'due_in' => $this->formatDaysDue($this->up_due_date),
-            'period_coverage' => $this->up_period_cov,
-            'paid_date' => $this->formatDate($this->up_status_date),
-            'amount_due' => number_format($this->up_amount, 2),
-            'company_branch' => $this->up_acname ?? $this->up_branch,
-            'file_pdf' => $this->up_filepdf,
-            'file_xls' => $this->up_filexls,
-            'status' => $this->status(),
+            'id' => $this->id,
+            'soa_number' => $this->soa_number,
+            'billing_ref' => $this->billing_ref,
+            'billing_ref_names' => $this->getBillingRefNames($this->billing_ref),
+            'bill_type' => BillType::label($this->bill_type),
+            'created_at' => CommonHelper::formatDate($this->created_at),
+            'due_date' => CommonHelper::formatDate($this->due_date),
+            'due_in' => $this->formatDaysDue($this->due_date),
+            'period_date_from' => $this->period_date_from,
+            'period_date_to' => $this->period_date_to,
+            'period_coverage' => Str::upper(CommonHelper::formatDate($this->period_date_from) . ' TO ' . CommonHelper::formatDate($this->period_date_to)),
+            'account_code' => $this->account_code,
+            'branch_code' => $this->branch_code,
+            'account_name' => CommonHelper::convertStringEncoding($this->getAccountName($this->account_code)),
+            'branch_name' => CommonHelper::convertStringEncoding($this->getBranchName($this->branch_code)),
+            'amount' => number_format($this->amount, 2),
+            'amount_raw' => (float) $this->amount,
+            'file_pdf' => $this->file_pdf,
+            'file_xls' => $this->file_xls,
+            'status_color' => SoaStatus::color($this->status),
+            'status' => SoaStatus::label($this->status),
+            'soa_activities' => $this->whenLoaded('soaActivity', function () use ($request) {
+                return SoaActivityListResource::collection($this->soaActivity)->resolve($request);
+            }, []),
         ];
     }
 
-    /**
-     * Get the status of the UP account
-     *
-     * @return string
-     *   'Unpaid' if the account is unpaid and not endorsed
-     *   'Endorsed' if the account is unpaid and endorsed
-     *   'Paid' if the account is paid
-     */
-    public function status(): string
-    {
-        $status = (int) $this->up_status;
-        $endorsed = (int) $this->up_endorsedtoacct;
-
-        return match (true) {
-            $status === 0 && $endorsed === 0 => 'Unpaid',
-            $status === 0 && $endorsed === 1 => 'Endorsed',
-            default => 'Paid',
-        };
-    }
-
-    /**
-     * Format a date string according to the given parameters.
-     *
-     * @param  string|null  $date
-     * @param  bool  $withTime
-     * @return  string|null
-     */
-    public function formatDate($date, $withTime = false)
-    {
-        if (!$date) {
-            return null;
+    public function getBillingRefNames($billingRef) {
+        $billingRefNames = [];
+        if (!empty($billingRef)) {
+            foreach ($billingRef as $ref) {
+                $billingRefNames[] = $ref;
+            }
         }
 
-        $date = Carbon::parse($date);
-
-        return $withTime
-            ? $date->format('F j, Y')
-            : $date->format('F j, Y h:i A');
+        return implode(', ', $billingRefNames);
     }
 
     /**
@@ -106,5 +89,23 @@ class SoaResource extends JsonResource
             1 => 'Due Tomorrow',
             default => "Due in {$days} days",
         };
+    }
+
+    public function getAccountName($accountCode) {
+        $account = (new SqlDatabase(Server::HMS))->getAccount($accountCode);
+
+        return $account->ac_name;
+    }
+
+    public function getAccountExpiryDate($accountCode) {
+        $account = (new SqlDatabase(Server::HMS))->getAccount($accountCode);
+
+        return CommonHelper::formatDate($account->expiry_date);
+    }
+
+    public function getBranchName($branchCode) {
+        $branch = (new SqlDatabase(Server::HMS))->getBranch($branchCode);
+
+        return $branch->br_branch_name ?? '';
     }
 }

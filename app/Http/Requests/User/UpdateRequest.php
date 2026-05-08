@@ -2,6 +2,9 @@
 
 namespace App\Http\Requests\User;
 
+use App\Enums\AccountType;
+use App\Enums\Gender;
+use App\Enums\UserType;
 use App\Rules\IsDataExists;
 use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
@@ -19,17 +22,48 @@ class UpdateRequest extends FormRequest
         return [
             'id' => [
                 'required',
-                'integer'
+                'integer',
+                'exists:users,id',
+            ],
+            'type' => [
+                'required',
+                'integer',
+                Rule::in(UserType::getValues()),
+            ],
+            'account_type' => [
+                'required_if:type,' . UserType::ACCOUNT_BRANCH_ADMIN,
+                'nullable',
+                'string',
+                Rule::in(AccountType::getValues()),
+            ],
+            'account_code' => [
+                'required_if:type,' . UserType::ACCOUNT_BRANCH_ADMIN,
+                'nullable',
+                'string',
+                //new IsDataExists('accounts'),
+            ],
+            'branch_code' => [
+                'nullable',
+                'string',
+                'max:191'
+                //new IsDataExists('branches'),
+            ],
+            'agent_code' => [
+                'nullable',
+                'required_if:type,' . UserType::BROKER,
+                'string',
+                'max:191'
+                //new IsDataExists('agents'),
             ],
             'gender_id' => [
                 'required',
                 'integer',
-                new IsDataExists('genders'),
+                Rule::in(Gender::getValues()),
             ],
             'civil_status_id' => [
                 'required',
                 'integer',
-                new IsDataExists('civil_statuses'),
+                // new IsDataExists('civil_statuses'),
             ],
             'citizenship_id' => [
                 'required',
@@ -37,14 +71,19 @@ class UpdateRequest extends FormRequest
                 new IsDataExists('citizenships'),
             ],
             'department_id' => [
-                'required',
+                'required_if:type,' . UserType::VC_EMPLOYEE,
                 'integer',
                 new IsDataExists('departments'),
             ],
             'position_id' => [
-                'required',
+                'required_if:type,' . UserType::VC_EMPLOYEE,
                 'integer',
                 new IsDataExists('positions'),
+            ],
+            'employee_no' => [
+                'required_if:type,' . UserType::VC_EMPLOYEE,
+                'string',
+                'max:191'
             ],
             'first_name' => [
                 'required',
@@ -79,15 +118,15 @@ class UpdateRequest extends FormRequest
             'username' => [
                 'required',
                 'string',
-                'max:100'
+                'max:191',
+                Rule::unique(User::class)->ignore(request()->input('id')),
             ],
             'email' => [
                 'required',
                 'string',
-                'lowercase',
                 'email',
                 'max:191',
-                Rule::unique(User::class)->ignore(request()->user()->id),
+                Rule::unique(User::class)->ignore(request()->input('id')),
             ],
         ];
     }
@@ -102,9 +141,12 @@ class UpdateRequest extends FormRequest
         return [
             'gender_id.required' => 'The Gender field is required',
             'civil_status_id.required' => 'The Civil Status field is required',
-            'citizenship_id.required' => 'The Citizenship field is required',
-            'department_id.required' => 'The Department field is required',
-            'position_id.required' => 'The Position field is required',
+            'citizenship_id.required_if' => 'The Citizenship field is required',
+            'department_id.required_if' => 'The Department field is required',
+            'position_id.required_if' => 'The Position field is required',
+            'account_type.required_if' => 'The Account Type field is required',
+            'account_code.required_if' => 'The Account field is required',
+            'agent_code.required_if' => 'The Agent Code field is required',
         ];
     }
 }

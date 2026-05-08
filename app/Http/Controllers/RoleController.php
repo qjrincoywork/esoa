@@ -6,10 +6,11 @@ use App\Helpers\CustomResponse;
 use App\Http\Controllers\Controller;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
-use App\Http\Requests\Role\{DeleteRequest, ListRequest, CreateRequest, UpdateRequest};
+use App\Http\Requests\Role\{DeleteRequest, ListRequest, CreateRequest, UpdatePermissionsRequest, UpdateRequest};
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
+use Spatie\Permission\PermissionRegistrar;
 use Symfony\Component\HttpFoundation\Response;
 
 class RoleController extends Controller
@@ -38,30 +39,18 @@ class RoleController extends Controller
      */
     public function index(ListRequest $request)
     {
+        $params = $request->validated();
         $perPage = $params['per_page'] ?? config('vc.default_pages');
 
-        $roles = $this->role->query()
-            ->with('permissions')
-            ->latest()
-            ->paginate($perPage)
-            ->withQueryString()
-            ->through(function ($role) {
-                return [
-                    'id' => $role->id,
-                    'name' => $role->name,
-                    'guard_name' => $role->guard_name,
-                    'created_at' => $role->created_at?->diffForHumans(),
-                    'permissions' => $role->permissions->map(function ($permission) {
-                        return [
-                            'id' => $permission->id,
-                            'name' => $permission->name,
-                        ];
-                    }),
-                ];
-            });
+        $roles = $this->role
+            ->when(isset($params['search_string']), function ($query) use ($params) {
+                $query->where('name', 'LIKE', '%' . $params['search_string'] . '%');
+            })
+            ->orderBy('id', 'desc')
+            ->with('permissions');
 
         return Inertia::render('roles/Index', [
-            'roles' => $roles,
+            'roles' => $roles->paginate($perPage),
             'permissions' => Permission::all(),
         ]);
     }
@@ -125,6 +114,29 @@ class RoleController extends Controller
     }
 
     /**
+     * Show the permissions assigned to the specified role.
+     *
+     * Returns the role's current permissions as JSON for AJAX consumers,
+     * used by the role-permission management UI to pre-populate selected
+     * permissions for a given role.
+     *
+     * @param  string  $id       The ID of the role.
+     * @param  \Illuminate\Http\Request  $request  The incoming HTTP request.
+     * @return \Illuminate\Http\JsonResponse|null  JSON response for AJAX requests, or null otherwise.
+     */
+    public function editPermissions(string $id, Request $request)
+    {
+        $role = Role::with('permissions')->find($id);
+
+        // Return JSON for AJAX requests (no URL change)
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'access_permissions' => $role->permissions,
+            ]);
+        }
+    }
+
+    /**
      * Update the specified resource in storage.
      */
     public function update(UpdateRequest $request)
@@ -180,6 +192,29 @@ class RoleController extends Controller
             if ($request->wantsJson() || $request->ajax()) {
                 return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
             }
+        }
+    }
+
+    /**
+     * Update the permissions assigned to a role.
+     */
+    public function updatePermissions(UpdatePermissionsRequest $request)
+    {
+        $validated = $request->validated();
+        DB::beginTransaction();
+
+        try {
+            $role = $this->role->findOrFail($validated['role_id']);
+            $role->syncPermissions($validated['permissions'] ?? []);
+            app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+            DB::commit();
+
+            return CustomResponse::created('Role permissions updated successfully', Response::HTTP_OK);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 }

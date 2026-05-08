@@ -45,7 +45,7 @@
     @inertiaHead
 </head>
 
-<body class="font-sans antialiased">
+<body class="font-sans antialiased base-z-index">
     @inertia
 </body>
 

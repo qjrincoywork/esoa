@@ -2,8 +2,11 @@
 
 namespace App\Http\Requests\User;
 
+use App\Enums\AccountType;
+use App\Enums\BooleanAsInteger;
+use App\Enums\UserType;
 use App\Rules\IsDataExists;
-use Illuminate\Contracts\Validation\Rule;
+use Illuminate\Validation\Rule;
 use Illuminate\Foundation\Http\FormRequest;
 
 class CreateRequest extends FormRequest
@@ -16,6 +19,71 @@ class CreateRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'type' => [
+                'required',
+                'integer',
+                Rule::in(UserType::getValues()),
+            ],
+            'account_type' => [
+                'required_if:type,' . UserType::ACCOUNT_BRANCH_ADMIN,
+                'nullable',
+                'string',
+                Rule::in(AccountType::getValues()),
+            ],
+            'account_code' => [
+                'required_if:type,' . UserType::ACCOUNT_BRANCH_ADMIN,
+                'nullable',
+                'string',
+                //new IsDataExists('accounts'),
+            ],
+            'branch_code' => [
+                'nullable',
+                'string',
+                'max:191'
+                //new IsDataExists('branches'),
+            ],
+            'agent_code' => [
+                'nullable',
+                'required_if:type,' . UserType::BROKER,
+                'string',
+                'max:191'
+                //new IsDataExists('agents'),
+            ],
+            'department_id' => [
+                'required_if:type,' . UserType::VC_EMPLOYEE,
+                'integer',
+                new IsDataExists('departments'),
+            ],
+            'position_id' => [
+                'required_if:type,' . UserType::VC_EMPLOYEE,
+                'integer',
+                new IsDataExists('positions'),
+            ],
+            'employee_no' => [
+                'required_if:type,' . UserType::VC_EMPLOYEE,
+                'string',
+                'max:191'
+            ],
+            'first_name' => [
+                'required',
+                'string',
+                'max:191'
+            ],
+            'middle_name' => [
+                'nullable',
+                'string',
+                'max:191'
+            ],
+            'last_name' => [
+                'required',
+                'string',
+                'max:191'
+            ],
+            'suffix' => [
+                'nullable',
+                'string',
+                'max:191'
+            ],
             'gender_id' => [
                 'required',
                 'integer',
@@ -31,55 +99,22 @@ class CreateRequest extends FormRequest
                 'integer',
                 new IsDataExists('citizenships'),
             ],
-            'department_id' => [
-                'required',
-                'integer',
-                new IsDataExists('departments'),
-            ],
-            'position_id' => [
-                'required',
-                'integer',
-                new IsDataExists('positions'),
-            ],
-            'first_name' => [
-                'required',
-                'string',
-                'max:191'
-            ],
-            'last_name' => [
-                'required',
-                'string',
-                'max:191'
-            ],
-            'middle_name' => [
-                'nullable',
-                'string',
-                'max:191'
-            ],
-            'suffix' => [
-                'nullable',
-                'string',
-                'max:191'
-            ],
             'birthdate' => [
                 'nullable',
                 'date',
                 'max:191'
             ],
-            'employee_no' => [
-                'nullable',
-                'string',
-                'max:191'
-            ],
             'username' => [
                 'required',
                 'string',
-                'max:191'
+                'max:191',
+                'unique:users,username'
             ],
             'email' => [
                 'required',
                 'string',
-                'max:191'
+                'max:191',
+                'unique:users,email'
             ],
         ];
     }
@@ -95,8 +130,12 @@ class CreateRequest extends FormRequest
             'gender_id.required' => 'The Gender field is required',
             'civil_status_id.required' => 'The Civil Status field is required',
             'citizenship_id.required' => 'The Citizenship field is required',
-            'department_id.required' => 'The Department field is required',
-            'position_id.required' => 'The Position field is required',
+            'department_id.required_if' => 'The Department field is required',
+            'employee_no.required_if' => 'The Employee No. field is required',
+            'position_id.required_if' => 'The Position field is required',
+            'account_type.required_if' => 'The Account Type field is required',
+            'account_code.required_if' => 'The Account field is required',
+            'agent_code.required_if' => 'The Agent Code field is required',
         ];
     }
 }

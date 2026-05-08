@@ -20,7 +20,7 @@ withDefaults(defineProps<Props>(), {
     </AppLayout>
     <GlobalModal />
     <NotificationProvider></NotificationProvider>
-    <div v-if="isLoading" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+    <div v-if="isLoading" class="fixed inset-0 loader flex items-center justify-center bg-black/40">
         <Loader />
     </div>
 </template>

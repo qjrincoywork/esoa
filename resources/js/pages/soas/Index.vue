@@ -31,7 +31,7 @@ const soas = computed(() => {
   }
   return propsSoas;
 });
-const { createSoa, editSoa, deleteSoa, viewSoa, manageFile, untagSoa } = useSoas();
+const { newSoa, editSoa, deleteSoa, viewSoa, manageFile, untagSoa } = useSoas();
 const columnHelper = createColumnHelper();
 const pagination = ref({
   current_page: soas.value.current_page,
@@ -208,7 +208,7 @@ watch(
         <Head title="Soa list" />
         <div class="bg-[var(--color-surface)] shadow-sm border border-[var(--color-border)] p-6">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-                <Button v-if="canCreate" :onClick="createSoa">Create</Button>
+                <Button v-if="canCreate" :onClick="newSoa">Create</Button>
                 <div class="relative w-full sm:w-64">
                     <label class="sr-only" for="soa-search">Search soas</label>
                     <div>

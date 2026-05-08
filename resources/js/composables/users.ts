@@ -2,6 +2,7 @@ import { useModal } from '@/composables/useModal';
 import { useAjax } from '@/composables/useAjax';
 import DeleteForm from '@/components/forms/users/DeleteForm.vue';
 import SavingForm from '@/components/forms/users/SavingForm.vue';
+import UserRolesForm from '@/components/forms/users/UserRolesForm.vue';
 let formApi: { getFormData: () => FormData | null } | null = null;
 import { dispatchNotification } from '@/components/notification';
 import { showLoader, hideLoader } from '@/composables/useLoader';
@@ -22,6 +23,13 @@ export interface Suffixes {
   [key: string]: any;
 }
 
+export interface Role {
+  id?: number | string
+  name?: string
+  guard_name?: string
+  [key: string]: any
+}
+
 export function useUsers() {
   const { slug } = useModulePermissions();
   const { openModal, closeModal } = useModal();
@@ -34,6 +42,8 @@ export function useUsers() {
         user: User;
         suffixes: Array<{ id: number | string; name: string }>;
         genders: Array<{ id: number | string; name: string }>;
+        types: Array<{ value: number | string; name: string }>;
+        account_types: Array<{ value: number | string; name: string }>;
         civil_statuses: Array<{ id: number | string; name: string }>;
         citizenships: Array<{ id: number | string; name: string }>;
         departments: Array<{ id: number | string; name: string }>;
@@ -58,6 +68,8 @@ export function useUsers() {
           user: payload.user,
           suffixes: payload.suffixes,
           genders: payload.genders,
+          types: payload.types,
+          account_types: payload.account_types,
           civil_statuses: payload.civil_statuses,
           citizenships: payload.citizenships,
           departments: payload.departments,
@@ -83,11 +95,10 @@ export function useUsers() {
             } else {
               dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
               closeModal();
-              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+              router.get(window.location.href, {}, { preserveState: false, preserveScroll: true, replace: true });
             }
           } catch (err) {
             dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
-            console.error(err);
           } finally {
             // Refresh current page to update datatable props
             hideLoader();
@@ -96,7 +107,6 @@ export function useUsers() {
       });
     } catch (error) {
       dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
-      console.error('Error fetching user data:', error);
     }
   };
 
@@ -106,6 +116,8 @@ export function useUsers() {
       const response = await get<{
         suffixes: Array<{ id: number | string; name: string }>;
         genders: Array<{ id: number | string; name: string }>;
+        types: Array<{ value: number | string; name: string }>;
+        account_types: Array<{ value: number | string; name: string }>;
         civil_statuses: Array<{ id: number | string; name: string }>;
         citizenships: Array<{ id: number | string; name: string }>;
         departments: Array<{ id: number | string; name: string }>;
@@ -129,6 +141,8 @@ export function useUsers() {
         componentProps: {
           suffixes: payload.suffixes,
           genders: payload.genders,
+          types: payload.types,
+          account_types: payload.account_types,
           civil_statuses: payload.civil_statuses,
           citizenships: payload.citizenships,
           departments: payload.departments,
@@ -137,7 +151,7 @@ export function useUsers() {
             formApi = api
           }
         },
-        size: 'md',
+        size: 'xl4',
         onSubmit: async () => {
           if (!formApi) return;
 
@@ -158,7 +172,6 @@ export function useUsers() {
             }
           } catch (err) {
             dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
-            console.error(err);
           } finally {
             // Refresh current page to update datatable props
             hideLoader();
@@ -167,7 +180,42 @@ export function useUsers() {
       });
     } catch (error) {
       dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
-      console.error('Error fetching user data:', error);
+    }
+  };
+
+  const getAccountsByParams = async (params: Record<string, string | number | undefined>) => {
+    try {
+      const response = await get(`/${slug.value}/get_accounts`, params);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch data');
+      }
+
+      const payload = response.data;
+
+      if (!payload) return;
+      // Return full paginated response: { data, meta, links } or plain array for backward compatibility
+      return payload.accounts;
+    } catch (error) {
+      dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
+    }
+  };
+
+  const getBranchesByParams = async (params: Record<string, string | number | undefined>) => {
+    try {
+      const response = await get(`/${slug.value}/get_branches`, params);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch data');
+      }
+
+      const payload = response.data;
+
+      if (!payload) return;
+      // Return full paginated response: { data, meta, links } or plain array for backward compatibility
+      return payload.branches;
+    } catch (error) {
+      dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
     }
   };
 
@@ -212,7 +260,6 @@ export function useUsers() {
             }
           } catch (err) {
             dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
-            console.error(err);
           } finally {
             // Refresh current page to update datatable props
             hideLoader();
@@ -221,14 +268,89 @@ export function useUsers() {
       });
     } catch (error) {
       dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
-      console.error('Error fetching user data:', error);
     }
   };
+
+  const manageUserRoles = async (user: User) => {
+    try {
+      const response = await get<{
+        user_roles: Role[]
+        all_roles: Role[]
+      }>(`/${slug.value}/${user.id}/edit_roles`)
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch user roles')
+      }
+
+      const payload = response.data
+      if (!payload) return
+
+      openModal({
+        modalTitle: `Assign Roles: ${user.username || user.id}`,
+        buttonText: 'Save',
+        component: UserRolesForm,
+        componentProps: {
+          user,
+          user_roles: payload.user_roles ?? [],
+          all_roles: payload.all_roles ?? [],
+          onReady: (api: { getFormData: () => FormData | null }) => {
+            formApi = api
+          },
+        },
+        size: 'lg',
+        onSubmit: async () => {
+          if (!formApi) return
+          const formData = formApi.getFormData()
+          if (!formData) return
+
+          showLoader()
+          try {
+            const response = await post(`/${slug.value}/update_roles`, formData)
+
+            if (!response.ok) {
+              dispatchNotification({
+                title: 'Error',
+                content: response.data.message,
+                type: 'error',
+              })
+            } else {
+              dispatchNotification({
+                title: 'Success',
+                content: response.data.message,
+                type: 'success',
+              })
+              closeModal()
+              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true })
+            }
+          } catch (err) {
+            dispatchNotification({
+              title: 'Error',
+              content: 'Network error',
+              type: 'error',
+            })
+            console.error(err)
+          } finally {
+            hideLoader()
+          }
+        },
+      })
+    } catch (error) {
+      dispatchNotification({
+        title: 'Error',
+        content: 'Internal Server Error',
+        type: 'error',
+      })
+      console.error('Internal Server Error:', error)
+    }
+  }
 
   return {
     editUser,
     createUser,
     deleteUser,
+    getAccountsByParams,
+    getBranchesByParams,
+    manageUserRoles,
   };
 }
 

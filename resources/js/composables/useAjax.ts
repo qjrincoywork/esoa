@@ -1,7 +1,9 @@
+import { applyCsrfHeader, readMetaCsrfToken } from '@/lib/csrf';
+
 export interface AjaxOptions {
     method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
     headers?: Record<string, string>;
-    body?: BodyInit | null;
+    body?: BodyInit | Record<string, unknown> | null;
     params?: Record<string, string | number>;
 }
 
@@ -35,7 +37,7 @@ export function useAjax() {
      */
     const request = async <T = any>(
         url: string,
-        options: AjaxOptions = {}
+        options: AjaxOptions = {},
     ): Promise<AjaxResponse<T>> => {
         const {
             method = 'GET',
@@ -47,24 +49,42 @@ export function useAjax() {
         // Build full URL with query params
         const fullUrl = params ? `${url}${buildQueryString(params)}` : url;
 
-        // Default headers for AJAX requests
+        const normalizedMethod = method.toUpperCase() as AjaxOptions['method'];
+        const isMutatingRequest = normalizedMethod !== 'GET';
+
         const defaultHeaders: Record<string, string> = {
             'Accept': 'application/json',
             'X-Requested-With': 'XMLHttpRequest',
             ...headers,
         };
+        applyCsrfHeader(defaultHeaders);
 
-        // Add CSRF token if available (Laravel)
-        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-        if (csrfToken) {
-            defaultHeaders['X-CSRF-TOKEN'] = csrfToken;
+        let requestBody: BodyInit | null;
+        if (body instanceof FormData) {
+            requestBody = body;
+        } else if (typeof body === 'string' || body instanceof Blob || body instanceof URLSearchParams || body instanceof ArrayBuffer || ArrayBuffer.isView(body) || body instanceof ReadableStream) {
+            requestBody = body as BodyInit;
+        } else if (body && typeof body === 'object') {
+            requestBody = JSON.stringify(body);
+            if (!defaultHeaders['Content-Type']) {
+                defaultHeaders['Content-Type'] = 'application/json';
+            }
+        } else {
+            requestBody = null;
+        }
+
+        if (requestBody instanceof FormData && isMutatingRequest && !requestBody.has('_token')) {
+            const plain = readMetaCsrfToken();
+            if (plain) {
+                requestBody.append('_token', plain);
+            }
         }
 
         try {
             const response = await fetch(fullUrl, {
-                method,
+                method: normalizedMethod,
                 headers: defaultHeaders,
-                body: body instanceof FormData ? body : body ? JSON.stringify(body) : null,
+                body: requestBody,
                 credentials: 'same-origin',
             });
 
@@ -92,37 +112,22 @@ export function useAjax() {
     /**
      * Convenience method for POST requests
      */
-    const post = <T = any>(url: string, body?: BodyInit | Record<string, any>, headers?: Record<string, string>): Promise<AjaxResponse<T>> => {
-        const requestBody = body instanceof FormData ? body : body ? JSON.stringify(body) : null;
-        const requestHeaders = body && !(body instanceof FormData)
-            ? { 'Content-Type': 'application/json', ...headers }
-            : headers;
-
-        return request<T>(url, { method: 'POST', body: requestBody, headers: requestHeaders });
+    const post = <T = any>(url: string, body?: BodyInit | Record<string, unknown>, headers?: Record<string, string>): Promise<AjaxResponse<T>> => {
+        return request<T>(url, { method: 'POST', body, headers });
     };
 
     /**
      * Convenience method for PUT requests
      */
-    const put = <T = any>(url: string, body?: BodyInit | Record<string, any>, headers?: Record<string, string>): Promise<AjaxResponse<T>> => {
-        const requestBody = body instanceof FormData ? body : body ? JSON.stringify(body) : null;
-        const requestHeaders = body && !(body instanceof FormData)
-            ? { 'Content-Type': 'application/json', ...headers }
-            : headers;
-
-        return request<T>(url, { method: 'PUT', body: requestBody, headers: requestHeaders });
+    const put = <T = any>(url: string, body?: BodyInit | Record<string, unknown>, headers?: Record<string, string>): Promise<AjaxResponse<T>> => {
+        return request<T>(url, { method: 'PUT', body, headers });
     };
 
     /**
      * Convenience method for PATCH requests
      */
-    const patch = <T = any>(url: string, body?: BodyInit | Record<string, any>, headers?: Record<string, string>): Promise<AjaxResponse<T>> => {
-        const requestBody = body instanceof FormData ? body : body ? JSON.stringify(body) : null;
-        const requestHeaders = body && !(body instanceof FormData)
-            ? { 'Content-Type': 'application/json', ...headers }
-            : headers;
-
-        return request<T>(url, { method: 'PATCH', body: requestBody, headers: requestHeaders });
+    const patch = <T = any>(url: string, body?: BodyInit | Record<string, unknown>, headers?: Record<string, string>): Promise<AjaxResponse<T>> => {
+        return request<T>(url, { method: 'PATCH', body, headers });
     };
 
     /**

@@ -15,14 +15,8 @@ export interface Permission {
   [key: string]: any;
 }
 
-export interface Suffixes {
-  id?: number | string;
-  name?: string;
-  [key: string]: any;
-}
-
 export function usePermissions() {
-    const { slug } = useModulePermissions();
+  const { slug } = useModulePermissions();
   const { openModal, closeModal } = useModal();
   const { get, post } = useAjax();
 

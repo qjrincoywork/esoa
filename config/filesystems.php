@@ -47,6 +47,23 @@ return [
             'report' => false,
         ],
 
+        'rm' => [
+            'driver' => 'local',
+            'root' => env('ROOT_FOLDER') . 'rm',
+        ],
+        'billing' => [
+            'driver' => 'local',
+            'root' => env('ROOT_FOLDER') . DIRECTORY_SEPARATOR . 'billing' . DIRECTORY_SEPARATOR . 'billing_invoices',
+        ],
+        'concerns' => [
+            'driver' => 'local',
+            'root' => env('ROOT_FOLDER') . DIRECTORY_SEPARATOR . 'billing' . DIRECTORY_SEPARATOR . 'concerns',
+        ],
+        'payments' => [
+            'driver' => 'local',
+            'root' => env('ROOT_FOLDER') . DIRECTORY_SEPARATOR . 'billing' . DIRECTORY_SEPARATOR . 'payments',
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),

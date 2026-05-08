@@ -1,31 +1,54 @@
 import '../css/app.css';
 
-import { createInertiaApp } from '@inertiajs/vue3';
+import { createInertiaApp, router } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import type { DefineComponent } from 'vue';
 import { createApp, h } from 'vue';
 import { initializeTheme } from './composables/useAppearance';
 import Loader from "@/components/Loader.vue";
+import { setMetaCsrfToken } from './lib/csrf';
 
 const appName = import.meta.env.VITE_APP_NAME || 'VC';
 
-createInertiaApp({
-    title: (title) => (title ? `${title} - ${appName}` : appName),
-    resolve: (name) =>
-        resolvePageComponent(
-            `./pages/${name}.vue`,
-            import.meta.glob<DefineComponent>('./pages/**/*.vue'),
-        ),
-    setup({ el, App, props, plugin }) {
-        createApp({ render: () => h(App, props) })
-            .use(plugin)
-            .component('Loader', Loader)
-            .mount(el);
-    },
-    progress: {
-        color: '#4B5563',
-    },
-});
+const syncCsrfTokenFromPage = (page: unknown): void => {
+    if (!page || typeof page !== 'object' || !('props' in page)) {
+        return;
+    }
+
+    const props = (page as { props?: { csrf_token?: unknown } }).props;
+    const token = props?.csrf_token;
+    if (typeof token === 'string' && token.length > 0) {
+        setMetaCsrfToken(token);
+    }
+};
+
+const bootstrap = async (): Promise<void> => {
+    createInertiaApp({
+        title: (title) => (title ? `${title} - ${appName}` : appName),
+        resolve: (name) =>
+            resolvePageComponent(
+                `./pages/${name}.vue`,
+                import.meta.glob<DefineComponent>('./pages/**/*.vue'),
+            ),
+        setup({ el, App, props, plugin }) {
+            syncCsrfTokenFromPage(props.initialPage);
+
+            router.on('success', (event) => {
+                syncCsrfTokenFromPage(event.detail.page);
+            });
+
+            createApp({ render: () => h(App, props) })
+                .use(plugin)
+                .component('Loader', Loader)
+                .mount(el);
+        },
+        progress: {
+            color: '#4B5563',
+        },
+    });
+};
+
+void bootstrap();
 
 // This will set light / dark mode on page load...
 initializeTheme();

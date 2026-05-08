@@ -1,89 +1,72 @@
-<script setup="ts">
-import { ref, onMounted, onBeforeUnmount } from 'vue';
+<script setup lang="ts">
+import type { Component } from 'vue';
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 
-const width = ref(320)
-const resizing = ref(false)
+type SheetSide = 'top' | 'right' | 'bottom' | 'left';
 
-function startResize() {
-  resizing.value = true
-}
+const props = withDefaults(
+    defineProps<{
+        open: boolean;
+        title?: string;
+        side?: SheetSide;
+        contentComponent?: Component | null;
+        componentProps?: Record<string, any>;
+        loading?: boolean;
+        error?: string | null;
+    }>(),
+    {
+        title: '',
+        side: 'right',
+        contentComponent: null,
+        componentProps: () => ({}),
+        loading: false,
+        error: null,
+    }
+);
 
-function stopResize() {
-  resizing.value = false
-}
-
-function resize(e) {
-  if (!resizing.value) return
-  width.value = window.innerWidth - e.clientX
-}
-
-onMounted(() => {
-  window.addEventListener('mousemove', resize)
-  window.addEventListener('mouseup', stopResize)
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('mousemove', resize)
-  window.removeEventListener('mouseup', stopResize)
-})
-const open = ref(true)
+const emit = defineEmits<{
+    'update:open': [value: boolean];
+}>()
 </script>
 
 <template>
-  <div class="container">
-    <main class="content">
-      <button @click="open = !open">
-        Toggle Right Pane
-      </button>
-      <p>Main content here</p>
-    </main>
+    <Sheet :open="props.open" @update:open="emit('update:open', $event)">
+        <SheetContent :side="props.side" class="p-0">
+            <div class="flex h-full w-full flex-col">
+                <div
+                    class="flex items-center justify-between gap-3 border-b border-[var(--color-border)] px-4 py-3">
+                    <SheetTitle class="text-base">
+                        {{ props.title }}
+                    </SheetTitle>
+                </div>
+                <SheetDescription class="sr-only">
+                    {{ props.title || 'Pane' }} content.
+                </SheetDescription>
 
-    <Transition name="modal" :duration="150">
-      <button @click="open = !open">
-        Toggle Right Pane
-      </button>
-      <aside v-if="open" class="right-pane">
-        Floating Right Pane
-      </aside>
-    </Transition>
-  </div>
+                <div class="flex-1 overflow-y-auto p-4">
+                    <div
+                        v-if="props.error"
+                        class="rounded-md border border-red-500/30 bg-red-50/30 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+                        {{ props.error }}
+                    </div>
+                    <div
+                        v-if="props.loading"
+                        class="flex items-center justify-center py-10 text-sm text-[var(--color-text-muted)]">
+                        Loading...
+                    </div>
+
+                    <component
+                        v-else-if="props.contentComponent"
+                        :is="props.contentComponent"
+                        v-bind="props.componentProps" />
+
+                    <div
+                        v-else
+                        class="text-sm text-[var(--color-text-muted)]">
+                        No content
+                    </div>
+                </div>
+            </div>
+        </SheetContent>
+    </Sheet>
 </template>
-
-<style scoped>
-.container {
-  position: relative;
-  height: 100vh;
-}
-
-.content {
-  padding: 16px;
-}
-
-/* animation */
-.slide-right-enter-active,
-.slide-right-leave-active {
-  transition: transform 0.25s ease;
-}
-.slide-right-enter-from,
-.slide-right-leave-to {
-  transform: translateX(100%);
-}
-.right-pane {
-  position: fixed;
-  top: 0;
-  right: 0;
-  height: 100vh;
-  background: #fff;
-  border-left: 1px solid #ddd;
-  box-shadow: -4px 0 12px rgba(0,0,0,0.1);
-}
-
-.resize-handle {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 6px;
-  height: 100%;
-  cursor: ew-resize;
-}
-</style>

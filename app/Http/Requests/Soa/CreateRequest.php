@@ -2,9 +2,10 @@
 
 namespace App\Http\Requests\Soa;
 
-use App\Rules\IsDataExists;
-use Illuminate\Contracts\Validation\Rule;
+use App\Enums\{ AccountType, BillType, Server };
+use App\Rules\{ IsDataExists, IsServerDataExists, SoaAmountIsValid, SoaStatusIsValid };
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class CreateRequest extends FormRequest
 {
@@ -16,70 +17,94 @@ class CreateRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'gender_id' => [
+            'user_id' => [
                 'required',
                 'integer',
-                new IsDataExists('genders'),
+                new IsDataExists('users'),
             ],
-            'civil_status_id' => [
-                'required',
-                'integer',
-                new IsDataExists('civil_statuses'),
-            ],
-            'citizenship_id' => [
-                'required',
-                'integer',
-                new IsDataExists('citizenships'),
-            ],
-            'department_id' => [
-                'required',
-                'integer',
-                new IsDataExists('departments'),
-            ],
-            'position_id' => [
-                'required',
-                'integer',
-                new IsDataExists('positions'),
-            ],
-            'first_name' => [
+            'account_type' => [
                 'required',
                 'string',
-                'max:191'
+                Rule::in(AccountType::getValues()),
             ],
-            'last_name' => [
+            'account_code' => [
                 'required',
                 'string',
-                'max:191'
+                'max:191',
+                new IsServerDataExists(Server::HMS, 'Accounts', 'ac_code'),
             ],
-            'middle_name' => [
+            'branch_code' => [
                 'nullable',
                 'string',
-                'max:191'
+                'max:191',
+                new IsServerDataExists(Server::HMS, 'Branches', 'br_code'),
             ],
-            'suffix' => [
+            'soa_number' => [
+                'required',
+                'string',
+                'max:191',
+                'regex:/^[A-Za-z0-9-]+$/',
+                Rule::unique('soas', 'soa_number'),
+            ],
+            'billing_ref' => [
+                'nullable',
+                'array',
+            ],
+            'billing_ref.*' => [
                 'nullable',
                 'string',
-                'max:191'
+                'max:' . config('vc.max_string_limit'),
             ],
-            'birthdate' => [
-                'nullable',
+            'bill_type' => [
+                'required',
+                'integer',
+                Rule::in(BillType::getValues()),
+            ],
+            'due_date' => [
+                'required',
                 'date',
-                'max:191'
             ],
-            'employee_no' => [
+            'status' => [
+                'required',
+                'integer',
+                new SoaStatusIsValid(),
+            ],
+            'period_date_from' => [
+                'required',
+                'date',
+            ],
+            'period_date_to' => [
+                'required',
+                'date',
+            ],
+            'amount' => [
+                'required',
+                'numeric',
+                // new SoaAmountIsValid(),
+            ],
+            'amount_paid' => [
                 'nullable',
-                'string',
-                'max:191'
+                'numeric',
             ],
-            'username' => [
-                'required',
-                'string',
-                'max:191'
+            'payment_adjustment' => [
+                'nullable',
+                'numeric',
             ],
-            'email' => [
+            'balance' => [
+                'nullable',
+                'numeric',
+            ],
+            'file_pdf' => [
                 'required',
-                'string',
-                'max:191'
+                'file',
+                'mimes:pdf',
+                'max:20480' // 2MB (size is in KB)
+            ],
+            'file_xls' => [
+                'nullable',
+                'file',
+                'mimes:xls,xlsx',
+                'max:20480' // 2MB (size is in KB)
             ],
         ];
     }
@@ -92,11 +117,16 @@ class CreateRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'gender_id.required' => 'The Gender field is required',
-            'civil_status_id.required' => 'The Civil Status field is required',
-            'citizenship_id.required' => 'The Citizenship field is required',
-            'department_id.required' => 'The Department field is required',
-            'position_id.required' => 'The Position field is required',
+            'user_id.required' => 'The user field is required',
+            'soa_number.regex' => 'The SOA number may only contain letters, numbers, and hyphens.',
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'billing_ref' => json_decode($this->input('billing_ref'), true),
+            'user_id' => auth()->user()->id,
+        ]);
     }
 }

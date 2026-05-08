@@ -31,14 +31,8 @@ const recomputeForm = ref<HTMLFormElement | null>(null)
 // Helper to extract FormData from this form (exposed to parent)
 function getFormData(): FormData | null {
   if (!recomputeForm.value) return null
-  console.log('recomputeForm', new FormData(recomputeForm.value), recomputeForm.value);
   return new FormData(recomputeForm.value)
 }
-
-// defineExpose({
-//   recomputeForm,
-//   getFormData,
-// })
 
 onMounted(() => {
   if (typeof props.onReady === 'function') {

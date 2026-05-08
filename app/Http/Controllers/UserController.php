@@ -2,14 +2,21 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\{ AccountType, Gender, Server, UserType };
 use App\Helpers\CustomResponse;
+use App\Helpers\SqlDatabase;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\User\{CreateRequest, DeleteRequest, ListRequest, UpdateRequest};
-use App\Models\{ Citizenship, CivilStatus, Department, Gender, Position, Suffix, User };
+use App\Http\Requests\User\{CreateRequest, DeleteRequest, ListRequest, UpdateRequest, UpdateRoleRequest};
+use App\Http\Resources\AccountResource;
+use App\Http\Resources\BranchResource;
+use App\Http\Resources\CommonResource;
+use App\Models\{Account, Citizenship, CivilStatus, Department, Position, Suffix, User };
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
+use Spatie\Permission\PermissionRegistrar;
+use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
@@ -21,15 +28,24 @@ class UserController extends Controller
     protected $user;
 
     /**
+     * SqlDatabase instance.
+     *
+     * @var SqlDatabase
+     */
+    protected $sqlDatabase;
+
+    /**
      * UserController constructor.
      *
      * @param User $user
+     * @param SqlDatabase $sqlDatabase
      *
      * @return void
      */
     public function __construct(User $user)
     {
         $this->user = $user;
+        $this->sqlDatabase = SqlDatabase::class;
     }
 
     /**
@@ -49,8 +65,6 @@ class UserController extends Controller
      */
     public function create(Request $request)
     {
-        $suffixes = Suffix::select(['id', 'name'])->get()->toArray();
-        $genders = Gender::select(['id', 'name'])->get()->toArray();
         $civil_statuses = CivilStatus::select(['id', 'name'])->get()->toArray();
         $citizenships = Citizenship::select(['id', 'name'])->get()->toArray();
         $departments = Department::select(['id', 'name'])->get()->toArray();
@@ -59,8 +73,9 @@ class UserController extends Controller
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
-                'suffixes' => $suffixes,
-                'genders' => $genders,
+                'account_types' => AccountType::list(),
+                'types' => UserType::list(),
+                'genders' => Gender::list(),
                 'civil_statuses' => $civil_statuses,
                 'citizenships' => $citizenships,
                 'departments' => $departments,
@@ -104,14 +119,37 @@ class UserController extends Controller
         //
     }
 
+    public function getAccounts(Request $request)
+    {
+        $accounts = (new $this->sqlDatabase(Server::HMS))->getAccountsByParams($request->all());
+
+        // Return JSON for AJAX requests (no URL change)
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'accounts' => new CommonResource(AccountResource::collection($accounts))
+            ]);
+        }
+    }
+
+    public function getBranches(Request $request)
+    {
+        $branches = (new $this->sqlDatabase(Server::HMS))->getBranchesByParams($request->all());
+
+        // Return JSON for AJAX requests (no URL change)
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'branches' => new CommonResource(BranchResource::collection($branches))
+            ]);
+        }
+    }
+
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit(string $id, Request $request)
+    public function edit(int $id, Request $request)
     {
         $user = $this->user->with('userDetail')->findOrFail($id)->toArray();
         $suffixes = Suffix::select(['id', 'name'])->get()->toArray();
-        $genders = Gender::select(['id', 'name'])->get()->toArray();
         $civil_statuses = CivilStatus::select(['id', 'name'])->get()->toArray();
         $citizenships = Citizenship::select(['id', 'name'])->get()->toArray();
         $departments = Department::select(['id', 'name'])->get()->toArray();
@@ -122,7 +160,9 @@ class UserController extends Controller
             return response()->json([
                 'user' => $user,
                 'suffixes' => $suffixes,
-                'genders' => $genders,
+                'genders' => Gender::list(),
+                'types' => UserType::list(),
+                'account_types' => AccountType::list(),
                 'civil_statuses' => $civil_statuses,
                 'citizenships' => $citizenships,
                 'departments' => $departments,
@@ -136,12 +176,10 @@ class UserController extends Controller
      */
     public function update(UpdateRequest $request)
     {
-        $validated = $request->validated();
-
         DB::beginTransaction();
 
         try {
-            $task = $this->user->saveUser($validated);
+            $this->user->saveUser($request->validated());
 
             // Commit transaction
             DB::commit();
@@ -199,6 +237,60 @@ class UserController extends Controller
             if ($request->wantsJson() || $request->ajax()) {
                 return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
             }
+        }
+    }
+
+    /**
+     * Return the roles currently assigned to a user and the full roles list.
+     *
+     * Used by the user-role assignment modal.
+     */
+    public function editRoles(int $id, Request $request)
+    {
+        $user = $this->user->with('roles')->findOrFail($id);
+
+        // Only return JSON for AJAX calls (matches your modal pattern)
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'user_roles' => $user->roles->map(fn ($role) => [
+                    'id' => $role->id,
+                    'name' => $role->name,
+                    'guard_name' => $role->guard_name,
+                ]),
+                'all_roles' => Role::query()->get(['id', 'name', 'guard_name']),
+            ]);
+        }
+
+        return response()->json([
+            'user_roles' => $user->roles,
+            'all_roles' => Role::query()->get(['id', 'name', 'guard_name']),
+        ]);
+    }
+
+    /**
+     * Save role assignment changes for a user.
+     */
+    public function updateRoles(UpdateRoleRequest $request)
+    {
+        $validated = $request->validated();
+
+        DB::beginTransaction();
+
+        try {
+            $user = $this->user->findOrFail($validated['user_id']);
+
+            // Sync by role IDs to avoid name/guard resolution issues.
+            $user->roles()->sync($validated['roles'] ?? []);
+
+            DB::commit();
+
+            app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+            return CustomResponse::created('User roles updated successfully', Response::HTTP_OK);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
 }

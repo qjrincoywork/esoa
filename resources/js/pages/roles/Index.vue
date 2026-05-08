@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
-import { ref, watch, computed } from 'vue';
+import { ref, watch, computed, h } from 'vue';
 import { Head, router, usePage } from '@inertiajs/vue3';
 import { createColumnHelper } from '@tanstack/vue-table';
 import { type BreadcrumbItem } from '@/types';
@@ -20,13 +20,21 @@ type RolesPagination = {
 const page = usePage();
 const { canCreate, slug, hasPermission } = useModulePermissions();
 const roles = computed(() => (page.props as any).roles as RolesPagination);
-const { createRole, editRole, deleteRole } = useRoles();
+const allPermissions = computed(() => (page.props as any).permissions);
+const { createRole, editRole, deleteRole, manageRolePermissions } = useRoles();
 const columnHelper = createColumnHelper();
-const pagination = ref({
+const pagination = ref<{
+    current_page: number
+    per_page: number | 'all'
+    total: number
+}>({
 	current_page: roles.value.current_page,
 	per_page: Number(roles.value.per_page),
 	total: roles.value.total
 })
+const searchQuery = ref('')
+const hasInitialized = ref(false)
+const isFirstLoad = ref(true)
 const baseColumns = [
   columnHelper.accessor('id', {
     header: 'ID',
@@ -44,19 +52,18 @@ const handlerMap: Record<string, Function> = {
   update: editRole,
   delete: deleteRole,
   destroy: deleteRole,
+  edit_permissions: (role: any) => manageRolePermissions(role, allPermissions.value),
 }
 
 const columns = computed(() => {
   const subModules = page.props.sub_modules
-    .filter((m: any) => hasPermission(m.slug) && m.slug.split('.')[1] != 'create')
+    .filter((m: any) => hasPermission(m.slug) && m.slug.split('.')[1] !== 'create')
     .map((m: any) => ({
       ...m,
       handler: handlerMap[m.slug.split('.')[1]],
     }))
 
-  return subModules.length
-    ? [...baseColumns, createActionColumn(subModules)]
-    : baseColumns
+  return [...baseColumns, createActionColumn(subModules)]
 })
 
 const breadcrumbItems: BreadcrumbItem[] = [
@@ -65,41 +72,106 @@ const breadcrumbItems: BreadcrumbItem[] = [
         href: 'roles',
     },
 ];
+
+// Function to fetch data from server
+const fetchRoles = () => {
+  const params: Record<string, any> = {
+    page: pagination.value.current_page,
+    per_page: pagination.value.per_page
+  }
+
+  if (searchQuery.value.trim()) {
+    params.search_string = searchQuery.value.trim()
+  }
+
+  router.get(
+    `/${slug.value}`,
+    params,
+    {
+      preserveState: true,
+      preserveScroll: true,
+      replace: true,
+      only: [slug.value]
+    }
+  )
+}
+
+// Debounced data fetching for search query changes
+const searchTimeout = ref<number | null>(null)
+watch(
+  searchQuery,
+  (newQuery, oldQuery) => {
+    // Only fetch if user has interacted (not on initial mount)
+    if (!hasInitialized.value && oldQuery === undefined) return
+
+    if (searchTimeout.value) {
+      clearTimeout(searchTimeout.value)
+    }
+    searchTimeout.value = window.setTimeout(() => {
+      // Reset to first page when searching
+      pagination.value.current_page = 1
+      fetchRoles()
+    }, 500)
+  },
+  { immediate: false }
+)
+// Keep local pagination in sync when server returns new users payload
+// Use a flag to prevent infinite loops when Datatable's watcher updates pagination
+const isUpdatingFromServer = ref(false)
+watch(
+  roles,
+  (next) => {
+    if (!next) return
+    isUpdatingFromServer.value = true
+    pagination.value.current_page = next.current_page
+    pagination.value.per_page = Number(next.per_page)
+    pagination.value.total = next.total
+
+    // Mark that we've loaded data at least once
+    if (isFirstLoad.value && next.total > 0) {
+      isFirstLoad.value = false
+    }
+
+    // Reset flag after a tick to allow Datatable to process the update
+    // Use a longer timeout to prevent Datatable's watcher from triggering
+    setTimeout(() => {
+      isUpdatingFromServer.value = false
+    }, 300)
+  }
+)
 // Debounced data fetching for pagination changes
 const fetchTimeout = ref<number | null>(null)
+const isRolePaginationChange = ref(false)
 watch(
-    () => [pagination.value.current_page, pagination.value.per_page],
-    ([currentPage, perPage], _prev) => {
-        if (fetchTimeout.value) {
-            clearTimeout(fetchTimeout.value)
-        }
-        fetchTimeout.value = window.setTimeout(() => {
-            router.get(
-                '/roles',
-                {
-                    page: Number(currentPage) || 1,
-                    per_page: Number(perPage) || Number(roles.value.per_page)
-                },
-                {
-                    preserveState: true,
-                    preserveScroll: true,
-                    replace: true,
-                    only: ['roles']
-                }
-            )
-        }, 200)
-    },
-    { immediate: false }
-)
-// Keep local pagination in sync when server returns new roles payload
-watch(
-    roles,
-    (next) => {
-        if (!next) return
-        pagination.value.current_page = next.current_page
-        pagination.value.per_page = Number(next.per_page)
-        pagination.value.total = next.total
+  () => [pagination.value.current_page, pagination.value.per_page],
+  ([currentPage, perPage], _prev) => {
+    // Only fetch if user has interacted (not on initial mount)
+    if (!hasInitialized.value) return
+    // Don't fetch if this is an update from server response
+    if (isUpdatingFromServer.value) return
+
+    if (fetchTimeout.value) {
+      clearTimeout(fetchTimeout.value)
     }
+
+    // Mark that this is a user-initiated pagination change
+    isRolePaginationChange.value = true
+
+    fetchTimeout.value = window.setTimeout(() => {
+      pagination.value.current_page = Number(currentPage) || 1
+      pagination.value.per_page = Number(perPage) || 10
+
+      // Make our request with search parameter
+      // This will happen before Datatable's watcher can trigger
+      fetchRoles()
+
+      // Reset flag after request is made
+      setTimeout(() => {
+        isRolePaginationChange.value = false
+      }, 500)
+    }, 50) // Shorter timeout to beat Datatable's watcher
+  },
+  { immediate: false }
 )
 </script>
 
@@ -107,13 +179,40 @@ watch(
     <AppLayout :breadcrumbs="breadcrumbItems">
         <Head title="Role list" />
         <div class="bg-[var(--color-surface)] shadow-sm border border-[var(--color-border)] p-6">
-            <Button :onClick="createRole">Create</Button>
+          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+            <Button v-if="canCreate" :onClick="createRole">Create</Button>
+            <div class="relative w-full sm:w-64">
+              <label class="sr-only" for="role-search">Search roles</label>
+              <input
+                  id="role-search"
+                  v-model="searchQuery"
+                  type="text"
+                  placeholder="Search role name..."
+                  class="border border-[var(--color-border-strong)] rounded-md text-sm bg-[var(--color-surface)] text-[var(--color-text)] focus:ring-2 focus:ring-opacity-50 focus:border-transparent w-full px-4 py-2 pr-8"
+                  :style="{ '--tw-ring-color': 'var(--primary-color)' }"
+                  @input="hasInitialized = true" />
+              <button
+                  v-if="searchQuery"
+                  class="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] hover:text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-opacity-50"
+                  :style="{ '--tw-ring-color': 'var(--primary-color)' }"
+                  aria-label="Clear search"
+                  @click="searchQuery = ''">
+                  <svg
+                      class="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+              </button>
+            </div>
+          </div>
             <Datatable
                 :data="roles.data"
                 :columns="columns"
                 :pagination="pagination"
-                :show-selection-column="true"
-                :search-fields="['name']"
+                :enable-search="false"
                 empty-message="No audit records found"
                 empty-description="System roles will appear here"
                 export-file-name="roles_list"

@@ -18,6 +18,11 @@ class UserDetail extends Model
      */
     protected $fillable = [
         'user_id',
+        'account_type',
+        'account_code',
+        'branch_code',
+        'agent_code',
+        'type',
         'suffix_id',
         'gender_id',
         'civil_status_id',
@@ -39,26 +44,6 @@ class UserDetail extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
-    }
-
-    /**
-     * Get the user suffix.
-     *
-     * @return BelongsTo
-     */
-    public function suffix(): BelongsTo
-    {
-        return $this->belongsTo(Suffix::class, 'suffix_id');
-    }
-
-    /**
-     * Get the user gender.
-     *
-     * @return BelongsTo
-     */
-    public function gender(): BelongsTo
-    {
-        return $this->belongsTo(Gender::class, 'gender_id');
     }
 
     /**

@@ -8,11 +8,10 @@ import {
     getFilteredRowModel,
     getPaginationRowModel
 } from '@tanstack/vue-table';
-
-import { Form, Head, Link, router, usePage } from '@inertiajs/vue3';
+import { Label } from "@/components/ui/label"
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectGroup, SelectItem } from "@/components/ui/select"
 import Modal from '@/components/Modal.vue';
 import { Button } from "@/components/ui/button";
-import { Pointer } from 'lucide-vue-next';
 
 const selectionColor = 'var(--selection-color)'
 
@@ -28,7 +27,7 @@ const styles = {
     rowSelected: 'bg-[var(--selection-color-light)] dark:bg-[var(--selection-color-dark)]',
     focusRing: 'focus:outline-none focus:ring-2 focus:ring-opacity-50',
     dropdown:
-        'absolute right-0 z-10 mt-2 w-48 origin-top-right rounded-md bg-[var(--color-surface)] shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none'
+        'absolute right-0 mt-2 w-48 origin-top-right rounded-md bg-[var(--color-surface)] shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none'
 }
 
 const icons = {
@@ -46,6 +45,9 @@ const props = defineProps({
     columns: { type: Array, required: true },
     title: { type: String, default: 'Data Table' },
     enableSearch: { type: Boolean, default: true },
+    // When enabled, clicking a table row will emit `row-click` with the original row data.
+    // This is opt-in to avoid changing existing table UX.
+    enableRowClick: { type: Boolean, default: false },
     // enableExport: { type: Boolean, default: true },// export data to csv file
     searchFields: { type: Array, default: () => [] },
     emptyMessage: { type: String, default: 'No data found' },
@@ -78,17 +80,13 @@ const props = defineProps({
         type: Function,
         default: null
     },
-    routeName: {
-        type: String,
-        default: ''
+    rowClick: {
+        type: Function,
+        default: () => {}
     },
-    routeParams: {
-        type: Object,
-        default: () => ({})
-    }
 })
 
-const emit = defineEmits(['update:pagination', 'bulk-delete', 'navigate'])
+const emit = defineEmits(['update:pagination', 'bulk-delete', 'navigate', 'row-click'])
 const sorting = ref([])
 const rowSelection = ref({})
 const searchQuery = ref('')
@@ -99,13 +97,6 @@ const pagination = ref({
 })
 const showDeleteModal = ref(false)
 
-const getNavigationUrl = () => {
-    if (props.routeName) {
-        return route(props.routeName, props.routeParams)
-    }
-    return window.location.pathname
-}
-
 const toggleRow = index => {
     const currentIndex = expandedRows.value.indexOf(index)
     if (currentIndex > -1) {
@@ -113,6 +104,19 @@ const toggleRow = index => {
     } else {
         expandedRows.value.push(index)
     }
+}
+
+const handleRowClick = (e, row) => {
+    if (!props.enableRowClick) return
+    const target = e.target
+    if (!target || !target.closest) return
+
+    // Avoid triggering row click when interacting with controls inside the row.
+    // This keeps action buttons/links and selection inputs working as expected.
+    if (target.closest('button, a, input, label, [role="button"]')) return
+
+    // emit('row-click', props.rowClick(row?.original ?? row))
+    props.rowClick(row?.original ?? row)
 }
 
 const isServerPagination = computed(() => Boolean(props.pagination?.total))
@@ -240,8 +244,7 @@ const totalRows = computed(() => paginationInfo.value.total)
 const pageCount = computed(() => paginationInfo.value.pageCount)
 const isFirstPage = computed(() => currentPage.value <= 1)
 const isLastPage = computed(() => currentPage.value >= pageCount.value)
-const showPagination = computed(() => currentPage.value >= pageCount.value)
-
+const selectedRowsPerPage = ref(props.pagination.per_page)
 const goToPage = pageNumber => {
     if (!isServerPagination.value) return
     if (pageNumber < 1 || pageNumber > pageCount.value) return
@@ -356,34 +359,22 @@ watch(
     { deep: true }
 )
 
-watch(
-    () => props.pagination,
-    (newPagination, oldPagination) => {
-        if (!isServerPagination.value) return
+// Server visits are owned by parent pages (see @update:pagination) to avoid duplicate
+// Inertia requests and cancellation when both Datatable and the page trigger router.get.
 
-        if (
-            oldPagination &&
-            (newPagination.current_page !== oldPagination.current_page ||
-                newPagination.per_page !== oldPagination.per_page)
-        ) {
-            router.get(
-                getNavigationUrl(),
-                {
-                    page: newPagination.current_page,
-                    per_page:
-                        newPagination.per_page === 'all' ? 'all' : Number(newPagination.per_page)
-                },
-                {
-                    preserveState: true,
-                    preserveScroll: true,
-                    onStart: () => emit('navigate', { loading: true }),
-                    onFinish: () => emit('navigate', { loading: false })
-                }
-            )
-        }
-    },
-    { deep: true }
+watch(selectedRowsPerPage, async () => {
+    if (isServerPagination.value) {
+      updateServerPagination({
+        per_page: selectedRowsPerPage.value,
+        current_page: 1
+      })
+    } else {
+      pagination.value.pageSize = selectedRowsPerPage.value
+    }
+  },
+  { deep: true }
 )
+
 </script>
 
 <template>
@@ -410,46 +401,38 @@ watch(
         <header
             class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
             <div
-                class="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full sm:w-auto">
+                class="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full">
                 <div class="flex space-x-2 items-center">
-                    <label class="text-sm text-[var(--color-text)]">
-                        {{ table.options.meta?.showRowsSelectLabel || 'Rows per page:' }}
-                    </label>
-                    <select
-                        class="border border-[var(--color-border-strong)] rounded-md text-sm bg-[var(--color-surface)] text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-opacity-50"
-                        :style="{ '--tw-ring-color': 'var(--primary-color)' }"
-                        :value="
-                            isServerPagination
-                                ? isAllSelected
-                                    ? 'all'
-                                    : String(props.pagination.per_page)
-                                : String(pagination.pageSize)
-                        "
-                        @change="
-                            e => {
-                                const newSize =
-                                    e.target.value === 'all' ? 'all' : Number(e.target.value)
-                                if (isServerPagination) {
-                                    updateServerPagination({
-                                        per_page: newSize,
-                                        current_page: 1
-                                    })
-                                } else {
-                                    pagination.pageSize =
-                                        newSize === 'all'
-                                            ? table.getFilteredRowModel().rows.length
-                                            : newSize
-                                    pagination.pageIndex = 0
-                                }
-                            }
-                        ">
-                        <option
+                  <Label class="text-xs text-[var(--color-text)]" for="rows_per_page">{{ table.options.meta?.showRowsSelectLabel || 'Rows per page:' }}</Label>
+                  <div class="w-15">
+                    <Select
+                      id="rows_per_page"
+                      class="w-15 test border border-[var(--color-border-strong)] rounded-md text-sm bg-[var(--color-surface)] text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-opacity-50"
+                      name="rows_per_page"
+                      :value="
+                          isServerPagination
+                              ? isAllSelected
+                                  ? 'all'
+                                  : String(props.pagination.per_page)
+                              : String(pagination.pageSize)
+                      "
+                      v-model="selectedRowsPerPage"
+                    >
+                      <SelectTrigger>
+                        <SelectValue/>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectItem
                             v-for="size in pageSizeOptions"
                             :key="size"
                             :value="size === 'All' ? 'all' : size">
                             {{ size === 'All' ? 'All' : size }}
-                        </option>
-                    </select>
+                          </SelectItem>
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 <div v-if="hasSelection" class="flex items-center gap-6">
@@ -575,7 +558,11 @@ watch(
                 <div
                     v-for="(row, index) in table.getRowModel().rows"
                     :key="row.id"
-                    class="bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] shadow-sm hover:shadow-md transition-all duration-200">
+                    :class="[
+                        'bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)] shadow-sm hover:shadow-md transition-all duration-200',
+                        props.enableRowClick ? 'cursor-pointer' : ''
+                    ]"
+                    @click="handleRowClick($event, row)">
                     <div class="p-2">
                         <div class="flex items-center justify-between mb-1.5">
                             <div class="flex items-center gap-1.5">
@@ -691,7 +678,7 @@ watch(
                             </div>
                         </th>
 
-                        <th class="w-10 px-6 py-3"
+                        <th class="px-3 py-3 text-sm"
                             v-for="header in table.getHeaderGroups()[0].headers"
                             :key="header.id"
                             :class="[
@@ -735,7 +722,8 @@ watch(
                                 : index % 2 === 0
                                   ? styles.rowEven
                                   : styles.rowOdd
-                        ]">
+                        ]"
+                        @click="handleRowClick($event, row)">
                         <td v-if="showSelectionColumn" class="px-6 py-1">
                             <div class="flex items-center">
                                 <label class="inline-flex items-center">

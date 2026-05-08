@@ -3,6 +3,8 @@
 namespace App\Helpers;
 
 use App\Enums\AccountType;
+use App\Enums\OrderType;
+use App\Enums\Server;
 use Illuminate\Support\Facades\DB;
 
 class SqlDatabase
@@ -71,6 +73,38 @@ class SqlDatabase
     }
 
     /**
+     * Retrieves a single account record by its accountCode.
+     *
+     * @param string $accountCode
+     * @return object|null
+     */
+    public function getAccount($accountCode)
+    {
+        $result = $this->db
+            ->table('Accounts')
+            ->where('ac_code', $accountCode)
+            ->first();
+
+        return $result;
+    }
+
+    /**
+     * Retrieves a single branch record by its branchCode.
+     *
+     * @param string $branchCode
+     * @return object|null
+     */
+    public function getBranch($branchCode)
+    {
+        $result = $this->db
+            ->table('Branches')
+            ->where('br_code', $branchCode)
+            ->first();
+
+        return $result;
+    }
+
+    /**
      * Retrieves a single billing record by its reference ID.
      *
      * Excludes records that are currently being recomputed.
@@ -89,7 +123,6 @@ class SqlDatabase
                     ->select('billing_id')
                     ->from('billing_recompute');
             })
-            // ->limit(1)
             ->first();
 
         return $result;
@@ -101,27 +134,254 @@ class SqlDatabase
      * @param string $type The type of accounts to retrieve
      * @return \Illuminate\Pagination\Paginator
      */
-    public function getAccountsByType($type)
+    public function getAccountsByParams($params)
     {
         // Pagination
         $perPage = $params['per_page'] ?? config('vc.default_pages');
+        $selectedCode = $params['selected_code'] ?? null;
         $result = $this->db
             ->table('Accounts')
             ->select('ac_name', 'ac_code', 'ac_ma_code')
-            ->when(isset($type), function ($query) use ($type) {
-                if (AccountType::HMO === $type) {
-                    $query->where('ac_accttype', $type);
+            ->when(isset($params['type']), function ($query) use ($params) {
+                if (AccountType::HMO === $params['type']) {
+                    $query->where('ac_accttype', $params['type']);
                 } else {
                     $query->where('ac_accttype', '!=', AccountType::HMO);
                 }
+            })
+            ->when(isset($params['name']) && $params['name'] !== '', function ($query) use ($params, $selectedCode) {
+                $query->where(function ($nameQuery) use ($params, $selectedCode) {
+                    $nameQuery->where('ac_name', 'like', '%' . $params['name'] . '%');
+                    if (!empty($selectedCode)) {
+                        $nameQuery->orWhere('ac_code', $selectedCode);
+                    }
+                });
             })
             ->where(function ($q) {
                 $q->where('ac_code', 'not like', 'IN%')
                     ->where('ac_code', 'not like', 'FM%')
                     ->where('ac_code', 'not like', 'GR%');
             })
+            ->where('ac_status', 'A') // Active accounts only
             ->groupBy('ac_name', 'ac_code', 'ac_ma_code')
+            ->when(!empty($selectedCode), function ($query) use ($selectedCode) {
+                $query->orderByRaw("CASE WHEN ac_code = ? THEN 0 ELSE 1 END", [$selectedCode]);
+            })
+            ->where(function ($query) {
+                $query->where('ac_candate', '>', now())
+                    ->orWhereNull('ac_candate');
+            })
             ->orderBy('ac_name');
+
+        return $result->paginate($perPage);
+    }
+
+    /**
+     * Retrieves the account codes associated with a specific agent.
+     *
+     * This method queries the 'Accounts' table to fetch active account codes
+     * for the given agent code, excluding accounts that have been cancelled
+     * (where cancellation date is in the past or null).
+     *
+     * @param string $agentCode The agent code to filter accounts by.
+     * @return \Illuminate\Support\Collection A collection of account codes (ac_code).
+     */
+    public function getAccountsOfAgent($agentCode)
+    {
+        $accounts = $this->db
+            ->table('Accounts')
+            ->select('ac_code')
+            ->where('ac_agcode', $agentCode)
+            ->where('ac_status', 'A') // Active accounts only
+            ->where(function ($query) {
+                $query->where('ac_candate', '>', now())
+                    ->orWhereNull('ac_candate');
+            })
+            ->pluck('ac_code');
+
+        return $accounts;
+    }
+
+
+    public function getBillingRefsByParams($params)
+    {
+        // Pagination
+        $perPage = $params['per_page'] ?? config('vc.default_pages');
+        $selectedRefs = $params['selected_refs'] ?? null;
+
+        // Handle both single string and array of selected refs
+        if (is_string($selectedRefs)) {
+            $selectedRefs = array_filter(explode(',', $selectedRefs));
+        } elseif (!is_array($selectedRefs)) {
+            $selectedRefs = $selectedRefs ? [$selectedRefs] : [];
+        }
+        $selectedRefs = array_filter($selectedRefs);
+
+        $result = $this->db
+            ->table('Billing as a')
+            ->select([
+                'a.bl_refid',
+                'a.bl_type',
+                'a.bl_claimnum',
+                'a.bl_policynum',
+                'a.bl_balance',
+                'a.bl_name',
+                'a.bl_dateposted',
+                'a.bl_workstatus',
+                'c.blp_tobebilledby',
+                'e.ac_name'
+            ])
+            ->leftJoin('Billing_Process as c', 'a.bl_refid', '=', 'c.blp_refid')
+            ->leftJoin('Accounts as e', function ($join) {
+                $join->on(DB::raw('SUBSTRING(a.bl_policynum,1,11)'), '=', 'e.ac_code');
+            })
+            ->where('e.ac_code', $params['account_code'])
+            ->when(isset($params['name']) && !empty($params['name']), function ($query) use ($params, $selectedRefs) {
+                $query->where(function ($nameQuery) use ($params, $selectedRefs) {
+                    $nameQuery->where('a.bl_refid', 'like', '%' . $params['name'] . '%');
+                    // Include selected refs in results
+                    if (!empty($selectedRefs)) {
+                        $nameQuery->orWhereIn('a.bl_refid', $selectedRefs);
+                    }
+                });
+            })
+            ->when(!empty($params['account_type']) && ($params['account_type'] != AccountType::HMO), function ($query) {
+                $query->whereNotIn('a.bl_refid', function ($query) {
+                    $query->select('a.bl_refid')
+                        ->from('Billing as a')
+                        ->leftJoin('Billing_Process as b', 'a.bl_refid', '=', 'b.blp_refid')
+                        ->whereIn('a.bl_workstatus', ['FB', 'PX'])
+                        ->where('a.bl_type', 'MEDCOLL')
+                        ->where('b.blp_tobebilledby', 'BILLING');
+                });
+            })
+            ->when(!empty($selectedRefs), function ($query) use ($selectedRefs) {
+                // Order selected refs first
+                $query->orderByRaw("CASE WHEN a.bl_refid IN ('" . implode("','", $selectedRefs) . "') THEN 0 ELSE 1 END");
+            })
+            ->orderBy('a.bl_dateposted', 'desc')
+            ->paginate($perPage);
+
+        return $result;
+    }
+
+    public function getBillingByParams($params)
+    {
+        $perPage = $params['per_page'] ?? config('vc.default_pages');
+        $result = $this->db
+            ->table('Billing as a')
+            ->select([
+                'a.bl_refid',
+                'a.bl_type',
+                'a.bl_claimnum',
+                'a.bl_policynum',
+                'a.bl_balance',
+                'a.bl_name',
+                'a.bl_dateposted',
+                'a.bl_workstatus',
+            ])
+            ->when(!empty($params['billing_ref']), function ($query) use ($params) {
+                $billRefs = is_string($params['billing_ref'])
+                    ? explode(',', $params['billing_ref'])
+                    : $params['billing_ref'];
+                $query->whereIn('a.bl_refid', $billRefs);
+            })
+            ->when(!empty($params['policynum']), function ($query) use ($params) {
+                $query->where('a.bl_policynum', $params['policynum']);
+            })
+            ->orderBy('a.bl_dateposted', 'desc')
+            ->paginate($perPage);
+
+        return $result;
+    }
+
+    public function getCardHolderDetailsByParams($params)
+    {
+        $authUser = auth()->user();
+        // Pagination
+        $perPage = $params['per_page'] ?? config('vc.default_pages');
+        $result = $this->db
+            ->table('cholders as c')
+            ->leftJoin('billing as b', function ($join) use ($params) {
+                $join->on('c.ch_policynum', '=', 'b.bl_policynum');
+            })
+            ->select(
+                'b.bl_claimnum',
+                'b.bl_policynum',
+                'c.ch_id',
+                'c.ch_policynum',
+                'c.ch_accountid',
+                'c.ch_branch_code',
+                'c.ch_firstname',
+                'c.ch_lastname',
+                'c.ch_middlename',
+                'c.ch_suffix'
+            )
+            ->when(!empty($params['billing_ref']), function ($query) use ($params) {
+                $billRefs = is_string($params['billing_ref'])
+                    ? explode(',', $params['billing_ref'])
+                    : $params['billing_ref'];
+                $query->whereIn('b.bl_refid', $billRefs);
+            })
+            ->when($authUser->hasRole('broker'), function ($query) use ($authUser) {
+                $agentAccounts = (new SqlDatabase(Server::HMS))
+                    ->getAccountsOfAgent($authUser->userDetail?->agent_code ?? null);
+                $query->whereIn('c.ch_accountid', $agentAccounts);
+            })
+            ->when($authUser->hasRole('account_branch_admin'), function ($query) use ($authUser) {
+                $query->where('c.ch_accountid', $authUser->userDetail?->account_code ?? null);
+                if (!empty($authUser->userDetail?->branch_code)) {
+                    $query->where('c.ch_branch_code', $authUser->userDetail?->branch_code);
+                }
+            })
+            ->when(!empty($params['claimnum']), function ($query) use ($params) {
+                $query->where('b.bl_claimnum', $params['claimnum']);
+            })
+            ->when(!empty($params['policynum']), function ($query) use ($params) {
+                $query->where('c.ch_policynum', $params['policynum']);
+            })
+            ->when(!empty($params['firstname']), function ($query) use ($params) {
+                $query->where('c.ch_firstname', $params['firstname']);
+            })
+            ->when(!empty($params['lastname']), function ($query) use ($params) {
+                $query->where('c.ch_lastname', $params['lastname']);
+            })
+            ->when(!empty($params['middlename']), function ($query) use ($params) {
+                $query->where('c.ch_middlename', $params['middlename']);
+            })
+            ->paginate($perPage);
+
+        return $result;
+    }
+
+    /**
+     * Retrieves branches based on the specified type.
+     *
+     * @return \Illuminate\Pagination\Paginator
+     */
+    public function getBranchesByParams($params)
+    {
+        // Pagination
+        $perPage = $params['per_page'] ?? config('vc.default_pages');
+        $selectedCode = $params['selected_code'] ?? null;
+        $result = $this->db
+            ->table('Branches')
+            ->select('br_branch_name', 'br_ac_code', 'br_code')
+            ->when(isset($params['account_code']), function ($query) use ($params) {
+                $query->where('br_ac_code', $params['account_code']);
+            })
+            ->when(isset($params['name']) && $params['name'] !== '', function ($query) use ($params, $selectedCode) {
+                $query->where(function ($nameQuery) use ($params, $selectedCode) {
+                    $nameQuery->where('br_branch_name', 'like', '%' . $params['name'] . '%');
+                    if (!empty($selectedCode)) {
+                        $nameQuery->orWhere('br_code', $selectedCode);
+                    }
+                });
+            })
+            ->when(!empty($selectedCode), function ($query) use ($selectedCode) {
+                $query->orderByRaw("CASE WHEN br_code = ? THEN 0 ELSE 1 END", [$selectedCode]);
+            })
+            ->orderBy('br_branch_name');
 
         return $result->paginate($perPage);
     }
