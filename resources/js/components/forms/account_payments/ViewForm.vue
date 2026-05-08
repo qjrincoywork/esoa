@@ -59,7 +59,7 @@ const openFilePreview = () => {
       <ul class="my-6 ml-6 list-disc [&>li]:mt-2">
         <li>Deposit Date: <span class="font-bold">{{ accountPayment.deposit_date }}</span></li>
         <li>Mode of Payment: <span class="font-bold">{{ accountPayment.mode_of_payment }}</span></li>
-        <li>Remarks: <span class="font-bold">{{ accountPayment.remarks }}</span></li>
+        <li>Remarks: <p class="font-bold whitespace-pre-line">{{ accountPayment.remarks }}</p></li>
         <li>Created By: <span class="font-bold">{{ accountPayment.created_by }}</span></li>
         <li>Created At: <span class="font-bold">{{ accountPayment.created_at }}</span></li>
         <li v-if="accountPayment.remittance_advice">

@@ -11,21 +11,27 @@ use App\Http\Controllers\{
     SoaController,
     UserController,
 };
+// use App\Models\{ AccountPayment, Concern, Soa };
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
-use App\Models\Soa;
 
 // Route::get('/', function () {
 //     return Inertia::render('Welcome', [
 //         'canRegister' => Features::enabled(false),
 //     ]);
 // })->name('home');
-// Route::get('/test-email', function () {
-//     return view('emails.esoa.billing-invoice-endorsed', [
-//         'soa' => Soa::findOrFail(2961),
-//     ]);
-// });
+Route::get('/test-email/{id}', function ($id) {
+    // return view('emails.esoa.billing-invoice-endorsed', [
+    //     'soa' => Soa::findOrFail($id),
+    // ]);
+    // return view('emails.esoa.concern-notification', [
+    //     'concern' => Concern::findOrFail($id),
+    // ]);
+    // return view('emails.esoa.account-payment-notification', [
+    //     'accountPayment' => AccountPayment::findOrFail($id),
+    // ]);
+});
 Route::get('/', function () {
     return Inertia::render('auth/Login', [
         'canResetPassword' => Features::enabled(Features::resetPasswords()),
