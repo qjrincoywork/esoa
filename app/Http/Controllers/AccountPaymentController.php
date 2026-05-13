@@ -66,7 +66,7 @@ class AccountPaymentController extends Controller
      */
     public function store(CreateRequest $request)
     {
-        DB::connection('mysql')->beginTransaction();
+        DB::beginTransaction();
         try {
             $validated = $request->validated();
             CommonHelper::storeUploadedFile(
@@ -78,13 +78,13 @@ class AccountPaymentController extends Controller
                 env('ACCOUNT_PAYMENTS_DISK', 'public')
             );
             $accountPayment = AccountPayment::create($validated);
-            DB::connection('mysql')->commit();
+            DB::commit();
 
             CommonHelper::sendNotificationEmail($accountPayment, $request->user(), AccountPaymentNotification::class);
 
             return response()->json(['message' => 'Account payment created successfully.']);
         } catch (\Exception $e) {
-            DB::connection('mysql')->rollBack();
+            DB::rollBack();
 
             return response()->json(['message' => 'Failed to create account payment: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
@@ -145,7 +145,7 @@ class AccountPaymentController extends Controller
     public function update(UpdateRequest $request)
     {
         $validated = $request->validated();
-        DB::connection('mysql')->beginTransaction();
+        DB::beginTransaction();
         try {
             $accountPayment = AccountPayment::findOrFail($validated['id']);
             CommonHelper::storeUploadedFile(
@@ -158,13 +158,13 @@ class AccountPaymentController extends Controller
             );
             $accountPayment->update($validated);
 
-            DB::connection('mysql')->commit();
+            DB::commit();
 
             CommonHelper::sendNotificationEmail($accountPayment, $request->user(), AccountPaymentNotification::class);
 
             return response()->json(['message' => 'Account payment updated successfully.']);
         } catch (\Exception $e) {
-            DB::connection('mysql')->rollBack();
+            DB::rollBack();
 
             return response()->json(['message' => 'Failed to update account payment: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
@@ -176,7 +176,7 @@ class AccountPaymentController extends Controller
     public function destroy(DeleteRequest $request)
     {
         $validated = $request->validated();
-        DB::connection('mysql')->beginTransaction();
+        DB::beginTransaction();
         try {
             $accountPayment = AccountPayment::withTrashed()->findOrFail($validated['id']);
 
@@ -188,13 +188,13 @@ class AccountPaymentController extends Controller
                 $message = 'Deleted';
             }
 
-            DB::connection('mysql')->commit();
+            DB::commit();
 
             if ($request->wantsJson() || $request->ajax()) {
                 return CustomResponse::ok('Account payment ' . $message . ' successfully', Response::HTTP_OK);
             }
         } catch (\Exception $e) {
-            DB::connection('mysql')->rollBack();
+            DB::rollBack();
 
             if ($request->wantsJson() || $request->ajax()) {
                 return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);

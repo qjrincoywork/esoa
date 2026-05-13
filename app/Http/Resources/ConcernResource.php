@@ -27,11 +27,11 @@ class ConcernResource extends JsonResource
         return [
             'id' => $this->id,
             'billing_invoice' => $this->billing_invoice,
-            'type' => ConcernType::label($this->type),
+            'type' => ConcernType::label((int) $this->type),
             'title' => $this->title,
             'description' => $this->description,
-            'status' => TicketStatus::label($this->status),
-            'status_color' => TicketStatus::color($this->status),
+            'status' => TicketStatus::label((int) $this->status),
+            'status_color' => TicketStatus::color((int) $this->status),
             'attachment' => $this->attachment,
             'attachment_preview_token' => $this->attachment && $request->user()
                 ? CommonHelper::createFilePreviewToken(

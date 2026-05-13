@@ -26,7 +26,7 @@ class SoaResource extends JsonResource
             'soa_number' => $this->soa_number,
             'billing_ref' => $this->billing_ref,
             'billing_ref_names' => $this->getBillingRefNames($this->billing_ref),
-            'bill_type' => BillType::label($this->bill_type),
+            'bill_type' => BillType::label((int) $this->bill_type),
             'created_at' => CommonHelper::formatDate($this->created_at),
             'due_date' => CommonHelper::formatDate($this->due_date),
             'due_in' => $this->formatDaysDue($this->due_date),
@@ -41,8 +41,8 @@ class SoaResource extends JsonResource
             'amount_raw' => (float) $this->amount,
             'file_pdf' => $this->file_pdf,
             'file_xls' => $this->file_xls,
-            'status_color' => SoaStatus::color($this->status),
-            'status' => SoaStatus::label($this->status),
+            'status_color' => SoaStatus::color((int) $this->status),
+            'status' => SoaStatus::label((int) $this->status),
             'soa_activities' => $this->whenLoaded('soaActivity', function () use ($request) {
                 return SoaActivityListResource::collection($this->soaActivity)->resolve($request);
             }, []),
