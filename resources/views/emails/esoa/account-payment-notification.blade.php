@@ -4,7 +4,7 @@
   <p>Hello,</p>
 
   <p>
-    An account payment record has been saved in ESOA by {{ $accountPayment->user?->name ?? $accountPayment->user?->email ?? 'an authenticated user' }}.
+    An account payment record has been uploaded in ESOA by {{ $accountPayment->user?->name ?? $accountPayment->user?->email ?? 'an authenticated user' }}.
   </p>
 
   <div style="background-color: #f5f7fb; border-left: 4px solid #4f46e5; padding: 16px; margin: 20px 0; border-radius: 4px;">
@@ -15,7 +15,7 @@
   </div>
 
   <p>
-    This notification was sent to {{ config('vc.contact_email') }} and copied to the account payment creator.
+    This notification was sent to {{ config('vc.contact_email') }}, with a copy sent to the account payment uploader.
   </p>
 
   <p>Thank you,<br>ESOA System Team</p>

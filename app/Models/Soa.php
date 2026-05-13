@@ -217,23 +217,41 @@ class Soa extends Model
         if (array_key_exists('due_in', $params) && $params['due_in'] !== null && $params['due_in'] !== '') {
             $query->when($params['due_in'] == SoaAging::PAST_DUE, function ($query) use ($params) {
                 $range = SoaAging::pastDueDayBucketsRange($params['due_in']);
-                $query->whereRaw('DATEDIFF(due_date, NOW()) < ?', end($range) ?? 0);
+                $query->whereRaw(
+                    'DATEDIFF(day, GETDATE(), due_date) < ?',
+                    [end($range) ?? 0]
+                );
             })
             ->when($params['due_in'] == SoaAging::DUE_WITHIN_30_DAYS, function ($query) use ($params) {
-                $query->whereRaw('DATEDIFF(due_date, NOW()) BETWEEN ? AND ?', SoaAging::pastDueDayBucketsRange($params['due_in']));
+                $query->whereRaw(
+                    'DATEDIFF(day, GETDATE(), due_date) BETWEEN ? AND ?',
+                    SoaAging::pastDueDayBucketsRange($params['due_in'])
+                );
             })
             ->when($params['due_in'] == SoaAging::DUE_WITHIN_60_DAYS, function ($query) use ($params) {
-                $query->whereRaw('DATEDIFF(due_date, NOW()) BETWEEN ? AND ?', SoaAging::pastDueDayBucketsRange($params['due_in']));
+                $query->whereRaw(
+                    'DATEDIFF(day, GETDATE(), due_date) BETWEEN ? AND ?',
+                    SoaAging::pastDueDayBucketsRange($params['due_in'])
+                );
             })
             ->when($params['due_in'] == SoaAging::DUE_WITHIN_90_DAYS, function ($query) use ($params) {
-                $query->whereRaw('DATEDIFF(due_date, NOW()) BETWEEN ? AND ?', SoaAging::pastDueDayBucketsRange($params['due_in']));
+                $query->whereRaw(
+                    'DATEDIFF(day, GETDATE(), due_date) BETWEEN ? AND ?',
+                    SoaAging::pastDueDayBucketsRange($params['due_in'])
+                );
             })
             ->when($params['due_in'] == SoaAging::DUE_WITHIN_120_DAYS, function ($query) use ($params) {
-                $query->whereRaw('DATEDIFF(due_date, NOW()) BETWEEN ? AND ?', SoaAging::pastDueDayBucketsRange($params['due_in']));
+                $query->whereRaw(
+                    'DATEDIFF(day, GETDATE(), due_date) BETWEEN ? AND ?',
+                    SoaAging::pastDueDayBucketsRange($params['due_in'])
+                );
             })
             ->when($params['due_in'] == SoaAging::DUE_WITHIN_MORE_THAN_120_DAYS, function ($query) use ($params) {
                 $range = SoaAging::pastDueDayBucketsRange($params['due_in']);
-                $query->whereRaw('DATEDIFF(due_date, NOW()) > ?', reset($range) ?? 0);
+                $query->whereRaw(
+                    'DATEDIFF(day, GETDATE(), due_date) > ?',
+                    [reset($range) ?? 0]
+                );
             });
         }
     }

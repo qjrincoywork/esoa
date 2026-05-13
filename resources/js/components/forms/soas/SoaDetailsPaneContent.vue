@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { usePage } from '@inertiajs/vue3';
 import {
   Card,
@@ -12,6 +12,12 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/ui/tabs'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import SoaActivitiesList from '@/components/forms/soas/SoaActivitiesList.vue';
 import AmountManagementForm from '@/components/forms/soas/AmountManagementForm.vue';
 import AccountBranchMembers from '@/components/forms/soas/AccountBranchMembers.vue';
@@ -73,6 +79,26 @@ function onAmountAdjusted(payload: { amount: string; amount_raw: number }) {
 }
 
 const activeTab = ref('details')
+function fileBasename(path: string): string {
+  const normalized = path.replace(/\\/g, '/')
+  const segment = normalized.split('/').pop()
+  return segment || path
+}
+
+/** Existing uploads (native file inputs cannot show these; we show name + link instead). */
+const existingPdf = computed(() => {
+  const id = localSoa.value?.id
+  const path = localSoa.value?.file_pdf
+  if (id == null || !path) return null
+  return { name: fileBasename(String(path)), href: `/soas/${id}/attachment/pdf` }
+})
+
+const existingExcel = computed(() => {
+  const id = localSoa.value?.id
+  const path = localSoa.value?.file_xls
+  if (id == null || !path) return null
+  return { name: fileBasename(String(path)), href: `/soas/${id}/attachment/excel` }
+})
 </script>
 
 <template>
@@ -117,6 +143,58 @@ const activeTab = ref('details')
               <li>Bill Date: <span class="font-bold">{{ localSoa.created_at }} </span></li>
               <li>Period Coverage: <span class="font-bold">{{ localSoa.period_coverage }}</span></li>
               <li>Amount: <span class="font-bold">{{ localSoa.amount }}</span></li>
+              <li v-if="existingPdf">Uploaded PDF:
+                <div class="grid gap-2 md:col-span-1">
+                  <p
+                    v-if="existingPdf"
+                    class="mt-1 text-xs text-[var(--color-text-muted)]"
+                  >
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <a
+                            :href="existingPdf.href"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="cursor-pointer font-medium text-[var(--color-text)] underline underline-offset-2 hover:opacity-90"
+                          >
+                            {{ existingPdf.name }}
+                          </a>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          View PDF
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </p>
+                </div>
+              </li>
+              <li v-if="existingExcel">Uploaded XLS/XLSX:
+                <div class="grid gap-2 md:col-span-1">
+                  <p
+                    v-if="existingExcel"
+                    class="mt-1 text-xs text-[var(--color-text-muted)]"
+                  >
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger>
+                          <a
+                            :href="existingExcel.href"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="cursor-pointer font-medium text-[var(--color-text)] underline underline-offset-2 hover:opacity-90"
+                          >
+                            {{ existingExcel.name }}
+                          </a>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          View XLS/XLSX
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </p>
+                </div>
+              </li>
             </ul>
           </CardContent>
         </Card>
