@@ -69,19 +69,19 @@ class ConcernController extends Controller
      */
     public function store(CreateRequest $request)
     {
-        DB::connection('mysql')->beginTransaction();
+        DB::beginTransaction();
         try {
             $validated = $request->validated();
             CommonHelper::storeUploadedFile($request, $validated, 'attachment');
             $concern = Concern::create($validated);
 
-            DB::connection('mysql')->commit();
+            DB::commit();
 
             CommonHelper::sendNotificationEmail($concern, $request->user(), ConcernNotification::class);
 
             return response()->json(['message' => 'Concern created successfully.']);
         } catch (\Exception $e) {
-            DB::connection('mysql')->rollBack();
+            DB::rollBack();
 
             return response()->json(['message' => 'Failed to create concern: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
@@ -142,20 +142,20 @@ class ConcernController extends Controller
      */
     public function update(UpdateRequest $request)
     {
-        DB::connection('mysql')->beginTransaction();
+        DB::beginTransaction();
         try {
             $concern = Concern::findOrFail($request->id);
             $validated = $request->validated();
             CommonHelper::storeUploadedFile($request, $validated, 'attachment');
             $concern->update($validated);
 
-            DB::connection('mysql')->commit();
+            DB::commit();
 
             CommonHelper::sendNotificationEmail($concern, $request->user(), ConcernNotification::class);
 
             return response()->json(['message' => 'Concern updated successfully.']);
         } catch (\Exception $e) {
-            DB::connection('mysql')->rollBack();
+            DB::rollBack();
 
             return response()->json(['message' => 'Failed to update concern: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }

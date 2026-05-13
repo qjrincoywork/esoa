@@ -33,8 +33,18 @@ class IsDataExists implements ValidationRule
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
         // Get all tables in the database main DB
-        $tableNames = DB::select('SHOW TABLES');
-        $tables = array_map('current', $tableNames);
+        if (env('DB_CONNECTION') == 'mysql') {
+            $tableNames = DB::select('SHOW TABLES');
+            $tables = array_map('current', $tableNames);
+        } else {
+            $tables = collect(DB::select("
+                SELECT TABLE_NAME
+                FROM INFORMATION_SCHEMA.TABLES
+                WHERE TABLE_TYPE = 'BASE TABLE'
+            "))
+            ->pluck('TABLE_NAME')
+            ->toArray();
+        }
 
         if (in_array($this->table, $tables)) {
             // Check if the value exists in the specified table
