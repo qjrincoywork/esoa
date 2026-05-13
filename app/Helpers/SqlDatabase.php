@@ -143,10 +143,10 @@ class SqlDatabase
             ->table('Accounts')
             ->select('ac_name', 'ac_code', 'ac_ma_code')
             ->when(isset($params['type']), function ($query) use ($params) {
-                if (AccountType::HMO === $params['type']) {
-                    $query->where('ac_accttype', $params['type']);
+                if (AccountType::TPA == $params['type']) {
+                    $query->where('ac_code', 'like', 'TP%');
                 } else {
-                    $query->where('ac_accttype', '!=', AccountType::HMO);
+                    $query->where('ac_code', 'not like', 'TP%');
                 }
             })
             ->when(isset($params['name']) && $params['name'] !== '', function ($query) use ($params, $selectedCode) {

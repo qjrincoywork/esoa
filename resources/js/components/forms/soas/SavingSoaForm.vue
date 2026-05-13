@@ -167,7 +167,7 @@ const searchAccountsByParams = async (name = '', page = 1, append = false) => {
     accountsLoadingMore.value = true;
   }
   const params = {
-    account_code: selectedAccount.value?.value,
+    type: selectedAccountType.value,
     name,
     page,
   };
