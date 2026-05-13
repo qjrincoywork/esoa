@@ -104,7 +104,8 @@ const periodDateTo = ref(soa.value?.period_date_to ?? '')
 const amount = ref(soa.value?.amount != null ? String(soa.value.amount) : '')
 const billingDateFrom = ref('')
 const billingDateTo = ref('')
-const hasBillingRef = ref(true)
+const hasBillingRefValue = ref(soa.value?.billing_ref != null && String(soa.value.billing_ref).trim().length > 0)
+const hasBillingRef = ref(soa.id == null ? hasBillingRefValue.value : true)
 const searchedBranchName = ref('')
 const searchedBillingRef = ref('')
 const isSyncingFromSoa = ref(false)
@@ -436,7 +437,7 @@ watch(soa, (val: Soa | undefined) => {
       />
     </div>
 
-    <div v-if="soa?.id || hasBillingRef" class="grid gap-2 md:col-span-1">
+    <div v-if="hasBillingRef" class="grid gap-2 md:col-span-1">
       <Label for="billing_date_from">Billing Date From</Label>
       <Input
         id="billing_date_from"
@@ -446,7 +447,7 @@ watch(soa, (val: Soa | undefined) => {
         v-model="billingDateFrom"
       />
     </div>
-    <div v-if="soa?.id || hasBillingRef" class="grid gap-2 md:col-span-1">
+    <div v-if="hasBillingRef" class="grid gap-2 md:col-span-1">
       <Label for="billing_date_to">Billing Date To</Label>
       <Input
         id="billing_date_to"
