@@ -3,6 +3,7 @@ import { ref, onMounted, computed, watch } from 'vue';
 import { usePage } from '@inertiajs/vue3';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { SearchableCombobox } from '@/components/ui/searchable-combobox';
 import { useSoas } from '@/composables/soas';
 import { debounce } from '@/composables/utilities/helper';
@@ -101,6 +102,9 @@ const dueDate = ref(soa.value?.due_date ?? '')
 const periodDateFrom = ref(soa.value?.period_date_from ?? '')
 const periodDateTo = ref(soa.value?.period_date_to ?? '')
 const amount = ref(soa.value?.amount != null ? String(soa.value.amount) : '')
+const billingDateFrom = ref('')
+const billingDateTo = ref('')
+const hasBillingRef = ref(true)
 const searchedBranchName = ref('')
 const searchedBillingRef = ref('')
 const isSyncingFromSoa = ref(false)
@@ -226,12 +230,13 @@ const searchBillingRefsByParams = async (name = '', page = 1, append = false) =>
 
   // Pass all selected refs as comma-separated string for multiple selection
   const selectedRefsParam = billingRef.value.length ? billingRef.value.join(',') : null;
-
   const params = {
     account_type: selectedAccountType.value,
     account_code: selectedAccount.value?.value,
     name,
     page,
+    billing_date_from: billingDateFrom.value ?? '',
+    billing_date_to: billingDateTo.value ?? '',
   };
   if (selectedRefsParam != null) {
     params.selected_refs = selectedRefsParam;
@@ -366,6 +371,11 @@ watch(soa, (val: Soa | undefined) => {
       <input type="hidden" name="bill_type" :value="String(selectedBillType ?? '')" />
       <input type="hidden" name="status" :value="String(selectedStatus ?? '')" />
     </div>
+    <div class="flex items-center gap-3">
+      <Checkbox id="has_billing_ref" v-model="hasBillingRef" class="cursor-pointer"/>
+      <Label for="has_billing_ref" class="cursor-pointer">Has Billing ref?</Label>
+    </div>
+
     <div v-if="!isEndorsed" class="grid gap-2 md:col-span-1">
       <Label for="account_type">Account Type<span class="text-red-400">*</span></Label>
       <Select
@@ -426,7 +436,28 @@ watch(soa, (val: Soa | undefined) => {
       />
     </div>
 
-    <div v-if="!isEndorsed" class="md:col-span-1">
+    <div v-if="soa?.id || hasBillingRef" class="grid gap-2 md:col-span-1">
+      <Label for="billing_date_from">Billing Date From</Label>
+      <Input
+        id="billing_date_from"
+        type="date"
+        class="mt-1 block w-full"
+        name="billing_date_from"
+        v-model="billingDateFrom"
+      />
+    </div>
+    <div v-if="soa?.id || hasBillingRef" class="grid gap-2 md:col-span-1">
+      <Label for="billing_date_to">Billing Date To</Label>
+      <Input
+        id="billing_date_to"
+        type="date"
+        class="mt-1 block w-full"
+        name="billing_date_to"
+        v-model="billingDateTo"
+      />
+    </div>
+
+    <div v-if="hasBillingRef" class="md:col-span-1">
       <SearchableCombobox
         id="billing_ref"
         label="Billing Ref"

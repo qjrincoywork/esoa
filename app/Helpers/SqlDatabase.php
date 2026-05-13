@@ -6,6 +6,7 @@ use App\Enums\AccountType;
 use App\Enums\OrderType;
 use App\Enums\Server;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class SqlDatabase
 {
@@ -254,6 +255,12 @@ class SqlDatabase
                         ->where('a.bl_type', 'MEDCOLL')
                         ->where('b.blp_tobebilledby', 'BILLING');
                 });
+            })
+            ->when(isset($params['billing_date_from']) && !empty($params['billing_date_from']), function ($query) use ($params) {
+                $query->where('a.bl_dateposted', '>=', Carbon::parse($params['billing_date_from'])->startOfDay());
+            })
+            ->when(isset($params['billing_date_to']) && !empty($params['billing_date_to']), function ($query) use ($params) {
+                $query->where('a.bl_dateposted', '<=', Carbon::parse($params['billing_date_to'])->endOfDay());
             })
             ->when(!empty($selectedRefs), function ($query) use ($selectedRefs) {
                 // Order selected refs first
