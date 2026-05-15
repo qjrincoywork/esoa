@@ -144,10 +144,16 @@ class SqlDatabase
             ->table('Accounts')
             ->select('ac_name', 'ac_code', 'ac_ma_code')
             ->when(isset($params['type']), function ($query) use ($params) {
-                if (AccountType::TPA == $params['type']) {
-                    $query->where('ac_code', 'like', 'TP%');
-                } else {
-                    $query->where('ac_code', 'not like', 'TP%');
+                switch ($params['type']) {
+                    case AccountType::TPA:
+                        $query->where('ac_code', 'like', 'TP%');
+                        break;
+                    case AccountType::HMO:
+                        $query->where('ac_code', 'not like', 'TP%');
+                        break;
+                    // default:
+                        // $query->where('ac_code', 'not like', 'TP%');
+                        // break;
                 }
             })
             ->when(isset($params['name']) && $params['name'] !== '', function ($query) use ($params, $selectedCode) {

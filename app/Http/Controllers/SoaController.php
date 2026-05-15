@@ -18,7 +18,7 @@ use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
 use App\Http\Resources\{AccountBranchMemberResource, BillingRefResource, OldSoaResource, SoaActivityListResource, SoaAgingCountResource, SoaResource };
-use App\Mail\{ BillingInvoiceEndorsed, NewBillingInvoiceUploaded, NewSoaUploaded };
+use App\Mail\{ BillingInvoiceStatusChanged, NewBillingInvoiceUploaded, NewSoaUploaded };
 use App\Models\{Account, Citizenship, CivilStatus, Contact, Department, Gender, MainAccount, Position, Soa, Suffix, UserDetail};
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -549,11 +549,12 @@ class SoaController extends Controller
                         }
                     }
 
+                    $statusChangedTo = $changes['status'] ?? null;
                     if (
-                        $soa->status == SoaStatus::ENDORSED
+                        in_array($statusChangedTo, [SoaStatus::ENDORSED, SoaStatus::DISPUTED], true)
                         && $request->user()->hasRole('account_branch_admin')
                     ) {
-                        CommonHelper::sendBillingInvoiceEmail($soa, $request->user(), BillingInvoiceEndorsed::class);
+                        CommonHelper::sendBillingInvoiceEmail($soa, $request->user(), BillingInvoiceStatusChanged::class);
                     }
                 }
 
