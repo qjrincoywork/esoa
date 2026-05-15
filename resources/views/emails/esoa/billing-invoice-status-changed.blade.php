@@ -11,7 +11,7 @@
 
     <p style="margin: 0 0 8px 0; color: #333333; font-size: 14px; line-height: 1.6; font-weight: 500;">
       {{
-          $soa->status == \App\Enums\SoaStatus::ENDORSED
+          (int) $soa->status == \App\Enums\SoaStatus::ENDORSED
               ? __('labels.billing_invoice_status_changed.line_1_2')
               : __('labels.billing_invoice_status_changed.line_1_1', [
                   'status_label' => \App\Enums\SoaStatus::label((int) $soa->status) ?? 'N/A'

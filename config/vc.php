@@ -25,4 +25,5 @@ return [
     'billing_notification_email' => env('BILLING_NOTIFICATION_EMAIL', 'billingsection@valuecarehealth.com'),
     'contact_number' => '+639123456789',
     'ignored_diff_keys' => ['created_at', 'updated_at', 'deleted_at'],
+    'allowed_soa_status_for_account_branch_admin' => [2, 4],
 ];

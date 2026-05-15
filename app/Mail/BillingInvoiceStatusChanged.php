@@ -23,19 +23,11 @@ class BillingInvoiceStatusChanged extends Mailable
     public $soa;
 
     /**
-     * Current status label.
-     *
-     * @var string
-     */
-    public $statusLabel;
-
-    /**
      * Create a new message instance.
      */
     public function __construct(Soa $soa)
     {
         $this->soa = $soa;
-        $this->statusLabel = SoaStatus::label($soa->status);
     }
 
     /**
@@ -46,7 +38,7 @@ class BillingInvoiceStatusChanged extends Mailable
         return new Envelope(
             subject: __('labels.billing_invoice_status_changed.subject', [
                 'soanum' => $this->soa->soa_number,
-                'status_label' => $this->statusLabel,
+                'status_label' => SoaStatus::label((int) $this->soa->status),
             ])
         );
     }
