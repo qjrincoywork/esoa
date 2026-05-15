@@ -510,6 +510,7 @@ class SoaController extends Controller
     public function update(UpdateRequest $request)
     {
         $validated = $request->validated();
+        DB::beginTransaction();
 
         try {
             $soa = DB::transaction(function () use ($validated, $request) {
@@ -551,7 +552,7 @@ class SoaController extends Controller
 
                     $statusChangedTo = $changes['status'] ?? null;
                     if (
-                        in_array($statusChangedTo, [SoaStatus::ENDORSED, SoaStatus::DISPUTED], true)
+                        in_array($statusChangedTo, config('vc.allowed_soa_status_for_account_branch_admin'))
                         && $request->user()->hasRole('account_branch_admin')
                     ) {
                         CommonHelper::sendBillingInvoiceEmail($soa, $request->user(), BillingInvoiceStatusChanged::class);
@@ -560,11 +561,13 @@ class SoaController extends Controller
 
                 return $soa;
             });
+            DB::commit();
 
             if ($request->wantsJson() || $request->ajax()) {
                 return CustomResponse::ok('Soa Updated successfully', Response::HTTP_OK);
             }
         } catch (\Throwable $e) {
+            DB::rollBack();
             if ($request->wantsJson() || $request->ajax()) {
                 return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
             }

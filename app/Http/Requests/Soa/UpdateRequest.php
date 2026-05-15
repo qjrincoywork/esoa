@@ -25,11 +25,6 @@ class UpdateRequest extends FormRequest
                     'integer',
                     new IsDataExists('soas'),
                 ],
-                'user_id' => [
-                    'required',
-                    'integer',
-                    new IsDataExists('users'),
-                ],
                 'status' => [
                     'required',
                     'integer',
