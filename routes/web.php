@@ -22,7 +22,7 @@ use Laravel\Fortify\Features;
 //     ]);
 // })->name('home');
 Route::get('/test-email/{id}', function ($id) {
-    // return view('emails.esoa.billing-invoice-endorsed', [
+    // return view('emails.esoa.billing-invoice-status-changed', [
     //     'soa' => Soa::findOrFail($id),
     // ]);
     // return view('emails.esoa.concern-notification', [
