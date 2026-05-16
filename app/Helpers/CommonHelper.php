@@ -155,13 +155,64 @@ class CommonHelper
         }
     }
 
-    public static function storeUploadedFile($request, array &$validated, $fileField, $directory = null, $model = null, $disk = null): void {
-        if ($request->hasFile($fileField)) {
-            $file = $request->file($fileField);
-            $preString = !empty($model) ? $model->id . '_' : '';
-            $directory = $directory ?? auth()->user()->username;
-            $filename = $preString . now()->format('Ymd_His') . '.' . $file->getClientOriginalExtension();
-            $validated[$fileField] = $file->storeAs($directory, $filename, $disk ?? env('CONCERNS_DISK', 'public'));
+    /**
+     * Store uploaded file(s) and populate the validated payload with stored paths.
+     *
+     * $fileField may be a string (single field) or an array of field names.
+     * If a single field contains multiple files (array), the corresponding
+     * validated value will be an array of stored paths.
+     */
+    public static function storeUploadedFile(
+        $request,
+        array &$validated,
+        $fileField,
+        $directory = null,
+        $model = null,
+        $disk = null,
+    ): void {
+        $username = auth()->user()?->username ?? 'unknown_user';
+
+        if (is_string($directory) && $directory !== '') {
+            $finalDir = $directory;
+        } elseif (!empty($model)) {
+            $finalDir = $username . '/' . $model->id;
+        } else {
+            $finalDir = $username;
+        }
+
+        $disk = $disk ?? env('CONCERNS_DISK', 'public');
+
+        $fields = is_array($fileField) ? $fileField : [$fileField];
+
+        foreach ($fields as $field) {
+            if (!$request->hasFile($field)) {
+                continue;
+            }
+
+            $files = $request->file($field);
+
+            // Multiple files under the same field
+            if (is_array($files) || $files instanceof \Illuminate\Support\Collection) {
+                $stored = [];
+                foreach ($files as $index => $file) {
+                    if (!$file) {
+                        continue;
+                    }
+                    $preString = !empty($model) ? $model->id . '_' : '';
+                    $filename = $preString . now()->format('Ymd_His') . '_' . $index . '.' . $file->getClientOriginalExtension();
+                    $stored[] = $file->storeAs($finalDir, $filename, $disk);
+                }
+                $validated[$field] = $stored;
+                continue;
+            }
+
+            // Single file
+            $file = $files;
+            if ($file) {
+                $preString = !empty($model) ? $model->id . '_' : '';
+                $filename = $preString . now()->format('Ymd_His') . '.' . $file->getClientOriginalExtension();
+                $validated[$field] = $file->storeAs($finalDir, $filename, $disk);
+            }
         }
     }
 

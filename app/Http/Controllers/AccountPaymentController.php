@@ -69,15 +69,22 @@ class AccountPaymentController extends Controller
         DB::beginTransaction();
         try {
             $validated = $request->validated();
+            $accountPayment = AccountPayment::create($validated);
+
+            // Store uploaded files (may throw). This will populate $validated with
+            // stored paths which we then persist to the created model.
             CommonHelper::storeUploadedFile(
                 $request,
                 $validated,
-                'remittance_advice',
+                ['image', 'pdf', 'excel'],
                 null,
-                null,
+                $accountPayment,
                 env('ACCOUNT_PAYMENTS_DISK', 'public')
             );
-            $accountPayment = AccountPayment::create($validated);
+
+            // Persist any stored file paths onto the model before committing.
+            $accountPayment->update($validated);
+
             DB::commit();
 
             CommonHelper::sendNotificationEmail($accountPayment, $request->user(), AccountPaymentNotification::class);

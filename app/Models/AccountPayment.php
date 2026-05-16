@@ -23,7 +23,9 @@ class AccountPayment extends Model
         'user_id',
         'deposit_date',
         'mode_of_payment',
-        'remittance_advice',
+        'image',
+        'excel',
+        'pdf',
         'remarks',
     ];
 
@@ -58,9 +60,6 @@ class AccountPayment extends Model
             ->when(!empty($params['created_by'] ?? null), function ($query) use ($params) {
                 $createdBy = trim((string) $params['created_by']);
                 $query->whereRelation('user', 'username', 'like', '%' . $createdBy . '%');
-            })
-            ->when(!empty($params['remittance_advice'] ?? null), function ($query) use ($params) {
-                $query->where('remittance_advice', 'like', '%' . $params['remittance_advice'] . '%');
             })
             ->when(!empty($params['remarks'] ?? null), function ($query) use ($params) {
                 $query->where('remarks', 'like', '%' . $params['remarks'] . '%');

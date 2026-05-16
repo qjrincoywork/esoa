@@ -14,8 +14,12 @@ type AccountPayment = {
   deposit_date?: string
   mode_of_payment?: number
   mode_of_payment_value?: number
-  remittance_advice?: string
-  remittance_advice_preview_token?: string | null
+  image?: string
+  image_preview_token?: string | null
+  excel?: string
+  excel_preview_token?: string | null
+  pdf?: string
+  pdf_preview_token?: string | null
   remarks?: string
   created_by?: string
   created_at?: string
@@ -42,10 +46,10 @@ const props = defineProps({
 
 const accountPayment = computed<AccountPayment>(() => props.account_payment as AccountPayment);
 
-const openFilePreview = () => {
-  if (accountPayment.value?.remittance_advice_preview_token) {
+const openFilePreview = (type: string) => {
+  if (accountPayment.value?.[`${type}_preview_token`]) {
     window.open(
-      `/account_payments/preview_file?token=${encodeURIComponent(accountPayment.value.remittance_advice_preview_token)}`,
+      `/account_payments/preview_file?token=${encodeURIComponent(accountPayment.value[`${type}_preview_token`])}`,
       '_blank',
       'noopener,noreferrer'
     );
@@ -62,8 +66,14 @@ const openFilePreview = () => {
         <li>Remarks: <p class="font-bold whitespace-pre-line">{{ accountPayment.remarks }}</p></li>
         <li>Created By: <span class="font-bold">{{ accountPayment.created_by }}</span></li>
         <li>Created At: <span class="font-bold">{{ accountPayment.created_at }}</span></li>
-        <li v-if="accountPayment.remittance_advice">
-          <Button :onClick="openFilePreview" class="cursor-pointer">View File</Button>
+        <li v-if="accountPayment.image">
+          <Button :onClick="() => openFilePreview('image')" class="cursor-pointer">View Image</Button>
+        </li>
+        <li v-if="accountPayment.pdf">
+          <Button :onClick="() => openFilePreview('pdf')" class="cursor-pointer">View PDF</Button>
+        </li>
+        <li v-if="accountPayment.excel">
+          <Button :onClick="() => openFilePreview('excel')" class="cursor-pointer">View Excel</Button>
         </li>
       </ul>
     </CardContent>

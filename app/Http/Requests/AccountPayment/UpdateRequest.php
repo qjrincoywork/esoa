@@ -30,10 +30,22 @@ class UpdateRequest extends FormRequest
                 'integer',
                 Rule::in(AccountPaymentMode::getValues()),
             ],
-            'remittance_advice' => [
-                'nullable',
+            'image' => [
+                'required',
                 'file',
-                'mimes:pdf,jpg,jpeg,png,xls,xlsx',
+                'mimes:jpg,jpeg,png',
+                'max:' . config('vc.max_file_size'),
+            ],
+            'pdf' => [
+                'required',
+                'file',
+                'mimes:pdf',
+                'max:' . config('vc.max_file_size'),
+            ],
+            'excel' => [
+                'required',
+                'file',
+                'mimes:xls,xlsx',
                 'max:' . config('vc.max_file_size'),
             ],
             'remarks' => [
