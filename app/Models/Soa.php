@@ -160,6 +160,8 @@ class Soa extends Model
     public function agingCountsPastDue(): array
     {
         $values = SoaAging::getValues();
+        $statusValues = [SoaStatus::ENDORSED, SoaStatus::DISPUTED];
+        $values = array_merge($values, $statusValues); // Include endorsed/disputed buckets in aging counts
         $authUser = auth()->user();
         if (!$authUser) {
             return array_fill_keys($values, 0);
@@ -175,7 +177,7 @@ class Soa extends Model
                             $query->where('branch_code', $authUser->userDetail?->branch_code);
                         }
                     })
-                    ->tap(fn (Builder $q) => $this->applyListSearchFiltersDueIn($q, ['due_in' => $soaAging]))
+                    ->tap(fn (Builder $q) => $this->applyListSearchFiltersDueIn($q, in_array($soaAging, $statusValues) ? ['status' => $soaAging] : ['due_in' => $soaAging]))
                     ->where('status', '!=', SoaStatus::PAID)
                     ->count(),
             ];
@@ -252,6 +254,15 @@ class Soa extends Model
                     'DATEDIFF(day, GETDATE(), due_date) > ?',
                     [reset($range) ?? 0]
                 );
+            });
+        }
+
+        if (array_key_exists('status', $params) && $params['status'] !== null && $params['status'] !== '') {
+            $query->when($params['status'] == SoaStatus::ENDORSED, function ($query) use ($params) {
+                $query->where('status', SoaStatus::ENDORSED);
+            })
+            ->when($params['status'] == SoaStatus::DISPUTED, function ($query) use ($params) {
+                $query->where('status', SoaStatus::DISPUTED);
             });
         }
     }

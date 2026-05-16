@@ -29,8 +29,8 @@ const breadcrumbItems: BreadcrumbItem[] = [
   },
 ];
 const soaAgings = computed(() => (page.props as any).soa_agings?.data as SoaAgingCountResource[]);
-const redirectToSoaList = (dueIn: number) => {
-  router.get(`/${slug.value}/list`, { due_in: dueIn });
+const redirectToSoaList = (href: string) => {
+  router.get(href);
 }
 </script>
 
@@ -40,7 +40,7 @@ const redirectToSoaList = (dueIn: number) => {
 
       <div class="grid auto-rows-min gap-4 md:grid-cols-3 p-4">
         <Card
-          v-for="soaAging in soaAgings.filter(soaAging => soaAging.count > 0)" :key="soaAging"
+          v-for="soaAging in soaAgings" :key="soaAging"
         >
           <CardContent>
             <TooltipProvider>
@@ -48,7 +48,7 @@ const redirectToSoaList = (dueIn: number) => {
                 <TooltipTrigger class="w-full h-full">
                   <div class="cursor-pointer"
                     :class="soaAging.color"
-                    @click="redirectToSoaList(soaAging.value)"
+                    @click="soaAging.count > 0 ? redirectToSoaList(soaAging.href) : null"
                   >
                     <div class="flex flex-col items-center justify-center">
                       <span
@@ -60,7 +60,7 @@ const redirectToSoaList = (dueIn: number) => {
                     </div>
                   </div>
                 </TooltipTrigger>
-                <TooltipContent>
+                <TooltipContent v-if="soaAging.count > 0">
                   <p>Click to view list</p>
                 </TooltipContent>
               </Tooltip>
