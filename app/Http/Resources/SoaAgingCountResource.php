@@ -22,11 +22,45 @@ class SoaAgingCountResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        $isStatus = in_array($this->resource['value'], [SoaStatus::ENDORSED, SoaStatus::DISPUTED]);
+
         return [
             'value' => $this->resource['value'],
             'count' => $this->resource['count'],
-            'label' => SoaAging::label($this->resource['value']),
-            'color' => SoaAging::color($this->resource['value']),
+            'label' => $this->applyLabel($this->resource['value']),
+            'color' => $this->applyColor($this->resource['value']),
+            'href' => $this->redirectToSoaList($this->resource['value']),
         ];
+    }
+
+
+    private function redirectToSoaList($soaAgingValue)
+    {
+        $query = [];
+        if (in_array($soaAgingValue, [SoaStatus::ENDORSED, SoaStatus::DISPUTED])) {
+            $query['status'] = $soaAgingValue;
+        } else {
+            $query['due_in'] = $soaAgingValue;
+        }
+
+        return route('soas.index', $query);
+    }
+
+    private function applyLabel($soaAgingValue): string
+    {
+        if (in_array($soaAgingValue, [SoaStatus::ENDORSED, SoaStatus::DISPUTED])) {
+            return SoaStatus::label($soaAgingValue);
+        }
+
+        return SoaAging::label($soaAgingValue);
+    }
+
+    private function applyColor($soaAgingValue): string
+    {
+        if (in_array($soaAgingValue, [SoaStatus::ENDORSED, SoaStatus::DISPUTED])) {
+            return SoaStatus::color($soaAgingValue);
+        }
+
+        return SoaAging::color($soaAgingValue);
     }
 }
