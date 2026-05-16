@@ -60,7 +60,7 @@ const redirectToSoaList = (href: string) => {
                     </div>
                   </div>
                 </TooltipTrigger>
-                <TooltipContent>
+                <TooltipContent v-if="soaAging.count > 0">
                   <p>Click to view list</p>
                 </TooltipContent>
               </Tooltip>

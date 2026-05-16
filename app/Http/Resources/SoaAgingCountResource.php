@@ -43,7 +43,7 @@ class SoaAgingCountResource extends JsonResource
             $query['due_in'] = $soaAgingValue;
         }
 
-        return route('soas.index', $query);
+        return route('soas.list', $query);
     }
 
     private function applyLabel($soaAgingValue): string

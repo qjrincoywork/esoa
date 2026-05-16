@@ -24,10 +24,10 @@ final class SoaStatus extends Enum
     public static function color($value): string
     {
         return match ($value) {
-            self::UNPAID => 'bg-red-500/20 text-red-500 border-red-500/30',
-            self::ENDORSED => 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30',
-            self::PAID => 'bg-green-500/20 text-green-500 border-green-500/30',
-            self::DISPUTED => 'bg-blue-500/20 text-blue-500 border-blue-500/30',
+            self::UNPAID => 'p-3 rounded-lg bg-red-500/20 text-red-500 border-red-500/30',
+            self::ENDORSED => 'p-3 rounded-lg bg-yellow-500/20 text-yellow-500 border-yellow-500/30',
+            self::PAID => 'p-3 rounded-lg bg-green-500/20 text-green-500 border-green-500/30',
+            self::DISPUTED => 'p-3 rounded-lg bg-blue-500/20 text-blue-500 border-blue-500/30',
         };
     }
 
