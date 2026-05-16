@@ -12,8 +12,12 @@ type AccountPayment = {
   deposit_date?: string
   mode_of_payment?: number
   mode_of_payment_value?: number
-  remittance_advice?: string
-  remittance_advice_preview_token?: string | null
+  image?: string
+  image_preview_token?: string | null
+  excel?: string
+  excel_preview_token?: string | null
+  pdf?: string
+  pdf_preview_token?: string | null
   remarks?: string
   created_by?: string
   created_at?: string
@@ -44,7 +48,7 @@ const form = ref({
   id: accountPayment.value?.id || '',
   deposit_date: accountPayment.value?.deposit_date || '',
   mode_of_payment: accountPayment.value?.mode_of_payment || '',
-  remittance_advice: null as File | null,
+  image: null as File | null,
   remarks: accountPayment.value?.remarks || '',
 });
 
@@ -66,10 +70,10 @@ onMounted(() => {
   }
 });
 
-const openFilePreview = () => {
-  if (accountPayment.value?.remittance_advice_preview_token) {
+const openFilePreview = (type: string) => {
+  if (accountPayment.value?.[`${type}_preview_token`]) {
     window.open(
-      `/account_payments/preview_file?token=${encodeURIComponent(accountPayment.value.remittance_advice_preview_token)}`,
+      `/account_payments/preview_file?token=${encodeURIComponent(accountPayment.value[`${type}_preview_token`])}`,
       '_blank',
       'noopener,noreferrer'
     );
@@ -120,25 +124,78 @@ const openFilePreview = () => {
     </div>
 
     <div class="grid gap-2 md:col-span-2">
-      <Label for="remittance_advice">Remittance Advice<span class="text-red-400">*</span></Label>
+      <Label for="image">Remittance Advice Image<span class="text-red-400">*</span></Label>
       <p
-        v-if="accountPayment?.remittance_advice"
+        v-if="accountPayment?.image"
         class="mt-1 text-xs text-[var(--color-text-muted)]"
       >
         Current:
         <a
-          @click="openFilePreview"
+          @click="openFilePreview('image')"
           target="_blank"
           rel="noopener noreferrer"
           class="cursor-pointer font-medium text-[var(--color-text)] underline underline-offset-2 hover:opacity-90"
         >
-          {{ accountPayment?.remittance_advice?.split('/').pop() }}
+          {{ accountPayment?.image?.split('/').pop() }}
         </a>
       </p>
       <Input
         class="mt-1 block w-full"
-        id="remittance_advice"
-        name="remittance_advice"
+        id="image"
+        name="image"
+        accept=".jpeg,.png,.jpg"
+        type="file"
+        :disabled="isViewOnly"
+      />
+    </div>
+
+    <div class="grid gap-2 md:col-span-2">
+      <Label for="pdf">Remittance Advice PDF<span class="text-red-400">*</span></Label>
+      <p
+        v-if="accountPayment?.pdf"
+        class="mt-1 text-xs text-[var(--color-text-muted)]"
+      >
+        Current:
+        <a
+          @click="openFilePreview('pdf')"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="cursor-pointer font-medium text-[var(--color-text)] underline underline-offset-2 hover:opacity-90"
+        >
+          {{ accountPayment?.pdf?.split('/').pop() }}
+        </a>
+      </p>
+      <Input
+        class="mt-1 block w-full"
+        id="pdf"
+        name="pdf"
+        accept=".pdf"
+        type="file"
+        :disabled="isViewOnly"
+      />
+    </div>
+
+    <div class="grid gap-2 md:col-span-2">
+      <Label for="excel">Remittance Advice Excel<span class="text-red-400">*</span></Label>
+      <p
+        v-if="accountPayment?.excel"
+        class="mt-1 text-xs text-[var(--color-text-muted)]"
+      >
+        Current:
+        <a
+          @click="openFilePreview('excel')"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="cursor-pointer font-medium text-[var(--color-text)] underline underline-offset-2 hover:opacity-90"
+        >
+          {{ accountPayment?.excel?.split('/').pop() }}
+        </a>
+      </p>
+      <Input
+        class="mt-1 block w-full"
+        id="excel"
+        name="excel"
+        accept=".xlsx,.xls"
         type="file"
         :disabled="isViewOnly"
       />

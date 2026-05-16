@@ -16,7 +16,9 @@ return new class extends Migration
             $table->bigInteger('user_id');
             $table->date('deposit_date');
             $table->integer('mode_of_payment');
-            $table->string('remittance_advice');
+            $table->string('image');
+            $table->string('excel');
+            $table->string('pdf')->nullable();
             $table->longText('remarks')->nullable();
             $table->timestamps();
             $table->softDeletes();
