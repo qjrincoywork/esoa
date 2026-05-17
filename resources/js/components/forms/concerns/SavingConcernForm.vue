@@ -5,12 +5,14 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { SearchableCombobox } from '@/components/ui/searchable-combobox';
 import { Auth, User, UserDetail } from '@/types';
+import { debounce } from 'lodash-es';
 
 type Concern = {
   id?: number
   user_id?: number
-  billing_invoice?: string
+  soa_ids?: Array<number> | string
   type?: string
   title?: string
   description?: string
@@ -18,10 +20,7 @@ type Concern = {
   attachment?: string
   attachment_preview_token?: string
 }
-
-// const emit = defineEmits<{
-//   submit: [formData: FormData]
-// }>();
+type BillingInvoice = { value: string | number; name: string; }
 
 const props = defineProps({
   auth: {
@@ -53,7 +52,7 @@ const concern = computed<Concern>(() => props.concern as Concern)
 
 const form = ref({
   id: concern.value?.id || '',
-  billing_invoice: concern.value?.billing_invoice || '',
+  soa_ids: concern.value?.soa_ids || [],
   type: concern.value?.type || '',
   title: concern.value?.title || '',
   description: concern.value?.description || '',
@@ -68,23 +67,139 @@ const selectedType = ref<string | number>(concern.value.type != null ? String(co
 const types = computed(() => props.concern_types || []); // Assuming concern_types is passed as a prop
 const statuses = computed(() => props.ticket_statuses || []); // Assuming ticket_statuses is passed as a prop
 const concernForm = ref<HTMLFormElement | null>(null);
+const soa_ids = ref<BillingInvoice[]>([])
+const billingInvoicePage = ref(1)
+const billingInvoiceLastPage = ref(1)
+const billingInvoicesLoadingMore = ref(false)
+const searchedBillingInvoice = ref('')
+const billingInvoice = ref<(string | number)[]>([])
+const hasMoreBillingInvoices = computed(() => billingInvoicePage.value < billingInvoiceLastPage.value)
 
 function getFormData(): FormData | null {
   if (!concernForm.value) return null;
   return new FormData(concernForm.value);
 }
 
-// defineExpose({
-//   getFormData,
-// });
+/**
+ * Fetch and search SOAs (billing invoices) by name and optional page.
+ * Replaces or appends results based on the `append` flag.
+ */
+const searchBillingInvoicesByParams = async (name = '', page = 1, append = false) => {
+  if (append) {
+    billingInvoicesLoadingMore.value = true;
+  }
+
+  try {
+    const params: Record<string, any> = {
+      soanum: name,
+      page,
+    };
+
+    const response = await fetch(`/soas/list?${new URLSearchParams(params).toString()}`, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch SOAs: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    const data = result?.data ?? [];
+
+    // Transform SOA data to BillingInvoice format
+    const transformed = data.map((soa: any) => ({
+      value: soa.id,
+      name: `${soa.soa_number} - ${soa.account_code}${soa.branch_code ? ` (${soa.branch_code})` : ''}`,
+    }));
+
+    if (append) {
+      soa_ids.value = [...(soa_ids.value ?? []), ...transformed];
+    } else {
+      soa_ids.value = transformed;
+    }
+
+    billingInvoicePage.value = result?.current_page ?? page;
+    billingInvoiceLastPage.value = result?.last_page ?? page;
+  } catch (error) {
+    console.error('Error fetching SOAs:', error);
+    if (!append) {
+      soa_ids.value = [];
+    }
+  } finally {
+    billingInvoicesLoadingMore.value = false;
+  }
+}
+
+/**
+ * Debounced wrapper to avoid excessive API calls on every keystroke.
+ */
+const debouncedGetBillingInvoices: (...args: any[]) => void = debounce((evOrName?: any) => {
+  const name = typeof evOrName === 'string' ? evOrName : (evOrName?.target?.value ?? '');
+  void searchBillingInvoicesByParams(name, 1, false);
+}, 2000);
 
 onMounted(() => {
+  // Load initial SOAs list
+  void searchBillingInvoicesByParams('', 1, false);
+
   if (typeof props.onReady === 'function') {
     props.onReady({ getFormData, formRef: concernForm.value });
   }
 });
+
+/**
+ * Sync billingInvoice from concern data when component initializes or concern changes.
+ */
+watch(
+  () => props.concern?.soa_ids,
+  (soa_ids) => {
+    if (!soa_ids) {
+      billingInvoice.value = [];
+      return;
+    }
+
+    // Handle both array and comma-separated string formats
+    if (Array.isArray(soa_ids)) {
+      billingInvoice.value = soa_ids;
+    } else if (typeof soa_ids === 'string') {
+      billingInvoice.value = soa_ids.split(',').filter(Boolean).map(id => {
+        const num = parseInt(id, 10);
+        return isNaN(num) ? id : num;
+      });
+    }
+  },
+  { immediate: true }
+);
+
+/**
+ * Sync search input to debounced search function.
+ */
+watch(searchedBillingInvoice, (newVal) => {
+  debouncedGetBillingInvoices(newVal);
+});
+
+/**
+ * Handle pagination load-more events.
+ */
+function loadMoreData(input: string) {
+  switch (input) {
+    case 'soas':
+      if (!hasMoreBillingInvoices.value || billingInvoicesLoadingMore.value) return;
+      void searchBillingInvoicesByParams(searchedBillingInvoice.value, billingInvoicePage.value + 1, true);
+      break;
+  }
+}
+
+/**
+ * Open attachment preview in new tab.
+ */
 const openTab = () => {
-  window.open(`/concerns/preview_file?token=${encodeURIComponent(concern.value?.attachment_preview_token)}`, '_blank', 'noopener,noreferrer')
+  window.open(
+    `/concerns/preview_file?token=${encodeURIComponent(concern.value?.attachment_preview_token)}`,
+    '_blank',
+    'noopener,noreferrer'
+  )
 }
 </script>
 
@@ -96,14 +211,24 @@ const openTab = () => {
         <input v-if="concern?.id" type="hidden" name="id" :value="concern?.id" />
         <input type="hidden" name="type" :value="selectedType" />
         <input type="hidden" name="status" :value="selectedStatus" />
+        <template v-for="id in billingInvoice" :key="id">
+          <input type="hidden" name="soa_ids[]" :value="id" />
+        </template>
       </div>
       <div class="grid gap-2 md:col-span-1">
-        <Label for="billing_invoice">Billing Invoice<span class="text-red-400">*</span></Label>
-        <Input
-          class="mt-1 block w-full"
-          id="billing_invoice"
-          name="billing_invoice"
-          v-model="form.billing_invoice"
+        <SearchableCombobox
+          id="soa_ids"
+          label="Billing Invoices"
+          v-model="billingInvoice"
+          v-model:search="searchedBillingInvoice"
+          :items="soa_ids"
+          placeholder="Select Billing Invoices..."
+          search-placeholder="Search Billing Invoices..."
+          empty-text="No Billing Invoices found."
+          :has-more="hasMoreBillingInvoices"
+          :loading-more="billingInvoicesLoadingMore"
+          :multiple="true"
+          @load-more="loadMoreData('soas')"
         />
       </div>
       <div class="grid gap-2 md:col-span-1">
@@ -195,6 +320,9 @@ const openTab = () => {
         <input v-if="concern?.id" type="hidden" name="id" :value="concern?.id" />
         <input type="hidden" name="type" :value="selectedType" />
         <input type="hidden" name="status" :value="selectedStatus" />
+        <template v-for="id in billingInvoice" :key="id">
+          <input type="hidden" name="soa_ids[]" :value="id" />
+        </template>
       </div>
       <div class="grid gap-2 md:col-span-1">
         <Label for="status">Status<span class="text-red-400">*</span></Label>

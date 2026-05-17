@@ -11,7 +11,14 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Database\Eloquent\{Model, SoftDeletes, Relations\HasMany, Relations\HasOne, Relations\BelongsTo};
+use Illuminate\Database\Eloquent\{
+    Model,
+    SoftDeletes,
+    Relations\HasMany,
+    Relations\HasOne,
+    Relations\BelongsTo,
+    Relations\BelongsToMany
+};
 
 class Soa extends Model
 {
@@ -63,6 +70,26 @@ class Soa extends Model
     public function soaActivity(): HasMany
     {
         return $this->hasMany(SoaActivity::class, 'soa_id');
+    }
+
+    public function concerns(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Concern::class,
+            'soa_concerns',
+            'soa_id',
+            'concern_id'
+        );
+    }
+
+    public function accountPayments(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            AccountPayment::class,
+            'soa_account_payments',
+            'soa_id',
+            'account_payment_id'
+        );
     }
 
     /**

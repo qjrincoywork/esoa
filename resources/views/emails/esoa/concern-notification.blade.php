@@ -8,6 +8,9 @@
   </p>
 
   <div style="background-color: #f5f7fb; border-left: 4px solid #4f46e5; padding: 16px; margin: 20px 0; border-radius: 4px;">
+    @if ($concern->soas->isNotEmpty())
+      <p style="margin: 0 0 8px 0;"><strong>Billing Invoice/s:</strong> {{ implode(', ', $concern->soas->pluck('soa_number')->toArray()) ?? 'N/A' }}</p>
+    @endif
     <p style="margin: 0 0 8px 0;"><strong>Title:</strong> {{ $concern->title ?? 'N/A' }}</p>
     <p style="margin: 0 0 8px 0;"><strong>Type:</strong> {{ \App\Enums\ConcernType::label((int) $concern->type) ?? 'N/A' }}</p>
     <p style="margin: 0 0 8px 0;"><strong>Status:</strong> {{ \App\Enums\TicketStatus::label((int) $concern->status) ?? 'N/A' }}</p>
