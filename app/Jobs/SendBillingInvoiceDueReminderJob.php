@@ -11,7 +11,6 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Collection;
 
 class SendBillingInvoiceDueReminderJob implements ShouldQueue
 {
@@ -20,7 +19,7 @@ class SendBillingInvoiceDueReminderJob implements ShouldQueue
     /**
      * User SOA groups to process
      *
-     * @var array<int, array{user_id: int, aging_value: int, aging_label: string, soas: Collection}>
+     * @var array<int, array{user_id: int, aging_value: int, soa_count: int}>
      */
     private array $userGroups;
 
@@ -63,16 +62,15 @@ class SendBillingInvoiceDueReminderJob implements ShouldQueue
     /**
      * Send reminder email to a user for their SOAs.
      *
-     * @param array{user_id: int, aging_value: int, aging_label: string, soas: Collection} $userGroup
+     * @param array{user_id: int, aging_value: int, soa_count: int} $userGroup
      */
     private function sendReminderForUser(array $userGroup): void
     {
         try {
             $userId = $userGroup['user_id'];
-            $agingLabel = $userGroup['aging_label'];
-            $soas = $userGroup['soas'];
+            $agingValue = $userGroup['aging_value'];
+            $soaCount = $userGroup['soa_count'];
 
-            // Fetch user with their email
             $user = User::select('id', 'email', 'username')
                 ->find($userId);
 
@@ -81,15 +79,14 @@ class SendBillingInvoiceDueReminderJob implements ShouldQueue
                 return;
             }
 
-            // Send email
             Mail::to($user->email)
-                ->send(new BillingInvoiceDueReminder($soas, $agingLabel));
+                ->send(new BillingInvoiceDueReminder($agingValue, $soaCount));
 
             Log::info('Sent due reminder email', [
                 'user_id' => $userId,
                 'email' => $user->email,
-                'aging_label' => $agingLabel,
-                'soa_count' => $soas->count(),
+                'aging_value' => $agingValue,
+                'soa_count' => $soaCount,
             ]);
         } catch (\Exception $e) {
             Log::error('Failed to send reminder email for user', [

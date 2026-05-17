@@ -8,48 +8,25 @@
   {{ __('labels.billing_invoice_due_reminder.greeting', ['name' => auth()->user()?->first_name ?? 'Valued Customer']) }}
 </p>
 
-<p style="margin: 0 0 16px 0; color: #333333; font-size: 15px; line-height: 1.6;">
+<p style="margin: 0 0 24px 0; color: #333333; font-size: 15px; line-height: 1.6;">
   {{ __('labels.billing_invoice_due_reminder.intro', ['aging' => $agingLabel, 'count' => $soaCount]) }}
 </p>
 
-<p style="margin: 0 0 16px 0; color: #555555; font-size: 14px; line-height: 1.6; font-weight: 500;">
-  {{ __('labels.billing_invoice_due_reminder.list_heading') }}
-</p>
-
-{{-- SOAs Table --}}
-<table style="width: 100%; border-collapse: collapse; margin: 16px 0; background-color: #f9f9f9;">
-  <thead>
-    <tr style="background-color: #667eea; color: #ffffff;">
-      <th style="padding: 12px; text-align: left; font-weight: 600; border: 1px solid #e0e0e0;">{{ __('labels.soa_number') }}</th>
-      <th style="padding: 12px; text-align: left; font-weight: 600; border: 1px solid #e0e0e0;">{{ __('labels.account_code') }}</th>
-      <th style="padding: 12px; text-align: left; font-weight: 600; border: 1px solid #e0e0e0;">{{ __('labels.due_date') }}</th>
-      <th style="padding: 12px; text-align: right; font-weight: 600; border: 1px solid #e0e0e0;">{{ __('labels.amount') }}</th>
-    </tr>
-  </thead>
-  <tbody>
-    @forelse ($soas as $soa)
-      <tr style="border-bottom: 1px solid #e0e0e0;">
-        <td style="padding: 12px; border: 1px solid #e0e0e0; font-size: 14px;">
-          <span style="color: #667eea; font-weight: 500;">{{ $soa->soa_number }}</span>
-        </td>
-        <td style="padding: 12px; border: 1px solid #e0e0e0; font-size: 14px; color: #555555;">
-          {{ $soa->account_code }}
-        </td>
-        <td style="padding: 12px; border: 1px solid #e0e0e0; font-size: 14px; color: #555555;">
-          {{ $soa->due_date?->format('M d, Y') ?? 'N/A' }}
-        </td>
-        <td style="padding: 12px; border: 1px solid #e0e0e0; font-size: 14px; color: #333333; font-weight: 500; text-align: right;">
-          {{ number_format($soa->amount ?? 0, 2) }}
-        </td>
-      </tr>
-    @empty
-      <tr>
-        <td colspan="4" style="padding: 20px; text-align: center; color: #999999;">
-          {{ __('labels.no_records_found') }}
-        </td>
-      </tr>
-    @endforelse
-  </tbody>
+<table role="presentation" style="width: 100%; border-collapse: collapse; margin: 0 0 24px 0;">
+  <tr>
+    <td style="padding: 20px; background-color: #f5f7ff; border: 1px solid #e0e4f5; border-radius: 8px; text-align: center;">
+      <p style="margin: 0 0 8px 0; color: #667eea; font-size: 18px; font-weight: 600; line-height: 1.4;">
+        {{ $agingLabel }}
+      </p>
+      <p style="margin: 0 0 16px 0; color: #555555; font-size: 14px; line-height: 1.5;">
+        {{ __('labels.billing_invoice_due_reminder.summary', ['count' => $soaCount]) }}
+      </p>
+      <a href="{{ $listUrl }}"
+        style="display: inline-block; padding: 12px 24px; background-color: #667eea; color: #ffffff; font-size: 14px; font-weight: 600; text-decoration: none; border-radius: 6px;">
+        {{ __('labels.billing_invoice_due_reminder.view_list') }}
+      </a>
+    </td>
+  </tr>
 </table>
 
 <p style="margin: 16px 0; color: #d32f2f; font-size: 14px; line-height: 1.6; padding: 12px; background-color: #ffebee; border-left: 4px solid #d32f2f; border-radius: 4px;">

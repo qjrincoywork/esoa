@@ -66,7 +66,7 @@ class SendBillingInvoiceDueReminders implements ShouldQueue
      * Fetch SOAs grouped by user_id with aging classifications.
      * Returns collection keyed by user_id with aged SOAs.
      *
-     * @return \Illuminate\Support\Collection<int, array{user_id: int, soas: array, aging_info: array}>
+     * @return \Illuminate\Support\Collection<int, array{user_id: int, aging_value: int, soa_count: int}>
      */
     private function fetchSOAsGroupedByUser(): \Illuminate\Support\Collection
     {
@@ -78,29 +78,18 @@ class SendBillingInvoiceDueReminders implements ShouldQueue
         foreach ($agingBuckets as $agingValue) {
             // Build query for this aging bucket
             $query = Soa::query()
-                ->select('id', 'user_id', 'soa_number', 'account_code', 'due_date', 'amount', 'status')
+                ->select('user_id', DB::raw('COUNT(*) as soa_count'))
                 ->where('status', '!=', SoaStatus::PAID)
-                ->orderBy('user_id')
-                ->orderBy('due_date');
+                ->groupBy('user_id');
 
-            // Apply the aging filter
             $this->applyAgingFilter($query, $agingValue);
 
-            $results = $query->get();
-
-            if ($results->isNotEmpty()) {
-                foreach ($results as $soa) {
-                    $key = $soa->user_id . '_' . $agingValue;
-                    if (!$soasWithAging->has($key)) {
-                        $soasWithAging->put($key, [
-                            'user_id' => $soa->user_id,
-                            'aging_value' => $agingValue,
-                            'aging_label' => SoaAging::label($agingValue),
-                            'soas' => collect(),
-                        ]);
-                    }
-                    $soasWithAging->get($key)['soas']->push($soa);
-                }
+            foreach ($query->get() as $row) {
+                $soasWithAging->put("{$row->user_id}_{$agingValue}", [
+                    'user_id' => $row->user_id,
+                    'aging_value' => $agingValue,
+                    'soa_count' => (int) $row->soa_count,
+                ]);
             }
         }
 
