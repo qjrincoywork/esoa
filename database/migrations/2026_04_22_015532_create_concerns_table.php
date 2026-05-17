@@ -13,8 +13,7 @@ return new class extends Migration
     {
         Schema::create('concerns', function (Blueprint $table) {
             $table->bigIncrements('id');
-            $table->bigInteger('user_id');
-            $table->longText('billing_invoice')->nullable();
+            $table->bigInteger('user_id')->unsigned();
             $table->integer('type');
             $table->string('title');
             $table->longText('description');

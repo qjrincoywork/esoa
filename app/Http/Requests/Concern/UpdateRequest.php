@@ -36,10 +36,14 @@ class UpdateRequest extends FormRequest
                     'integer',
                     'exists:concerns,id',
                 ],
-                'billing_invoice' => [
+                'soa_ids' => [
                     'required',
-                    'string',
-                    'max:' . config('vc.max_string_limit'),
+                    'array',
+                ],
+                'soa_ids.*' => [
+                    'required',
+                    'integer',
+                    'exists:soas,id',
                 ],
                 'type' => [
                     'required',

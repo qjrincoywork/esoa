@@ -72,8 +72,25 @@ class ConcernController extends Controller
         DB::beginTransaction();
         try {
             $validated = $request->validated();
-            CommonHelper::storeUploadedFile($request, $validated, 'attachment');
             $concern = Concern::create($validated);
+            if (!empty($validated['soa_ids'])) {
+                // Attach ids
+                $concern->soas()->sync(
+                    $validated['soa_ids']
+                );
+            }
+            // Store uploaded files (may throw). This will populate $validated with
+            // stored paths which we then persist to the created model.
+            CommonHelper::storeUploadedFile(
+                $request,
+                $validated,
+                'attachment',
+                null,
+                $concern,
+            );
+
+            // Persist any stored file paths onto the model before committing.
+            $concern->update($validated);
 
             DB::commit();
 
@@ -146,7 +163,22 @@ class ConcernController extends Controller
         try {
             $concern = Concern::findOrFail($request->id);
             $validated = $request->validated();
-            CommonHelper::storeUploadedFile($request, $validated, 'attachment');
+            if (!empty($validated['soa_ids'])) {
+                // Attach ids
+                $concern->soas()->sync(
+                    $validated['soa_ids']
+                );
+            }
+            // Store uploaded files (may throw). This will populate $validated with
+            // stored paths which we then persist to the created model.
+            CommonHelper::storeUploadedFile(
+                $request,
+                $validated,
+                'attachment',
+                null,
+                $concern,
+            );
+            // Persist any stored file paths onto the model before committing.
             $concern->update($validated);
 
             DB::commit();

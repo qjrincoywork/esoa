@@ -26,7 +26,7 @@ class ConcernResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'billing_invoice' => $this->billing_invoice,
+            'billing_invoice' => implode(', ', $this->soas->pluck('soa_number')->toArray()),
             'type' => ConcernType::label((int) $this->type),
             'title' => $this->title,
             'description' => $this->description,

@@ -70,6 +70,12 @@ class AccountPaymentController extends Controller
         try {
             $validated = $request->validated();
             $accountPayment = AccountPayment::create($validated);
+            if (!empty($validated['soa_ids'])) {
+                // Attach ids
+                $accountPayment->soas()->sync(
+                    $validated['soa_ids']
+                );
+            }
 
             // Store uploaded files (may throw). This will populate $validated with
             // stored paths which we then persist to the created model.
@@ -155,14 +161,23 @@ class AccountPaymentController extends Controller
         DB::beginTransaction();
         try {
             $accountPayment = AccountPayment::findOrFail($validated['id']);
+            if (!empty($validated['soa_ids'])) {
+                // Attach ids
+                $accountPayment->soas()->sync(
+                    $validated['soa_ids']
+                );
+            }
+            // Store uploaded files (may throw). This will populate $validated with
+            // stored paths which we then persist to the created model.
             CommonHelper::storeUploadedFile(
                 $request,
                 $validated,
-                'remittance_advice',
+                ['image', 'pdf', 'excel'],
                 null,
                 $accountPayment,
                 env('ACCOUNT_PAYMENTS_DISK', 'public')
             );
+            // Persist any stored file paths onto the model before committing.
             $accountPayment->update($validated);
 
             DB::commit();

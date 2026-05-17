@@ -22,10 +22,14 @@ class CreateRequest extends FormRequest
                 'integer',
                 'exists:users,id',
             ],
-            'billing_invoice' => [
+            'soa_ids' => [
                 'required',
-                'string',
-                'max:' . config('vc.max_string_limit'),
+                'array',
+            ],
+            'soa_ids.*' => [
+                'required',
+                'integer',
+                'exists:soas,id',
             ],
             'type' => [
                 'required',
@@ -60,7 +64,12 @@ class CreateRequest extends FormRequest
      */
     protected function prepareForValidation(): void
     {
+        $soaIdsInput = $this->input('soa_ids');
+
         $this->merge([
+            'soa_ids' => is_string($soaIdsInput)
+                ? json_decode($soaIdsInput, true)
+                : $soaIdsInput,
             'user_id' => auth()->id(),
             'status' => TicketStatus::OPEN,
         ]);

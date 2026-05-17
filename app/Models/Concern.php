@@ -3,7 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\{Model, SoftDeletes, Relations\BelongsTo};
+use Illuminate\Database\Eloquent\{
+    Model,
+    SoftDeletes,
+    Relations\BelongsTo,
+    Relations\BelongsToMany
+};
 
 class Concern extends Model
 {
@@ -17,7 +22,6 @@ class Concern extends Model
      */
     protected $fillable = [
         'user_id',
-        'billing_invoice',
         'type',
         'title',
         'description',
@@ -36,21 +40,20 @@ class Concern extends Model
         return $this->belongsTo(User::class, 'user_id');
     }
 
-    /**
-     * Method: soa
-     * This method defines the relationship between the User model and SoaActivity Model.
-     *
-     * @return BelongsTo The relationship between User and SoaActivity Model.
-     */
-    public function soa(): BelongsTo
+    public function soas(): BelongsToMany
     {
-        return $this->belongsTo(Soa::class, 'billing_invoice', 'soa_number');
+        return $this->belongsToMany(
+            Soa::class,
+            'soa_concerns',
+            'concern_id',
+            'soa_id'
+        );
     }
 
     public function getConcerns($params)
     {
         $authUser = auth()->user();
-        $concerns = self::with(['user', 'soa'])
+        $concerns = self::with(['user', 'soas'])
             ->when($authUser->hasRole('broker') || $authUser->hasRole('account_branch_admin'), function ($query) use ($authUser) {
                     $query->where('user_id', $authUser->id);
                 }

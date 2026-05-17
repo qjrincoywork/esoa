@@ -155,6 +155,17 @@ class SoaController extends Controller
     {
         $soas = $this->soa->getSoas($request->validated());
 
+        // Return JSON for AJAX/fetch requests (for SearchableCombobox usage)
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'data' => SoaResource::collection($soas)->resolve(),
+                'current_page' => $soas->currentPage(),
+                'last_page' => $soas->lastPage(),
+                'total' => $soas->total(),
+                'per_page' => $soas->perPage(),
+            ]);
+        }
+
         return Inertia::render('soas/List', [
             'soas' => new CommonResource(SoaResource::collection($soas)),
             'soa_status_options' => SoaStatus::list(),

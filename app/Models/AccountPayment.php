@@ -6,7 +6,8 @@ use Illuminate\Database\Eloquent\{
     Factories\HasFactory,
     Model,
     SoftDeletes,
-    Relations\BelongsTo
+    Relations\BelongsTo,
+    Relations\BelongsToMany
 };
 
 class AccountPayment extends Model
@@ -38,6 +39,16 @@ class AccountPayment extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function soas(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Soa::class,
+            'soa_account_payments',
+            'account_payment_id',
+            'soa_id'
+        );
     }
 
     public function getAccountPayments(array $params)
