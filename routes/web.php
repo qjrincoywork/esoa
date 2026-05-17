@@ -23,13 +23,13 @@ use Laravel\Fortify\Features;
 //     ]);
 // })->name('home');
 Route::get('/test-email/{id}', function ($id) {
-    $agingValue = SoaAging::PAST_DUE;
+    // $agingValue = SoaAging::PAST_DUE;
 
-    return view('emails.esoa.billing-invoice-due-reminder', [
-        'agingLabel' => SoaAging::label($agingValue),
-        'soaCount' => 5,
-        'listUrl' => SoaAging::listUrl($agingValue),
-    ]);
+    // return view('emails.esoa.billing-invoice-due-reminder', [
+    //     'agingLabel' => SoaAging::label($agingValue),
+    //     'soaCount' => 5,
+    //     'listUrl' => SoaAging::listUrl($agingValue),
+    // ]);
     // return view('emails.esoa.billing-invoice-status-changed', [
     //     'soa' => Soa::findOrFail($id),
     // ]);
