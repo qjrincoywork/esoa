@@ -101,7 +101,7 @@ class CreateRequest extends FormRequest
                 'max:20480' // 2MB (size is in KB)
             ],
             'file_xls' => [
-                'nullable',
+                'required_unless:bill_type,' . BillType::ECU,
                 'file',
                 'mimes:xls,xlsx',
                 'max:20480' // 2MB (size is in KB)

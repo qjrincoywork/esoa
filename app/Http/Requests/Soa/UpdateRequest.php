@@ -37,7 +37,6 @@ class UpdateRequest extends FormRequest
             if (!$existingFilePdf) {
                 $filePdfRules = [
                     'required',
-                    // 'required_if:status,' . SoaStatus::ENDORSED,
                 ];
             }
             if ($this->hasFile('file_pdf')) {
@@ -84,11 +83,6 @@ class UpdateRequest extends FormRequest
                     'regex:/^[A-Za-z0-9-]+$/',
                     Rule::unique('soas', 'soa_number')->ignore($this->id)
                 ],
-                // 'billing_ref' => [
-                //     'required_unless:status,' . SoaStatus::ENDORSED,
-                //     'string',
-                //     // 'max:500',
-                // ],
                 'billing_ref' => [
                     'nullable',
                     // 'required_unless:status,' . SoaStatus::ENDORSED,
@@ -139,7 +133,7 @@ class UpdateRequest extends FormRequest
                 ],
                 'file_pdf' => $filePdfRules,
                 'file_xls' => [
-                    'nullable',
+                    'required_unless:bill_type,' . BillType::ECU,
                     'file',
                     'mimes:xls,xlsx',
                     'max:20480' // 2MB (size is in KB)
