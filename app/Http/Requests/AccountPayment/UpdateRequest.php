@@ -48,11 +48,34 @@ class UpdateRequest extends FormRequest
                 'mimes:xls,xlsx',
                 'max:' . config('vc.max_file_size'),
             ],
+            'soa_ids' => [
+                'nullable',
+                'array',
+            ],
+            'soa_ids.*' => [
+                'integer',
+                'exists:soas,id',
+            ],
             'remarks' => [
                 'nullable',
                 'string',
                 'max:' . config('vc.max_text_limit'),
             ],
         ];
+    }
+
+    /**
+     * Prepare the data for validation.
+     */
+    protected function prepareForValidation(): void
+    {
+        $soaIdsInput = $this->input('soa_ids');
+
+        if (is_string($soaIdsInput)) {
+            $decodedSoaIds = json_decode($soaIdsInput, true);
+            if (is_array($decodedSoaIds)) {
+                $this->merge(['soa_ids' => $decodedSoaIds]);
+            }
+        }
     }
 }

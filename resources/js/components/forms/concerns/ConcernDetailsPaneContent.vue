@@ -62,7 +62,7 @@ const openTab = () => {
         <Card>
           <CardContent class="grid gap-3">
             <ul class="my-6 ml-6 list-disc [&>li]:mt-2">
-              <li v-if="localConcern.billing_invoice">Billing Invoice: <span class="font-bold">{{ localConcern.billing_invoice }}</span></li>
+              <li v-if="localConcern.billing_invoice">Billing Invoice/s: <span class="font-bold">{{ localConcern.billing_invoice }}</span></li>
               <li>Title: <span class="font-bold">{{ localConcern.title }}</span></li>
               <li>Type: <span class="font-bold">{{ localConcern.type }}</span></li>
               <li>Description: <p class="leading-7 [&:not(:first-child)]:mt-6 whitespace-pre-line">{{ localConcern.description }}</p></li>

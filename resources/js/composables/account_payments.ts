@@ -21,6 +21,8 @@ export interface AccountPayment {
   remittance_advice?: string
   remittance_advice_preview_token?: string | null
   remarks?: string
+  soas?: Array<{ id: number | string; soa_number?: string; account_code?: string; branch_code?: string }>;
+  soa_ids?: Array<number> | string;
   created_by?: string
   created_at?: string
   deleted_at?: string | null

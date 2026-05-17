@@ -108,7 +108,7 @@ class AccountPaymentController extends Controller
      */
     public function show(AccountPayment $accountPayment)
     {
-        $accountPayment->load(['user']);
+        $accountPayment->load(['user', 'soas']);
         $accountPayment = AccountPaymentResource::make($accountPayment);
 
         return Inertia::render('account_payments/Show', [
@@ -133,7 +133,7 @@ class AccountPaymentController extends Controller
      */
     public function edit($id, Request $request)
     {
-        $accountPayment = $this->accountPayment->findOrFail($id);
+        $accountPayment = $this->accountPayment->with('soas')->findOrFail($id);
         if ($accountPayment) {
             $accountPayment->remittance_advice_preview_token = $accountPayment->remittance_advice && $request->user()
                 ? CommonHelper::createFilePreviewToken(
