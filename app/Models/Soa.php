@@ -11,7 +11,14 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Database\Eloquent\{Model, SoftDeletes, Relations\HasMany, Relations\HasOne, Relations\BelongsTo};
+use Illuminate\Database\Eloquent\{
+    Model,
+    SoftDeletes,
+    Relations\HasMany,
+    Relations\HasOne,
+    Relations\BelongsTo,
+    Relations\BelongsToMany
+};
 
 class Soa extends Model
 {
@@ -63,6 +70,26 @@ class Soa extends Model
     public function soaActivity(): HasMany
     {
         return $this->hasMany(SoaActivity::class, 'soa_id');
+    }
+
+    public function concerns(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            Concern::class,
+            'soa_concerns',
+            'soa_id',
+            'concern_id'
+        );
+    }
+
+    public function accountPayments(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            AccountPayment::class,
+            'soa_account_payments',
+            'soa_id',
+            'account_payment_id'
+        );
     }
 
     /**
@@ -160,6 +187,8 @@ class Soa extends Model
     public function agingCountsPastDue(): array
     {
         $values = SoaAging::getValues();
+        $statusValues = [SoaStatus::ENDORSED, SoaStatus::DISPUTED];
+        $values = array_merge($values, $statusValues); // Include endorsed/disputed buckets in aging counts
         $authUser = auth()->user();
         if (!$authUser) {
             return array_fill_keys($values, 0);
@@ -175,7 +204,7 @@ class Soa extends Model
                             $query->where('branch_code', $authUser->userDetail?->branch_code);
                         }
                     })
-                    ->tap(fn (Builder $q) => $this->applyListSearchFiltersDueIn($q, ['due_in' => $soaAging]))
+                    ->tap(fn (Builder $q) => $this->applyListSearchFiltersDueIn($q, in_array($soaAging, $statusValues) ? ['status' => $soaAging] : ['due_in' => $soaAging]))
                     ->where('status', '!=', SoaStatus::PAID)
                     ->count(),
             ];
@@ -217,23 +246,50 @@ class Soa extends Model
         if (array_key_exists('due_in', $params) && $params['due_in'] !== null && $params['due_in'] !== '') {
             $query->when($params['due_in'] == SoaAging::PAST_DUE, function ($query) use ($params) {
                 $range = SoaAging::pastDueDayBucketsRange($params['due_in']);
-                $query->whereRaw('DATEDIFF(due_date, NOW()) < ?', end($range) ?? 0);
+                $query->whereRaw(
+                    'DATEDIFF(day, GETDATE(), due_date) < ?',
+                    [end($range) ?? 0]
+                );
             })
             ->when($params['due_in'] == SoaAging::DUE_WITHIN_30_DAYS, function ($query) use ($params) {
-                $query->whereRaw('DATEDIFF(due_date, NOW()) BETWEEN ? AND ?', SoaAging::pastDueDayBucketsRange($params['due_in']));
+                $query->whereRaw(
+                    'DATEDIFF(day, GETDATE(), due_date) BETWEEN ? AND ?',
+                    SoaAging::pastDueDayBucketsRange($params['due_in'])
+                );
             })
             ->when($params['due_in'] == SoaAging::DUE_WITHIN_60_DAYS, function ($query) use ($params) {
-                $query->whereRaw('DATEDIFF(due_date, NOW()) BETWEEN ? AND ?', SoaAging::pastDueDayBucketsRange($params['due_in']));
+                $query->whereRaw(
+                    'DATEDIFF(day, GETDATE(), due_date) BETWEEN ? AND ?',
+                    SoaAging::pastDueDayBucketsRange($params['due_in'])
+                );
             })
             ->when($params['due_in'] == SoaAging::DUE_WITHIN_90_DAYS, function ($query) use ($params) {
-                $query->whereRaw('DATEDIFF(due_date, NOW()) BETWEEN ? AND ?', SoaAging::pastDueDayBucketsRange($params['due_in']));
+                $query->whereRaw(
+                    'DATEDIFF(day, GETDATE(), due_date) BETWEEN ? AND ?',
+                    SoaAging::pastDueDayBucketsRange($params['due_in'])
+                );
             })
             ->when($params['due_in'] == SoaAging::DUE_WITHIN_120_DAYS, function ($query) use ($params) {
-                $query->whereRaw('DATEDIFF(due_date, NOW()) BETWEEN ? AND ?', SoaAging::pastDueDayBucketsRange($params['due_in']));
+                $query->whereRaw(
+                    'DATEDIFF(day, GETDATE(), due_date) BETWEEN ? AND ?',
+                    SoaAging::pastDueDayBucketsRange($params['due_in'])
+                );
             })
             ->when($params['due_in'] == SoaAging::DUE_WITHIN_MORE_THAN_120_DAYS, function ($query) use ($params) {
                 $range = SoaAging::pastDueDayBucketsRange($params['due_in']);
-                $query->whereRaw('DATEDIFF(due_date, NOW()) > ?', reset($range) ?? 0);
+                $query->whereRaw(
+                    'DATEDIFF(day, GETDATE(), due_date) > ?',
+                    [reset($range) ?? 0]
+                );
+            });
+        }
+
+        if (array_key_exists('status', $params) && $params['status'] !== null && $params['status'] !== '') {
+            $query->when($params['status'] == SoaStatus::ENDORSED, function ($query) use ($params) {
+                $query->where('status', SoaStatus::ENDORSED);
+            })
+            ->when($params['status'] == SoaStatus::DISPUTED, function ($query) use ($params) {
+                $query->where('status', SoaStatus::DISPUTED);
             });
         }
     }

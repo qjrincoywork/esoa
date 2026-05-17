@@ -144,7 +144,7 @@ return [
         'soa' => [
             'driver' => 'sqlsrv',
             'url' => env('DB_URL'),
-            // 'port' => env('DB_PORT', '1433'),
+            'port' => env('SOA_DB_PORT', '1433'), // 'port' => env('DB_PORT', '1433'),
             'host' => env('SOA_DB_HOST'),
             'database' => env('SOA_DB_DATABASE'),
             'username' => env('SOA_DB_USERNAME'),

@@ -30,11 +30,31 @@ class CreateRequest extends FormRequest
                 'integer',
                 Rule::in(AccountPaymentMode::getValues()),
             ],
-            'remittance_advice' => [
+            'image' => [
                 'required',
                 'file',
-                'mimes:pdf,jpg,jpeg,png,xls,xlsx',
+                'mimes:jpg,jpeg,png',
                 'max:' . config('vc.max_file_size'),
+            ],
+            'pdf' => [
+                'required',
+                'file',
+                'mimes:pdf',
+                'max:' . config('vc.max_file_size'),
+            ],
+            'excel' => [
+                'required',
+                'file',
+                'mimes:xls,xlsx',
+                'max:' . config('vc.max_file_size'),
+            ],
+            'soa_ids' => [
+                'nullable',
+                'array',
+            ],
+            'soa_ids.*' => [
+                'integer',
+                'exists:soas,id',
             ],
             'remarks' => [
                 'nullable',
@@ -49,6 +69,15 @@ class CreateRequest extends FormRequest
      */
     protected function prepareForValidation(): void
     {
+        $soaIdsInput = $this->input('soa_ids');
+
+        if (is_string($soaIdsInput)) {
+            $decodedSoaIds = json_decode($soaIdsInput, true);
+            if (is_array($decodedSoaIds)) {
+                $this->merge(['soa_ids' => $decodedSoaIds]);
+            }
+        }
+
         $this->merge([
             'user_id' => auth()->id(),
         ]);

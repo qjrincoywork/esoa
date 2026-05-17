@@ -9,15 +9,16 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 use App\Models\Soa;
+use App\Enums\SoaStatus;
 
-class BillingInvoiceEndorsed extends Mailable
+class BillingInvoiceStatusChanged extends Mailable
 {
     use Queueable, SerializesModels;
 
     /**
      * soa details
      *
-     * @var $soa
+     * @var Soa
      */
     public $soa;
 
@@ -35,8 +36,9 @@ class BillingInvoiceEndorsed extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: __('labels.billing_invoice_endorsed.subject', [
-                'soanum' => $this->soa->soa_number
+            subject: __('labels.billing_invoice_status_changed.subject', [
+                'soanum' => $this->soa->soa_number,
+                'status_label' => SoaStatus::label((int) $this->soa->status),
             ])
         );
     }
@@ -47,7 +49,7 @@ class BillingInvoiceEndorsed extends Mailable
     public function content(): Content
     {
         return new Content(
-            view: 'emails.esoa.billing-invoice-endorsed',
+            view: 'emails.esoa.billing-invoice-status-changed',
         );
     }
 

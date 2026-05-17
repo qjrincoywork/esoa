@@ -19,11 +19,11 @@ class SoaStatusIsValid implements ValidationRule
         $isAccountBranchAdmin = empty(auth()->user()->userDetail->employee_no);
         if ($isAccountBranchAdmin) {
             $filteredStatusTypes = array_filter(SoaStatus::getValues(), function ($value) {
-                return $value == SoaStatus::ENDORSED;
+                return in_array($value, config('vc.allowed_soa_status_for_account_branch_admin'));
             });
         } else {
             $filteredStatusTypes = array_filter(SoaStatus::getValues(), function ($value) {
-                return $value != SoaStatus::ENDORSED;
+                return !in_array($value, config('vc.allowed_soa_status_for_account_branch_admin'));
             });
         }
         if (!in_array($value, $filteredStatusTypes)) {

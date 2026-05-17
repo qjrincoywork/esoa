@@ -6,6 +6,7 @@ use App\Enums\AccountType;
 use App\Enums\OrderType;
 use App\Enums\Server;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class SqlDatabase
 {
@@ -143,10 +144,16 @@ class SqlDatabase
             ->table('Accounts')
             ->select('ac_name', 'ac_code', 'ac_ma_code')
             ->when(isset($params['type']), function ($query) use ($params) {
-                if (AccountType::HMO === $params['type']) {
-                    $query->where('ac_accttype', $params['type']);
-                } else {
-                    $query->where('ac_accttype', '!=', AccountType::HMO);
+                switch ($params['type']) {
+                    case AccountType::TPA:
+                        $query->where('ac_code', 'like', 'TP%');
+                        break;
+                    case AccountType::HMO:
+                        $query->where('ac_code', 'not like', 'TP%');
+                        break;
+                    // default:
+                        // $query->where('ac_code', 'not like', 'TP%');
+                        // break;
                 }
             })
             ->when(isset($params['name']) && $params['name'] !== '', function ($query) use ($params, $selectedCode) {
@@ -254,6 +261,12 @@ class SqlDatabase
                         ->where('a.bl_type', 'MEDCOLL')
                         ->where('b.blp_tobebilledby', 'BILLING');
                 });
+            })
+            ->when(isset($params['billing_date_from']) && !empty($params['billing_date_from']), function ($query) use ($params) {
+                $query->where('a.bl_dateposted', '>=', Carbon::parse($params['billing_date_from'])->startOfDay());
+            })
+            ->when(isset($params['billing_date_to']) && !empty($params['billing_date_to']), function ($query) use ($params) {
+                $query->where('a.bl_dateposted', '<=', Carbon::parse($params['billing_date_to'])->endOfDay());
             })
             ->when(!empty($selectedRefs), function ($query) use ($selectedRefs) {
                 // Order selected refs first

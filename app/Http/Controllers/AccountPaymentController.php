@@ -69,15 +69,28 @@ class AccountPaymentController extends Controller
         DB::beginTransaction();
         try {
             $validated = $request->validated();
+            $accountPayment = AccountPayment::create($validated);
+            if (!empty($validated['soa_ids'])) {
+                // Attach ids
+                $accountPayment->soas()->sync(
+                    $validated['soa_ids']
+                );
+            }
+
+            // Store uploaded files (may throw). This will populate $validated with
+            // stored paths which we then persist to the created model.
             CommonHelper::storeUploadedFile(
                 $request,
                 $validated,
-                'remittance_advice',
+                ['image', 'pdf', 'excel'],
                 null,
-                null,
+                $accountPayment,
                 env('ACCOUNT_PAYMENTS_DISK', 'public')
             );
-            $accountPayment = AccountPayment::create($validated);
+
+            // Persist any stored file paths onto the model before committing.
+            $accountPayment->update($validated);
+
             DB::commit();
 
             CommonHelper::sendNotificationEmail($accountPayment, $request->user(), AccountPaymentNotification::class);
@@ -95,7 +108,7 @@ class AccountPaymentController extends Controller
      */
     public function show(AccountPayment $accountPayment)
     {
-        $accountPayment->load(['user']);
+        $accountPayment->load(['user', 'soas']);
         $accountPayment = AccountPaymentResource::make($accountPayment);
 
         return Inertia::render('account_payments/Show', [
@@ -120,7 +133,7 @@ class AccountPaymentController extends Controller
      */
     public function edit($id, Request $request)
     {
-        $accountPayment = $this->accountPayment->findOrFail($id);
+        $accountPayment = $this->accountPayment->with('soas')->findOrFail($id);
         if ($accountPayment) {
             $accountPayment->remittance_advice_preview_token = $accountPayment->remittance_advice && $request->user()
                 ? CommonHelper::createFilePreviewToken(
@@ -148,14 +161,23 @@ class AccountPaymentController extends Controller
         DB::beginTransaction();
         try {
             $accountPayment = AccountPayment::findOrFail($validated['id']);
+            if (!empty($validated['soa_ids'])) {
+                // Attach ids
+                $accountPayment->soas()->sync(
+                    $validated['soa_ids']
+                );
+            }
+            // Store uploaded files (may throw). This will populate $validated with
+            // stored paths which we then persist to the created model.
             CommonHelper::storeUploadedFile(
                 $request,
                 $validated,
-                'remittance_advice',
+                ['image', 'pdf', 'excel'],
                 null,
                 $accountPayment,
                 env('ACCOUNT_PAYMENTS_DISK', 'public')
             );
+            // Persist any stored file paths onto the model before committing.
             $accountPayment->update($validated);
 
             DB::commit();

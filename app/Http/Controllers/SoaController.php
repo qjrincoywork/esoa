@@ -18,7 +18,7 @@ use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
 use App\Http\Resources\{AccountBranchMemberResource, BillingRefResource, OldSoaResource, SoaActivityListResource, SoaAgingCountResource, SoaResource };
-use App\Mail\{ BillingInvoiceEndorsed, NewBillingInvoiceUploaded, NewSoaUploaded };
+use App\Mail\{ BillingInvoiceStatusChanged, NewBillingInvoiceUploaded, NewSoaUploaded };
 use App\Models\{Account, Citizenship, CivilStatus, Contact, Department, Gender, MainAccount, Position, Soa, Suffix, UserDetail};
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -154,6 +154,17 @@ class SoaController extends Controller
     public function list(ListRequest $request)
     {
         $soas = $this->soa->getSoas($request->validated());
+
+        // Return JSON for AJAX/fetch requests (for SearchableCombobox usage)
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'data' => SoaResource::collection($soas)->resolve(),
+                'current_page' => $soas->currentPage(),
+                'last_page' => $soas->lastPage(),
+                'total' => $soas->total(),
+                'per_page' => $soas->perPage(),
+            ]);
+        }
 
         return Inertia::render('soas/List', [
             'soas' => new CommonResource(SoaResource::collection($soas)),
@@ -510,6 +521,7 @@ class SoaController extends Controller
     public function update(UpdateRequest $request)
     {
         $validated = $request->validated();
+        DB::beginTransaction();
 
         try {
             $soa = DB::transaction(function () use ($validated, $request) {
@@ -549,21 +561,24 @@ class SoaController extends Controller
                         }
                     }
 
+                    $statusChangedTo = $changes['status'] ?? null;
                     if (
-                        $soa->status == SoaStatus::ENDORSED
+                        in_array($statusChangedTo, config('vc.allowed_soa_status_for_account_branch_admin'))
                         && $request->user()->hasRole('account_branch_admin')
                     ) {
-                        CommonHelper::sendBillingInvoiceEmail($soa, $request->user(), BillingInvoiceEndorsed::class);
+                        CommonHelper::sendBillingInvoiceEmail($soa, $request->user(), BillingInvoiceStatusChanged::class);
                     }
                 }
 
                 return $soa;
             });
+            DB::commit();
 
             if ($request->wantsJson() || $request->ajax()) {
                 return CustomResponse::ok('Soa Updated successfully', Response::HTTP_OK);
             }
         } catch (\Throwable $e) {
+            DB::rollBack();
             if ($request->wantsJson() || $request->ajax()) {
                 return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
             }
