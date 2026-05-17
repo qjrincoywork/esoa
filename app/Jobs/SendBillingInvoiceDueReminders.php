@@ -18,11 +18,6 @@ class SendBillingInvoiceDueReminders implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     /**
-     * Chunk size for batch processing
-     */
-    private const CHUNK_SIZE = 2000;
-
-    /**
      * Statuses to exclude from reminders
      */
     private const EXCLUDE_STATUSES = [SoaStatus::PAID];
@@ -34,7 +29,7 @@ class SendBillingInvoiceDueReminders implements ShouldQueue
     {
         $this->queue = 'default';
         $this->tries = 3;
-        $this->timeout = 3600; // 1 hour timeout
+        $this->timeout = config('vc.overlapping_timeout'); // 1 hour timeout
     }
 
     /**
@@ -161,7 +156,7 @@ class SendBillingInvoiceDueReminders implements ShouldQueue
             $chunkCount++;
 
             // Dispatch when chunk reaches size limit or at the end
-            if ($chunkCount >= self::CHUNK_SIZE) {
+            if ($chunkCount >= config('vc.chunk_size')) {
                 SendBillingInvoiceDueReminderJob::dispatch($chunk);
                 $chunk = [];
                 $chunkCount = 0;

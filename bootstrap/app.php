@@ -51,10 +51,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // Billing invoice due reminders
         $schedule->command('billing:send-due-reminders')
             ->daily()
-            ->at('02:00')
-            ->queue('default')
+            ->at(config('vc.billing_reminder_time', '07:00'))
             ->onOneServer()
-            ->withoutOverlapping(timeout: 3600)
+            ->withoutOverlapping(config('vc.overlapping_timeout'))
             ->onFailure(function () {
                 \Illuminate\Support\Facades\Log::error('Billing due reminders scheduler failed');
             })

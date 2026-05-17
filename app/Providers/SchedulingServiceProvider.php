@@ -51,10 +51,9 @@ class SchedulingServiceProvider extends ServiceProvider
         // Sends reminder emails to users with SOAs that are past due or coming due
         $schedule->command('billing:send-due-reminders')
             ->daily()
-            ->at('02:00')                          // Run at 2:00 AM daily
-            ->queue('default')                     // Process via queue
-            ->onOneServer()                        // Only run on one server in distributed setup
-            ->withoutOverlapping(timeout: 3600)   // Prevent overlapping runs (1 hour timeout)
+            ->at(config('vc.billing_reminder_time', '07:00')) // Run at 2:00 AM daily
+            ->onOneServer() // Only run on one server in distributed setup
+            ->withoutOverlapping(config('vc.overlapping_timeout'))   // Prevent overlapping runs (1 hour timeout)
             ->onFailure(function () {
                 Log::error('Billing due reminders schedule execution failed');
             })

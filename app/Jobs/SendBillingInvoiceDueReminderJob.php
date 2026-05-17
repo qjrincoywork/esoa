@@ -33,8 +33,8 @@ class SendBillingInvoiceDueReminderJob implements ShouldQueue
     {
         $this->userGroups = $userGroups;
         $this->queue = 'default';
-        $this->tries = 3;
-        $this->timeout = 1800; // 30 minutes
+        $this->tries = 4;
+        $this->timeout = config('vc.overlapping_timeout'); // 1 hour
         $this->backoff = [60, 300, 900]; // Retry with exponential backoff
     }
 
