@@ -18,6 +18,7 @@ class AccountPaymentResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'billing_invoice' => $this->soas->isNotEmpty() ? implode(', ', $this->soas->pluck('soa_number')->toArray()) : null,
             'deposit_date' => CommonHelper::formatDate($this->deposit_date),
             'mode_of_payment' => AccountPaymentMode::label((int) $this->mode_of_payment),
             'mode_of_payment_value' => $this->mode_of_payment,

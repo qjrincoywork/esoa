@@ -8,6 +8,11 @@
   </p>
 
   <div style="background-color: #f5f7fb; border-left: 4px solid #4f46e5; padding: 16px; margin: 20px 0; border-radius: 4px;">
+    @if ($accountPayment->soas->isNotEmpty())
+      <p style="margin: 0 0 8px 0;"><strong>Billing Invoice/s:</strong> {{ implode(', ', $accountPayment->soas->pluck('soa_number')->toArray()) }}</p>
+    @else
+      <p style="margin: 0 0 8px 0;"><strong>Billing Invoice/s:</strong> Please see the attached files for payment advice reference</p>
+    @endif
     <p style="margin: 0 0 8px 0;"><strong>Deposit Date:</strong> {{ \App\Helpers\CommonHelper::formatDate($accountPayment->deposit_date) ?? 'N/A' }}</p>
     <p style="margin: 0 0 8px 0;"><strong>Payment Mode:</strong> {{ \App\Enums\AccountPaymentMode::label((int) $accountPayment->mode_of_payment) ?? 'N/A' }}</p>
     <p style="margin: 0 0 8px 0; white-space: pre-line;"><strong>Remarks:</strong> {{ $accountPayment->remarks ?? 'None' }}</p>

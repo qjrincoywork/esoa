@@ -1,10 +1,18 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, watch } from 'vue';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
+import { SearchableCombobox } from '@/components/ui/searchable-combobox';
+import { debounce } from 'lodash-es';
+
+type SoaRelation = {
+  id: string | number;
+  soa_number?: string;
+  account_code?: string;
+  branch_code?: string;
+};
 
 type AccountPayment = {
   id?: number
@@ -21,6 +29,8 @@ type AccountPayment = {
   remarks?: string
   created_by?: string
   created_at?: string
+  soa_ids?: Array<number> | string
+  soas?: SoaRelation[]
 }
 
 const props = defineProps({
@@ -58,22 +68,119 @@ const selectedModeOfPayment = ref<string | number>(
 
 const modeOfPaymentOptions = computed(() => props.mode_of_payment_options || []);
 const accountPaymentForm = ref<HTMLFormElement | null>(null);
+const soaOptions = ref<BillingInvoice[]>([]);
+const billingInvoicePage = ref(1);
+const billingInvoiceLastPage = ref(1);
+const billingInvoicesLoadingMore = ref(false);
+const searchedBillingInvoice = ref('');
+const selectedSoaIds = ref<(string | number)[]>(parseSoaIds(accountPayment.value?.soa_ids ?? accountPayment.value?.soas));
+const hasMoreBillingInvoices = computed(() => billingInvoicePage.value < billingInvoiceLastPage.value);
+
+function parseSoaIds(input: Array<number> | string | undefined | SoaRelation[]): (string | number)[] {
+  if (!input) return [];
+  if (Array.isArray(input)) {
+    if (input.length > 0 && typeof input[0] === 'object') {
+      return (input as SoaRelation[]).map((item) => item.id);
+    }
+    return input as Array<number>;
+  }
+  return input
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean)
+    .map((id) => {
+      const num = parseInt(id, 10);
+      return isNaN(num) ? id : num;
+    });
+}
 
 function getFormData(): FormData | null {
   if (!accountPaymentForm.value) return null;
   return new FormData(accountPaymentForm.value);
 }
 
+const searchBillingInvoicesByParams = async (name = '', page = 1, append = false) => {
+  if (append) {
+    billingInvoicesLoadingMore.value = true;
+  }
+
+  try {
+    const params: Record<string, any> = {
+      soanum: name,
+      page,
+    };
+
+    const response = await fetch(`/soas/list?${new URLSearchParams(params).toString()}`, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch SOAs: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    const data = result?.data ?? [];
+
+    const transformed = data.map((soa: any) => ({
+      value: soa.id,
+      name: `${soa.soa_number} - ${soa.account_code}${soa.branch_code ? ` (${soa.branch_code})` : ''}`,
+    }));
+
+    if (append) {
+      soaOptions.value = [...soaOptions.value, ...transformed];
+    } else {
+      soaOptions.value = transformed;
+    }
+
+    billingInvoicePage.value = result?.current_page ?? page;
+    billingInvoiceLastPage.value = result?.last_page ?? page;
+  } catch (error) {
+    console.error('Error fetching SOAs:', error);
+    if (!append) {
+      soaOptions.value = [];
+    }
+  } finally {
+    billingInvoicesLoadingMore.value = false;
+  }
+};
+
+const debouncedGetBillingInvoices: (...args: any[]) => void = debounce((evOrName?: any) => {
+  const name = typeof evOrName === 'string' ? evOrName : (evOrName?.target?.value ?? '');
+  void searchBillingInvoicesByParams(name, 1, false);
+}, 2000);
+
 onMounted(() => {
+  void searchBillingInvoicesByParams('', 1, false);
+
   if (typeof props.onReady === 'function') {
     props.onReady({ getFormData, formRef: accountPaymentForm.value });
   }
 });
 
+watch(
+  () => accountPayment.value,
+  (accountPaymentValue: AccountPayment | undefined) => {
+    selectedSoaIds.value = parseSoaIds(accountPaymentValue?.soa_ids ?? accountPaymentValue?.soas);
+  },
+  { immediate: true }
+);
+
+watch(searchedBillingInvoice, (newVal: string) => {
+  debouncedGetBillingInvoices(newVal);
+});
+
+function loadMoreData(input: string) {
+  if (input !== 'soas' || billingInvoicesLoadingMore.value || !hasMoreBillingInvoices.value) return;
+  void searchBillingInvoicesByParams(searchedBillingInvoice.value, billingInvoicePage.value + 1, true);
+}
+
 const openFilePreview = (type: string) => {
-  if (accountPayment.value?.[`${type}_preview_token`]) {
+  const tokenKey = `${type}_preview_token` as keyof AccountPayment;
+  const token = accountPayment.value?.[tokenKey];
+  if (typeof token === 'string' && token.length > 0) {
     window.open(
-      `/account_payments/preview_file?token=${encodeURIComponent(accountPayment.value[`${type}_preview_token`])}`,
+      `/account_payments/preview_file?token=${encodeURIComponent(token)}`,
       '_blank',
       'noopener,noreferrer'
     );
@@ -87,6 +194,9 @@ const openFilePreview = (type: string) => {
       <!-- Use native hidden inputs so FormData always reflects latest reactive values -->
       <input v-if="accountPayment?.id" type="hidden" name="id" :value="accountPayment?.id" />
       <input type="hidden" name="mode_of_payment" :value="selectedModeOfPayment" />
+      <template v-for="id in selectedSoaIds" :key="id">
+        <input type="hidden" name="soa_ids[]" :value="id" />
+      </template>
     </div>
 
     <div class="grid gap-2">
@@ -121,6 +231,24 @@ const openFilePreview = (type: string) => {
           </SelectItem>
         </SelectContent>
       </Select>
+    </div>
+
+    <div class="grid gap-2 md:col-span-2">
+      <SearchableCombobox
+        id="soa_ids"
+        label="Billing Invoices"
+        v-model="selectedSoaIds"
+        v-model:search="searchedBillingInvoice"
+        :items="soaOptions"
+        placeholder="Select Billing Invoices..."
+        search-placeholder="Search Billing Invoices..."
+        empty-text="No Billing Invoices found."
+        :has-more="hasMoreBillingInvoices"
+        :loading-more="billingInvoicesLoadingMore"
+        :multiple="true"
+        :disabled="isViewOnly"
+        @load-more="loadMoreData('soas')"
+      />
     </div>
 
     <div class="grid gap-2 md:col-span-2">

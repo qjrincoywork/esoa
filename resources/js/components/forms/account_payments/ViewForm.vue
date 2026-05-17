@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 type AccountPayment = {
   id?: number
   user_id?: number
+  billing_invoice?: string
   deposit_date?: string
   mode_of_payment?: number
   mode_of_payment_value?: number
@@ -61,6 +62,7 @@ const openFilePreview = (type: string) => {
   <Card>
     <CardContent class="grid gap-3">
       <ul class="my-6 ml-6 list-disc [&>li]:mt-2">
+        <li v-if="accountPayment.billing_invoice">Billing Invoice/s: <span class="font-bold">{{ accountPayment.billing_invoice }}</span></li>
         <li>Deposit Date: <span class="font-bold">{{ accountPayment.deposit_date }}</span></li>
         <li>Mode of Payment: <span class="font-bold">{{ accountPayment.mode_of_payment }}</span></li>
         <li>Remarks: <p class="font-bold whitespace-pre-line">{{ accountPayment.remarks }}</p></li>
