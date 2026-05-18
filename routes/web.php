@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\SoaAging;
 use App\Http\Controllers\{
     AccountPaymentController,
     AdminController,
@@ -11,7 +12,7 @@ use App\Http\Controllers\{
     SoaController,
     UserController,
 };
-// use App\Models\{ AccountPayment, Concern, Soa };
+use App\Models\{ AccountPayment, Concern, Soa };
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
@@ -22,6 +23,13 @@ use Laravel\Fortify\Features;
 //     ]);
 // })->name('home');
 Route::get('/test-email/{id}', function ($id) {
+    // $agingValue = SoaAging::PAST_DUE;
+
+    // return view('emails.esoa.billing-invoice-due-reminder', [
+    //     'agingLabel' => SoaAging::label($agingValue),
+    //     'soaCount' => 5,
+    //     'listUrl' => SoaAging::listUrl($agingValue),
+    // ]);
     // return view('emails.esoa.billing-invoice-status-changed', [
     //     'soa' => Soa::findOrFail($id),
     // ]);

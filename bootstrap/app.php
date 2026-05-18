@@ -47,6 +47,20 @@ return Application::configure(basePath: dirname(__DIR__))
             AddLinkHeadersForPreloadedAssets::class,
         ]);
     })
+    ->withSchedule(function ($schedule) {
+        // Billing invoice due reminders
+        $schedule->command('billing:send-due-reminders')
+            ->daily()
+            ->at(config('vc.billing_reminder_time', '07:00'))
+            ->onOneServer()
+            ->withoutOverlapping(config('vc.overlapping_timeout'))
+            ->onFailure(function () {
+                \Illuminate\Support\Facades\Log::error('Billing due reminders scheduler failed');
+            })
+            ->onSuccess(function () {
+                \Illuminate\Support\Facades\Log::info('Billing due reminders executed successfully');
+            });
+    })
     ->withExceptions(function (Exceptions $exceptions) {
         //
     })->create();

@@ -36,14 +36,11 @@ class SoaAgingCountResource extends JsonResource
 
     private function redirectToSoaList($soaAgingValue)
     {
-        $query = [];
         if (in_array($soaAgingValue, [SoaStatus::ENDORSED, SoaStatus::DISPUTED])) {
-            $query['status'] = $soaAgingValue;
-        } else {
-            $query['due_in'] = $soaAgingValue;
+            return route('soas.list', ['status' => $soaAgingValue]);
         }
 
-        return route('soas.list', $query);
+        return SoaAging::listUrl($soaAgingValue);
     }
 
     private function applyLabel($soaAgingValue): string
