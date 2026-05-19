@@ -226,52 +226,52 @@ class SqlDatabase
         $result = $this->db
             ->table('Billing as a')
             ->select([
-                'a.bl_refid',
+                'a.bl_refid as ref_id',
                 'a.bl_type',
                 'a.bl_claimnum',
                 'a.bl_policynum',
-                'a.bl_balance',
+                'a.bl_balance as amount',
                 'a.bl_name',
-                'a.bl_dateposted',
+                'a.bl_dateposted as date_posted',
                 'a.bl_workstatus',
                 'c.blp_tobebilledby',
                 'e.ac_name'
             ])
-            ->leftJoin('Billing_Process as c', 'a.bl_refid', '=', 'c.blp_refid')
+            ->leftJoin('Billing_Process as c', 'ref_id', '=', 'c.blp_refid')
             ->leftJoin('Accounts as e', function ($join) {
                 $join->on(DB::raw('SUBSTRING(a.bl_policynum,1,11)'), '=', 'e.ac_code');
             })
             ->where('e.ac_code', $params['account_code'])
             ->when(isset($params['name']) && !empty($params['name']), function ($query) use ($params, $selectedRefs) {
                 $query->where(function ($nameQuery) use ($params, $selectedRefs) {
-                    $nameQuery->where('a.bl_refid', 'like', '%' . $params['name'] . '%');
+                    $nameQuery->where('ref_id', 'like', '%' . $params['name'] . '%');
                     // Include selected refs in results
                     if (!empty($selectedRefs)) {
-                        $nameQuery->orWhereIn('a.bl_refid', $selectedRefs);
+                        $nameQuery->orWhereIn('ref_id', $selectedRefs);
                     }
                 });
             })
             ->when(!empty($params['account_type']) && ($params['account_type'] != AccountType::HMO), function ($query) {
-                $query->whereNotIn('a.bl_refid', function ($query) {
-                    $query->select('a.bl_refid')
+                $query->whereNotIn('ref_id', function ($query) {
+                    $query->select('ref_id')
                         ->from('Billing as a')
-                        ->leftJoin('Billing_Process as b', 'a.bl_refid', '=', 'b.blp_refid')
+                        ->leftJoin('Billing_Process as b', 'ref_id', '=', 'b.blp_refid')
                         ->whereIn('a.bl_workstatus', ['FB', 'PX'])
                         ->where('a.bl_type', 'MEDCOLL')
                         ->where('b.blp_tobebilledby', 'BILLING');
                 });
             })
             ->when(isset($params['billing_date_from']) && !empty($params['billing_date_from']), function ($query) use ($params) {
-                $query->where('a.bl_dateposted', '>=', Carbon::parse($params['billing_date_from'])->startOfDay());
+                $query->where('date_posted', '>=', Carbon::parse($params['billing_date_from'])->startOfDay());
             })
             ->when(isset($params['billing_date_to']) && !empty($params['billing_date_to']), function ($query) use ($params) {
-                $query->where('a.bl_dateposted', '<=', Carbon::parse($params['billing_date_to'])->endOfDay());
+                $query->where('date_posted', '<=', Carbon::parse($params['billing_date_to'])->endOfDay());
             })
             ->when(!empty($selectedRefs), function ($query) use ($selectedRefs) {
                 // Order selected refs first
-                $query->orderByRaw("CASE WHEN a.bl_refid IN ('" . implode("','", $selectedRefs) . "') THEN 0 ELSE 1 END");
+                $query->orderByRaw("CASE WHEN ref_id IN ('" . implode("','", $selectedRefs) . "') THEN 0 ELSE 1 END");
             })
-            ->orderBy('a.bl_dateposted', 'desc')
+            ->orderBy('date_posted', 'desc')
             ->paginate($perPage);
 
         return $result;
@@ -396,6 +396,15 @@ class SqlDatabase
     {
         $authUser = auth()->user();
         $perPage = $params['per_page'] ?? config('vc.default_pages');
+        $selectedRefs = $params['selected_refs'] ?? null;
+
+        // Handle both single string and array of selected refs
+        if (is_string($selectedRefs)) {
+            $selectedRefs = array_filter(explode(',', $selectedRefs));
+        } elseif (!is_array($selectedRefs)) {
+            $selectedRefs = $selectedRefs ? [$selectedRefs] : [];
+        }
+        $selectedRefs = array_filter($selectedRefs);
         $query = $this->db
             ->table('cholders as c')
             ->leftJoin('Accounts as a', 'c.ch_accountid', '=', 'a.ac_code')
@@ -407,16 +416,26 @@ class SqlDatabase
                 'c.ch_accountid',
                 'c.ch_policynum',
                 'c.ch_name',
-                'ac.act_batchnum',
+                'ac.act_batchnum as ref_id',
                 'cl.cl_availmentdate',
-                'ac.act_dateposted',
+                'ac.act_dateposted as date_posted',
                 'cl.cl_claimnum',
+                'cl.cl_amount as amount',
                 'cl.cl_processdate'
             );
 
         $query = $this->applyCholderAccountFilters($query, $params, $authUser);
 
         $result = $query
+            ->when(isset($params['name']) && !empty($params['name']), function ($query) use ($params, $selectedRefs) {
+                $query->where(function ($nameQuery) use ($params, $selectedRefs) {
+                    $nameQuery->where('ac.act_batchnum', 'like', '%' . $params['name'] . '%');
+                    // Include selected refs in results
+                    if (!empty($selectedRefs)) {
+                        $nameQuery->orWhereIn('ac.act_batchnum', $selectedRefs);
+                    }
+                });
+            })
             ->when(!empty($params['billing_date_from']), function ($query) use ($params) {
                 $query->where('cl.cl_processdate', '>=', Carbon::parse($params['billing_date_from'])->startOfDay());
             })
@@ -426,21 +445,22 @@ class SqlDatabase
             ->when(!empty($params['claimnum']), function ($query) use ($params) {
                 $query->where('cl.cl_claimnum', $params['claimnum']);
             })
+            ->when(!empty($selectedRefs), function ($query) use ($selectedRefs) {
+                // Order selected refs first
+                $query->orderByRaw("CASE WHEN ac.act_batchnum IN ('" . implode("','", $selectedRefs) . "') THEN 0 ELSE 1 END");
+            })
             ->when(!empty($params['policynum']), function ($query) use ($params) {
                 $query->where('c.ch_policynum', $params['policynum']);
-            })
-            ->when(!empty($params['name']), function ($query) use ($params) {
-                $query->where('c.ch_name', 'like', '%' . $params['name'] . '%');
             })
             ->when(empty($params['order_by']), function ($query) {
                 $query->orderBy('c.ch_name', 'asc');
             })
             ->when(!empty($params['order_by']), function ($query) use ($params) {
                 $query->orderBy($params['order_by'], $params['order_dir'] ?? 'asc');
-            })
-            ->paginate($perPage);
+            });
+        dd($result->toSql());
 
-        return $result;
+        return $result->paginate($perPage);
     }
 
     /**

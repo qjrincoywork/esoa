@@ -332,7 +332,8 @@ class SoaController extends Controller
 
     public function getBillingRefs(Request $request)
     {
-        $billingRefs = (new $this->sqlDatabase(Server::HMS))->getBillingRefsByParams($request->all());
+        $billingRefs = (new $this->sqlDatabase(Server::HMS))->getClaimDetailsByParams($request->all());
+        // $billingRefs = (new $this->sqlDatabase(Server::HMS))->getBillingRefsByParams($request->all());
 
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
