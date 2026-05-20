@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\AccountType;
+use App\Enums\BillRefFrom;
 use App\Enums\BillType;
 use App\Enums\Server;
 use App\Enums\SoaAging;
@@ -13,7 +14,7 @@ use App\Helpers\CommonHelper;
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Soa\{AccountBranchMembersRequest, AdjustAmountRequest, CreateRequest, FileListRequest, FileProxyRequest, ListRequest, RecordViewedRequest, RecomputeTaxRequest, UpdateRequest, UpdateTagRequest };
+use App\Http\Requests\Soa\{AccountBranchMembersRequest, AdjustAmountRequest, BillRefsRequest, CreateRequest, FileListRequest, FileProxyRequest, ListRequest, RecordViewedRequest, RecomputeTaxRequest, UpdateRequest, UpdateTagRequest };
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
@@ -280,6 +281,7 @@ class SoaController extends Controller
                 'account_types' => AccountType::list(),
                 'bill_types' => BillType::list(),
                 'status_types' => SoaStatus::list(),
+                'bill_ref_from_types' => BillRefFrom::list(),
             ]);
         }
     }
@@ -330,10 +332,9 @@ class SoaController extends Controller
         }
     }
 
-    public function getBillingRefs(Request $request)
+    public function getBillingRefs(BillRefsRequest $request)
     {
-        $billingRefs = (new $this->sqlDatabase(Server::HMS))->getClaimDetailsByParams($request->all());
-        // $billingRefs = (new $this->sqlDatabase(Server::HMS))->getBillingRefsByParams($request->all());
+        $billingRefs = (new $this->sqlDatabase(Server::HMS))->getBillingRefsByParams($request->validated());
 
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
@@ -512,6 +513,7 @@ class SoaController extends Controller
                 'account_types' => AccountType::list(),
                 'bill_types' => BillType::list(),
                 'status_types' => SoaStatus::list(),
+                'bill_ref_from_types' => BillRefFrom::list(),
             ]);
         }
     }

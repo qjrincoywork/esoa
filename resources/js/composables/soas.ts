@@ -8,6 +8,7 @@ import ViewForm from '@/components/forms/soas/ViewForm.vue';
 import UntagForm from '@/components/forms/soas/UntagForm.vue';
 import ManageFileForm from '@/components/forms/soas/ManageFileForm.vue';
 import { ref, shallowRef, toRef, type Component, type Ref } from 'vue';
+import { Soa } from '@/types';
 let formApi: { getFormData: () => FormData | null } | null = null;
 
 /** Client-side overlays for list rows until the next Inertia `soas` refresh (module singleton). */
@@ -32,29 +33,6 @@ import { useModulePermissions } from '@/composables/useModulePermissions';
 import { router, usePage } from '@inertiajs/vue3';
 import SoaFileBrowser from '@/components/forms/soas/SoaFileBrowser.vue';
 import SoaDetailsPaneContent from '@/components/forms/soas/SoaDetailsPaneContent.vue';
-
-export interface Soa {
-  id?: number
-  user_id?: number
-  soa_number?: string
-  account_code?: string
-  branch_code?: string
-  billing_ref?: string
-  bill_type?: number
-  status?: number
-  bill_date?: string
-  due_date?: string
-  period_date_from?: string
-  period_date_to?: string
-  amount?: string | number
-  /** Numeric amount from API (e.g. SoaResource); preferred for math when present */
-  amount_raw?: number
-  amount_paid?: number
-  payment_adjustment?: number
-  balance?: number
-  file_pdf?: string
-  file_xls?: string
-}
 
 export function useSoas() {
   const page = usePage();
@@ -229,6 +207,7 @@ export function useSoas() {
           account_types: payload.account_types,
           bill_types: payload.bill_types ?? [],
           status_types: payload.status_types ?? [],
+          bill_ref_from_types: payload.bill_ref_from_types ?? [],
           user: authUser ?? undefined,
           onReady: (api: { getFormData: () => FormData | null }) => {
             formApi = api
@@ -281,6 +260,7 @@ export function useSoas() {
         account_types: Array<{ value: number | string; name: string }>;
         bill_types: Array<{ value: number | string; name: string }>;
         status_types: Array<{ value: number | string; name: string }>;
+        bill_ref_from_types: Array<{ value: number | string; name: string }>;
       }>(
         `/${slug.value}/create`
       );
@@ -301,6 +281,7 @@ export function useSoas() {
           account_types: payload.account_types,
           bill_types: payload.bill_types ?? [],
           status_types: payload.status_types ?? [],
+          bill_ref_from_types: payload.bill_ref_from_types ?? [],
           user: authUser ?? undefined,
           onReady: (api: { getFormData: () => FormData | null }) => {
             formApi = api
@@ -418,6 +399,7 @@ export function useSoas() {
   };
 
   const getAccountsByParams = async (params: Record<string, string | number | undefined>) => {
+    showLoader();
     try {
       const response = await get(`/${slug.value}/get_accounts`, params);
 
@@ -432,10 +414,13 @@ export function useSoas() {
       return payload.accounts;
     } catch (error) {
       dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
+    } finally {
+      hideLoader();
     }
   };
 
   const getBillingRefsByParams = async (params: Record<string, string | number | undefined>) => {
+    showLoader();
     try {
       const response = await get(`/${slug.value}/get_billing_refs`, params);
 
@@ -450,10 +435,13 @@ export function useSoas() {
       return payload.billing_refs;
     } catch (error) {
       dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
+    } finally {
+      hideLoader();
     }
   };
 
   const getBranchesByParams = async (params: Record<string, string | number | undefined>) => {
+    showLoader();
     try {
       const response = await get(`/${slug.value}/get_branches`, params);
 
@@ -468,6 +456,8 @@ export function useSoas() {
       return payload.branches;
     } catch (error) {
       dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
+    } finally {
+      hideLoader();
     }
   };
 

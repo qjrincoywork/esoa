@@ -7,7 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { SearchableCombobox } from '@/components/ui/searchable-combobox';
 import { useSoas } from '@/composables/soas';
 import { debounce } from '@/composables/utilities/helper';
-import { Auth, User, UserDetail } from '@/types';
+import { Auth, User, UserDetail, Soa } from '@/types';
 import { Select, SelectTrigger, SelectContent, SelectGroup, SelectLabel, SelectItem, SelectValue } from '@/components/ui/select';
 
 type UserBasic = {
@@ -15,27 +15,12 @@ type UserBasic = {
   username?: string | number
   email?: string | number
 }
-type Soa = {
-  id?: number
-  user_id?: number
-  soa_number?: string
-  account_type?: string | number
-  account_code?: string
-  branch_code?: string
-  billing_ref?: string
-  bill_type?: number
-  status?: number
-  due_date?: string
-  period_date_from?: string
-  period_date_to?: string
-  amount?: number
-  file_pdf?: string
-  file_xls?: string
-}
+
 type Account = { value: string | number; name: string }
 type AccountType = { value: string | number; name: string }
 type Branch = { value: string | number; name: string }
 type BillingRef = { value: string | number; name: string; balance_raw?: number | string }
+type BillRefFrom = { value: string | number; name: string }
 
 const { getAccountsByParams, getBranchesByParams, getBillingRefsByParams } = useSoas();
 const props = defineProps({
@@ -53,6 +38,10 @@ const props = defineProps({
     default: () => [],
   },
   status_types: {
+    type: Array as unknown as () => { value: string | number; name: string }[],
+    default: () => [],
+  },
+  bill_ref_from_types: {
     type: Array as unknown as () => { value: string | number; name: string }[],
     default: () => [],
   },
@@ -98,6 +87,7 @@ const searchedAccountName = ref('')
 const soaNumber = ref(soa.value?.soa_number ?? '')
 const selectedBillType = ref<string | number>(soa.value?.bill_type ?? '')
 const selectedStatus = ref<string | number>(soa.value?.status ?? '1')
+const selectedBillRefFrom = ref<string | number>(soa.value?.bill_ref_from ?? '')
 const dueDate = ref(soa.value?.due_date ?? '')
 const periodDateFrom = ref(soa.value?.period_date_from ?? '')
 const periodDateTo = ref(soa.value?.period_date_to ?? '')
@@ -105,7 +95,7 @@ const amount = ref(soa.value?.amount != null ? String(soa.value.amount) : '')
 const billingDateFrom = ref('')
 const billingDateTo = ref('')
 const hasBillingRefValue = ref(soa.value?.billing_ref != null && String(soa.value.billing_ref).trim().length > 0)
-const hasBillingRef = ref(soa.id == null ? hasBillingRefValue.value : true)
+const hasBillingRef = ref(soa.value?.id ? true : hasBillingRefValue.value)
 const searchedBranchName = ref('')
 const searchedBillingRef = ref('')
 const isSyncingFromSoa = ref(false)
@@ -234,13 +224,18 @@ const searchBillingRefsByParams = async (name = '', page = 1, append = false) =>
   const params = {
     account_type: selectedAccountType.value,
     account_code: selectedAccount.value?.value,
-    name,
+    bill_ref_from: selectedBillRefFrom.value,
     page,
-    billing_date_from: billingDateFrom.value ?? '',
-    billing_date_to: billingDateTo.value ?? '',
   };
+  if (billingDateFrom.value != '' && billingDateTo.value != '') {
+    params.billing_date_from = billingDateFrom.value ?? '';
+    params.billing_date_to = billingDateTo.value ?? '';
+  }
   if (selectedRefsParam != null) {
     params.selected_refs = selectedRefsParam;
+  }
+  if (name != null && name.trim() !== '') {
+    params.name = name.trim();
   }
   const result = await getBillingRefsByParams(params);
 
@@ -300,14 +295,17 @@ watch([selectedAccountType, searchedAccountName], async () => {
     }
   }
 }, { immediate: true })
-watch([selectedAccount, searchedBranchName, searchedBillingRef], async () => {
+watch([selectedAccount, searchedBranchName], async () => {
   if (selectedAccount.value?.value != null) {
     if (searchedBranchName.value.length > 0) {
       debouncedGetBranches(searchedBranchName.value);
     } else {
       await searchBranchesByParams();
     }
-
+  }
+}, { immediate: true })
+watch([searchedBillingRef, selectedBillRefFrom], async () => {
+  if (selectedBillRefFrom.value != null) {
     if (searchedBillingRef.value.length > 0) {
       debouncedGetBillingRefs(searchedBillingRef.value);
     } else {
@@ -355,6 +353,7 @@ watch(soa, (val: Soa | undefined) => {
   if (val.account_code != null) accountCode.value = String(val.account_code);
   if (val.branch_code != null) branchCode.value = String(val.branch_code);
   if (val.billing_ref != null) billingRef.value = String(val.billing_ref).split(',').filter(Boolean);
+  if (val.bill_ref_from != null) selectedBillRefFrom.value = val.bill_ref_from;
   isSyncingFromSoa.value = false
 }, { immediate: true })
 
@@ -371,6 +370,7 @@ watch(soa, (val: Soa | undefined) => {
       <input type="hidden" name="billing_ref" :value="billingRef.length ? JSON.stringify(billingRef) : ''" />
       <input type="hidden" name="bill_type" :value="String(selectedBillType ?? '')" />
       <input type="hidden" name="status" :value="String(selectedStatus ?? '')" />
+      <input type="hidden" name="bill_ref_from" :value="String(selectedBillRefFrom ?? '')" />
     </div>
     <div class="flex items-center gap-3">
       <Checkbox id="has_billing_ref" v-model="hasBillingRef" class="cursor-pointer"/>
@@ -459,15 +459,40 @@ watch(soa, (val: Soa | undefined) => {
     </div>
 
     <div v-if="hasBillingRef" class="md:col-span-1">
+      <Label for="bill_ref_from">Billing Reference From<span class="text-red-400">*</span></Label>
+      <Select
+        id="bill_ref_from"
+        class="mt-1 block w-full"
+        v-model="selectedBillRefFrom"
+      >
+        <SelectTrigger class="w-full">
+          <SelectValue placeholder="Select a billing reference from" />
+        </SelectTrigger>
+        <SelectContent class="w-full">
+          <SelectGroup>
+            <SelectLabel>Billing Reference From</SelectLabel>
+            <SelectItem
+              v-for="bill_ref_from_type in bill_ref_from_types"
+              :key="bill_ref_from_type.value"
+              :value="String(bill_ref_from_type.value)"
+            >
+            {{ bill_ref_from_type.name }}
+            </SelectItem>
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+    </div>
+
+    <div v-if="hasBillingRef" class="md:col-span-1">
       <SearchableCombobox
         id="billing_ref"
-        label="Billing Ref"
+        label="Billing Reference"
         v-model="billingRef"
         v-model:search="searchedBillingRef"
         :items="billing_refs"
-        placeholder="Select Billing Ref..."
-        search-placeholder="Search Billing Ref..."
-        empty-text="No Billing Ref found."
+        placeholder="Select Billing Reference..."
+        search-placeholder="Search Billing Reference..."
+        empty-text="No Billing Reference found."
         :disabled="!selectedAccount"
         :has-more="hasMoreBillingRefs"
         :loading-more="billingRefsLoadingMore"

@@ -21,42 +21,8 @@ import {
 import SoaActivitiesList from '@/components/forms/soas/SoaActivitiesList.vue';
 import AmountManagementForm from '@/components/forms/soas/AmountManagementForm.vue';
 import AccountBranchMembers from '@/components/forms/soas/AccountBranchMembers.vue';
+import { Soa } from '@/types';
 
-type SoaActivity = {
-  id?: number
-  user_id?: number
-  name?: string
-  event?: string
-  from?: unknown
-  to?: unknown
-  created_at?: string
-}
-
-type Soa = {
-  id?: number
-  user_id?: number
-  soa_number?: string
-  account_name?: string
-  account_code?: string
-  branch_name?: string
-  branch_code?: string
-  billing_ref?: string
-  billing_ref_names?: string
-  bill_type?: number
-  status?: number
-  status_color?: string
-  created_at?: string
-  due_date?: string
-  due_in?: string
-  period_date_from?: string
-  period_date_to?: string
-  period_coverage?: string
-  amount?: string | number
-  amount_raw?: number
-  file_pdf?: string
-  file_xls?: string
-  soa_activities?: SoaActivity[]
-}
 const props = defineProps({
   soa: {
     type: Object as unknown as () => Soa,
