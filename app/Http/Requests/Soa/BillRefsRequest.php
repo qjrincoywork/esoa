@@ -26,7 +26,7 @@ class BillRefsRequest extends FormRequest
                 'string',
                 'max:' . config('vc.max_string_limit'),
             ],
-            'bill_ref_from' => [
+            'billing_ref_from' => [
                 'required',
                 'integer',
                 Rule::in(BillRefFrom::getValues()), // Assuming these are the only valid values based on BillRefFrom enum
@@ -47,8 +47,9 @@ class BillRefsRequest extends FormRequest
             ],
             'billing_date_to' => [
                 'nullable',
+                'required_with:billing_date_from',
                 'date',
-                // 'after_or_equal:billing_date_from',
+                'after_or_equal:billing_date_from',
             ],
             'billing_ref' => [
                 'nullable',

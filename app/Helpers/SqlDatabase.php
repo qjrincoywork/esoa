@@ -213,8 +213,8 @@ class SqlDatabase
 
     public function getBillingRefsByParams($params)
     {
-        if ($params['bill_ref_from'] == BillRefFrom::CLAIMS) {
-            $result = $this->getClaimDetailsByParams($params);
+        if ($params['billing_ref_from'] == BillRefFrom::CLAIMS) {
+            $result = $this->getClaimsReceivingDetailsByParams($params);
         } else {
             $result = $this->getMdaDetailsByParams($params);
         }
@@ -259,12 +259,15 @@ class SqlDatabase
         $perPage = $params['per_page'] ?? config('vc.default_pages');
         $query = $this->db
             ->table('cholders as c')
-            ->leftJoin('billing as b', function ($join) use ($params) {
-                $join->on('c.ch_policynum', '=', 'b.bl_policynum');
+            ->leftJoin('claims as cl', function ($join) use ($params) {
+                $join->on('c.ch_policynum', '=', 'cl.cl_policynumber');
             })
+            // ->leftJoin('billing as b', function ($join) use ($params) {
+            //     $join->on('c.ch_policynum', '=', 'b.bl_policynum');
+            // })
             ->select(
-                'b.bl_claimnum',
-                'b.bl_policynum',
+                'cl.cl_claimnum as claimnum',
+                'cl.cl_policynumber',
                 'c.ch_id',
                 'c.ch_policynum',
                 'c.ch_accountid',
@@ -282,13 +285,13 @@ class SqlDatabase
                 $billRefs = is_string($params['billing_ref'])
                     ? explode(',', $params['billing_ref'])
                     : $params['billing_ref'];
-                $query->whereIn('b.bl_refid', $billRefs);
+                $query->whereIn('cl.cl_batchnumber', $billRefs);
             })
             ->when(!empty($params['claimnum']), function ($query) use ($params) {
-                $query->where('b.bl_claimnum', $params['claimnum']);
+                $query->where('cl.cl_claimnum', $params['claimnum']);
             })
             ->when(!empty($params['policynum']), function ($query) use ($params) {
-                $query->where('c.ch_policynum', $params['policynum']);
+                $query->where('cl.cl_policynumber', $params['policynum']);
             })
             ->when(!empty($params['firstname']), function ($query) use ($params) {
                 $query->where('c.ch_firstname', $params['firstname']);
@@ -335,6 +338,132 @@ class SqlDatabase
         }
 
         return $query;
+    }
+
+    /**
+     * Applies account, branch, broker, and billing-date filters on a Claims query (alias "c").
+     */
+    private function applyClaimsPolicyFilters($query, array $params, $authUser): string
+    {
+        $accountCode = $params['account_code'] ?? null;
+
+        if ($authUser?->hasRole('account_branch_admin') && !empty($authUser->userDetail?->account_code)) {
+            $accountCode = $authUser->userDetail->account_code;
+        }
+
+        if (!empty($accountCode)) {
+            $query->whereRaw('SUBSTRING(c.cl_policynumber, 1, 11) = ?', [$accountCode]);
+        }
+
+        if ($authUser?->hasRole('broker')) {
+            $agentAccounts = (new SqlDatabase(Server::HMS))
+                ->getAccountsOfAgent($authUser->userDetail?->agent_code ?? null);
+
+            if ($agentAccounts->isEmpty()) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereIn(DB::raw('SUBSTRING(c.cl_policynumber, 1, 11)'), $agentAccounts);
+            }
+        }
+
+        $branchCode = $params['branch_code'] ?? null;
+
+        if ($authUser?->hasRole('account_branch_admin') && !empty($authUser->userDetail?->branch_code)) {
+            $branchCode = $authUser->userDetail->branch_code;
+        }
+
+        if (!empty($branchCode) && !empty($accountCode)) {
+            $query->whereExists(function ($sub) use ($accountCode, $branchCode) {
+                $sub->selectRaw('1')
+                    ->from('Cholders as ch')
+                    ->where('ch.ch_accountid', $accountCode)
+                    ->where('ch.ch_branch_code', $branchCode);
+            });
+        }
+
+        if (!empty($params['billing_date_from'])) {
+            $query->where(
+                'c.cl_processdate',
+                '>=',
+                Carbon::parse($params['billing_date_from'])->startOfDay()
+            );
+        }
+
+        if (!empty($params['billing_date_to'])) {
+            $query->where(
+                'c.cl_processdate',
+                '<=',
+                Carbon::parse($params['billing_date_to'])->endOfDay()
+            );
+        }
+
+        return $accountCode ?? '';
+    }
+
+    public function getClaimsReceivingDetailsByParams($params)
+    {
+        $perPage = $params['per_page'] ?? config('vc.default_pages');
+        $authUser = auth()->user();
+        $selectedRefs = $params['selected_refs'] ?? null;
+
+        if (is_string($selectedRefs)) {
+            $selectedRefs = array_filter(explode(',', $selectedRefs));
+        } elseif (!is_array($selectedRefs)) {
+            $selectedRefs = $selectedRefs ? [$selectedRefs] : [];
+        }
+        $selectedRefs = array_filter($selectedRefs);
+
+        $latestClaims = $this->db
+            ->table('Claims as c')
+            ->select([
+                'c.cl_batchnumber',
+                DB::raw('MAX(c.cl_processdate) as cl_processdate'),
+            ]);
+
+        $accountCode = $this->applyClaimsPolicyFilters($latestClaims, $params, $authUser);
+        $latestClaims->groupBy('c.cl_batchnumber');
+
+        if (
+            empty($accountCode)
+            && !$authUser?->hasRole('broker')
+            && !$authUser?->hasRole('account_branch_admin')
+        ) {
+            return $this->db->table('Claims_Receiving')->whereRaw('1 = 0')->simplePaginate($perPage);
+        }
+
+        $query = $this->db
+            ->table('Claims_Receiving as cr')
+            ->joinSub($latestClaims, 'latest', function ($join) {
+                $join->on('cr.cr_batchnum', '=', 'latest.cl_batchnumber');
+            })
+            ->join('Claims as c', function ($join) {
+                $join->on('c.cl_batchnumber', '=', 'latest.cl_batchnumber')
+                    ->on('c.cl_processdate', '=', 'latest.cl_processdate');
+            })
+            ->select([
+                'cr.cr_batchnum as ref_id',
+                'cr.cr_amount as amount',
+                'c.cl_processdate as date_posted',
+                DB::raw('MAX(c.cl_claimnum) as cl_claimnum'),
+            ])
+            ->groupBy('cr.cr_batchnum', 'cr.cr_amount', 'c.cl_processdate')
+            ->when(isset($params['name']) && !empty($params['name']), function ($query) use ($params, $selectedRefs) {
+                $query->where(function ($nameQuery) use ($params, $selectedRefs) {
+                    $nameQuery->where('cr.cr_batchnum', 'like', '%' . $params['name'] . '%');
+                    if (!empty($selectedRefs)) {
+                        $nameQuery->orWhereIn('cr.cr_batchnum', $selectedRefs);
+                    }
+                });
+            })
+            ->when(!empty($selectedRefs), function ($query) use ($selectedRefs) {
+                $query->orderByRaw(
+                    'CASE WHEN cr.cr_batchnum IN (\'' . implode('\',\'', $selectedRefs) . '\') THEN 0 ELSE 1 END'
+                );
+            })
+            ->orderByDesc('date_posted')
+            ->orderBy('ref_id');
+
+        return $query->paginate($perPage);
     }
 
     public function getClaimDetailsByParams($params)

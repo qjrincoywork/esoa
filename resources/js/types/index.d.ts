@@ -47,7 +47,7 @@ export interface Soa {
   account_code?: string
   branch_code?: string
   billing_ref?: string
-  bill_ref_from?: number | string
+  billing_ref_from?: number | string
   bill_type?: number
   status?: number
   bill_date?: string

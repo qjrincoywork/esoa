@@ -15,7 +15,7 @@ class AccountBranchMemberResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
-            'claimnum' => $this->bl_claimnum,
+            'claimnum' => $this->claimnum,
             'policynum' => $this->ch_policynum,
             'id' => $this->ch_id,
             'firstname' => $this->ch_firstname,

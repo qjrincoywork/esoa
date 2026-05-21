@@ -183,8 +183,8 @@ class SoaController extends Controller
         $billing = (new $this->sqlDatabase(Server::HMS))->getBillingByParams($validated);
         //http://192.170.11.185/dmis_finance/file/rm/ //EO-2832655-003, EO-3085829-004
         $files = [];
-        if (!empty($billing) && !empty($billing->bl_claimnum)) {
-            $paths = Storage::disk(env('RM_DISK', 'public'))->files($billing->bl_claimnum);
+        if (isset($validated['claimnum']) && !empty($validated['claimnum'])) {
+            $paths = Storage::disk(env('RM_DISK', 'public'))->files($validated['claimnum']);
             $userId = (int) auth()->id();
             $files = array_map(function (string $path) use ($userId) {
                 return [
@@ -281,7 +281,7 @@ class SoaController extends Controller
                 'account_types' => AccountType::list(),
                 'bill_types' => BillType::list(),
                 'status_types' => SoaStatus::list(),
-                'bill_ref_from_types' => BillRefFrom::list(),
+                'billing_ref_from_types' => BillRefFrom::list(),
             ]);
         }
     }
@@ -513,7 +513,7 @@ class SoaController extends Controller
                 'account_types' => AccountType::list(),
                 'bill_types' => BillType::list(),
                 'status_types' => SoaStatus::list(),
-                'bill_ref_from_types' => BillRefFrom::list(),
+                'billing_ref_from_types' => BillRefFrom::list(),
             ]);
         }
     }

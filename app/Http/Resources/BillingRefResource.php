@@ -16,7 +16,7 @@ class BillingRefResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        $name = $this->ref_id . ((int) request()->bill_ref_from == BillRefFrom::CLAIMS ? ' - ' . $this->cl_claimnum : '')
+        $name = $this->ref_id . ((int) request()->billing_ref_from == BillRefFrom::CLAIMS ? ' - ' . $this->cl_claimnum : '')
                 . ' - '
                 . config('vc.peso_sign') . number_format($this->amount, 2)
                 . ' - '

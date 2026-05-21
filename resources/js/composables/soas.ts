@@ -207,7 +207,7 @@ export function useSoas() {
           account_types: payload.account_types,
           bill_types: payload.bill_types ?? [],
           status_types: payload.status_types ?? [],
-          bill_ref_from_types: payload.bill_ref_from_types ?? [],
+          billing_ref_from_types: payload.billing_ref_from_types ?? [],
           user: authUser ?? undefined,
           onReady: (api: { getFormData: () => FormData | null }) => {
             formApi = api
@@ -260,7 +260,7 @@ export function useSoas() {
         account_types: Array<{ value: number | string; name: string }>;
         bill_types: Array<{ value: number | string; name: string }>;
         status_types: Array<{ value: number | string; name: string }>;
-        bill_ref_from_types: Array<{ value: number | string; name: string }>;
+        billing_ref_from_types: Array<{ value: number | string; name: string }>;
       }>(
         `/${slug.value}/create`
       );
@@ -281,7 +281,7 @@ export function useSoas() {
           account_types: payload.account_types,
           bill_types: payload.bill_types ?? [],
           status_types: payload.status_types ?? [],
-          bill_ref_from_types: payload.bill_ref_from_types ?? [],
+          billing_ref_from_types: payload.billing_ref_from_types ?? [],
           user: authUser ?? undefined,
           onReady: (api: { getFormData: () => FormData | null }) => {
             formApi = api
@@ -327,6 +327,7 @@ export function useSoas() {
         billing_ref: soa.billing_ref,
         claimnum: item.claimnum,
         policynum: item.policynum,
+        billing_ref_from: soa.billing_ref_from,
       };
       const response = await get(`/${slug.value}/file_list`, params);
 

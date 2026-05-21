@@ -37,6 +37,7 @@ class Soa extends Model
         'account_code',
         'branch_code',
         'billing_ref',
+        'billing_ref_from',
         'bill_type',
         'status',
         'due_date',

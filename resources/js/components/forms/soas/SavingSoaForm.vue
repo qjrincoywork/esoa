@@ -20,7 +20,6 @@ type Account = { value: string | number; name: string }
 type AccountType = { value: string | number; name: string }
 type Branch = { value: string | number; name: string }
 type BillingRef = { value: string | number; name: string; balance_raw?: number | string }
-type BillRefFrom = { value: string | number; name: string }
 
 const { getAccountsByParams, getBranchesByParams, getBillingRefsByParams } = useSoas();
 const props = defineProps({
@@ -41,7 +40,7 @@ const props = defineProps({
     type: Array as unknown as () => { value: string | number; name: string }[],
     default: () => [],
   },
-  bill_ref_from_types: {
+  billing_ref_from_types: {
     type: Array as unknown as () => { value: string | number; name: string }[],
     default: () => [],
   },
@@ -87,14 +86,14 @@ const searchedAccountName = ref('')
 const soaNumber = ref(soa.value?.soa_number ?? '')
 const selectedBillType = ref<string | number>(soa.value?.bill_type ?? '')
 const selectedStatus = ref<string | number>(soa.value?.status ?? '1')
-const selectedBillRefFrom = ref<string | number>(soa.value?.bill_ref_from ?? '')
+const selectedBillRefFrom = ref<string | number>(soa.value?.billing_ref_from ?? '')
 const dueDate = ref(soa.value?.due_date ?? '')
 const periodDateFrom = ref(soa.value?.period_date_from ?? '')
 const periodDateTo = ref(soa.value?.period_date_to ?? '')
 const amount = ref(soa.value?.amount != null ? String(soa.value.amount) : '')
 const billingDateFrom = ref('')
 const billingDateTo = ref('')
-const hasBillingRefValue = ref(soa.value?.billing_ref != null && String(soa.value.billing_ref).trim().length > 0)
+const hasBillingRefValue = ref(soa.value?.billing_ref != null && billingRef.value.length > 0)
 const hasBillingRef = ref(soa.value?.id ? true : hasBillingRefValue.value)
 const searchedBranchName = ref('')
 const searchedBillingRef = ref('')
@@ -224,7 +223,7 @@ const searchBillingRefsByParams = async (name = '', page = 1, append = false) =>
   const params = {
     account_type: selectedAccountType.value,
     account_code: selectedAccount.value?.value,
-    bill_ref_from: selectedBillRefFrom.value,
+    billing_ref_from: selectedBillRefFrom.value,
     page,
   };
   if (billingDateFrom.value != '' && billingDateTo.value != '') {
@@ -353,7 +352,7 @@ watch(soa, (val: Soa | undefined) => {
   if (val.account_code != null) accountCode.value = String(val.account_code);
   if (val.branch_code != null) branchCode.value = String(val.branch_code);
   if (val.billing_ref != null) billingRef.value = String(val.billing_ref).split(',').filter(Boolean);
-  if (val.bill_ref_from != null) selectedBillRefFrom.value = val.bill_ref_from;
+  if (val.billing_ref_from != null) selectedBillRefFrom.value = val.billing_ref_from;
   isSyncingFromSoa.value = false
 }, { immediate: true })
 
@@ -370,7 +369,7 @@ watch(soa, (val: Soa | undefined) => {
       <input type="hidden" name="billing_ref" :value="billingRef.length ? JSON.stringify(billingRef) : ''" />
       <input type="hidden" name="bill_type" :value="String(selectedBillType ?? '')" />
       <input type="hidden" name="status" :value="String(selectedStatus ?? '')" />
-      <input type="hidden" name="bill_ref_from" :value="String(selectedBillRefFrom ?? '')" />
+      <input type="hidden" name="billing_ref_from" :value="String(selectedBillRefFrom ?? '')" />
     </div>
     <div class="flex items-center gap-3">
       <Checkbox id="has_billing_ref" v-model="hasBillingRef" class="cursor-pointer"/>
@@ -459,9 +458,9 @@ watch(soa, (val: Soa | undefined) => {
     </div>
 
     <div v-if="hasBillingRef" class="md:col-span-1">
-      <Label for="bill_ref_from">Billing Reference From<span class="text-red-400">*</span></Label>
+      <Label for="billing_ref_from">Billing Reference From<span class="text-red-400">*</span></Label>
       <Select
-        id="bill_ref_from"
+        id="billing_ref_from"
         class="mt-1 block w-full"
         v-model="selectedBillRefFrom"
       >
@@ -472,11 +471,11 @@ watch(soa, (val: Soa | undefined) => {
           <SelectGroup>
             <SelectLabel>Billing Reference From</SelectLabel>
             <SelectItem
-              v-for="bill_ref_from_type in bill_ref_from_types"
-              :key="bill_ref_from_type.value"
-              :value="String(bill_ref_from_type.value)"
+              v-for="billing_ref_from_type in billing_ref_from_types"
+              :key="billing_ref_from_type.value"
+              :value="String(billing_ref_from_type.value)"
             >
-            {{ bill_ref_from_type.name }}
+            {{ billing_ref_from_type.name }}
             </SelectItem>
           </SelectGroup>
         </SelectContent>
