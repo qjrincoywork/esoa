@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { h, onMounted, ref, watch } from 'vue';
+import { router } from '@inertiajs/vue3';
 import { createColumnHelper } from '@tanstack/vue-table';
 import Datatable from '@/components/Datatable.vue';
 import { useAjax } from '@/composables/useAjax';
@@ -7,11 +8,14 @@ import { useModulePermissions } from '@/composables/useModulePermissions';
 
 type SoaConcern = {
   id?: number;
+  billing_invoice?: string;
   type?: string;
   title?: string;
   description?: string;
   status?: string;
   status_color?: string;
+  attachment?: string;
+  attachment_preview_token?: string | null;
   created_by?: string;
   created_at?: string;
 };
@@ -121,6 +125,13 @@ const handlePaginationUpdate = (newPagination: {
   fetchConcerns();
 };
 
+/** Store row data and navigate to the concerns index, which will auto-open the view pane. */
+const handleRowClick = (concern: SoaConcern) => {
+  if (!concern.id) return;
+  sessionStorage.setItem(`concern_view_${concern.id}`, JSON.stringify(concern));
+  router.visit('/concerns', { data: { open: concern.id } });
+};
+
 watch(
   () => props.soaId,
   () => {
@@ -139,6 +150,8 @@ onMounted(fetchConcerns);
     :columns="columns"
     :pagination="pagination"
     :enable-search="false"
+    :enable-row-click="true"
+    :row-click="handleRowClick"
     :search-fields="[]"
     :loading="loading"
     :error="error"

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue';
+import { router } from '@inertiajs/vue3';
 import { createColumnHelper } from '@tanstack/vue-table';
 import Datatable from '@/components/Datatable.vue';
 import { useAjax } from '@/composables/useAjax';
@@ -7,11 +8,20 @@ import { useModulePermissions } from '@/composables/useModulePermissions';
 
 type SoaAccountPayment = {
   id?: number;
+  billing_invoice?: string | null;
   deposit_date?: string;
   mode_of_payment?: string;
+  mode_of_payment_value?: number;
+  image?: string;
+  pdf?: string;
+  excel?: string;
   remarks?: string;
   created_by?: string;
   created_at?: string;
+  image_preview_token?: string | null;
+  pdf_preview_token?: string | null;
+  excel_preview_token?: string | null;
+  deleted_at?: string | null;
 };
 
 const props = defineProps<{
@@ -109,6 +119,13 @@ const handlePaginationUpdate = (newPagination: {
   fetchPayments();
 };
 
+/** Store row data and navigate to the account payments index, which will auto-open the view pane. */
+const handleRowClick = (payment: SoaAccountPayment) => {
+  if (!payment.id) return;
+  sessionStorage.setItem(`account_payment_view_${payment.id}`, JSON.stringify(payment));
+  router.visit('/account_payments', { data: { open: payment.id } });
+};
+
 watch(
   () => props.soaId,
   () => {
@@ -127,6 +144,8 @@ onMounted(fetchPayments);
     :columns="columns"
     :pagination="pagination"
     :enable-search="false"
+    :enable-row-click="true"
+    :row-click="handleRowClick"
     :search-fields="[]"
     :loading="loading"
     :error="error"
