@@ -19,6 +19,8 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import SoaActivitiesList from '@/components/forms/soas/SoaActivitiesList.vue';
+import SoaConcernsList from '@/components/forms/soas/SoaConcernsList.vue';
+import SoaAccountPaymentsList from '@/components/forms/soas/SoaAccountPaymentsList.vue';
 import AmountManagementForm from '@/components/forms/soas/AmountManagementForm.vue';
 import AccountBranchMembers from '@/components/forms/soas/AccountBranchMembers.vue';
 import { Soa } from '@/types';
@@ -79,6 +81,12 @@ const existingExcel = computed(() => {
         </TabsTrigger>
         <TabsTrigger class="cursor-pointer" value="members">
           Account / Branch Members
+        </TabsTrigger>
+        <TabsTrigger class="cursor-pointer" value="concerns">
+          Concerns
+        </TabsTrigger>
+        <TabsTrigger class="cursor-pointer" value="remittance_advices">
+          Remittance Advices
         </TabsTrigger>
         <TabsTrigger class="cursor-pointer" value="activities">
           Soa Activities
@@ -162,6 +170,24 @@ const existingExcel = computed(() => {
                 </div>
               </li>
             </ul>
+          </CardContent>
+        </Card>
+      </TabsContent>
+      <TabsContent value="concerns">
+        <Card>
+          <CardContent class="grid gap-6">
+            <SoaConcernsList
+              v-if="activeTab === 'concerns'"
+              :soa-id="localSoa.id ?? null" />
+          </CardContent>
+        </Card>
+      </TabsContent>
+      <TabsContent value="remittance_advices">
+        <Card>
+          <CardContent class="grid gap-6">
+            <SoaAccountPaymentsList
+              v-if="activeTab === 'remittance_advices'"
+              :soa-id="localSoa.id ?? null" />
           </CardContent>
         </Card>
       </TabsContent>

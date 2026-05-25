@@ -18,7 +18,7 @@ use App\Http\Requests\Soa\{AccountBranchMembersRequest, AdjustAmountRequest, Bil
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
-use App\Http\Resources\{AccountBranchMemberResource, BillingRefResource, OldSoaResource, SoaActivityListResource, SoaAgingCountResource, SoaResource };
+use App\Http\Resources\{AccountBranchMemberResource, AccountPaymentResource, BillingRefResource, ConcernResource, OldSoaResource, SoaActivityListResource, SoaAgingCountResource, SoaResource };
 use App\Mail\{ BillingInvoiceStatusChanged, NewBillingInvoiceUploaded, NewSoaUploaded };
 use App\Models\{Account, Citizenship, CivilStatus, Contact, Department, Gender, MainAccount, Position, Soa, Suffix, UserDetail};
 use Carbon\Carbon;
@@ -444,6 +444,40 @@ class SoaController extends Controller
         }
 
         return response()->json(['activities' => $payload]);
+    }
+
+    /**
+     * Display paginated concerns linked to the given SOA (on-demand).
+     */
+    public function concerns(Request $request, int $id)
+    {
+        $soa = $this->soa->findOrFail($id);
+        $this->assertUserMayAccessModelSoa($soa);
+
+        $perPage = (int) $request->get('per_page', config('vc.default_pages'));
+        $concerns = $soa->concerns()
+            ->with(['user', 'soas'])
+            ->orderByDesc('id')
+            ->paginate($perPage);
+
+        return response()->json(['concerns' => new CommonResource(ConcernResource::collection($concerns))]);
+    }
+
+    /**
+     * Display paginated account payments (remittance advices) linked to the given SOA (on-demand).
+     */
+    public function soaAccountPayments(Request $request, int $id)
+    {
+        $soa = $this->soa->findOrFail($id);
+        $this->assertUserMayAccessModelSoa($soa);
+
+        $perPage = (int) $request->get('per_page', config('vc.default_pages'));
+        $accountPayments = $soa->accountPayments()
+            ->with(['user', 'soas'])
+            ->orderByDesc('id')
+            ->paginate($perPage);
+
+        return response()->json(['account_payments' => new CommonResource(AccountPaymentResource::collection($accountPayments))]);
     }
 
     /**

@@ -30,6 +30,9 @@ return new class extends Migration
      */
     public function down(): void
     {
+        Schema::table('soa_account_payments', function (Blueprint $table) {
+            $table->dropForeign(['account_payment_id']);
+        });
         Schema::dropIfExists('account_payments');
     }
 };
