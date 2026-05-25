@@ -49,7 +49,7 @@ return [
 
         'rm' => [
             'driver' => 'local',
-            'root' => env('ROOT_FOLDER') . 'rm',
+            'root' => env('ROOT_FOLDER') . DIRECTORY_SEPARATOR . 'rm',
         ],
         'billing' => [
             'driver' => 'local',

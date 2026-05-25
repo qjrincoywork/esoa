@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Soa;
 
-use App\Enums\{ AccountType, BillType, Server };
+use App\Enums\{ AccountType, BillRefFrom, BillType, Server };
 use App\Rules\{ IsDataExists, IsServerDataExists, SoaAmountIsValid, SoaStatusIsValid };
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -45,6 +45,11 @@ class CreateRequest extends FormRequest
                 'max:191',
                 'regex:/^[A-Za-z0-9-]+$/',
                 Rule::unique('soas', 'soa_number'),
+            ],
+            'billing_ref_from' => [
+                'nullable',
+                'string',
+                Rule::in(BillRefFrom::getValues()),
             ],
             'billing_ref' => [
                 'nullable',
