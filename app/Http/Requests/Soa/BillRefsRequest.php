@@ -22,7 +22,7 @@ class BillRefsRequest extends FormRequest
                 Rule::in(AccountType::getValues()),
             ],
             'account_code' => [
-                'nullable',
+                'required',
                 'string',
                 'max:' . config('vc.max_string_limit'),
             ],
@@ -51,16 +51,11 @@ class BillRefsRequest extends FormRequest
                 'date',
                 'after_or_equal:billing_date_from',
             ],
-            'billing_ref' => [
-                'nullable',
-                'string',
-                'max:' . config('vc.max_string_limit'),
-            ],
-            'selected_refs' => [
-                'nullable',
-                'array',
-            ],
-            'selected_refs.*' => [
+            // 'billing_refs' => [
+            //     'nullable',
+            //     'array',
+            // ],
+            'billing_refs' => [
                 'string',
                 'max:' . config('vc.max_string_limit'),
             ],

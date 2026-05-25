@@ -404,7 +404,7 @@ class SqlDatabase
     {
         $perPage = $params['per_page'] ?? config('vc.default_pages');
         $authUser = auth()->user();
-        $selectedRefs = $params['selected_refs'] ?? null;
+        $selectedRefs = $params['billing_refs'] ?? null;
 
         if (is_string($selectedRefs)) {
             $selectedRefs = array_filter(explode(',', $selectedRefs));
@@ -470,7 +470,7 @@ class SqlDatabase
     {
         $authUser = auth()->user();
         $perPage = $params['per_page'] ?? config('vc.default_pages');
-        $selectedRefs = $params['selected_refs'] ?? null;
+        $selectedRefs = $params['billing_refs'] ?? null;
 
         // Handle both single string and array of selected refs
         if (is_string($selectedRefs)) {
@@ -542,7 +542,7 @@ class SqlDatabase
         // Pagination
         $authUser = auth()->user();
         $perPage = $params['per_page'] ?? config('vc.default_pages');
-        $selectedRefs = $params['selected_refs'] ?? null;
+        $selectedRefs = $params['billing_refs'] ?? null;
 
         // Handle both single string and array of selected refs
         if (is_string($selectedRefs)) {

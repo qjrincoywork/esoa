@@ -210,7 +210,7 @@ const searchBranchesByParams = async (name = '', page = 1, append = false) => {
 
 // Fetch billing refs by selected account, optional search name, and page (replace or append)
 const searchBillingRefsByParams = async (name = '', page = 1, append = false) => {
-  if (!selectedAccount.value?.value) {
+  if (!accountCode.value) {
     billing_refs.value = [];
     return;
   }
@@ -222,7 +222,7 @@ const searchBillingRefsByParams = async (name = '', page = 1, append = false) =>
   const selectedRefsParam = billingRef.value.length ? billingRef.value.join(',') : null;
   const params = {
     account_type: selectedAccountType.value,
-    account_code: selectedAccount.value?.value,
+    account_code: accountCode.value,
     billing_ref_from: selectedBillRefFrom.value,
     page,
   };
@@ -231,7 +231,7 @@ const searchBillingRefsByParams = async (name = '', page = 1, append = false) =>
     params.billing_date_to = billingDateTo.value ?? '';
   }
   if (selectedRefsParam != null) {
-    params.selected_refs = selectedRefsParam;
+    params.billing_refs = selectedRefsParam;
   }
   if (name != null && name.trim() !== '') {
     params.name = name.trim();
@@ -355,7 +355,7 @@ watch(soa, (val: Soa | undefined) => {
   if (val.billing_ref_from != null) selectedBillRefFrom.value = val.billing_ref_from;
   isSyncingFromSoa.value = false
 }, { immediate: true })
-
+console.log(!selectedAccount && (billing_refs.length > 0), billing_refs.value, selectedAccount.value)
 </script>
 
 <template>
@@ -463,6 +463,7 @@ watch(soa, (val: Soa | undefined) => {
         id="billing_ref_from"
         class="mt-1 block w-full"
         v-model="selectedBillRefFrom"
+        :disabled="!selectedAccount"
       >
         <SelectTrigger class="w-full">
           <SelectValue placeholder="Select a billing reference from" />
@@ -492,7 +493,7 @@ watch(soa, (val: Soa | undefined) => {
         placeholder="Select Billing Reference..."
         search-placeholder="Search Billing Reference..."
         empty-text="No Billing Reference found."
-        :disabled="!selectedAccount"
+        :disabled="billing_refs?.length == 0"
         :has-more="hasMoreBillingRefs"
         :loading-more="billingRefsLoadingMore"
         :multiple="true"
