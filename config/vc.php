@@ -13,6 +13,9 @@ return [
     'api_key' => env('VC_API_KEY'),
     'api_auth_token' => 'API_AUTH_TOKEN',
 
+    'chunk_size' => 2000,
+    'billing_reminder_time' => env('BILLING_REMINDER_TIME', '07:00'), // Default to 7:00 AM if not set
+    'overlapping_timeout' => env('BILLING_REMINDER_TIMEOUT', 3600), // Default to 1 hour if not set
     'peso_sign' => '₱',
     'default_pages' => 10,
     'max_per_pages' => 100,

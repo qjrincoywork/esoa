@@ -56,6 +56,14 @@ final class SoaAging extends Enum
         };
     }
 
+    /**
+     * SOA list route filtered by this aging bucket (same query as dashboard cards).
+     */
+    public static function listUrl(int $value): string
+    {
+        return route('soas.list', ['due_in' => $value]);
+    }
+
     public static function list(): array
     {
         return [

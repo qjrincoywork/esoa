@@ -29,6 +29,42 @@ export interface NavigationModule {
   permission_name: string | null;
 }
 
+export interface SoaActivity {
+  id?: number
+  user_id?: number
+  name?: string
+  event?: string
+  from?: unknown
+  to?: unknown
+  created_at?: string
+}
+
+export interface Soa {
+  id?: number
+  user_id?: number
+  soa_number?: string
+  account_type?: string
+  account_code?: string
+  branch_code?: string
+  billing_ref?: string
+  billing_ref_from?: number | string
+  bill_type?: number
+  status?: number
+  bill_date?: string
+  due_date?: string
+  period_date_from?: string
+  period_date_to?: string
+  amount?: string | number
+  /** Numeric amount from API (e.g. SoaResource); preferred for math when present */
+  amount_raw?: number
+  amount_paid?: number
+  payment_adjustment?: number
+  balance?: number
+  file_pdf?: string
+  file_xls?: string
+  soa_activities?: SoaActivity[]
+}
+
 export interface Navigation {
   id: number;
   name: string;

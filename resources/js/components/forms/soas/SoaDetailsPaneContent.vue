@@ -19,44 +19,12 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import SoaActivitiesList from '@/components/forms/soas/SoaActivitiesList.vue';
+import SoaConcernsList from '@/components/forms/soas/SoaConcernsList.vue';
+import SoaAccountPaymentsList from '@/components/forms/soas/SoaAccountPaymentsList.vue';
 import AmountManagementForm from '@/components/forms/soas/AmountManagementForm.vue';
 import AccountBranchMembers from '@/components/forms/soas/AccountBranchMembers.vue';
+import { Soa } from '@/types';
 
-type SoaActivity = {
-  id?: number
-  user_id?: number
-  name?: string
-  event?: string
-  from?: unknown
-  to?: unknown
-  created_at?: string
-}
-
-type Soa = {
-  id?: number
-  user_id?: number
-  soa_number?: string
-  account_name?: string
-  account_code?: string
-  branch_name?: string
-  branch_code?: string
-  billing_ref?: string
-  billing_ref_names?: string
-  bill_type?: number
-  status?: number
-  status_color?: string
-  created_at?: string
-  due_date?: string
-  due_in?: string
-  period_date_from?: string
-  period_date_to?: string
-  period_coverage?: string
-  amount?: string | number
-  amount_raw?: number
-  file_pdf?: string
-  file_xls?: string
-  soa_activities?: SoaActivity[]
-}
 const props = defineProps({
   soa: {
     type: Object as unknown as () => Soa,
@@ -113,6 +81,12 @@ const existingExcel = computed(() => {
         </TabsTrigger>
         <TabsTrigger class="cursor-pointer" value="members">
           Account / Branch Members
+        </TabsTrigger>
+        <TabsTrigger class="cursor-pointer" value="concerns">
+          Concerns
+        </TabsTrigger>
+        <TabsTrigger class="cursor-pointer" value="remittance_advices">
+          Remittance Advices
         </TabsTrigger>
         <TabsTrigger class="cursor-pointer" value="activities">
           Soa Activities
@@ -196,6 +170,24 @@ const existingExcel = computed(() => {
                 </div>
               </li>
             </ul>
+          </CardContent>
+        </Card>
+      </TabsContent>
+      <TabsContent value="concerns">
+        <Card>
+          <CardContent class="grid gap-6">
+            <SoaConcernsList
+              v-if="activeTab === 'concerns'"
+              :soa-id="localSoa.id ?? null" />
+          </CardContent>
+        </Card>
+      </TabsContent>
+      <TabsContent value="remittance_advices">
+        <Card>
+          <CardContent class="grid gap-6">
+            <SoaAccountPaymentsList
+              v-if="activeTab === 'remittance_advices'"
+              :soa-id="localSoa.id ?? null" />
           </CardContent>
         </Card>
       </TabsContent>

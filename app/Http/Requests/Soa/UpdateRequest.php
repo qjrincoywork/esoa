@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Soa;
 
-use App\Enums\{ AccountType, BillType, Server, SoaStatus };
+use App\Enums\{ AccountType, BillRefFrom, BillType, Server, SoaStatus };
 use App\Models\Soa;
 use App\Rules\{ IsDataExists, IsServerDataExists, SoaStatusIsValid };
 use Illuminate\Foundation\Http\FormRequest;
@@ -37,7 +37,6 @@ class UpdateRequest extends FormRequest
             if (!$existingFilePdf) {
                 $filePdfRules = [
                     'required',
-                    // 'required_if:status,' . SoaStatus::ENDORSED,
                 ];
             }
             if ($this->hasFile('file_pdf')) {
@@ -45,6 +44,21 @@ class UpdateRequest extends FormRequest
                     ...$filePdfRules,
                     'file',
                     'mimes:pdf',
+                    'max:20480', // 2MB (size is in KB)
+                ];
+            }
+            $existingFileXls = Soa::whereKey($this->input('id'))->value('file_xls');
+            $fileXlsRules = [];
+            if (!$existingFileXls) {
+                $fileXlsRules = [
+                    'required_unless:bill_type,' . BillType::ECU,
+                ];
+            }
+            if ($this->hasFile('file_xls')) {
+                $fileXlsRules = [
+                    ...$fileXlsRules,
+                    'file',
+                    'mimes:xls,xlsx',
                     'max:20480', // 2MB (size is in KB)
                 ];
             }
@@ -84,11 +98,11 @@ class UpdateRequest extends FormRequest
                     'regex:/^[A-Za-z0-9-]+$/',
                     Rule::unique('soas', 'soa_number')->ignore($this->id)
                 ],
-                // 'billing_ref' => [
-                //     'required_unless:status,' . SoaStatus::ENDORSED,
-                //     'string',
-                //     // 'max:500',
-                // ],
+                'billing_ref_from' => [
+                    'nullable',
+                    'string',
+                    Rule::in(BillRefFrom::getValues()),
+                ],
                 'billing_ref' => [
                     'nullable',
                     // 'required_unless:status,' . SoaStatus::ENDORSED,
@@ -138,12 +152,7 @@ class UpdateRequest extends FormRequest
                     'numeric',
                 ],
                 'file_pdf' => $filePdfRules,
-                'file_xls' => [
-                    'nullable',
-                    'file',
-                    'mimes:xls,xlsx',
-                    'max:20480' // 2MB (size is in KB)
-                ],
+                'file_xls' => $fileXlsRules,
             ];
         }
 
@@ -173,6 +182,7 @@ class UpdateRequest extends FormRequest
             'user_id.required' => 'The user field is required',
             'file_pdf.required_if' => 'The PDF file field is required',
             'file_xls.required_without' => 'The XLS file field is required',
+            'file_xls.required_unless' => 'The XLS file field is required if the bill type is not ECU',
         ];
     }
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { Button } from "@/components/ui/button";
+import { Soa } from '@/types';
 
 const folders = ref<string[]>([])
 const loading = ref(false)
@@ -8,26 +9,7 @@ type FileEntry = {
   name: string
   preview_token: string
 }
-type Soa = {
-  id?: number
-  user_id?: number
-  soa_number?: string
-  account_code?: string
-  branch_code?: string
-  billing_ref?: string
-  bill_type?: number
-  status?: number
-  bill_date?: string
-  due_date?: string
-  period_date_from?: string
-  period_date_to?: string
-  amount?: number
-  amount_paid?: number
-  payment_adjustment?: number
-  balance?: number
-  file_pdf?: string
-  file_xls?: string
-}
+
 const props = defineProps({
   soa: {
     type: Object as unknown as () => Soa,

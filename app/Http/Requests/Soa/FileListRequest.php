@@ -22,17 +22,22 @@ class FileListRequest extends FormRequest
             'billing_ref' => [
                 'required',
                 'string',
-                'max:191',
+                'max:' . config('vc.max_string_limit'),
             ],
             'claimnum' => [
                 'nullable',
                 'string',
-                'max:191',
+                'max:' . config('vc.max_string_limit'),
             ],
             'policynum' => [
                 'required',
                 'string',
-                'max:191',
+                'max:' . config('vc.max_string_limit'),
+            ],
+            'billing_ref_from' => [
+                'required',
+                'string',
+                'max:' . config('vc.max_string_limit'),
             ],
         ];
     }

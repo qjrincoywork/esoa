@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\AccountType;
+use App\Enums\BillRefFrom;
 use App\Enums\BillType;
 use App\Enums\Server;
 use App\Enums\SoaAging;
@@ -13,11 +14,11 @@ use App\Helpers\CommonHelper;
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Soa\{AccountBranchMembersRequest, AdjustAmountRequest, CreateRequest, FileListRequest, FileProxyRequest, ListRequest, RecordViewedRequest, RecomputeTaxRequest, UpdateRequest, UpdateTagRequest };
+use App\Http\Requests\Soa\{AccountBranchMembersRequest, AdjustAmountRequest, BillRefsRequest, CreateRequest, FileListRequest, FileProxyRequest, ListRequest, RecordViewedRequest, RecomputeTaxRequest, UpdateRequest, UpdateTagRequest };
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
-use App\Http\Resources\{AccountBranchMemberResource, BillingRefResource, OldSoaResource, SoaActivityListResource, SoaAgingCountResource, SoaResource };
+use App\Http\Resources\{AccountBranchMemberResource, AccountPaymentResource, BillingRefResource, ConcernResource, OldSoaResource, SoaActivityListResource, SoaAgingCountResource, SoaResource };
 use App\Mail\{ BillingInvoiceStatusChanged, NewBillingInvoiceUploaded, NewSoaUploaded };
 use App\Models\{Account, Citizenship, CivilStatus, Contact, Department, Gender, MainAccount, Position, Soa, Suffix, UserDetail};
 use Carbon\Carbon;
@@ -156,7 +157,7 @@ class SoaController extends Controller
         $soas = $this->soa->getSoas($request->validated());
 
         // Return JSON for AJAX/fetch requests (for SearchableCombobox usage)
-        if ($request->wantsJson() || $request->ajax()) {
+        if ($request->wantsJson()) {
             return response()->json([
                 'data' => SoaResource::collection($soas)->resolve(),
                 'current_page' => $soas->currentPage(),
@@ -182,8 +183,8 @@ class SoaController extends Controller
         $billing = (new $this->sqlDatabase(Server::HMS))->getBillingByParams($validated);
         //http://192.170.11.185/dmis_finance/file/rm/ //EO-2832655-003, EO-3085829-004
         $files = [];
-        if (!empty($billing) && !empty($billing->bl_claimnum)) {
-            $paths = Storage::disk(env('RM_DISK', 'public'))->files($billing->bl_claimnum);
+        if (isset($validated['claimnum']) && !empty($validated['claimnum'])) {
+            $paths = Storage::disk(env('RM_DISK', 'public'))->files($validated['claimnum']);
             $userId = (int) auth()->id();
             $files = array_map(function (string $path) use ($userId) {
                 return [
@@ -280,6 +281,7 @@ class SoaController extends Controller
                 'account_types' => AccountType::list(),
                 'bill_types' => BillType::list(),
                 'status_types' => SoaStatus::list(),
+                'billing_ref_from_types' => BillRefFrom::list(),
             ]);
         }
     }
@@ -330,9 +332,9 @@ class SoaController extends Controller
         }
     }
 
-    public function getBillingRefs(Request $request)
+    public function getBillingRefs(BillRefsRequest $request)
     {
-        $billingRefs = (new $this->sqlDatabase(Server::HMS))->getBillingRefsByParams($request->all());
+        $billingRefs = (new $this->sqlDatabase(Server::HMS))->getBillingRefsByParams($request->validated());
 
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
@@ -445,6 +447,40 @@ class SoaController extends Controller
     }
 
     /**
+     * Display paginated concerns linked to the given SOA (on-demand).
+     */
+    public function concerns(Request $request, int $id)
+    {
+        $soa = $this->soa->findOrFail($id);
+        $this->assertUserMayAccessModelSoa($soa);
+
+        $perPage = (int) $request->get('per_page', config('vc.default_pages'));
+        $concerns = $soa->concerns()
+            ->with(['user', 'soas'])
+            ->orderByDesc('id')
+            ->paginate($perPage);
+
+        return response()->json(['concerns' => new CommonResource(ConcernResource::collection($concerns))]);
+    }
+
+    /**
+     * Display paginated account payments (remittance advices) linked to the given SOA (on-demand).
+     */
+    public function soaAccountPayments(Request $request, int $id)
+    {
+        $soa = $this->soa->findOrFail($id);
+        $this->assertUserMayAccessModelSoa($soa);
+
+        $perPage = (int) $request->get('per_page', config('vc.default_pages'));
+        $accountPayments = $soa->accountPayments()
+            ->with(['user', 'soas'])
+            ->orderByDesc('id')
+            ->paginate($perPage);
+
+        return response()->json(['account_payments' => new CommonResource(AccountPaymentResource::collection($accountPayments))]);
+    }
+
+    /**
      * Record a single "billing invoice viewed" activity (account_branch_admin only).
      * Ensures only one activity per SOA for this event.
      */
@@ -511,6 +547,7 @@ class SoaController extends Controller
                 'account_types' => AccountType::list(),
                 'bill_types' => BillType::list(),
                 'status_types' => SoaStatus::list(),
+                'billing_ref_from_types' => BillRefFrom::list(),
             ]);
         }
     }

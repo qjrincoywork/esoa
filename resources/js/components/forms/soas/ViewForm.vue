@@ -2,27 +2,7 @@
 import { ref, onMounted, computed } from 'vue';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-
-type Soa = {
-  id?: number
-  soanum?: string
-  macode?: string
-  refid?: string
-  upcode?: string
-  billcode?: string
-  billtype?: string
-  billdate?: string
-  upload_date?: string
-  due_date?: string
-  period_coverage?: string
-  paid_date?: string
-  amount_due?: number
-  company_branch?: string
-  file_pdf?: string
-  file_xls?: string
-  status?: string
-}
-
+import { Soa } from '@/types';
 
 const props = defineProps({
   soa: {
