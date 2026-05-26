@@ -52,6 +52,8 @@ class RolePermissionSeeder extends Seeder
             'soas.edit',
             'soas.destroy',
             'soas.manage_file',
+            'soas.find_member',
+            'soas.member_files',
         ];
 
         try {
