@@ -537,6 +537,77 @@ class SqlDatabase
         return $result->paginate($perPage);
     }
 
+    /**
+     * Searches members (cardholders) across policynum, batch number, claimnum,
+     * lastname, firstname, account code, and company name.
+     * Returns one row per claim so claimnum is available for file attachment lookup.
+     *
+     * @param array $params
+     * @return \Illuminate\Pagination\LengthAwarePaginator
+     */
+    public function getMembersByParams($params)
+    {
+        $perPage = $params['per_page'] ?? config('vc.default_pages');
+        $authUser = auth()->user();
+
+        $query = $this->db
+            ->table('cholders as c')
+            ->leftJoin('Claims as cl', 'c.ch_policynum', '=', 'cl.cl_policynumber')
+            ->leftJoin('Accounts as a', 'c.ch_accountid', '=', 'a.ac_code')
+            ->select([
+                'c.ch_id',
+                'c.ch_policynum',
+                'c.ch_firstname',
+                'c.ch_lastname',
+                'c.ch_middlename',
+                'c.ch_suffix',
+                'c.ch_accountid',
+                'a.ac_name',
+                'cl.cl_claimnum as claimnum',
+                'cl.cl_batchnumber as batch_number',
+            ]);
+
+        if ($authUser?->hasRole('broker')) {
+            $agentAccounts = (new SqlDatabase(Server::HMS))
+                ->getAccountsOfAgent($authUser->userDetail?->agent_code ?? null);
+            $query->whereIn('c.ch_accountid', $agentAccounts);
+        }
+
+        if ($authUser?->hasRole('account_branch_admin')) {
+            $query->where('c.ch_accountid', $authUser->userDetail?->account_code ?? null);
+            if (!empty($authUser->userDetail?->branch_code)) {
+                $query->where('c.ch_branch_code', $authUser->userDetail->branch_code);
+            }
+        }
+
+        $query
+            ->when(!empty($params['policynum']), function ($q) use ($params) {
+                $q->where('c.ch_policynum', 'like', '%' . $params['policynum'] . '%');
+            })
+            ->when(!empty($params['batch_number']), function ($q) use ($params) {
+                $q->where('cl.cl_batchnumber', 'like', '%' . $params['batch_number'] . '%');
+            })
+            ->when(!empty($params['claimnum']), function ($q) use ($params) {
+                $q->where('cl.cl_claimnum', 'like', '%' . $params['claimnum'] . '%');
+            })
+            ->when(!empty($params['lastname']), function ($q) use ($params) {
+                $q->where('c.ch_lastname', 'like', '%' . $params['lastname'] . '%');
+            })
+            ->when(!empty($params['firstname']), function ($q) use ($params) {
+                $q->where('c.ch_firstname', 'like', '%' . $params['firstname'] . '%');
+            })
+            ->when(!empty($params['account_code']), function ($q) use ($params) {
+                $q->where('c.ch_accountid', $params['account_code']);
+            })
+            ->when(!empty($params['company_name']), function ($q) use ($params) {
+                $q->where('a.ac_name', 'like', '%' . $params['company_name'] . '%');
+            })
+            ->orderBy('c.ch_lastname')
+            ->orderBy('c.ch_firstname');
+
+        return $query->paginate($perPage);
+    }
+
     public function getMdaDetailsByParams($params)
     {
         // Pagination

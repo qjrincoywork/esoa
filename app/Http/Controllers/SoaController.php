@@ -14,11 +14,11 @@ use App\Helpers\CommonHelper;
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Soa\{AccountBranchMembersRequest, AdjustAmountRequest, BillRefsRequest, CreateRequest, FileListRequest, FileProxyRequest, ListRequest, RecordViewedRequest, RecomputeTaxRequest, UpdateRequest, UpdateTagRequest };
+use App\Http\Requests\Soa\{AccountBranchMembersRequest, AdjustAmountRequest, BillRefsRequest, CreateRequest, FileListRequest, FileProxyRequest, FindMemberRequest, ListRequest, MemberFilesRequest, RecordViewedRequest, RecomputeTaxRequest, UpdateRequest, UpdateTagRequest };
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
-use App\Http\Resources\{AccountBranchMemberResource, AccountPaymentResource, BillingRefResource, ConcernResource, OldSoaResource, SoaActivityListResource, SoaAgingCountResource, SoaResource };
+use App\Http\Resources\{AccountBranchMemberResource, AccountPaymentResource, BillingRefResource, ConcernResource, MemberResource, OldSoaResource, SoaActivityListResource, SoaAgingCountResource, SoaResource };
 use App\Mail\{ BillingInvoiceStatusChanged, NewBillingInvoiceUploaded, NewSoaUploaded };
 use App\Models\{Account, Citizenship, CivilStatus, Contact, Department, Gender, MainAccount, Position, Soa, Suffix, UserDetail};
 use Carbon\Carbon;
@@ -681,6 +681,51 @@ class SoaController extends Controller
                 return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
             }
         }
+    }
+
+    /**
+     * Display the Find Member search page, or return paginated JSON results.
+     */
+    public function findMember(FindMemberRequest $request)
+    {
+        $members = (new $this->sqlDatabase(Server::HMS))->getMembersByParams($request->validated());
+
+        if ($request->wantsJson()) {
+            return response()->json([
+                'data' => MemberResource::collection($members)->resolve(),
+                'current_page' => $members->currentPage(),
+                'last_page' => $members->lastPage(),
+                'total' => $members->total(),
+                'per_page' => $members->perPage(),
+            ]);
+        }
+
+        return Inertia::render('soas/FindMember');
+    }
+
+    /**
+     * Return RM attachment files for a given claim number.
+     * Mirrors the file-listing logic of fileList() without requiring an SOA context.
+     */
+    public function memberFiles(MemberFilesRequest $request)
+    {
+        $claimnum = $request->validated('claimnum');
+        $userId = (int) auth()->id();
+
+        $paths = Storage::disk(env('RM_DISK', 'public'))->files($claimnum);
+
+        $files = array_map(function (string $path) use ($userId) {
+            return [
+                'name' => basename($path),
+                'preview_token' => CommonHelper::createFilePreviewToken(
+                    env('RM_DISK', 'public'),
+                    $path,
+                    $userId
+                ),
+            ];
+        }, $paths);
+
+        return response()->json(['files' => $files]);
     }
 
     public function taxComputation(Request $request)

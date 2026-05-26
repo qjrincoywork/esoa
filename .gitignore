@@ -19,6 +19,7 @@ resources/js/helper/lang.json
 
 # IDE files
 .vscode/
+.claude/
 
 /storage/*.key
 /storage/pail

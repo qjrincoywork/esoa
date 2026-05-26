@@ -152,6 +152,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/list', 'list')->name('list');
             Route::get('/file_list', 'fileList')->name('file_list');
             Route::get('/preview_file', 'previewFile')->name('preview_file');
+            Route::get('/find_member', 'findMember')->name('find_member');
+            Route::get('/member_files', 'memberFiles')->name('member_files');
             Route::get('/tax_computation', 'taxComputation')->name('tax_computation');
             Route::get('/get_accounts', 'getAccounts')->name('get_accounts');
             Route::get('/get_billing_refs', 'getBillingRefs')->name('get_billing_refs');
