@@ -29,6 +29,9 @@ return new class extends Migration
      */
     public function down(): void
     {
+        Schema::table('soa_concerns', function (Blueprint $table) {
+            $table->dropForeign(['concern_id']);
+        });
         Schema::dropIfExists('concerns');
     }
 };

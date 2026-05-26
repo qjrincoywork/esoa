@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, computed, h } from 'vue';
+import { ref, watch, computed, h, onMounted } from 'vue';
 import { Head, router, usePage } from '@inertiajs/vue3';
 import { createColumnHelper } from '@tanstack/vue-table';
 import { Auth, User, UserDetail, type BreadcrumbItem } from '@/types';
@@ -244,6 +244,29 @@ const breadcrumbItems: BreadcrumbItem[] = [
     href: slug.value,
   },
 ];
+
+/**
+ * When navigating from the SOA details pane's Concerns tab, a ?open={id} param
+ * is appended and the row data is stored in sessionStorage. On mount we detect
+ * this, retrieve the stored data, open the view pane, then clean up.
+ */
+onMounted(() => {
+  const openId = new URLSearchParams(window.location.search).get('open');
+  if (!openId) return;
+
+  const key = `concern_view_${openId}`;
+  const stored = sessionStorage.getItem(key);
+  if (!stored) return;
+
+  try {
+    const concern = JSON.parse(stored);
+    sessionStorage.removeItem(key);
+    history.replaceState(null, '', window.location.pathname);
+    viewConcern(concern);
+  } catch {
+    sessionStorage.removeItem(key);
+  }
+});
 </script>
 
 <template>
