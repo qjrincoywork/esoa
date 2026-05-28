@@ -565,6 +565,7 @@ class SqlDatabase
                 'a.ac_name',
                 'cl.cl_claimnum as claimnum',
                 'cl.cl_batchnumber as batch_number',
+                'cl.cl_processdate as process_date',
             ]);
 
         if ($authUser?->hasRole('broker')) {
@@ -582,10 +583,10 @@ class SqlDatabase
 
         $query
             ->when(!empty($params['policynum']), function ($q) use ($params) {
-                $q->where('c.ch_policynum', 'like', '%' . $params['policynum'] . '%');
+                $q->where('c.ch_policynum', $params['policynum']);
             })
             ->when(!empty($params['batch_number']), function ($q) use ($params) {
-                $q->where('cl.cl_batchnumber', 'like', '%' . $params['batch_number'] . '%');
+                $q->where('cl.cl_batchnumber', $params['batch_number']);
             })
             ->when(!empty($params['claimnum']), function ($q) use ($params) {
                 $q->where('cl.cl_claimnum', 'like', '%' . $params['claimnum'] . '%');
@@ -603,7 +604,7 @@ class SqlDatabase
                 $q->where('a.ac_name', 'like', '%' . $params['company_name'] . '%');
             })
             ->orderBy('c.ch_lastname')
-            ->orderBy('c.ch_firstname');
+            ->orderBy('cl.cl_processdate', OrderType::DESC);
 
         return $query->paginate($perPage);
     }
