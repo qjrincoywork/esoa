@@ -111,6 +111,7 @@ const baseColumns = [
   columnHelper.accessor('middlename',   { header: 'Middle Name',   cell: ({ getValue }) => getValue() || '—' }),
   columnHelper.accessor('account_code', { header: 'Account Code',  cell: ({ getValue }) => getValue() || '—' }),
   columnHelper.accessor('company_name', { header: 'Company Name',  cell: ({ getValue }) => getValue() || '—' }),
+  columnHelper.accessor('process_date', { header: 'Process Date',  cell: ({ getValue }) => getValue() || '—' }),
 ];
 
 const columns = computed(() => {
@@ -262,32 +263,32 @@ const handlePaginationUpdate = (newPagination: { current_page: number; per_page:
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div class="grid gap-1.5">
             <Label for="fm-policynum">Policy Number</Label>
-            <Input id="fm-policynum" v-model="filters.policynum" placeholder="e.g. TP-12345678-12345-12" autocomplete="off" />
+            <Input id="fm-policynum" v-model="filters.policynum" :disabled="loading" placeholder="e.g. TP-12345678-12345-12" autocomplete="off" />
           </div>
 
           <div class="grid gap-1.5">
             <Label for="fm-lastname">Last Name</Label>
-            <Input id="fm-lastname" v-model="filters.lastname" placeholder="e.g. Dela Cruz" autocomplete="off" />
+            <Input id="fm-lastname" v-model="filters.lastname" :disabled="loading" placeholder="e.g. Dela Cruz" autocomplete="off" />
           </div>
 
           <div class="grid gap-1.5">
             <Label for="fm-firstname">First Name</Label>
-            <Input id="fm-firstname" v-model="filters.firstname" placeholder="e.g. Juan" autocomplete="off" />
+            <Input id="fm-firstname" v-model="filters.firstname" :disabled="loading" placeholder="e.g. Juan" autocomplete="off" />
           </div>
 
           <div class="grid gap-1.5">
             <Label for="fm-batch">Batch Number</Label>
-            <Input id="fm-batch" v-model="filters.batch_number" placeholder="e.g. EO-1234567" autocomplete="off" />
+            <Input id="fm-batch" v-model="filters.batch_number" :disabled="loading" placeholder="e.g. EO-1234567" autocomplete="off" />
           </div>
 
           <div class="grid gap-1.5">
             <Label for="fm-account-code">Account Code</Label>
-            <Input id="fm-account-code" v-model="filters.account_code" placeholder="e.g. TP-12345678 / AT-12345678" autocomplete="off" />
+            <Input id="fm-account-code" v-model="filters.account_code" :disabled="loading" placeholder="e.g. TP-12345678 / AT-12345678" autocomplete="off" />
           </div>
 
           <div class="grid gap-1.5">
             <Label for="fm-company">Company Name</Label>
-            <Input id="fm-company" v-model="filters.company_name" placeholder="e.g. Juan Dela Cruz Corp" autocomplete="off" />
+            <Input id="fm-company" v-model="filters.company_name" :disabled="loading" placeholder="e.g. Juan Dela Cruz Corp" autocomplete="off" />
           </div>
         </div>
 

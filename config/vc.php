@@ -24,8 +24,8 @@ return [
     'max_file_size' => 2048, // in KB
     'max_text_limit' => 800,
     'default_password' => 'VALUCARE123',
-    'contact_email' => 'billingsection@valuecarehealth.com',
-    'billing_notification_email' => env('BILLING_NOTIFICATION_EMAIL', 'billingsection@valuecarehealth.com'),
+    'contact_email' => 'esoabillingandcollection@valuecarehealth.com',
+    'billing_notification_email' => env('BILLING_NOTIFICATION_EMAIL', 'esoabillingandcollection@valuecarehealth.com'),
     'contact_number' => '+639123456789',
     'ignored_diff_keys' => ['created_at', 'updated_at', 'deleted_at'],
     'allowed_soa_status_for_account_branch_admin' => [2, 4],
