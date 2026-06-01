@@ -355,7 +355,6 @@ watch(soa, (val: Soa | undefined) => {
   if (val.billing_ref_from != null) selectedBillRefFrom.value = val.billing_ref_from;
   isSyncingFromSoa.value = false
 }, { immediate: true })
-console.log(!selectedAccount && (billing_refs.length > 0), billing_refs.value, selectedAccount.value)
 </script>
 
 <template>

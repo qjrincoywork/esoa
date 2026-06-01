@@ -36,21 +36,23 @@ const {
       v-bind="componentProps" />
 
     <template #footer>
-      <button
-        v-if="!hasSubmitButton"
-        type="button"
-        class="cursor-pointer px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600"
-        @click="closeModal">
-        Cancel
-      </button>
-      <button
-        v-if="hasSubmitButton"
-        type="button"
-        class="cursor-pointer px-4 py-2 text-sm font-medium text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2"
-        :class="buttonClass"
-        @click="submitModal">
-        {{ buttonLabel }}
-      </button>
+      <div class="flex w-full flex-wrap justify-end gap-2 sm:gap-3">
+        <button
+          v-if="!hasSubmitButton"
+          type="button"
+          class="cursor-pointer rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+          @click="closeModal">
+          Cancel
+        </button>
+        <button
+          v-if="hasSubmitButton"
+          type="button"
+          class="cursor-pointer rounded-lg px-4 py-2 text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2"
+          :class="buttonClass"
+          @click="submitModal">
+          {{ buttonLabel }}
+        </button>
+      </div>
     </template>
   </Modal>
 </template>
