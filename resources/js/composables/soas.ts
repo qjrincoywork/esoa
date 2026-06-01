@@ -514,6 +514,68 @@ export function useSoas() {
     }
   };
 
+  const exportBillingInvoices = async (params: Record<string, string | number>) => {
+    showLoader();
+    try {
+      const qs = new URLSearchParams();
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== '' && value !== undefined && value !== null) {
+          qs.set(key, String(value));
+        }
+      });
+
+      const response = await fetch(`/${slug.value}/export?${qs.toString()}`, {
+        method: 'GET',
+        credentials: 'same-origin',
+        headers: {
+          Accept: 'application/vnd.ms-excel, application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+      });
+
+      const contentType = response.headers.get('Content-Type') ?? '';
+
+      if (!response.ok) {
+        let message = 'Export failed.';
+        if (contentType.includes('application/json')) {
+          const body = (await response.json()) as { message?: string };
+          message = body?.message ?? message;
+        }
+        throw new Error(message);
+      }
+
+      const blob = await response.blob();
+      const disposition = response.headers.get('Content-Disposition') ?? '';
+      const match = disposition.match(/filename[^;=\n]*=["']?([^"';\n]+)["']?/i);
+      const filename =
+        match?.[1]?.trim() ??
+        `billing_invoices_${new Date().toISOString().slice(0, 10)}.xls`;
+
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+
+      dispatchNotification({
+        title: 'Success',
+        content: 'Billing invoices export downloaded.',
+        type: 'success',
+      });
+    } catch (error) {
+      dispatchNotification({
+        title: 'Error',
+        content: error instanceof Error ? error.message : 'Export failed.',
+        type: 'error',
+      });
+    } finally {
+      hideLoader();
+    }
+  };
+
   const adjustSoaAmount = async (payload: { soa_id: number; operation: 'add' | 'deduct'; amount: number }) => {
     const formData = new FormData();
     formData.append('soa_id', String(payload.soa_id));
@@ -565,6 +627,7 @@ export function useSoas() {
     getAccountsByParams,
     getBranchesByParams,
     getBillingRefsByParams,
+    exportBillingInvoices,
     adjustSoaAmount,
 
     openPane,

@@ -145,20 +145,17 @@ class Soa extends Model
     }
 
     /**
-     * Retrieves a paginated list of SOA records from the database.
-     *
-     * @param array $params
-     * @return \Illuminate\Pagination\Paginator
+     * Base query for SOA list and export (shared filters and role scoping).
      */
-    public function getSoas($params)
+    public function listQuery(array $params): Builder
     {
         $authUser = auth()->user();
-        $perPage = $params['per_page'] ?? config('vc.default_pages');
 
-        $result = self::query()
+        $query = self::query()
             ->when(!empty($params), function ($query) use ($params) {
                 $query->tap(fn (Builder $q) => $this->applyListSearchFilters($q, $params));
                 $query->tap(fn (Builder $q) => $this->applyListSearchFiltersDueIn($q, $params));
+                $query->tap(fn (Builder $q) => $this->applyListDateFilters($q, $params));
             })
             ->when($authUser->hasRole('broker'), function ($query) use ($authUser) {
                 $agentAccounts = (new SqlDatabase(Server::HMS))
@@ -174,10 +171,23 @@ class Soa extends Model
             ->orderBy('created_at', OrderType::DESC);
 
         if ($authUser && $authUser->hasRole('superadmin')) {
-            $result->withTrashed();
+            $query->withTrashed();
         }
 
-        return $result->paginate($perPage);
+        return $query;
+    }
+
+    /**
+     * Retrieves a paginated list of SOA records from the database.
+     *
+     * @param array $params
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     */
+    public function getSoas($params)
+    {
+        $perPage = $params['per_page'] ?? config('vc.default_pages');
+
+        return $this->listQuery($params)->paginate($perPage);
     }
 
     /**
@@ -236,6 +246,44 @@ class Soa extends Model
         }
         if (array_key_exists('status', $params) && $params['status'] !== null && $params['status'] !== '') {
             $query->where('status', (int) $params['status']);
+        }
+    }
+
+    /**
+     * Apply due-date and bill-date (created_at) range filters for list and export.
+     */
+    protected function applyListDateFilters(Builder $query, array $params): void
+    {
+        if (!empty($params['due_date_from'] ?? null)) {
+            $query->where(
+                'due_date',
+                '>=',
+                Carbon::parse($params['due_date_from'])->startOfDay()
+            );
+        }
+
+        if (!empty($params['due_date_to'] ?? null)) {
+            $query->where(
+                'due_date',
+                '<=',
+                Carbon::parse($params['due_date_to'])->endOfDay()
+            );
+        }
+
+        if (!empty($params['bill_date_from'] ?? null)) {
+            $query->where(
+                'created_at',
+                '>=',
+                Carbon::parse($params['bill_date_from'])->startOfDay()
+            );
+        }
+
+        if (!empty($params['bill_date_to'] ?? null)) {
+            $query->where(
+                'created_at',
+                '<=',
+                Carbon::parse($params['bill_date_to'])->endOfDay()
+            );
         }
     }
 

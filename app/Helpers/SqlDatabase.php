@@ -603,8 +603,8 @@ class SqlDatabase
             ->when(!empty($params['company_name']), function ($q) use ($params) {
                 $q->where('a.ac_name', 'like', '%' . $params['company_name'] . '%');
             })
-            ->orderBy('c.ch_lastname')
-            ->orderBy('cl.cl_processdate', OrderType::DESC);
+            ->orderBy('cl.cl_processdate', OrderType::DESC)
+            ->orderBy('c.ch_lastname');
 
         return $query->paginate($perPage);
     }

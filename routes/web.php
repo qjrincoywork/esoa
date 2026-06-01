@@ -150,6 +150,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/file_proxy', 'fileProxy')->name('file_proxy');
             Route::get('/', 'index')->name('index');
             Route::get('/list', 'list')->name('list');
+            Route::get('/export', 'exportList')->name('export');
             Route::get('/file_list', 'fileList')->name('file_list');
             Route::get('/preview_file', 'previewFile')->name('preview_file');
             Route::get('/find_member', 'findMember')->name('find_member');

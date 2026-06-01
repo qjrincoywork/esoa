@@ -59,6 +59,7 @@ const {
   getAccountsByParams,
   getBranchesByParams,
   getBillingRefsByParams,
+  exportBillingInvoices,
   openPane,
   closePane,
   topPaneVisible,
@@ -299,6 +300,10 @@ const clearFilters = () => {
 };
 
 const filtersActive = computed(() => soaListFiltersActive(filters.value));
+
+const exportList = () => {
+  void exportBillingInvoices(soaListFiltersToParams(filters.value));
+};
 
 const filterDebounceMs = 500;
 const filterWatchTimeout = ref<number | null>(null);
@@ -541,8 +546,14 @@ watch(
         <div class="bg-[var(--color-surface)] shadow-sm border border-[var(--color-border)] p-6">
             <div class="flex flex-col gap-4 mb-4">
               <div class="flex flex-row lg:flex-row justify-between items-stretch lg:items-start gap-4">
-                <div class="flex flex-1 flex-row gap-3 min-w-0">
+                <div class="flex flex-1 flex-row flex-wrap gap-3 min-w-0">
                   <Button class="cursor-pointer" v-if="canCreate" :onClick="newSoa">Upload</Button>
+                  <Button
+                    v-if="hasPermission(slug + '.export')"
+                    class="cursor-pointer"
+                    :onClick="exportList">
+                    Export Excel
+                  </Button>
                 </div>
               </div>
 
@@ -659,6 +670,43 @@ watch(
                                           </SelectContent>
                                       </Select>
                                   </div>
+
+                                  <div class="grid gap-2 md:col-span-1">
+                                      <Label for="soa-filter-bill-date-from">Bill date from</Label>
+                                      <Input
+                                          id="soa-filter-bill-date-from"
+                                          v-model="filters.bill_date_from"
+                                          type="date"
+                                          class="mt-0"
+                                      />
+                                  </div>
+                                  <div class="grid gap-2 md:col-span-1">
+                                      <Label for="soa-filter-bill-date-to">Bill date to</Label>
+                                      <Input
+                                          id="soa-filter-bill-date-to"
+                                          v-model="filters.bill_date_to"
+                                          type="date"
+                                          class="mt-0"
+                                      />
+                                  </div>
+                                  <div class="grid gap-2 md:col-span-1">
+                                      <Label for="soa-filter-due-date-from">Due date from</Label>
+                                      <Input
+                                          id="soa-filter-due-date-from"
+                                          v-model="filters.due_date_from"
+                                          type="date"
+                                          class="mt-0"
+                                      />
+                                  </div>
+                                  <div class="grid gap-2 md:col-span-1">
+                                      <Label for="soa-filter-due-date-to">Due date to</Label>
+                                      <Input
+                                          id="soa-filter-due-date-to"
+                                          v-model="filters.due_date_to"
+                                          type="date"
+                                          class="mt-0"
+                                      />
+                                  </div>
                               </div>
                               <div class="flex flex-wrap items-center gap-2">
                                   <Button
@@ -698,6 +746,7 @@ watch(
               :row-click="openSoaFilesPane"
               empty-message="No soas found"
               empty-description="System soas will appear here. Use filters, pagination, or change rows per page to load data."
+              :enable-export="false"
               export-file-name="soas_list"
               @update:pagination="(newPagination) => { markInteracted(); pagination = newPagination }">
             </Datatable>
