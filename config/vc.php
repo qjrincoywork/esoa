@@ -19,6 +19,7 @@ return [
     'peso_sign' => '₱',
     'default_pages' => 10,
     'max_per_pages' => 100,
+    'soa_export_max_rows' => 7000,
     'file_preview_token_ttl_minutes' => 10,//FILE_PREVIEW_TOKEN_TTL_MINUTES
     'max_string_limit' => 191,
     'max_file_size' => 2048, // in KB
@@ -29,4 +30,19 @@ return [
     'contact_number' => '+639123456789',
     'ignored_diff_keys' => ['created_at', 'updated_at', 'deleted_at'],
     'allowed_soa_status_for_account_branch_admin' => [2, 4],
+    'billing_invoice_export_headers' => [
+        'Billing Invoice',
+        'Account Code',
+        'Account',
+        'Branch Code',
+        'Branch',
+        'Account Type',
+        'Billing Ref',
+        'Bill Date',
+        'Due Date',
+        'Due In',
+        'Amount',
+        'Status',
+        'Period Coverage',
+    ],
 ];
