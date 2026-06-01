@@ -421,6 +421,10 @@
     z-index: var(--z-tooltip);
   }
 }
+
+section {
+  border-color: var(--foreground);
+}
 /* End Default Theme */
 
 @layer base {

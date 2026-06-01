@@ -287,7 +287,7 @@ export function useSoas() {
             formApi = api
           }
         },
-        size: 'xl',
+        size: 'xl2',
         onSubmit: async () => {
           if (!formApi) return;
 
