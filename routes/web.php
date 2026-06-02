@@ -22,24 +22,24 @@ use Laravel\Fortify\Features;
 //         'canRegister' => Features::enabled(false),
 //     ]);
 // })->name('home');
-Route::get('/test-email/{id}', function ($id) {
-    $agingValue = SoaAging::PAST_DUE;
+// Route::get('/test-email/{id}', function ($id) {
+//     $agingValue = SoaAging::PAST_DUE;
 
-    return view('emails.esoa.billing-invoice-due-reminder', [
-        'agingLabel' => SoaAging::label($agingValue),
-        'soaCount' => 5,
-        'listUrl' => SoaAging::listUrl($agingValue),
-    ]);
-    // return view('emails.esoa.billing-invoice-status-changed', [
-    //     'soa' => Soa::findOrFail($id),
-    // ]);
-    // return view('emails.esoa.concern-notification', [
-    //     'concern' => Concern::findOrFail($id),
-    // ]);
-    // return view('emails.esoa.account-payment-notification', [
-    //     'accountPayment' => AccountPayment::findOrFail($id),
-    // ]);
-});
+//     return view('emails.esoa.billing-invoice-due-reminder', [
+//         'agingLabel' => SoaAging::label($agingValue),
+//         'soaCount' => 5,
+//         'listUrl' => SoaAging::listUrl($agingValue),
+//     ]);
+//     // return view('emails.esoa.billing-invoice-status-changed', [
+//     //     'soa' => Soa::findOrFail($id),
+//     // ]);
+//     // return view('emails.esoa.concern-notification', [
+//     //     'concern' => Concern::findOrFail($id),
+//     // ]);
+//     // return view('emails.esoa.account-payment-notification', [
+//     //     'accountPayment' => AccountPayment::findOrFail($id),
+//     // ]);
+// });
 Route::get('/', function () {
     return Inertia::render('auth/Login', [
         'canResetPassword' => Features::enabled(Features::resetPasswords()),
