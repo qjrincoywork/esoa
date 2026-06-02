@@ -24,6 +24,8 @@ import SoaAccountPaymentsList from '@/components/forms/soas/SoaAccountPaymentsLi
 import AmountManagementForm from '@/components/forms/soas/AmountManagementForm.vue';
 import AccountBranchMembers from '@/components/forms/soas/AccountBranchMembers.vue';
 import { Soa } from '@/types';
+import { useModulePermissions } from '@/composables/useModulePermissions';
+const { slug, hasPermission } = useModulePermissions();
 
 const props = defineProps({
   soa: {
@@ -79,13 +81,13 @@ const existingExcel = computed(() => {
         <TabsTrigger class="cursor-pointer" value="amount_management" v-if="page.props.auth.user?.user_detail?.employee_no || page.props.auth.is_superadmin">
           Amount Management
         </TabsTrigger>
-        <TabsTrigger class="cursor-pointer" value="members">
+        <TabsTrigger v-if="hasPermission(`${slug}.account_branch_members`)" class="cursor-pointer" value="members">
           Account / Branch Members
         </TabsTrigger>
-        <TabsTrigger class="cursor-pointer" value="concerns">
+        <TabsTrigger v-if="hasPermission(`${slug}.concerns`)"  class="cursor-pointer" value="concerns">
           Concerns
         </TabsTrigger>
-        <TabsTrigger class="cursor-pointer" value="remittance_advices">
+        <TabsTrigger v-if="hasPermission(`${slug}.account_payments`)" class="cursor-pointer" value="remittance_advices">
           Remittance Advices
         </TabsTrigger>
         <TabsTrigger class="cursor-pointer" value="activities">
@@ -173,7 +175,7 @@ const existingExcel = computed(() => {
           </CardContent>
         </Card>
       </TabsContent>
-      <TabsContent value="concerns">
+      <TabsContent v-if="hasPermission(`${slug}.concerns`)" value="concerns">
         <Card>
           <CardContent class="grid gap-6">
             <SoaConcernsList
@@ -182,7 +184,7 @@ const existingExcel = computed(() => {
           </CardContent>
         </Card>
       </TabsContent>
-      <TabsContent value="remittance_advices">
+      <TabsContent v-if="hasPermission(`${slug}.account_payments`)" value="remittance_advices">
         <Card>
           <CardContent class="grid gap-6">
             <SoaAccountPaymentsList
@@ -210,7 +212,7 @@ const existingExcel = computed(() => {
           </CardContent>
         </Card>
       </TabsContent>
-      <TabsContent value="members">
+      <TabsContent v-if="hasPermission(`${slug}.account_branch_members`)" value="members">
         <Card>
           <CardContent class="grid gap-6">
             <AccountBranchMembers

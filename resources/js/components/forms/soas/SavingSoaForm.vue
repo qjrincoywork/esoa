@@ -568,7 +568,7 @@ watch(soa, (val: Soa | undefined) => {
         </div>
 
         <div v-if="!isEndorsed" class="grid gap-2">
-          <Label for="period_date_from">Period Date From</Label>
+          <Label for="period_date_from">Period Date From<span class="text-red-400">*</span></Label>
           <Input
             id="period_date_from"
             type="date"
@@ -579,7 +579,7 @@ watch(soa, (val: Soa | undefined) => {
         </div>
 
         <div v-if="!isEndorsed" class="grid gap-2">
-          <Label for="period_date_to">Period Date To</Label>
+          <Label for="period_date_to">Period Date To<span class="text-red-400">*</span></Label>
           <Input
             id="period_date_to"
             type="date"
