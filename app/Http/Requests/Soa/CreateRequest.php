@@ -103,13 +103,13 @@ class CreateRequest extends FormRequest
                 'required',
                 'file',
                 'mimes:pdf',
-                'max:20480' // 2MB (size is in KB)
+                'max:' . config('vc.max_file_size'), // 2MB (size is in KB)
             ],
             'file_xls' => [
                 'required_unless:bill_type,' . BillType::ECU,
                 'file',
                 'mimes:xls,xlsx',
-                'max:20480' // 2MB (size is in KB)
+                'max:' . config('vc.max_file_size'), // 2MB (size is in KB)
             ],
         ];
     }
