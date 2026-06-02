@@ -22,7 +22,7 @@ return [
     'soa_export_max_rows' => 7000,
     'file_preview_token_ttl_minutes' => 10,//FILE_PREVIEW_TOKEN_TTL_MINUTES
     'max_string_limit' => 191,
-    'max_file_size' => 2048, // in KB
+    'max_file_size' => 2048, // 2MB in KB
     'max_text_limit' => 800,
     'default_password' => 'VALUCARE123',
     'contact_email' => 'esoabillingandcollection@valuecarehealth.com',

@@ -44,7 +44,7 @@ class UpdateRequest extends FormRequest
                     ...$filePdfRules,
                     'file',
                     'mimes:pdf',
-                    'max:20480', // 2MB (size is in KB)
+                    'max:' . config('vc.max_file_size'), // 2MB (size is in KB)
                 ];
             }
             $existingFileXls = Soa::whereKey($this->input('id'))->value('file_xls');
@@ -59,7 +59,7 @@ class UpdateRequest extends FormRequest
                     ...$fileXlsRules,
                     'file',
                     'mimes:xls,xlsx',
-                    'max:20480', // 2MB (size is in KB)
+                    'max:' . config('vc.max_file_size'), // 2MB (size is in KB)
                 ];
             }
 

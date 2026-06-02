@@ -94,7 +94,7 @@ const amount = ref(soa.value?.amount != null ? String(soa.value.amount) : '')
 const billingDateFrom = ref('')
 const billingDateTo = ref('')
 const hasBillingRefValue = ref(soa.value?.billing_ref != null && billingRef.value.length > 0)
-const hasBillingRef = ref(soa.value?.id ? true : hasBillingRefValue.value)
+const hasBillingRef = ref(soa.value?.billing_ref ? true : hasBillingRefValue.value)
 const searchedBranchName = ref('')
 const searchedBillingRef = ref('')
 const isSyncingFromSoa = ref(false)
@@ -214,6 +214,9 @@ const searchBillingRefsByParams = async (name = '', page = 1, append = false) =>
     billing_refs.value = [];
     return;
   }
+  if (!hasBillingRef.value) {
+    return;
+  }
   if (append) {
     billingRefsLoadingMore.value = true;
   }
@@ -260,6 +263,9 @@ function loadMoreData(input: string) {
       break;
     case 'billingRefs':
       if (!hasMoreBillingRefs.value || billingRefsLoadingMore.value) return;
+      if (!hasBillingRef.value) {
+        return;
+      }
       void searchBillingRefsByParams(searchedBillingRef.value, billingRefPage.value + 1, true);
       break;
   }
@@ -603,7 +609,7 @@ watch(soa, (val: Soa | undefined) => {
         </div>
 
         <div class="grid gap-2">
-          <Label for="file_pdf">PDF File</Label>
+          <Label for="file_pdf">PDF File<span class="text-red-400">*</span></Label>
           <p v-if="existingPdf" class="text-xs text-[var(--color-text-muted)]">
             Current:
             <a
