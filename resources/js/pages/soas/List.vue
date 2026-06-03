@@ -16,7 +16,6 @@ import { useModulePermissions } from '@/composables/useModulePermissions';
 import { debounce } from '@/composables/utilities/helper';
 import RightPane from '@/components/RightPane.vue';
 import TopPane from '@/components/TopPane.vue';
-import { Search } from 'lucide-vue-next';
 
 import {
   emptySoaListFilters,
@@ -133,7 +132,6 @@ const searchedBranchName = ref('');
 const searchedBillingRef = ref('');
 const accounts = ref<SearchableComboboxItem[]>([]);
 const branches = ref<SearchableComboboxItem[]>([]);
-const billing_refs = ref<SearchableComboboxItem[]>([]);
 const accountPage = ref(1);
 const accountLastPage = ref(1);
 const branchPage = ref(1);
@@ -271,7 +269,6 @@ const suppressFilterWatch = ref(false);
 const resetDependentLists = () => {
   accounts.value = [];
   branches.value = [];
-  billing_refs.value = [];
   accountPage.value = 1;
   accountLastPage.value = 1;
   branchPage.value = 1;
@@ -287,6 +284,12 @@ const clearFilters = () => {
   }
   suppressFilterWatch.value = true;
   filters.value = emptySoaListFilters();
+  if (isAccountBranchAdmin.value) {
+    filters.value.account_code = userDetail.value?.account_code ?? '';
+    if (filters.value.account_code) {
+      searchBranchesByParams();
+    }
+  }
   searchedAccountName.value = '';
   searchedBranchName.value = '';
   searchedBillingRef.value = '';
@@ -300,7 +303,13 @@ const clearFilters = () => {
 };
 
 const filtersActive = computed(() => soaListFiltersActive(filters.value));
+const isAccountBranchAdmin = computed(() => userDetail.value?.employee_no == null || userDetail.value?.employee_no == '');
 
+const selectedAccountCode = computed(() =>
+  isAccountBranchAdmin.value
+    ? (userDetail.value?.account_code ?? '')
+    : (selectedAccountFilter.value?.value ?? '')
+);
 const exportList = () => {
   void exportBillingInvoices(soaListFiltersToParams(filters.value));
 };
@@ -330,7 +339,6 @@ watch(
     if (!filtersBootstrapped.value || suppressFilterWatch.value) return;
     filters.value.account_code = '';
     filters.value.branch_code = '';
-    filters.value.billing_ref = '';
     searchedAccountName.value = '';
     searchedBranchName.value = '';
     searchedBillingRef.value = '';
@@ -343,11 +351,9 @@ watch(
   () => {
     if (!filtersBootstrapped.value || suppressFilterWatch.value) return;
     filters.value.branch_code = '';
-    filters.value.billing_ref = '';
     searchedBranchName.value = '';
     searchedBillingRef.value = '';
     branches.value = [];
-    billing_refs.value = [];
     branchPage.value = 1;
     branchLastPage.value = 1;
     billingRefPage.value = 1;
@@ -379,7 +385,7 @@ const searchAccountsByParams = async (name = '', pageNum = 1, append = false) =>
 };
 
 const searchBranchesByParams = async (name = '', pageNum = 1, append = false) => {
-  if (!selectedAccountFilter.value?.value) {
+  if (!selectedAccountCode.value) {
     branches.value = [];
     return;
   }
@@ -387,7 +393,7 @@ const searchBranchesByParams = async (name = '', pageNum = 1, append = false) =>
     branchesLoadingMore.value = true;
   }
   const result = await getBranchesByParams({
-    account_code: selectedAccountFilter.value.value,
+    account_code: selectedAccountCode.value,
     name,
     page: pageNum,
   });
@@ -401,29 +407,6 @@ const searchBranchesByParams = async (name = '', pageNum = 1, append = false) =>
   branchesLoadingMore.value = false;
 };
 
-const searchBillingRefsByParams = async (name = '', pageNum = 1, append = false) => {
-  if (!selectedAccountFilter.value?.value) {
-    billing_refs.value = [];
-    return;
-  }
-  if (append) {
-    billingRefsLoadingMore.value = true;
-  }
-  const result = await getBillingRefsByParams({
-    account_code: selectedAccountFilter.value.value,
-    name,
-    page: pageNum,
-  });
-  if (append) {
-    billing_refs.value = [...(billing_refs.value ?? []), ...(result?.data ?? [])];
-  } else {
-    billing_refs.value = result?.data ?? [];
-  }
-  billingRefPage.value = result?.current_page ?? 1;
-  billingRefLastPage.value = result?.last_page ?? 1;
-  billingRefsLoadingMore.value = false;
-};
-
 const debouncedGetAccounts: (...args: unknown[]) => void = debounce((evOrName?: unknown) => {
   const name = typeof evOrName === 'string' ? evOrName : ((evOrName as { target?: { value?: string } })?.target?.value ?? '');
   void searchAccountsByParams(name, 1, false);
@@ -432,11 +415,6 @@ const debouncedGetAccounts: (...args: unknown[]) => void = debounce((evOrName?: 
 const debouncedGetBranches: (...args: unknown[]) => void = debounce((evOrName?: unknown) => {
   const name = typeof evOrName === 'string' ? evOrName : ((evOrName as { target?: { value?: string } })?.target?.value ?? '');
   void searchBranchesByParams(name, 1, false);
-});
-
-const debouncedGetBillingRefs: (...args: unknown[]) => void = debounce((evOrName?: unknown) => {
-  const name = typeof evOrName === 'string' ? evOrName : ((evOrName as { target?: { value?: string } })?.target?.value ?? '');
-  void searchBillingRefsByParams(name, 1, false);
 });
 
 function loadMoreData(kind: 'accounts' | 'branches' | 'billingRefs') {
@@ -448,10 +426,6 @@ function loadMoreData(kind: 'accounts' | 'branches' | 'billingRefs') {
     case 'branches':
       if (!hasMoreBranches.value || branchesLoadingMore.value) return;
       void searchBranchesByParams(searchedBranchName.value, branchPage.value + 1, true);
-      break;
-    case 'billingRefs':
-      if (!hasMoreBillingRefs.value || billingRefsLoadingMore.value) return;
-      void searchBillingRefsByParams(searchedBillingRef.value, billingRefPage.value + 1, true);
       break;
   }
 }
@@ -467,34 +441,37 @@ watch([() => filters.value.account_type, searchedAccountName], async () => {
   }
 }, { immediate: true });
 
-watch([selectedAccountFilter, searchedBranchName, searchedBillingRef], async () => {
-  if (selectedAccountFilter.value?.value != null) {
+watch([selectedAccountCode, searchedBranchName, searchedBillingRef], async () => {
+  if (!filtersBootstrapped.value) return;
+  if (selectedAccountCode.value) {
     if (searchedBranchName.value.length > 0) {
       debouncedGetBranches(searchedBranchName.value);
     } else {
       await searchBranchesByParams();
     }
-    if (searchedBillingRef.value.length > 0) {
-      debouncedGetBillingRefs(searchedBillingRef.value);
-    } else {
-      await searchBillingRefsByParams();
-    }
   } else {
     branches.value = [];
-    billing_refs.value = [];
   }
 }, { immediate: true });
 
 onMounted(async () => {
-  if (filters.value.account_type) {
-    await searchAccountsByParams(searchedAccountName.value, 1, false);
+  if (isAccountBranchAdmin.value) {
+    filters.value.account_code = userDetail.value?.account_code ?? '';
     if (filters.value.account_code) {
       await searchBranchesByParams();
-      await searchBillingRefsByParams();
     }
+    await nextTick();
+    filtersBootstrapped.value = true;
+  } else {
+    if (filters.value.account_type) {
+      await searchAccountsByParams(searchedAccountName.value, 1, false);
+      if (filters.value.account_code) {
+        await searchBranchesByParams();
+      }
+    }
+    await nextTick();
+    filtersBootstrapped.value = true;
   }
-  await nextTick();
-  filtersBootstrapped.value = true;
 });
 
 const isUpdatingFromServer = ref(false)
@@ -557,7 +534,7 @@ watch(
                 </div>
               </div>
 
-              <div v-if="userDetail?.employee_no || auth?.is_superadmin" class="grid gap-2 md:col-span-1">
+              <div class="grid gap-2 md:col-span-1">
                 <Accordion type="single" collapsible>
                   <AccordionItem value="filters">
                     <AccordionTrigger class="cursor-pointer">Filters</AccordionTrigger>
@@ -565,7 +542,7 @@ watch(
                       <div class="flex flex-row lg:flex-row justify-between items-stretch lg:items-start gap-4">
                           <div class="flex flex-1 flex-col gap-3 min-w-0">
                               <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                  <div class="grid gap-2 md:col-span-1">
+                                  <div v-if="!isAccountBranchAdmin" class="grid gap-2 md:col-span-1">
                                       <Label for="soa-filter-account-type">Account Type</Label>
                                       <Select v-model="accountTypeModel">
                                           <SelectTrigger id="soa-filter-account-type" class="w-full">
@@ -585,7 +562,7 @@ watch(
                                       </Select>
                                   </div>
 
-                                  <div class="md:col-span-1">
+                                  <div v-if="!isAccountBranchAdmin" class="md:col-span-1">
                                       <SearchableCombobox
                                           id="soa-filter-account"
                                           label="Account"
@@ -596,7 +573,7 @@ watch(
                                           placeholder="Select account…"
                                           search-placeholder="Search account…"
                                           empty-text="No account found."
-                                          :disabled="!filters.account_type"
+                                          :disabled="!filters.account_code"
                                           :has-more="hasMoreAccounts"
                                           :loading-more="accountsLoadingMore"
                                           @load-more="loadMoreData('accounts')"
@@ -614,28 +591,10 @@ watch(
                                           placeholder="Select branch…"
                                           search-placeholder="Search branch…"
                                           empty-text="No branch found."
-                                          :disabled="!selectedAccountFilter"
+                                          :disabled="!selectedAccountCode"
                                           :has-more="hasMoreBranches"
                                           :loading-more="branchesLoadingMore"
                                           @load-more="loadMoreData('branches')"
-                                      />
-                                  </div>
-
-                                  <div class="md:col-span-1">
-                                      <SearchableCombobox
-                                          id="soa-filter-billing-ref"
-                                          label="Billing Ref"
-                                          :model-value="filters.billing_ref || null"
-                                          @update:model-value="(v) => { filters.billing_ref = v != null ? String(v) : '' }"
-                                          v-model:search="searchedBillingRef"
-                                          :items="billing_refs"
-                                          placeholder="Select billing ref…"
-                                          search-placeholder="Search billing ref…"
-                                          empty-text="No billing ref found."
-                                          :disabled="!selectedAccountFilter"
-                                          :has-more="hasMoreBillingRefs"
-                                          :loading-more="billingRefsLoadingMore"
-                                          @load-more="loadMoreData('billingRefs')"
                                       />
                                   </div>
 
@@ -721,19 +680,6 @@ watch(
                     </AccordionContent>
                   </AccordionItem>
                 </Accordion>
-              </div>
-              <div v-else class="w-md">
-                <div class="grid gap-2 md:col-span-1">
-                  <Label for="soa-filter-soa-number">SOA Number / Billing Invoice</Label>
-                  <Input
-                    id="soa-filter-soa-number"
-                    v-model="filters.soanum"
-                    type="text"
-                    autocomplete="off"
-                    placeholder="SOA Number / Billing Invoice"
-                    class="mt-0"
-                  />
-                </div>
               </div>
             </div>
             <Datatable
