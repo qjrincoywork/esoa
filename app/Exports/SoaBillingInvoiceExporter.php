@@ -11,7 +11,7 @@ use App\Models\Soa;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Str;
-use Symfony\Component\HttpFoundation\StreamedResponse;
+use Symfony\Component\HttpFoundation\{Response, StreamedResponse};
 
 class SoaBillingInvoiceExporter
 {
@@ -75,9 +75,9 @@ class SoaBillingInvoiceExporter
             number_format((float) $soa->amount, 2, '.', ''),
             SoaStatus::label((int) $soa->status),
             Str::upper(
-                CommonHelper::formatDate($soa->period_date_from)
+                CommonHelper::formatDate($this->contractStartDate($soa->account_code))
                 . ' TO '
-                . CommonHelper::formatDate($soa->period_date_to)
+                . CommonHelper::formatDate($this->contractEndDate($soa->account_code))
             ),
         ];
 
@@ -87,6 +87,38 @@ class SoaBillingInvoiceExporter
         }
 
         return $row . '</tr>';
+    }
+
+    protected function contractStartDate(?string $accountCode): string
+    {
+        if (empty($accountCode)) {
+            abort(Response::HTTP_NOT_FOUND);
+        }
+        $account = (new SqlDatabase(Server::HMS))->getAccount($accountCode);
+        if (empty($account)) {
+            abort(Response::HTTP_NOT_FOUND);
+        }
+        $effectivityDate = CommonHelper::formatDate($account->ac_effdate);
+        $renewalDate = CommonHelper::formatDate($account->ac_rendate);
+        $startDate = $effectivityDate ?? $renewalDate;
+
+        return $startDate;
+    }
+
+    protected function contractEndDate(?string $accountCode): string
+    {
+        if (empty($accountCode)) {
+            abort(Response::HTTP_NOT_FOUND);
+        }
+        $account = (new SqlDatabase(Server::HMS))->getAccount($accountCode);
+        if (empty($account)) {
+            abort(Response::HTTP_NOT_FOUND);
+        }
+        $cancelDate = CommonHelper::formatDate($account->ac_candate);
+        $expiryDate = CommonHelper::formatDate($account->ac_expiry);
+        $endDate = $cancelDate ?? $expiryDate;
+
+        return $endDate;
     }
 
     protected function accountName(?string $accountCode): string
