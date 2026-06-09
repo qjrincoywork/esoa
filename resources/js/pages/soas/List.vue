@@ -573,7 +573,7 @@ watch(
                                           placeholder="Select account…"
                                           search-placeholder="Search account…"
                                           empty-text="No account found."
-                                          :disabled="!filters.account_code"
+                                          :disabled="!filters.account_type"
                                           :has-more="hasMoreAccounts"
                                           :loading-more="accountsLoadingMore"
                                           @load-more="loadMoreData('accounts')"

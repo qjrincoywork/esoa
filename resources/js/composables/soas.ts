@@ -354,10 +354,11 @@ export function useSoas() {
       dispatchNotification({ title: 'Error', content: 'Invalid SOA', type: 'error' });
       return;
     }
-    const path = `/${slug.value}/${soa.id}/attachment/pdf`;
-    const url = new URL(path, window.location.origin).href;
-    const opened = window.open(url, '_blank', 'noopener,noreferrer');
-    if (!opened) {
+    try {
+      const path = `/${slug.value}/${soa.id}/attachment/pdf`;
+      const url = new URL(path, window.location.origin).href;
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (error) {
       dispatchNotification({
         title: 'Error',
         content: 'Could not open a new tab.',
