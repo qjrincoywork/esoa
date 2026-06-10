@@ -74,11 +74,10 @@ class SoaBillingInvoiceExporter
             $this->formatDaysDue($soa->due_date),
             number_format((float) $soa->amount, 2, '.', ''),
             SoaStatus::label((int) $soa->status),
-            Str::upper(
-                CommonHelper::formatDate($this->contractStartDate($soa->account_code))
-                . ' TO '
-                . CommonHelper::formatDate($this->contractEndDate($soa->account_code))
-            ),
+            CommonHelper::formatDate($soa->period_date_from),
+            CommonHelper::formatDate($soa->period_date_to),
+            CommonHelper::formatDate($this->contractStartDate($soa->account_code)),
+            CommonHelper::formatDate($this->contractEndDate($soa->account_code)),
         ];
 
         $row = '<tr>';

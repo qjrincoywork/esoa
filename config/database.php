@@ -1,5 +1,6 @@
 <?php
 
+use App\Support\SqlServer;
 use Illuminate\Support\Str;
 
 return [
@@ -103,8 +104,8 @@ return [
             'host' => env('DB_HOST', 'localhost'),
             'port' => env('DB_PORT', '1433'),
             'database' => env('DB_DATABASE', 'esoa'),
-            'username' => env('DB_USERNAME', ''),
-            'password' => env('DB_PASSWORD', ''),
+            'username' => SqlServer::escapeCredential(env('DB_USERNAME', '')),
+            'password' => SqlServer::escapeCredential(env('DB_PASSWORD', '')),
             'charset' => env('DB_CHARSET', 'utf8'),
             'prefix' => '',
             'prefix_indexes' => true,
@@ -117,8 +118,8 @@ return [
             // 'port' => env('DB_PORT', '1433'),
             'host' => env('HMS_DB_HOST'),
             'database' => env('HMS_DB_DATABASE'),
-            'username' => env('HMS_DB_USERNAME'),
-            'password' => env('HMS_DB_PASSWORD'),
+            'username' => SqlServer::escapeCredential(env('HMS_DB_USERNAME')),
+            'password' => SqlServer::escapeCredential(env('HMS_DB_PASSWORD')),
             'charset' => env('DB_CHARSET', 'utf8'),
             'prefix' => '',
             'prefix_indexes' => true,
@@ -133,8 +134,8 @@ return [
             // 'port' => env('DB_PORT', '1433'),
             'host' => env('OI_DB_HOST'),
             'database' => env('OI_DB_DATABASE'),
-            'username' => env('OI_DB_USERNAME'),
-            'password' => env('OI_DB_PASSWORD'),
+            'username' => SqlServer::escapeCredential(env('OI_DB_USERNAME')),
+            'password' => SqlServer::escapeCredential(env('OI_DB_PASSWORD')),
             'charset' => env('DB_CHARSET', 'utf8'),
             'prefix' => '',
             'prefix_indexes' => true,
@@ -147,8 +148,8 @@ return [
             'port' => env('SOA_DB_PORT', '1433'), // 'port' => env('DB_PORT', '1433'),
             'host' => env('SOA_DB_HOST'),
             'database' => env('SOA_DB_DATABASE'),
-            'username' => env('SOA_DB_USERNAME'),
-            'password' => env('SOA_DB_PASSWORD'),
+            'username' => SqlServer::escapeCredential(env('SOA_DB_USERNAME')),
+            'password' => SqlServer::escapeCredential(env('SOA_DB_PASSWORD')),
             'charset' => env('DB_CHARSET', 'utf8'),
             'prefix' => '',
             'prefix_indexes' => true,
@@ -169,8 +170,8 @@ return [
             // 'port' => env('DB_PORT', '1433'),
             'host' => env('CENUSER_DB_HOST'),
             'database' => env('CENUSER_DB_DATABASE'),
-            'username' => env('CENUSER_DB_USERNAME'),
-            'password' => env('CENUSER_DB_PASSWORD'),
+            'username' => SqlServer::escapeCredential(env('CENUSER_DB_USERNAME')),
+            'password' => SqlServer::escapeCredential(env('CENUSER_DB_PASSWORD')),
             'charset' => env('DB_CHARSET', 'utf8'),
             'prefix' => '',
             'prefix_indexes' => true,
