@@ -20,6 +20,8 @@ resources/js/helper/lang.json
 # IDE files
 .vscode/
 .claude/
+.qodo/
+.cursor/
 
 /storage/*.key
 /storage/pail
