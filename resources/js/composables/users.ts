@@ -3,6 +3,7 @@ import { useAjax } from '@/composables/useAjax';
 import DeleteForm from '@/components/forms/users/DeleteForm.vue';
 import SavingForm from '@/components/forms/users/SavingForm.vue';
 import UserRolesForm from '@/components/forms/users/UserRolesForm.vue';
+import VerifyForm from '@/components/forms/users/VerifyForm.vue';
 let formApi: { getFormData: () => FormData | null } | null = null;
 import { dispatchNotification } from '@/components/notification';
 import { showLoader, hideLoader } from '@/composables/useLoader';
@@ -344,6 +345,48 @@ export function useUsers() {
     }
   }
 
+  const verifyUsers = async (users: User[]) => {
+    if (!users.length) return;
+
+    openModal({
+      modalTitle: users.length === 1
+        ? `Verify ${users[0]?.username || 'User'}`
+        : `Verify ${users.length} Users`,
+      buttonText: 'Verify',
+      buttonClass: `bg-green-600 hover:bg-green-700 focus:ring-green-500
+        dark:bg-green-500 dark:hover:bg-green-600`,
+      component: VerifyForm,
+      componentProps: {
+        users,
+        onReady: (api: { getFormData: () => FormData | null }) => {
+          formApi = api;
+        },
+      },
+      size: users.length > 3 ? 'md' : 'sm',
+      onSubmit: async () => {
+        if (!formApi) return;
+        const formData = formApi.getFormData();
+        if (!formData) return;
+
+        showLoader();
+        try {
+          const response = await post(`/${slug.value}/verify`, formData);
+          if (!response.ok) {
+            dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+          } else {
+            dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+            closeModal();
+            router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+          }
+        } catch (err) {
+          dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+        } finally {
+          hideLoader();
+        }
+      },
+    });
+  };
+
   return {
     editUser,
     createUser,
@@ -351,6 +394,7 @@ export function useUsers() {
     getAccountsByParams,
     getBranchesByParams,
     manageUserRoles,
+    verifyUsers,
   };
 }
 

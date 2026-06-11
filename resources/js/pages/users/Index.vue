@@ -32,7 +32,7 @@ const users = computed(() => {
     }
     return propsUsers;
 });
-const { createUser, editUser, deleteUser, manageUserRoles } = useUsers();
+const { createUser, editUser, deleteUser, manageUserRoles, verifyUsers } = useUsers();
 const columnHelper = createColumnHelper();
 const pagination = ref({
 	current_page: users.value.current_page,
@@ -70,7 +70,15 @@ const columns = computed(() => {
       handler: handlerMap[m.slug.split('.')[1]],
     }))
 
-  return [...baseColumns, createActionColumn(subModules)]
+  const verifyAction = {
+    slug: 'users.verify',
+    name: 'Verify',
+    color: 'white',
+    icon: ShieldCheck,
+    handler: (user: any) => verifyUsers([user]),
+  }
+
+  return [...baseColumns, createActionColumn([...subModules, verifyAction])]
 })
 
 const breadcrumbItems: BreadcrumbItem[] = [
@@ -227,6 +235,14 @@ watch(
                 empty-description="System users will appear here. Use search, pagination, or change rows per page to load data."
                 export-file-name="users_list"
                 @update:pagination="(newPagination: typeof pagination) => { hasInitialized = true; pagination = newPagination }">
+                <template #bulk-actions="{ selectedRows }">
+                    <button
+                        class="inline-flex items-center gap-1.5 text-xs font-medium text-green-600 dark:text-green-500 hover:text-green-800 dark:hover:text-green-400 cursor-pointer"
+                        @click="verifyUsers(selectedRows.map(r => r.original))">
+                        <ShieldCheck class="w-4 h-4" />
+                        Verify Selected
+                    </button>
+                </template>
             </Datatable>
         </div>
     </AppLayout>
