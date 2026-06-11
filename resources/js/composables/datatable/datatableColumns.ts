@@ -24,7 +24,7 @@ export interface ActionColumnOptions {
   }>;
 }
 
-export function createActionColumn(customActions: ActionColumnOptions) {
+export function createActionColumn(customActions: ActionColumnOptions['customActions']) {
   return columnHelper.display({
     id: 'actions',
     header: 'Actions',

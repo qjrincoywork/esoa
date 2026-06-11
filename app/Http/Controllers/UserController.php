@@ -6,7 +6,7 @@ use App\Enums\{ AccountType, Gender, Server, UserType };
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\User\{CreateRequest, DeleteRequest, ListRequest, UpdateRequest, UpdateRoleRequest};
+use App\Http\Requests\User\{CreateRequest, DeleteRequest, ListRequest, UpdateRequest, UpdateRoleRequest, VerifyRequest};
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
@@ -265,6 +265,41 @@ class UserController extends Controller
             'user_roles' => $user->roles,
             'all_roles' => Role::query()->get(['id', 'name', 'guard_name']),
         ]);
+    }
+
+    /**
+     * Verify one or more users: sets email_verified_at and is_approved.
+     * Restricted to superadmin via VerifyRequest::authorize() and route middleware.
+     */
+    public function verify(VerifyRequest $request)
+    {
+        $ids = $request->validated()['ids'];
+
+        DB::beginTransaction();
+
+        try {
+            $this->user->whereIn('id', $ids)->update([
+                'email_verified_at' => now(),
+                'is_approved'       => 1,
+            ]);
+
+            DB::commit();
+
+            $count   = count($ids);
+            $message = $count === 1
+                ? 'User verified successfully'
+                : "{$count} users verified successfully";
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return CustomResponse::ok($message, Response::HTTP_OK);
+            }
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+            }
+        }
     }
 
     /**
