@@ -22,24 +22,24 @@ use Laravel\Fortify\Features;
 //         'canRegister' => Features::enabled(false),
 //     ]);
 // })->name('home');
-Route::get('/test-email/{id}', function ($id) {
-    $agingValue = SoaAging::PAST_DUE;
+// Route::get('/test-email/{id}', function ($id) {
+//     $agingValue = SoaAging::PAST_DUE;
 
-    return view('emails.esoa.billing-invoice-due-reminder', [
-        'agingLabel' => SoaAging::label($agingValue),
-        'soaCount' => 5,
-        'listUrl' => SoaAging::listUrl($agingValue),
-    ]);
-    // return view('emails.esoa.billing-invoice-status-changed', [
-    //     'soa' => Soa::findOrFail($id),
-    // ]);
-    // return view('emails.esoa.concern-notification', [
-    //     'concern' => Concern::findOrFail($id),
-    // ]);
-    // return view('emails.esoa.account-payment-notification', [
-    //     'accountPayment' => AccountPayment::findOrFail($id),
-    // ]);
-});
+//     return view('emails.esoa.billing-invoice-due-reminder', [
+//         'agingLabel' => SoaAging::label($agingValue),
+//         'soaCount' => 5,
+//         'listUrl' => SoaAging::listUrl($agingValue),
+//     ]);
+//     // return view('emails.esoa.billing-invoice-status-changed', [
+//     //     'soa' => Soa::findOrFail($id),
+//     // ]);
+//     // return view('emails.esoa.concern-notification', [
+//     //     'concern' => Concern::findOrFail($id),
+//     // ]);
+//     // return view('emails.esoa.account-payment-notification', [
+//     //     'accountPayment' => AccountPayment::findOrFail($id),
+//     // ]);
+// });
 Route::get('/', function () {
     return Inertia::render('auth/Login', [
         'canResetPassword' => Features::enabled(Features::resetPasswords()),
@@ -88,6 +88,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::post('/update', 'update')->name('update');
                 Route::post('/store', 'store')->name('store');
                 Route::post('/destroy', 'destroy')->name('destroy');
+                Route::post('/verify', 'verify')->name('verify');
         });
 
         //Roles
@@ -150,6 +151,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/file_proxy', 'fileProxy')->name('file_proxy');
             Route::get('/', 'index')->name('index');
             Route::get('/list', 'list')->name('list');
+            Route::get('/export', 'exportList')->name('export');
             Route::get('/file_list', 'fileList')->name('file_list');
             Route::get('/preview_file', 'previewFile')->name('preview_file');
             Route::get('/find_member', 'findMember')->name('find_member');

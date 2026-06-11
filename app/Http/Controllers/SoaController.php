@@ -10,6 +10,7 @@ use App\Enums\SoaAging;
 use App\Enums\SoaAmountOperation;
 use App\Enums\SoaStatus;
 use App\Enums\UntagType;
+use App\Exports\SoaBillingInvoiceExporter;
 use App\Helpers\CommonHelper;
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
@@ -172,6 +173,35 @@ class SoaController extends Controller
             'soa_status_options' => SoaStatus::list(),
             'soa_account_type_options' => AccountType::list(),
         ]);
+    }
+
+    /**
+     * Export billing invoices matching list filters as an Excel (.xls) file.
+     */
+    public function exportList(ListRequest $request)
+    {
+        $params = $request->validated();
+        $query = $this->soa->listQuery($params);
+        $maxRows = (int) config('vc.soa_export_max_rows', 7000);
+        $total = $query->count();
+
+        if ($total > $maxRows) {
+            return CustomResponse::error(
+                "Too many rows to export ({$total}). Please narrow your filters (maximum {$maxRows}).",
+                Response::HTTP_UNPROCESSABLE_ENTITY
+            );
+        }
+
+        if ($total === 0) {
+            return CustomResponse::error(
+                'No billing invoices match the selected filters.',
+                Response::HTTP_UNPROCESSABLE_ENTITY
+            );
+        }
+
+        $filename = 'billing_invoices_' . now()->format('Y-m-d_His') . '.xls';
+
+        return (new SoaBillingInvoiceExporter())->download($query, $filename);
     }
 
     /**

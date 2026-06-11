@@ -94,7 +94,7 @@ const amount = ref(soa.value?.amount != null ? String(soa.value.amount) : '')
 const billingDateFrom = ref('')
 const billingDateTo = ref('')
 const hasBillingRefValue = ref(soa.value?.billing_ref != null && billingRef.value.length > 0)
-const hasBillingRef = ref(soa.value?.id ? true : hasBillingRefValue.value)
+const hasBillingRef = ref(soa.value?.billing_ref ? true : hasBillingRefValue.value)
 const searchedBranchName = ref('')
 const searchedBillingRef = ref('')
 const isSyncingFromSoa = ref(false)
@@ -214,6 +214,9 @@ const searchBillingRefsByParams = async (name = '', page = 1, append = false) =>
     billing_refs.value = [];
     return;
   }
+  if (!hasBillingRef.value) {
+    return;
+  }
   if (append) {
     billingRefsLoadingMore.value = true;
   }
@@ -260,6 +263,9 @@ function loadMoreData(input: string) {
       break;
     case 'billingRefs':
       if (!hasMoreBillingRefs.value || billingRefsLoadingMore.value) return;
+      if (!hasBillingRef.value) {
+        return;
+      }
       void searchBillingRefsByParams(searchedBillingRef.value, billingRefPage.value + 1, true);
       break;
   }
@@ -355,13 +361,12 @@ watch(soa, (val: Soa | undefined) => {
   if (val.billing_ref_from != null) selectedBillRefFrom.value = val.billing_ref_from;
   isSyncingFromSoa.value = false
 }, { immediate: true })
-console.log(!selectedAccount && (billing_refs.length > 0), billing_refs.value, selectedAccount.value)
 </script>
 
 <template>
-  <form ref="savingForm" class="grid grid-cols-1 md:grid-cols-2 gap-3" enctype="multipart/form-data">
-    <div class="md:col-span-2 hidden">
-      <!-- Use native hidden inputs so FormData always reflects latest reactive values -->
+  <form ref="savingForm" class="flex flex-col gap-5" enctype="multipart/form-data">
+    <!-- Hidden inputs: keep FormData in sync with reactive state -->
+    <div class="hidden">
       <input type="hidden" name="id" :value="soa?.id ?? ''" />
       <input type="hidden" name="account_type" :value="selectedAccountType ?? ''" />
       <input type="hidden" name="account_code" :value="accountCode ?? ''" />
@@ -371,294 +376,280 @@ console.log(!selectedAccount && (billing_refs.length > 0), billing_refs.value, s
       <input type="hidden" name="status" :value="String(selectedStatus ?? '')" />
       <input type="hidden" name="billing_ref_from" :value="String(selectedBillRefFrom ?? '')" />
     </div>
-    <div class="flex items-center gap-3">
-      <Checkbox id="has_billing_ref" v-model="hasBillingRef" class="cursor-pointer"/>
-      <Label for="has_billing_ref" class="cursor-pointer">Has Billing ref?</Label>
-    </div>
 
-    <div v-if="!isEndorsed" class="grid gap-2 md:col-span-1">
-      <Label for="account_type">Account Type<span class="text-red-400">*</span></Label>
-      <Select
-        id="account_type"
-        class="mt-1 block w-full"
-        v-model="selectedAccountType"
-      >
-        <SelectTrigger class="w-full">
-          <SelectValue placeholder="Select an account type" />
-        </SelectTrigger>
-        <SelectContent class="w-full">
-          <SelectGroup>
-            <SelectLabel>Account Type</SelectLabel>
-            <SelectItem
-              v-for="account_type in account_types"
-              :key="account_type.value"
-              :value="String(account_type.value)"
-            >
-            {{ account_type.name }}
-            </SelectItem>
-          </SelectGroup>
-        </SelectContent>
-      </Select>
-    </div>
+    <!-- Section 1: Account Information -->
+    <section v-if="!isEndorsed" class="rounded-lg border p-4 flex flex-col gap-4">
+      <h3 class="text-sm font-semibold">Account Information</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div class="grid gap-2">
+          <Label for="account_type">Account Type<span class="text-red-400">*</span></Label>
+          <Select id="account_type" v-model="selectedAccountType">
+            <SelectTrigger class="w-full">
+              <SelectValue placeholder="Select an account type" />
+            </SelectTrigger>
+            <SelectContent class="w-full">
+              <SelectGroup>
+                <SelectLabel>Account Type</SelectLabel>
+                <SelectItem
+                  v-for="account_type in account_types"
+                  :key="account_type.value"
+                  :value="String(account_type.value)"
+                >
+                  {{ account_type.name }}
+                </SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </div>
 
-    <div v-if="!isEndorsed" class="md:col-span-1">
-      <SearchableCombobox
-        id="account"
-        label="Account"
-        :required="true"
-        v-model="accountCode"
-        v-model:search="searchedAccountName"
-        :items="accounts"
-        placeholder="Select Account..."
-        search-placeholder="Search Account..."
-        empty-text="No account found."
-        :disabled="!selectedAccountType"
-        :has-more="hasMoreAccounts"
-        :loading-more="accountsLoadingMore"
-        @load-more="loadMoreData('accounts')"
-      />
-    </div>
+        <SearchableCombobox
+          id="account"
+          label="Account"
+          :required="true"
+          v-model="accountCode"
+          v-model:search="searchedAccountName"
+          :items="accounts"
+          placeholder="Select Account..."
+          search-placeholder="Search Account..."
+          empty-text="No account found."
+          :disabled="!selectedAccountType"
+          :has-more="hasMoreAccounts"
+          :loading-more="accountsLoadingMore"
+          @load-more="loadMoreData('accounts')"
+        />
 
-    <div v-if="!isEndorsed" class="md:col-span-1">
-      <SearchableCombobox
-        id="branch"
-        label="Branch"
-        v-model="branchCode"
-        v-model:search="searchedBranchName"
-        :items="branches"
-        placeholder="Select Branch..."
-        search-placeholder="Search Branch..."
-        empty-text="No branch found."
-        :disabled="!selectedAccount"
-        :has-more="hasMoreBranches"
-        :loading-more="branchesLoadingMore"
-        @load-more="loadMoreData('branches')"
-      />
-    </div>
+        <SearchableCombobox
+          id="branch"
+          label="Branch"
+          v-model="branchCode"
+          v-model:search="searchedBranchName"
+          :items="branches"
+          placeholder="Select Branch..."
+          search-placeholder="Search Branch..."
+          empty-text="No branch found."
+          :disabled="!selectedAccount"
+          :has-more="hasMoreBranches"
+          :loading-more="branchesLoadingMore"
+          @load-more="loadMoreData('branches')"
+        />
+      </div>
+    </section>
 
-    <div v-if="hasBillingRef" class="grid gap-2 md:col-span-1">
-      <Label for="billing_date_from">Billing Date From</Label>
-      <Input
-        id="billing_date_from"
-        type="date"
-        class="mt-1 block w-full"
-        name="billing_date_from"
-        v-model="billingDateFrom"
-      />
-    </div>
-    <div v-if="hasBillingRef" class="grid gap-2 md:col-span-1">
-      <Label for="billing_date_to">Billing Date To</Label>
-      <Input
-        id="billing_date_to"
-        type="date"
-        class="mt-1 block w-full"
-        name="billing_date_to"
-        v-model="billingDateTo"
-      />
-    </div>
+    <!-- Section 2: Billing Reference -->
+    <section class="rounded-lg border p-4 flex flex-col gap-4">
+      <div class="flex items-center gap-3">
+        <Checkbox id="has_billing_ref" v-model="hasBillingRef" class="cursor-pointer" />
+        <Label for="has_billing_ref" class="cursor-pointer font-semibold">Has Billing Reference?</Label>
+      </div>
 
-    <div v-if="hasBillingRef" class="md:col-span-1">
-      <Label for="billing_ref_from">Billing Reference From<span class="text-red-400">*</span></Label>
-      <Select
-        id="billing_ref_from"
-        class="mt-1 block w-full"
-        v-model="selectedBillRefFrom"
-        :disabled="!selectedAccount"
-      >
-        <SelectTrigger class="w-full">
-          <SelectValue placeholder="Select a billing reference from" />
-        </SelectTrigger>
-        <SelectContent class="w-full">
-          <SelectGroup>
-            <SelectLabel>Billing Reference From</SelectLabel>
-            <SelectItem
-              v-for="billing_ref_from_type in billing_ref_from_types"
-              :key="billing_ref_from_type.value"
-              :value="String(billing_ref_from_type.value)"
-            >
-            {{ billing_ref_from_type.name }}
-            </SelectItem>
-          </SelectGroup>
-        </SelectContent>
-      </Select>
-    </div>
+      <div v-if="hasBillingRef" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div class="grid gap-2">
+          <Label for="billing_date_from">Billing Date From</Label>
+          <Input
+            id="billing_date_from"
+            type="date"
+            class="w-full"
+            name="billing_date_from"
+            v-model="billingDateFrom"
+          />
+        </div>
 
-    <div v-if="hasBillingRef" class="md:col-span-1">
-      <SearchableCombobox
-        id="billing_ref"
-        label="Billing Reference"
-        v-model="billingRef"
-        v-model:search="searchedBillingRef"
-        :items="billing_refs"
-        placeholder="Select Billing Reference..."
-        search-placeholder="Search Billing Reference..."
-        empty-text="No Billing Reference found."
-        :disabled="billing_refs?.length == 0"
-        :has-more="hasMoreBillingRefs"
-        :loading-more="billingRefsLoadingMore"
-        :multiple="true"
-        @load-more="loadMoreData('billingRefs')"
-      />
-    </div>
+        <div class="grid gap-2">
+          <Label for="billing_date_to">Billing Date To</Label>
+          <Input
+            id="billing_date_to"
+            type="date"
+            class="w-full"
+            name="billing_date_to"
+            v-model="billingDateTo"
+          />
+        </div>
 
-    <div v-if="!isEndorsed" class="grid gap-2 md:col-span-1">
-      <Label for="soa_number">SOA Number / Billing Invoice<span class="text-red-400">*</span></Label>
-      <Input
-        id="soa_number"
-        class="mt-1 block w-full"
-        name="soa_number"
-        v-model="soaNumber"
-        autocomplete="off"
-        placeholder="SOA Number / Billing Invoice"
-      />
-    </div>
+        <div class="grid gap-2">
+          <Label for="billing_ref_from">Billing Reference From<span class="text-red-400">*</span></Label>
+          <Select id="billing_ref_from" v-model="selectedBillRefFrom" :disabled="!selectedAccount">
+            <SelectTrigger class="w-full">
+              <SelectValue placeholder="Select a billing reference from" />
+            </SelectTrigger>
+            <SelectContent class="w-full">
+              <SelectGroup>
+                <SelectLabel>Billing Reference From</SelectLabel>
+                <SelectItem
+                  v-for="billing_ref_from_type in billing_ref_from_types"
+                  :key="billing_ref_from_type.value"
+                  :value="String(billing_ref_from_type.value)"
+                >
+                  {{ billing_ref_from_type.name }}
+                </SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </div>
 
-    <div v-if="!isEndorsed" class="grid gap-2 md:col-span-1">
-      <Label for="bill_type">Bill Type<span class="text-red-400">*</span></Label>
-      <Select
-        id="bill_type"
-        class="mt-1 block w-full"
-        v-model="selectedBillType"
-      >
-        <SelectTrigger class="w-full">
-          <SelectValue placeholder="Select bill type" />
-        </SelectTrigger>
-        <SelectContent class="w-full">
-          <SelectGroup>
-            <SelectLabel>Bill Type</SelectLabel>
-            <SelectItem
-              v-for="bt in bill_types"
-              :key="bt.value"
-              :value="String(bt.value)"
-            >
-              {{ bt.name }}
-            </SelectItem>
-          </SelectGroup>
-        </SelectContent>
-      </Select>
-    </div>
+        <SearchableCombobox
+          id="billing_ref"
+          label="Billing Reference"
+          v-model="billingRef"
+          v-model:search="searchedBillingRef"
+          :items="billing_refs"
+          placeholder="Select Billing Reference..."
+          search-placeholder="Search Billing Reference..."
+          empty-text="No Billing Reference found."
+          :disabled="billing_refs?.length == 0"
+          :has-more="hasMoreBillingRefs"
+          :loading-more="billingRefsLoadingMore"
+          :multiple="true"
+          @load-more="loadMoreData('billingRefs')"
+        />
+      </div>
+    </section>
 
-    <div v-if="!isEndorsed" class="grid gap-2 md:col-span-1">
-      <Label for="due_date">Due Date<span class="text-red-400">*</span></Label>
-      <Input
-        id="due_date"
-        type="date"
-        class="mt-1 block w-full"
-        name="due_date"
-        v-model="dueDate"
-      />
-    </div>
+    <!-- Section 3: SOA Details -->
+    <section class="rounded-lg border p-4 flex flex-col gap-4">
+      <h3 class="text-sm font-semibold">SOA Details</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div v-if="!isEndorsed" class="grid gap-2">
+          <Label for="soa_number">SOA Number / Billing Invoice<span class="text-red-400">*</span></Label>
+          <Input
+            id="soa_number"
+            class="w-full"
+            name="soa_number"
+            v-model="soaNumber"
+            autocomplete="off"
+            placeholder="SOA Number / Billing Invoice"
+          />
+        </div>
 
-    <div class="grid gap-2 md:col-span-1">
-      <Label for="status">Status<span class="text-red-400">*</span></Label>
-      <Select
-        id="status"
-        class="mt-1 block w-full"
-        v-model="selectedStatus"
-      >
-        <SelectTrigger class="w-full">
-          <SelectValue placeholder="Select status" />
-        </SelectTrigger>
-        <SelectContent class="w-full">
-          <SelectGroup>
-            <SelectLabel>Status</SelectLabel>
-            <SelectItem
-              v-for="st in filteredStatusTypes"
-              :key="st.value"
-              :value="String(st.value)"
-            >
-              {{ st.name }}
-            </SelectItem>
-          </SelectGroup>
-        </SelectContent>
-      </Select>
-    </div>
+        <div v-if="!isEndorsed" class="grid gap-2">
+          <Label for="bill_type">Bill Type<span class="text-red-400">*</span></Label>
+          <Select id="bill_type" v-model="selectedBillType">
+            <SelectTrigger class="w-full">
+              <SelectValue placeholder="Select bill type" />
+            </SelectTrigger>
+            <SelectContent class="w-full">
+              <SelectGroup>
+                <SelectLabel>Bill Type</SelectLabel>
+                <SelectItem
+                  v-for="bt in bill_types"
+                  :key="bt.value"
+                  :value="String(bt.value)"
+                >
+                  {{ bt.name }}
+                </SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </div>
 
-    <div v-if="!isEndorsed" class="grid gap-2 md:col-span-1">
-      <Label for="period_date_from">Period Date From</Label>
-      <Input
-        id="period_date_from"
-        type="date"
-        class="mt-1 block w-full"
-        name="period_date_from"
-        v-model="periodDateFrom"
-      />
-    </div>
+        <div v-if="!isEndorsed" class="grid gap-2">
+          <Label for="due_date">Due Date<span class="text-red-400">*</span></Label>
+          <Input
+            id="due_date"
+            type="date"
+            class="w-full"
+            name="due_date"
+            v-model="dueDate"
+          />
+        </div>
 
-    <div v-if="!isEndorsed" class="grid gap-2 md:col-span-1">
-      <Label for="period_date_to">Period Date To</Label>
-      <Input
-        id="period_date_to"
-        type="date"
-        class="mt-1 block w-full"
-        name="period_date_to"
-        v-model="periodDateTo"
-      />
-    </div>
+        <div class="grid gap-2">
+          <Label for="status">Status<span class="text-red-400">*</span></Label>
+          <Select id="status" v-model="selectedStatus">
+            <SelectTrigger class="w-full">
+              <SelectValue placeholder="Select status" />
+            </SelectTrigger>
+            <SelectContent class="w-full">
+              <SelectGroup>
+                <SelectLabel>Status</SelectLabel>
+                <SelectItem
+                  v-for="st in filteredStatusTypes"
+                  :key="st.value"
+                  :value="String(st.value)"
+                >
+                  {{ st.name }}
+                </SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </div>
 
-    <div v-if="!isEndorsed" class="grid gap-2 md:col-span-1">
-      <Label for="amount">Amount<span class="text-red-400">*</span></Label>
-      <Input
-        id="amount"
-        type="number"
-        step="0.01"
-        class="mt-1 block w-full"
-        name="amount"
-        v-model="amount"
-        placeholder="0.00"
-      />
-    </div>
+        <div v-if="!isEndorsed" class="grid gap-2">
+          <Label for="period_date_from">Period Date From<span class="text-red-400">*</span></Label>
+          <Input
+            id="period_date_from"
+            type="date"
+            class="w-full"
+            name="period_date_from"
+            v-model="periodDateFrom"
+          />
+        </div>
 
-    <div class="grid gap-2 md:col-span-1">
-      <Label for="file_pdf">PDF File</Label>
-      <p
-        v-if="existingPdf"
-        class="mt-1 text-xs text-[var(--color-text-muted)]"
-      >
-        Current:
-        <a
-          :href="existingPdf.href"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="cursor-pointer font-medium text-[var(--color-text)] underline underline-offset-2 hover:opacity-90"
-        >
-          {{ existingPdf.name }}
-        </a>
-      </p>
-      <Input
-        :key="`pdf-${soa?.id ?? 'new'}`"
-        id="file_pdf"
-        type="file"
-        accept=".pdf"
-        class="mt-1 block w-full"
-        name="file_pdf"
-      />
-    </div>
+        <div v-if="!isEndorsed" class="grid gap-2">
+          <Label for="period_date_to">Period Date To<span class="text-red-400">*</span></Label>
+          <Input
+            id="period_date_to"
+            type="date"
+            class="w-full"
+            name="period_date_to"
+            v-model="periodDateTo"
+          />
+        </div>
 
-    <div class="grid gap-2 md:col-span-1">
-      <Label for="file_xls">Excel File</Label>
-      <p
-        v-if="existingExcel"
-        class="mt-1 text-xs text-[var(--color-text-muted)]"
-      >
-        Current:
-        <a
-          :href="existingExcel.href"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="cursor-pointer font-medium text-[var(--color-text)] underline underline-offset-2 hover:opacity-90"
-        >
-          {{ existingExcel.name }}
-        </a>
-      </p>
-      <Input
-        :key="`xls-${soa?.id ?? 'new'}`"
-        id="file_xls"
-        type="file"
-        accept=".xls,.xlsx"
-        class="mt-1 block w-full"
-        name="file_xls"
-      />
-    </div>
+        <div v-if="!isEndorsed" class="grid gap-2">
+          <Label for="amount">Amount<span class="text-red-400">*</span></Label>
+          <Input
+            id="amount"
+            type="number"
+            step="0.01"
+            class="w-full"
+            name="amount"
+            v-model="amount"
+            placeholder="0.00"
+          />
+        </div>
+
+        <div class="grid gap-2">
+          <Label for="file_pdf">PDF File<span class="text-red-400">*</span></Label>
+          <p v-if="existingPdf" class="text-xs text-[var(--color-text-muted)]">
+            Current:
+            <a
+              :href="existingPdf.href"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="cursor-pointer font-medium text-[var(--color-text)] underline underline-offset-2 hover:opacity-90"
+            >{{ existingPdf.name }}</a>
+          </p>
+          <Input
+            :key="`pdf-${soa?.id ?? 'new'}`"
+            id="file_pdf"
+            type="file"
+            accept=".pdf"
+            class="w-full"
+            name="file_pdf"
+          />
+        </div>
+
+        <div class="grid gap-2">
+          <Label for="file_xls">Excel File</Label>
+          <p v-if="existingExcel" class="text-xs text-[var(--color-text-muted)]">
+            Current:
+            <a
+              :href="existingExcel.href"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="cursor-pointer font-medium text-[var(--color-text)] underline underline-offset-2 hover:opacity-90"
+            >{{ existingExcel.name }}</a>
+          </p>
+          <Input
+            :key="`xls-${soa?.id ?? 'new'}`"
+            id="file_xls"
+            type="file"
+            accept=".xls,.xlsx"
+            class="w-full"
+            name="file_xls"
+          />
+        </div>
+      </div>
+    </section>
   </form>
 </template>

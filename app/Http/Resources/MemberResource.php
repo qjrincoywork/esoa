@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Helpers\CommonHelper;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -25,6 +26,7 @@ class MemberResource extends JsonResource
             'company_name' => $this->ac_name,
             'claimnum'     => $this->claimnum,
             'batch_number' => $this->batch_number,
+            'process_date' => CommonHelper::formatDate($this->process_date),
         ];
     }
 }

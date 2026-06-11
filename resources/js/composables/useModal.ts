@@ -2,7 +2,21 @@ import { ref, shallowRef, type Component } from 'vue';
 import { router } from '@inertiajs/vue3';
 
 export type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
-export type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | '5xl' | 'full';
+/** Width tokens consumed by Modal.vue (aliases 2xl→xl2, etc. are resolved there). */
+export type ModalSize =
+  | 'sm'
+  | 'md'
+  | 'lg'
+  | 'xl'
+  | 'xl2'
+  | 'xl3'
+  | 'xl4'
+  | 'xl5'
+  | '2xl'
+  | '3xl'
+  | '4xl'
+  | '5xl'
+  | 'full';
 
 export interface ModalOptions {
   modalTitle?: string;

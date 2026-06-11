@@ -278,7 +278,18 @@ class SqlDatabase
                 'c.ch_suffix'
             );
 
-        $query = $this->applyCholderAccountFilters($query, $params, $authUser);
+        if ($authUser?->hasRole('broker')) {
+            $agentAccounts = (new SqlDatabase(Server::HMS))
+                ->getAccountsOfAgent($authUser->userDetail?->agent_code ?? null);
+            $query->whereIn('c.ch_accountid', $agentAccounts);
+        }
+
+        if ($authUser?->hasRole('account_branch_admin')) {
+            $query->where('c.ch_accountid', $authUser->userDetail?->account_code ?? null);
+            if (!empty($authUser->userDetail?->branch_code)) {
+                $query->where('c.ch_branch_code', $authUser->userDetail->branch_code);
+            }
+        }
 
         $result = $query
             ->when(!empty($params['billing_ref']), function ($query) use ($params) {
@@ -293,11 +304,11 @@ class SqlDatabase
             ->when(!empty($params['policynum']), function ($query) use ($params) {
                 $query->where('cl.cl_policynumber', $params['policynum']);
             })
-            ->when(!empty($params['firstname']), function ($query) use ($params) {
-                $query->where('c.ch_firstname', $params['firstname']);
+            ->when(!empty($params['lastname']), function ($q) use ($params) {
+                $q->where('c.ch_lastname', 'like', '%' . $params['lastname'] . '%');
             })
-            ->when(!empty($params['lastname']), function ($query) use ($params) {
-                $query->where('c.ch_lastname', $params['lastname']);
+            ->when(!empty($params['firstname']), function ($q) use ($params) {
+                $q->where('c.ch_firstname', 'like', '%' . $params['firstname'] . '%');
             })
             ->when(!empty($params['middlename']), function ($query) use ($params) {
                 $query->where('c.ch_middlename', $params['middlename']);
@@ -315,14 +326,6 @@ class SqlDatabase
 
     private function applyCholderAccountFilters($query, $params, $authUser)
     {
-        if (!empty($params['account_code'])) {
-            $query->where('c.ch_accountid', $params['account_code']);
-        }
-
-        if (!empty($params['branch_code'])) {
-            $query->where('c.ch_branch_code', $params['branch_code']);
-        }
-
         if ($authUser?->hasRole('broker')) {
             $agentAccounts = (new SqlDatabase(Server::HMS))
                 ->getAccountsOfAgent($authUser->userDetail?->agent_code ?? null);
@@ -565,6 +568,7 @@ class SqlDatabase
                 'a.ac_name',
                 'cl.cl_claimnum as claimnum',
                 'cl.cl_batchnumber as batch_number',
+                'cl.cl_processdate as process_date',
             ]);
 
         if ($authUser?->hasRole('broker')) {
@@ -582,10 +586,10 @@ class SqlDatabase
 
         $query
             ->when(!empty($params['policynum']), function ($q) use ($params) {
-                $q->where('c.ch_policynum', 'like', '%' . $params['policynum'] . '%');
+                $q->where('c.ch_policynum', $params['policynum']);
             })
             ->when(!empty($params['batch_number']), function ($q) use ($params) {
-                $q->where('cl.cl_batchnumber', 'like', '%' . $params['batch_number'] . '%');
+                $q->where('cl.cl_batchnumber', $params['batch_number']);
             })
             ->when(!empty($params['claimnum']), function ($q) use ($params) {
                 $q->where('cl.cl_claimnum', 'like', '%' . $params['claimnum'] . '%');
@@ -602,8 +606,8 @@ class SqlDatabase
             ->when(!empty($params['company_name']), function ($q) use ($params) {
                 $q->where('a.ac_name', 'like', '%' . $params['company_name'] . '%');
             })
-            ->orderBy('c.ch_lastname')
-            ->orderBy('c.ch_firstname');
+            ->orderBy('cl.cl_processdate', OrderType::DESC)
+            ->orderBy('c.ch_lastname');
 
         return $query->paginate($perPage);
     }
