@@ -1,28 +1,29 @@
 <?php
 
-namespace Database\Seeders\master;
+namespace Database\Seeders\Master;
 
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
 
 class RolePermissionSeeder extends Seeder
 {
-    public function run()
+    public function run(): void
     {
+        app()[\Spatie\Permission\PermissionRegistrar::class]->forgetCachedPermissions();
+
         $roles = [
             'superadmin',
             'admin',
             'manager',
             'team_leader',
-            'user'
+            'user',
         ];
 
         $permissions = [
             'dashboard',
 
-            //users
+            // users
             'users.index',
             'users.create',
             'users.edit',
@@ -56,22 +57,14 @@ class RolePermissionSeeder extends Seeder
             'soas.member_files',
         ];
 
-        try {
-            foreach ($roles as $role) {
-                Role::firstOrCreate(['name' => $role, 'guard_name'=> 'web']);
-            }
-
-            foreach ($permissions as $perm) {
-                Permission::firstOrCreate(['name' => $perm, 'guard_name'=> 'web']);
-            }
-
-            // Assign all permissions to superadmin
-            Role::where('name', 'superadmin')->first()
-                ->syncPermissions(Permission::all());
-        } catch (\Exception $e) {
-            // Catch and handle any unexpected errors
-            throw $e;
+        foreach ($roles as $role) {
+            Role::firstOrCreate(['name' => $role, 'guard_name' => 'web']);
         }
+
+        foreach ($permissions as $permission) {
+            Permission::firstOrCreate(['name' => $permission, 'guard_name' => 'web']);
+        }
+
+        Role::findByName('superadmin')->syncPermissions(Permission::all());
     }
 }
-

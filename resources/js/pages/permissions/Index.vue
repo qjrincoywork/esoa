@@ -62,7 +62,7 @@ const columns = computed(() => {
 
 const breadcrumbItems: BreadcrumbItem[] = [
     {
-        title: 'Permission list',
+        title: 'Permissions',
         href: 'permissions',
     },
 ];
@@ -106,7 +106,7 @@ watch(
 
 <template>
     <AppLayout :breadcrumbs="breadcrumbItems">
-        <Head title="Permission list" />
+        <Head title="Permissions" />
         <div class="bg-[var(--color-surface)] shadow-sm border border-[var(--color-border)] p-6">
             <Button :onClick="createPermission">Create</Button>
             <Datatable
