@@ -24,6 +24,37 @@ export interface ActionColumnOptions {
   }>;
 }
 
+// Full static class strings so Tailwind's scanner includes every color at build time.
+// Never build these dynamically with template literals — add new colors here instead.
+const ACTION_COLOR_CLASSES: Record<string, string> = {
+  // Reds / Pinks / Rose
+  red:     'text-red-600    hover:text-red-800',
+  rose:    'text-rose-500   hover:text-rose-700',
+  pink:    'text-pink-500   hover:text-pink-700',
+  // Oranges / Yellows / Ambers
+  orange:  'text-orange-500 hover:text-orange-700',
+  amber:   'text-amber-500  hover:text-amber-700',
+  yellow:  'text-yellow-500 hover:text-yellow-700',
+  // Greens / Limes / Emeralds / Teals
+  lime:    'text-lime-500   hover:text-lime-700',
+  green:   'text-green-600  hover:text-green-800',
+  emerald: 'text-emerald-600 hover:text-emerald-800',
+  teal:    'text-teal-600   hover:text-teal-800',
+  // Blues / Cyans / Skys
+  cyan:    'text-cyan-500   hover:text-cyan-700',
+  sky:     'text-sky-500    hover:text-sky-700',
+  blue:    'text-blue-600   hover:text-blue-800',
+  // Purples / Violets / Indigos / Fuchsias
+  indigo:  'text-indigo-600 hover:text-indigo-800',
+  violet:  'text-violet-600 hover:text-violet-800',
+  purple:  'text-purple-600 hover:text-purple-800',
+  fuchsia: 'text-fuchsia-500 hover:text-fuchsia-700',
+  // Neutrals / Special
+  gray:    'text-gray-500   hover:text-gray-700',
+  slate:   'text-slate-500  hover:text-slate-700',
+  white:   'text-white      hover:text-gray-200',
+};
+
 export function createActionColumn(customActions: ActionColumnOptions['customActions']) {
   return columnHelper.display({
     id: 'actions',
@@ -57,7 +88,8 @@ export function createActionColumn(customActions: ActionColumnOptions['customAct
         for (const action of customActions) {
           const ActionIcon = action.icon || File;
           const label = action.name || action.slug || 'Action';
-          const css = `cursor-pointer p-1 text-${action.color}-600 hover:text-${action.color}-800 transition-colors rounded`;
+          const colorClass = ACTION_COLOR_CLASSES[action.color ?? ''] ?? ACTION_COLOR_CLASSES['gray'];
+          const css = `cursor-pointer p-1 ${colorClass} transition-colors rounded`;
 
           if (
             (item.status?.toLowerCase() == 'paid' && action.slug == 'soas.edit')

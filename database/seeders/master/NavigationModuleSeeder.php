@@ -32,6 +32,7 @@ class NavigationModuleSeeder extends Seeder
             ['nav' => 'ICT Admin', 'perm' => 'users.create',          'name' => 'Create User',                  'slug' => 'users.create',                 'icon' => 'UserPlus',       'color' => null,     'url' => '/users/create',                'parent' => 'users.index',           'order' => 3],
             ['nav' => 'ICT Admin', 'perm' => 'users.edit',            'name' => 'Edit User',                    'slug' => 'users.edit',                   'icon' => 'Pencil',         'color' => 'blue',   'url' => '/users/{id}/edit',             'parent' => 'users.index',           'order' => 4],
             ['nav' => 'ICT Admin', 'perm' => 'users.destroy',         'name' => 'Delete User',                  'slug' => 'users.destroy',                'icon' => 'Trash2',         'color' => 'red',    'url' => '/users/destroy',               'parent' => 'users.index',           'order' => 5],
+            ['nav' => 'ICT Admin', 'perm' => 'users.verify',          'name' => 'Verify User',                  'slug' => 'users.verify',                 'icon' => 'ShieldCheck',    'color' => 'teal',   'url' => '/users/verify',                'parent' => 'users.index',           'order' => 1],
 
             // Roles
             ['nav' => 'ICT Admin', 'perm' => 'roles.index',           'name' => 'Roles',                        'slug' => 'roles.index',                  'icon' => 'Lock',           'color' => null,     'url' => '/roles',                       'parent' => null,                    'order' => 6],
@@ -67,7 +68,7 @@ class NavigationModuleSeeder extends Seeder
 
             // SOA sub-actions — cross-nav: in Soa nav but parented under ICT Admin modules
             ['nav' => 'Soa', 'perm' => 'roles.edit_permissions',      'name' => 'Manage Permissions',           'slug' => 'roles.edit_permissions',       'icon' => 'Key',            'color' => 'green',  'url' => '/roles/{id}/edit_permissions', 'parent' => 'roles.index',           'order' => 1],
-            ['nav' => 'Soa', 'perm' => 'users.edit_roles',            'name' => 'Manage Roles',                 'slug' => 'users.edit_roles',             'icon' => 'UserRoundCog',   'color' => 'green',  'url' => '/users/{id}/edit_roles',       'parent' => 'users.index',           'order' => 1],
+            ['nav' => 'Soa', 'perm' => 'users.edit_roles',            'name' => 'Manage Roles',                 'slug' => 'users.edit_roles',             'icon' => 'UserRoundCog',   'color' => 'purple', 'url' => '/users/{id}/edit_roles',       'parent' => 'users.index',           'order' => 2],
 
             // SOA — under soas.index
             ['nav' => 'Soa', 'perm' => 'soas.show',                   'name' => 'View Soa',                     'slug' => 'soas.show',                    'icon' => 'Eye',            'color' => 'green',  'url' => '/soas/{id}/show',              'parent' => 'soas.index',            'order' => 1],
@@ -77,7 +78,7 @@ class NavigationModuleSeeder extends Seeder
 
             // SOA — under soas.list (Billing Invoices)
             ['nav' => 'Soa', 'perm' => 'soas.edit',                   'name' => 'Edit Soa',                     'slug' => 'soas.edit',                    'icon' => 'Pencil',         'color' => 'blue',   'url' => '/soas/{id}/edit',              'parent' => 'soas.list',             'order' => 2],
-            ['nav' => 'Soa', 'perm' => 'soas.file_list',              'name' => 'Billing PDF File',             'slug' => 'soas.billing_attachments',     'icon' => 'FileText',       'color' => 'green',  'url' => '/soas/{id}/attachment/{type}', 'parent' => 'soas.list',             'order' => 20],
+            ['nav' => 'Soa', 'perm' => 'soas.file_list',              'name' => 'Billing PDF File',             'slug' => 'soas.billing_attachments',     'icon' => 'FileText',       'color' => 'yellow', 'url' => '/soas/{id}/attachment/{type}', 'parent' => 'soas.list',             'order' => 20],
             ['nav' => 'Soa', 'perm' => 'soas.file_list',              'name' => 'Records Management File List', 'slug' => 'soas.file_list',               'icon' => 'Files',          'color' => 'blue',   'url' => '/soas/file_list',              'parent' => 'soas.list',             'order' => 21],
 
             // SOA — under concerns.index (Concerns)
