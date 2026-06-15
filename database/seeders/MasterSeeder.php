@@ -3,16 +3,17 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 use Database\Seeders\Master\RolePermissionSeeder;
 use Database\Seeders\Master\NavigationSeeder;
 use Database\Seeders\Master\NavigationModuleSeeder;
-use Illuminate\Support\Facades\DB;
+use Database\Seeders\Master\CitizenshipSeeder;
+use Database\Seeders\Master\CivilStatusSeeder;
+use Database\Seeders\Master\DepartmentSeeder;
+use Database\Seeders\Master\PositionSeeder;
 
 class MasterSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
         DB::beginTransaction();
@@ -22,11 +23,14 @@ class MasterSeeder extends Seeder
                 RolePermissionSeeder::class,
                 NavigationSeeder::class,
                 NavigationModuleSeeder::class,
+                CitizenshipSeeder::class,
+                CivilStatusSeeder::class,
+                DepartmentSeeder::class,
+                PositionSeeder::class,
             ]);
-            // Commit transaction
+
             DB::commit();
         } catch (\Exception $e) {
-            // Catch and handle any unexpected errors
             DB::rollBack();
             throw $e;
         }

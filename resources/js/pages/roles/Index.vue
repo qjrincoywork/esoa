@@ -68,7 +68,7 @@ const columns = computed(() => {
 
 const breadcrumbItems: BreadcrumbItem[] = [
     {
-        title: 'Role list',
+        title: 'Roles',
         href: 'roles',
     },
 ];
@@ -177,7 +177,7 @@ watch(
 
 <template>
     <AppLayout :breadcrumbs="breadcrumbItems">
-        <Head title="Role list" />
+        <Head title="Roles" />
         <div class="bg-[var(--color-surface)] shadow-sm border border-[var(--color-border)] p-6">
           <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
             <Button v-if="canCreate" :onClick="createRole">Create</Button>
