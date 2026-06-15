@@ -47,6 +47,14 @@ class RolePermissionSeeder extends Seeder
             'navigations.edit',
             'navigations.destroy',
 
+            // navigation modules
+            'navigation_modules.index',
+            'navigation_modules.create',
+            'navigation_modules.store',
+            'navigation_modules.edit',
+            'navigation_modules.update',
+            'navigation_modules.destroy',
+
             // soas
             'soas.index',
             'soas.create',

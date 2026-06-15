@@ -18,11 +18,8 @@ class NavigationModuleSeeder extends Seeder
          * 'perm'   — permission name used to resolve permission_id at seed time
          * 'parent' — slug of the parent NavigationModule (null = top-level)
          *
-         * Notes:
-         *  - navigation_modules.index currently holds the concerns.destroy permission
-         *    in the DB; ideally it should have its own navigation_modules.index permission
-         *  - roles.edit_permissions / users.edit_roles live under the Soa nav
-         *    but reference parent slugs from the ICT Admin nav
+         * Note: roles.edit_permissions / users.edit_roles live under the Soa nav
+         * but reference parent slugs from the ICT Admin nav.
          */
         $modules = [
 
@@ -54,8 +51,9 @@ class NavigationModuleSeeder extends Seeder
             ['nav' => 'ICT Admin', 'perm' => 'navigations.edit',      'name' => 'Edit Navigation',              'slug' => 'navigations.edit',             'icon' => 'Pencil',         'color' => 'blue',   'url' => '/navigations/{id}/edit',       'parent' => 'navigations.index',     'order' => 16],
             ['nav' => 'ICT Admin', 'perm' => 'navigations.destroy',   'name' => 'Delete Navigation',            'slug' => 'navigations.destroy',          'icon' => 'Trash2',         'color' => 'red',    'url' => '/navigations/destroy',         'parent' => 'navigations.index',     'order' => 17],
 
-            // Navigation Modules (uses concerns.destroy perm per current DB state)
-            ['nav' => 'ICT Admin', 'perm' => 'concerns.destroy',      'name' => 'Navigation Modules',           'slug' => 'navigation_modules.index',     'icon' => 'SquareMenu',     'color' => null,     'url' => '/navigation_modules',          'parent' => null,                    'order' => 16],
+            ['nav' => 'ICT Admin', 'perm' => 'navigation_modules.index',   'name' => 'Navigation Modules',           'slug' => 'navigation_modules.index',     'icon' => 'SquareMenu',     'color' => null,     'url' => '/navigation_modules',              'parent' => null,                      'order' => 16],
+            ['nav' => 'ICT Admin', 'perm' => 'navigation_modules.edit',    'name' => 'Edit Navigation Module',       'slug' => 'navigation_modules.edit',      'icon' => 'Pencil',         'color' => 'blue',   'url' => '/navigation_modules/{id}/edit',    'parent' => 'navigation_modules.index', 'order' => 1],
+            ['nav' => 'ICT Admin', 'perm' => 'navigation_modules.destroy', 'name' => 'Delete Navigation Module',     'slug' => 'navigation_modules.destroy',   'icon' => 'Trash2',         'color' => 'red',    'url' => '/navigation_modules/destroy',      'parent' => 'navigation_modules.index', 'order' => 2],
 
             // ── SOA ───────────────────────────────────────────────────────────────
 
@@ -73,13 +71,13 @@ class NavigationModuleSeeder extends Seeder
 
             // SOA — under soas.index
             ['nav' => 'Soa', 'perm' => 'soas.show',                   'name' => 'View Soa',                     'slug' => 'soas.show',                    'icon' => 'Eye',            'color' => 'green',  'url' => '/soas/{id}/show',              'parent' => 'soas.index',            'order' => 1],
-            ['nav' => 'Soa', 'perm' => 'soas.untag',                  'name' => 'Undo Soa Tag',                 'slug' => 'soas.untag',                   'icon' => 'Undo',           'color' => 'blue',   'url' => '/soas/{id}/untag',             'parent' => 'soas.index',            'order' => 4],
+            ['nav' => 'Soa', 'perm' => 'soas.manage_file',             'name' => 'Undo Soa Tag',                 'slug' => 'soas.untag',                   'icon' => 'Undo',           'color' => 'blue',   'url' => '/soas/{id}/untag',             'parent' => 'soas.index',            'order' => 4],
             ['nav' => 'Soa', 'perm' => 'soas.destroy',                'name' => 'Delete Soa',                   'slug' => 'soas.destroy',                 'icon' => 'Trash2',         'color' => 'red',    'url' => '/soas/destroy',                'parent' => 'soas.index',            'order' => 5],
             ['nav' => 'Soa', 'perm' => 'soas.create',                 'name' => 'Create Soa',                   'slug' => 'soas.create',                  'icon' => 'FilePlusCorner', 'color' => 'green',  'url' => '/soas/create',                 'parent' => 'soas.index',            'order' => 7],
 
             // SOA — under soas.list (Billing Invoices)
             ['nav' => 'Soa', 'perm' => 'soas.edit',                   'name' => 'Edit Soa',                     'slug' => 'soas.edit',                    'icon' => 'Pencil',         'color' => 'blue',   'url' => '/soas/{id}/edit',              'parent' => 'soas.list',             'order' => 2],
-            ['nav' => 'Soa', 'perm' => 'soas.billing_attachments',     'name' => 'Billing PDF File',             'slug' => 'soas.billing_attachments',     'icon' => 'FileText',       'color' => 'green',  'url' => '/soas/{id}/attachment/{type}', 'parent' => 'soas.list',             'order' => 20],
+            ['nav' => 'Soa', 'perm' => 'soas.file_list',              'name' => 'Billing PDF File',             'slug' => 'soas.billing_attachments',     'icon' => 'FileText',       'color' => 'green',  'url' => '/soas/{id}/attachment/{type}', 'parent' => 'soas.list',             'order' => 20],
             ['nav' => 'Soa', 'perm' => 'soas.file_list',              'name' => 'Records Management File List', 'slug' => 'soas.file_list',               'icon' => 'Files',          'color' => 'blue',   'url' => '/soas/file_list',              'parent' => 'soas.list',             'order' => 21],
 
             // SOA — under concerns.index (Concerns)
