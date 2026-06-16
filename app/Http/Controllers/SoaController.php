@@ -715,18 +715,20 @@ class SoaController extends Controller
 
     /**
      * Display the Find Member search page, or return paginated JSON results.
+     * The DB call is intentionally inside the wantsJson() branch so the initial
+     * Inertia page render never triggers an HMS query.
      */
     public function findMember(FindMemberRequest $request)
     {
-        $members = (new $this->sqlDatabase(Server::HMS))->getMembersByParams($request->validated());
-
         if ($request->wantsJson()) {
+            $members = (new $this->sqlDatabase(Server::HMS))->getMembersByParams($request->validated());
+
             return response()->json([
-                'data' => MemberResource::collection($members)->resolve(),
+                'data'         => MemberResource::collection($members)->resolve(),
                 'current_page' => $members->currentPage(),
-                'last_page' => $members->lastPage(),
-                'total' => $members->total(),
-                'per_page' => $members->perPage(),
+                'last_page'    => $members->lastPage(),
+                'total'        => $members->total(),
+                'per_page'     => $members->perPage(),
             ]);
         }
 
