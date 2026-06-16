@@ -580,7 +580,7 @@ watch(
                                       />
                                   </div>
 
-                                  <div class="md:col-span-1">
+                                  <div v-if="!userDetail.branch_code" class="md:col-span-1">
                                       <SearchableCombobox
                                           id="soa-filter-branch"
                                           label="Branch"
