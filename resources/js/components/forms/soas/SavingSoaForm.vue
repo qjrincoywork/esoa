@@ -446,7 +446,7 @@ watch(soa, (val: Soa | undefined) => {
       <div v-if="hasBillingRef" class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <DateRangePicker
           id="billing-date"
-          label="Billing Date"
+          label="Billing Date Range"
           :from="billingDateFrom"
           :to="billingDateTo"
           from-name="billing_date_from"
@@ -566,7 +566,7 @@ watch(soa, (val: Soa | undefined) => {
         <DateRangePicker
           v-if="!isEndorsed"
           id="period-date"
-          label="Period Date"
+          label="Period Date Range"
           :required="true"
           :from="periodDateFrom"
           :to="periodDateTo"

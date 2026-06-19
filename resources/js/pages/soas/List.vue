@@ -633,7 +633,7 @@ watch(
 
                                   <DateRangePicker
                                       id="soa-filter-bill-date"
-                                      label="Bill Date"
+                                      label="Bill Date Range"
                                       :from="filters.bill_date_from"
                                       :to="filters.bill_date_to"
                                       @update:from="(v) => { filters.bill_date_from = v }"
@@ -641,7 +641,7 @@ watch(
                                   />
                                   <DateRangePicker
                                       id="soa-filter-due-date"
-                                      label="Due Date"
+                                      label="Due Date Range"
                                       :from="filters.due_date_from"
                                       :to="filters.due_date_to"
                                       @update:from="(v) => { filters.due_date_from = v }"
