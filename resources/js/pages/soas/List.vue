@@ -8,6 +8,7 @@ import Datatable from '@/components/Datatable.vue';
 import { Button } from "@/components/ui/button";
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { Select, SelectTrigger, SelectContent, SelectGroup, SelectLabel, SelectItem, SelectValue } from '@/components/ui/select';
 import { SearchableCombobox, type SearchableComboboxItem } from '@/components/ui/searchable-combobox';
 import { createActionColumn } from '@/composables/datatable/datatableColumns';
@@ -630,42 +631,22 @@ watch(
                                       </Select>
                                   </div>
 
-                                  <div class="grid gap-2 md:col-span-1">
-                                      <Label for="soa-filter-bill-date-from">Bill date from</Label>
-                                      <Input
-                                          id="soa-filter-bill-date-from"
-                                          v-model="filters.bill_date_from"
-                                          type="date"
-                                          class="mt-0"
-                                      />
-                                  </div>
-                                  <div class="grid gap-2 md:col-span-1">
-                                      <Label for="soa-filter-bill-date-to">Bill date to</Label>
-                                      <Input
-                                          id="soa-filter-bill-date-to"
-                                          v-model="filters.bill_date_to"
-                                          type="date"
-                                          class="mt-0"
-                                      />
-                                  </div>
-                                  <div class="grid gap-2 md:col-span-1">
-                                      <Label for="soa-filter-due-date-from">Due date from</Label>
-                                      <Input
-                                          id="soa-filter-due-date-from"
-                                          v-model="filters.due_date_from"
-                                          type="date"
-                                          class="mt-0"
-                                      />
-                                  </div>
-                                  <div class="grid gap-2 md:col-span-1">
-                                      <Label for="soa-filter-due-date-to">Due date to</Label>
-                                      <Input
-                                          id="soa-filter-due-date-to"
-                                          v-model="filters.due_date_to"
-                                          type="date"
-                                          class="mt-0"
-                                      />
-                                  </div>
+                                  <DateRangePicker
+                                      id="soa-filter-bill-date"
+                                      label="Bill Date"
+                                      :from="filters.bill_date_from"
+                                      :to="filters.bill_date_to"
+                                      @update:from="(v) => { filters.bill_date_from = v }"
+                                      @update:to="(v) => { filters.bill_date_to = v }"
+                                  />
+                                  <DateRangePicker
+                                      id="soa-filter-due-date"
+                                      label="Due Date"
+                                      :from="filters.due_date_from"
+                                      :to="filters.due_date_to"
+                                      @update:from="(v) => { filters.due_date_from = v }"
+                                      @update:to="(v) => { filters.due_date_to = v }"
+                                  />
                               </div>
                               <div class="flex flex-wrap items-center gap-2">
                                   <Button

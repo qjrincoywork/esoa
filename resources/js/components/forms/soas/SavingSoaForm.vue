@@ -3,6 +3,7 @@ import { ref, onMounted, computed, watch } from 'vue';
 import { usePage } from '@inertiajs/vue3';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { Checkbox } from '@/components/ui/checkbox';
 import { SearchableCombobox } from '@/components/ui/searchable-combobox';
 import { useSoas } from '@/composables/soas';
@@ -443,27 +444,16 @@ watch(soa, (val: Soa | undefined) => {
       </div>
 
       <div v-if="hasBillingRef" class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div class="grid gap-2">
-          <Label for="billing_date_from">Billing Date From</Label>
-          <Input
-            id="billing_date_from"
-            type="date"
-            class="w-full"
-            name="billing_date_from"
-            v-model="billingDateFrom"
-          />
-        </div>
-
-        <div class="grid gap-2">
-          <Label for="billing_date_to">Billing Date To</Label>
-          <Input
-            id="billing_date_to"
-            type="date"
-            class="w-full"
-            name="billing_date_to"
-            v-model="billingDateTo"
-          />
-        </div>
+        <DateRangePicker
+          id="billing-date"
+          label="Billing Date"
+          :from="billingDateFrom"
+          :to="billingDateTo"
+          from-name="billing_date_from"
+          to-name="billing_date_to"
+          @update:from="(v) => { billingDateFrom = v }"
+          @update:to="(v) => { billingDateTo = v }"
+        />
 
         <div class="grid gap-2">
           <Label for="billing_ref_from">Billing Reference From<span class="text-red-400">*</span></Label>
@@ -546,7 +536,7 @@ watch(soa, (val: Soa | undefined) => {
           <Input
             id="due_date"
             type="date"
-            class="w-full"
+            class="w-full [color-scheme:light] dark:[color-scheme:dark]"
             name="due_date"
             v-model="dueDate"
           />
@@ -573,27 +563,18 @@ watch(soa, (val: Soa | undefined) => {
           </Select>
         </div>
 
-        <div v-if="!isEndorsed" class="grid gap-2">
-          <Label for="period_date_from">Period Date From<span class="text-red-400">*</span></Label>
-          <Input
-            id="period_date_from"
-            type="date"
-            class="w-full"
-            name="period_date_from"
-            v-model="periodDateFrom"
-          />
-        </div>
-
-        <div v-if="!isEndorsed" class="grid gap-2">
-          <Label for="period_date_to">Period Date To<span class="text-red-400">*</span></Label>
-          <Input
-            id="period_date_to"
-            type="date"
-            class="w-full"
-            name="period_date_to"
-            v-model="periodDateTo"
-          />
-        </div>
+        <DateRangePicker
+          v-if="!isEndorsed"
+          id="period-date"
+          label="Period Date"
+          :required="true"
+          :from="periodDateFrom"
+          :to="periodDateTo"
+          from-name="period_date_from"
+          to-name="period_date_to"
+          @update:from="(v) => { periodDateFrom = v }"
+          @update:to="(v) => { periodDateTo = v }"
+        />
 
         <div v-if="!isEndorsed" class="grid gap-2">
           <Label for="amount">Amount<span class="text-red-400">*</span></Label>
