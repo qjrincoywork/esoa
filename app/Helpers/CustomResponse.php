@@ -76,4 +76,20 @@ class CustomResponse
             'errors' => $errors
         ], $statusCode);
     }
+
+    /**
+     * Log the exception and return a generic error response with a correlation ID.
+     * Use this instead of exposing $e->getMessage() to clients.
+     */
+    public static function serverError(\Throwable $e, string $context = '', array $logExtra = [])
+    {
+        $correlationId = uniqid('err_', true);
+        \Illuminate\Support\Facades\Log::error("[$context] Unexpected server error", array_merge([
+            'correlation_id' => $correlationId,
+            'message' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ], $logExtra));
+
+        return self::error('An unexpected error occurred. Reference: ' . $correlationId, 500);
+    }
 }

@@ -107,7 +107,7 @@ class UserController extends Controller
             // Catch and handle any unexpected errors
             DB::rollBack();
 
-            return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+            return CustomResponse::serverError($e, 'UserController');
         }
     }
 
@@ -179,23 +179,20 @@ class UserController extends Controller
         DB::beginTransaction();
 
         try {
-            $this->user->saveUser($request->validated());
+            $validated = $request->validated();
+            $target = User::findOrFail($validated['id']);
+            $this->user->saveUser($validated, $target);
 
-            // Commit transaction
             DB::commit();
 
-            // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
                 return CustomResponse::ok('User Updated successfully', Response::HTTP_OK);
             }
         } catch (\Exception $e) {
-            // Catch and handle any unexpected errors
             DB::rollBack();
 
-            // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
-                // Catch and handle any unexpected errors
-                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+                return CustomResponse::serverError($e, 'UserController::update');
             }
         }
     }
@@ -235,7 +232,7 @@ class UserController extends Controller
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
-                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+                return CustomResponse::serverError($e, 'UserController');
             }
         }
     }
@@ -297,7 +294,7 @@ class UserController extends Controller
             DB::rollBack();
 
             if ($request->wantsJson() || $request->ajax()) {
-                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+                return CustomResponse::serverError($e, 'UserController');
             }
         }
     }
@@ -325,7 +322,7 @@ class UserController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
 
-            return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+            return CustomResponse::serverError($e, 'UserController');
         }
     }
 }

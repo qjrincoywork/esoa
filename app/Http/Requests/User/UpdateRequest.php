@@ -12,6 +12,11 @@ use Illuminate\Validation\Rule;
 
 class UpdateRequest extends FormRequest
 {
+    public function authorize(): bool
+    {
+        return $this->user()?->hasAnyRole(['superadmin', 'admin']) ?? false;
+    }
+
     /**
      * Get the validation rules that apply to the request.
      *
@@ -108,11 +113,6 @@ class UpdateRequest extends FormRequest
             'birthdate' => [
                 'nullable',
                 'date',
-                'max:191'
-            ],
-            'employee_no' => [
-                'nullable',
-                'string',
                 'max:191'
             ],
             'username' => [

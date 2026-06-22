@@ -51,13 +51,11 @@ class BillRefsRequest extends FormRequest
                 'date',
                 'after_or_equal:billing_date_from',
             ],
-            // 'billing_refs' => [
-            //     'nullable',
-            //     'array',
-            // ],
             'billing_refs' => [
+                'nullable',
                 'string',
                 'max:' . config('vc.max_string_limit'),
+                'regex:/^[A-Za-z0-9\-_,\s]*$/',
             ],
             'per_page' => [
                 'nullable',

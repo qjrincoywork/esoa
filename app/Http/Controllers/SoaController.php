@@ -87,27 +87,36 @@ class SoaController extends Controller
      */
     public function fileProxy(FileProxyRequest $request)
     {
-        $fileUrl = env('VC_ADMIN_DOMAIN') . $request->get('url');
+        $path = $request->get('url', '');
 
-        if (!$fileUrl) {
-            return CustomResponse::error('URL parameter is required', Response::HTTP_BAD_REQUEST);
+        // Block absolute URLs and path traversal — only relative paths allowed
+        if (preg_match('#^https?://#i', $path) || str_contains($path, '..') || str_contains($path, "\0")) {
+            return CustomResponse::error('Invalid URL', Response::HTTP_BAD_REQUEST);
         }
 
+        $allowedBase = rtrim(config('vc.admin_domain'), '/');
+
+        if (empty($allowedBase)) {
+            return CustomResponse::error('Proxy not configured', Response::HTTP_SERVICE_UNAVAILABLE);
+        }
+
+        $fileUrl = $allowedBase . '/' . ltrim($path, '/');
+
         try {
-            $response = Http::withoutVerifying()->timeout(15)->get($fileUrl);
+            // TLS verification enabled — withoutVerifying() removed
+            $response = Http::timeout(15)->get($fileUrl);
             $contentType = $response->header('Content-Type') ?? 'application/octet-stream';
 
             if ($response->successful()) {
                 return response($response->body(), Response::HTTP_OK, [
                     'Content-Type' => $contentType,
-                    'Access-Control-Allow-Origin' => '*',
                     'Content-Disposition' => 'inline',
                 ]);
-            } else {
-                return CustomResponse::error('Failed to fetch PDF', $response->status());
             }
+
+            return CustomResponse::error('Failed to fetch file', $response->status());
         } catch (\Exception $e) {
-            return CustomResponse::error('An error occurred: ' . $e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+            return CustomResponse::serverError($e, 'SoaController::fileProxy');
         }
     }
 
@@ -345,7 +354,7 @@ class SoaController extends Controller
             }
         } catch (\Exception $e) {
             if ($request->wantsJson() || $request->ajax()) {
-                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+                return CustomResponse::serverError($e, 'SoaController');
             }
         }
     }
@@ -647,7 +656,7 @@ class SoaController extends Controller
         } catch (\Throwable $e) {
             DB::rollBack();
             if ($request->wantsJson() || $request->ajax()) {
-                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+                return CustomResponse::serverError($e, 'SoaController');
             }
         }
     }
@@ -692,7 +701,7 @@ class SoaController extends Controller
             }
 
             // (new $this->sqlDatabase(Server::SOA))->untagSoa($soa, $validated);
-            Mail::to('quirjohnincoy.work@gmail.com')->send(new NewSoaUploaded($soa));
+            Mail::to(config('vc.contact_email'))->send(new NewSoaUploaded($soa));
 
             // Commit transaction
             DB::connection(Server::SOA)->commit();
@@ -708,7 +717,7 @@ class SoaController extends Controller
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
                 // Catch and handle any unexpected errors
-                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+                return CustomResponse::serverError($e, 'SoaController');
             }
         }
     }
@@ -784,7 +793,7 @@ class SoaController extends Controller
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
                 // Catch and handle any unexpected errors
-                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+                return CustomResponse::serverError($e, 'SoaController');
             }
         }
     }

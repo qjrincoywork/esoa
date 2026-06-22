@@ -24,7 +24,7 @@ return [
     'max_string_limit' => 191,
     'max_file_size' => 2048, // 2MB in KB
     'max_text_limit' => 800,
-    'default_password' => 'VALUCARE123',
+    'default_password' => null, // Deprecated — new users receive a randomly generated password
     'contact_email' => 'esoabillingandcollection@valuecarehealth.com',
     'billing_notification_email' => env('BILLING_NOTIFICATION_EMAIL', 'esoabillingandcollection@valuecarehealth.com'),
     'contact_number' => '+639123456789',

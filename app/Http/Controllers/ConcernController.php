@@ -100,7 +100,7 @@ class ConcernController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
 
-            return response()->json(['message' => 'Failed to create concern: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return CustomResponse::serverError($e, 'ConcernController::store');
         }
     }
 
@@ -162,6 +162,12 @@ class ConcernController extends Controller
         DB::beginTransaction();
         try {
             $concern = Concern::findOrFail($request->id);
+
+            $authUser = $request->user();
+            if (!$authUser->hasAnyRole(['superadmin', 'admin']) && $concern->user_id !== $authUser->id) {
+                return CustomResponse::error('Forbidden', Response::HTTP_FORBIDDEN);
+            }
+
             $validated = $request->validated();
             if (!empty($validated['soa_ids'])) {
                 // Attach ids
@@ -189,7 +195,7 @@ class ConcernController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
 
-            return response()->json(['message' => 'Failed to update concern: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return CustomResponse::serverError($e, 'ConcernController::update');
         }
     }
 
@@ -203,6 +209,11 @@ class ConcernController extends Controller
         DB::beginTransaction();
         try {
             $concern = Concern::withTrashed()->findOrFail($validated['id']);
+
+            $authUser = $request->user();
+            if (!$authUser->hasAnyRole(['superadmin', 'admin']) && $concern->user_id !== $authUser->id) {
+                return CustomResponse::error('Forbidden', Response::HTTP_FORBIDDEN);
+            }
 
             if ($concern->trashed()) {
                 $concern->restore();
@@ -225,7 +236,7 @@ class ConcernController extends Controller
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
-                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+                return CustomResponse::serverError($e, 'ConcernController::destroy');
             }
         }
     }

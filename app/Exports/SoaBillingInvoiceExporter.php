@@ -175,6 +175,11 @@ class SoaBillingInvoiceExporter
 
     protected function escape(string $value): string
     {
+        // Neutralize formula-injection prefixes before HTML-escaping
+        if ($value !== '' && in_array($value[0], ['=', '+', '-', '@', "\t", "\r", "\n"], true)) {
+            $value = "'" . $value;
+        }
+
         return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 }

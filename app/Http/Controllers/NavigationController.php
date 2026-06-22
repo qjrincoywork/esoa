@@ -81,7 +81,7 @@ class NavigationController extends Controller
             // Catch and handle any unexpected errors
             DB::rollBack();
 
-            return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+            return CustomResponse::serverError($e, 'NavigationController::store');
         }
     }
 
@@ -135,7 +135,7 @@ class NavigationController extends Controller
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
                 // Catch and handle any unexpected errors
-                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+                return CustomResponse::serverError($e, 'NavigationController::update');
             }
         }
     }
@@ -175,7 +175,7 @@ class NavigationController extends Controller
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
-                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+                return CustomResponse::serverError($e, 'NavigationController::destroy');
             }
         }
     }

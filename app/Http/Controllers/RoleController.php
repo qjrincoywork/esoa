@@ -86,7 +86,7 @@ class RoleController extends Controller
             // Catch and handle any unexpected errors
             DB::rollBack();
 
-            return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+            return CustomResponse::serverError($e, 'RoleController::store');
         }
     }
 
@@ -160,7 +160,7 @@ class RoleController extends Controller
             // Catch and handle any unexpected errors
             DB::rollBack();
 
-            return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+            return CustomResponse::serverError($e, 'RoleController::update');
         }
     }
 
@@ -190,7 +190,7 @@ class RoleController extends Controller
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
-                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+                return CustomResponse::serverError($e, 'RoleController::destroy');
             }
         }
     }
@@ -214,7 +214,7 @@ class RoleController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
 
-            return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+            return CustomResponse::serverError($e, 'RoleController::updatePermissions');
         }
     }
 }
