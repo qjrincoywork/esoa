@@ -511,6 +511,23 @@ class SoaController extends Controller
     }
 
     /**
+     * Display paginated official receipts linked to the given SOA (on-demand).
+     */
+    public function soaOfficialReceipts(Request $request, int $id)
+    {
+        $soa = $this->soa->findOrFail($id);
+        $this->assertUserMayAccessModelSoa($soa);
+
+        $perPage = (int) $request->get('per_page', config('vc.default_pages'));
+        $officialReceipts = $soa->officialReceipts()
+            ->with(['user'])
+            ->orderByDesc('id')
+            ->paginate($perPage);
+
+        return response()->json(['official_receipts' => new CommonResource(\App\Http\Resources\OfficialReceiptResource::collection($officialReceipts))]);
+    }
+
+    /**
      * Record a single "billing invoice viewed" activity (account_branch_admin only).
      * Ensures only one activity per SOA for this event.
      */
