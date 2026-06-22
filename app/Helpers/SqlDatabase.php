@@ -459,8 +459,10 @@ class SqlDatabase
                 });
             })
             ->when(!empty($selectedRefs), function ($query) use ($selectedRefs) {
+                $placeholders = implode(',', array_fill(0, count($selectedRefs), '?'));
                 $query->orderByRaw(
-                    'CASE WHEN cr.cr_batchnum IN (\'' . implode('\',\'', $selectedRefs) . '\') THEN 0 ELSE 1 END'
+                    "CASE WHEN cr.cr_batchnum IN ({$placeholders}) THEN 0 ELSE 1 END",
+                    array_values($selectedRefs)
                 );
             })
             ->orderByDesc('date_posted')
@@ -523,8 +525,11 @@ class SqlDatabase
                 $query->where('cl.cl_claimnum', $params['claimnum']);
             })
             ->when(!empty($selectedRefs), function ($query) use ($selectedRefs) {
-                // Order selected refs first
-                $query->orderByRaw("CASE WHEN ac.act_batchnum IN ('" . implode("','", $selectedRefs) . "') THEN 0 ELSE 1 END");
+                $placeholders = implode(',', array_fill(0, count($selectedRefs), '?'));
+                $query->orderByRaw(
+                    "CASE WHEN ac.act_batchnum IN ({$placeholders}) THEN 0 ELSE 1 END",
+                    array_values($selectedRefs)
+                );
             })
             ->when(!empty($params['policynum']), function ($query) use ($params) {
                 $query->where('c.ch_policynum', $params['policynum']);
@@ -533,7 +538,11 @@ class SqlDatabase
                 $query->orderBy('cl.cl_processdate', OrderType::DESC);
             })
             ->when(!empty($params['order_by']), function ($query) use ($params) {
-                $query->orderBy($params['order_by'], $params['order_dir'] ?? 'asc');
+                $allowedColumns = ['cl.cl_processdate', 'cl.cl_claimnum', 'cl.cl_amount', 'ac.act_batchnum', 'ac.act_dateposted'];
+                $allowedDirs = ['asc', 'desc'];
+                $col = in_array($params['order_by'], $allowedColumns, true) ? $params['order_by'] : 'cl.cl_processdate';
+                $dir = in_array(strtolower($params['order_dir'] ?? 'asc'), $allowedDirs, true) ? strtolower($params['order_dir']) : 'asc';
+                $query->orderBy($col, $dir);
             })
             ->where('ac.act_batchnum', '!=', '');
 
@@ -671,8 +680,11 @@ class SqlDatabase
                 $query->where('a.bl_dateposted', '<=', Carbon::parse($params['billing_date_to'])->endOfDay());
             })
             ->when(!empty($selectedRefs), function ($query) use ($selectedRefs) {
-                // Order selected refs first
-                $query->orderByRaw("CASE WHEN a.bl_refid IN ('" . implode("','", $selectedRefs) . "') THEN 0 ELSE 1 END");
+                $placeholders = implode(',', array_fill(0, count($selectedRefs), '?'));
+                $query->orderByRaw(
+                    "CASE WHEN a.bl_refid IN ({$placeholders}) THEN 0 ELSE 1 END",
+                    array_values($selectedRefs)
+                );
             })
             ->orderBy('a.bl_dateposted', 'desc');
 

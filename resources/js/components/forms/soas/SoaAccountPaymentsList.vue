@@ -119,10 +119,9 @@ const handlePaginationUpdate = (newPagination: {
   fetchPayments();
 };
 
-/** Store row data and navigate to the account payments index, which will auto-open the view pane. */
+/** Navigate to the account payments index with the record ID — the index page fetches the record on arrival. */
 const handleRowClick = (payment: SoaAccountPayment) => {
   if (!payment.id) return;
-  sessionStorage.setItem(`account_payment_view_${payment.id}`, JSON.stringify(payment));
   router.visit('/account_payments', { data: { open: payment.id } });
 };
 

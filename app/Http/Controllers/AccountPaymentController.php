@@ -99,7 +99,7 @@ class AccountPaymentController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
 
-            return response()->json(['message' => 'Failed to create account payment: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return CustomResponse::serverError($e, 'AccountPaymentController::store');
         }
     }
 
@@ -161,6 +161,11 @@ class AccountPaymentController extends Controller
         DB::beginTransaction();
         try {
             $accountPayment = AccountPayment::findOrFail($validated['id']);
+
+            $authUser = $request->user();
+            if (!$authUser->hasAnyRole(['superadmin', 'admin']) && $accountPayment->user_id !== $authUser->id) {
+                return CustomResponse::error('Forbidden', Response::HTTP_FORBIDDEN);
+            }
             if (!empty($validated['soa_ids'])) {
                 // Attach ids
                 $accountPayment->soas()->sync(
@@ -188,7 +193,7 @@ class AccountPaymentController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
 
-            return response()->json(['message' => 'Failed to update account payment: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return CustomResponse::serverError($e, 'AccountPaymentController::update');
         }
     }
 
@@ -201,6 +206,11 @@ class AccountPaymentController extends Controller
         DB::beginTransaction();
         try {
             $accountPayment = AccountPayment::withTrashed()->findOrFail($validated['id']);
+
+            $authUser = $request->user();
+            if (!$authUser->hasAnyRole(['superadmin', 'admin']) && $accountPayment->user_id !== $authUser->id) {
+                return CustomResponse::error('Forbidden', Response::HTTP_FORBIDDEN);
+            }
 
             if ($accountPayment->trashed()) {
                 $accountPayment->restore();
@@ -219,7 +229,7 @@ class AccountPaymentController extends Controller
             DB::rollBack();
 
             if ($request->wantsJson() || $request->ajax()) {
-                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+                return CustomResponse::serverError($e, 'AccountPaymentController::destroy');
             }
         }
     }

@@ -215,12 +215,13 @@ const openTab = () => {
           <input type="hidden" name="soa_ids[]" :value="id" />
         </template>
       </div>
-      <div class="grid gap-2 md:col-span-1">
+      <div class="grid gap-2 md:col-span-1 mb-2">
         <SearchableCombobox
           id="soa_ids"
           label="Billing Invoices"
           v-model="billingInvoice"
           v-model:search="searchedBillingInvoice"
+          :required="true"
           :items="soa_ids"
           placeholder="Select Billing Invoices..."
           search-placeholder="Search Billing Invoices..."
@@ -231,7 +232,7 @@ const openTab = () => {
           @load-more="loadMoreData('soas')"
         />
       </div>
-      <div class="grid gap-2 md:col-span-1">
+      <div class="grid gap-2 md:col-span-1 mb-2">
         <Label for="type">Type<span class="text-red-400">*</span></Label>
         <Select
           class="mt-1 block w-full"
@@ -251,7 +252,7 @@ const openTab = () => {
           </SelectContent>
         </Select>
       </div>
-      <div class="grid gap-2 md:col-span-1">
+      <div class="grid gap-2 md:col-span-1 mb-2">
         <Label for="title">Title<span class="text-red-400">*</span></Label>
         <Input
           class="mt-1 block w-full"
@@ -260,7 +261,7 @@ const openTab = () => {
           v-model="form.title"
         />
       </div>
-      <div class="grid gap-2 md:col-span-1">
+      <div class="grid gap-2 md:col-span-1 mb-2">
         <Label for="description">Description<span class="text-red-400">*</span></Label>
         <Textarea
           placeholder="Type the description here."
@@ -270,7 +271,7 @@ const openTab = () => {
           v-model="form.description"
         />
       </div>
-      <div v-if="auth?.is_superadmin" class="grid gap-2 md:col-span-1">
+      <div v-if="auth?.is_superadmin" class="grid gap-2 md:col-span-1 mb-2">
         <Label for="status">Status<span class="text-red-400">*</span></Label>
         <Select
           class="mt-1 block w-full"
@@ -324,7 +325,7 @@ const openTab = () => {
           <input type="hidden" name="soa_ids[]" :value="id" />
         </template>
       </div>
-      <div class="grid gap-2 md:col-span-1">
+      <div class="grid gap-2 md:col-span-1 mb-2">
         <Label for="status">Status<span class="text-red-400">*</span></Label>
         <Select
           class="mt-1 block w-full"

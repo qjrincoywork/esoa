@@ -61,7 +61,7 @@ class NavigationModuleController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
 
-            return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+            return CustomResponse::serverError($e, 'NavigationModuleController::store');
         }
     }
 
@@ -99,7 +99,7 @@ class NavigationModuleController extends Controller
             DB::rollBack();
 
             if ($request->wantsJson() || $request->ajax()) {
-                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+                return CustomResponse::serverError($e, 'NavigationModuleController::update');
             }
         }
     }
@@ -133,7 +133,7 @@ class NavigationModuleController extends Controller
             DB::rollBack();
 
             if ($request->wantsJson() || $request->ajax()) {
-                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+                return CustomResponse::serverError($e, 'NavigationModuleController::destroy');
             }
         }
     }

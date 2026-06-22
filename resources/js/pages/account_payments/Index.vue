@@ -228,21 +228,21 @@ const breadcrumbItems: BreadcrumbItem[] = [
  * param is appended and the row data is stored in sessionStorage. On mount we detect
  * this, retrieve the stored data, open the view pane, then clean up.
  */
-onMounted(() => {
+onMounted(async () => {
   const openId = new URLSearchParams(window.location.search).get('open');
   if (!openId) return;
 
-  const key = `account_payment_view_${openId}`;
-  const stored = sessionStorage.getItem(key);
-  if (!stored) return;
+  history.replaceState(null, '', window.location.pathname);
 
   try {
-    const payment = JSON.parse(stored);
-    sessionStorage.removeItem(key);
-    history.replaceState(null, '', window.location.pathname);
-    viewAccountPayment(payment);
+    const res = await fetch(`/account_payments/${openId}/edit`, {
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data?.account_payment) viewAccountPayment(data.account_payment);
   } catch {
-    sessionStorage.removeItem(key);
+    // Silently ignore — user can find the record in the list
   }
 });
 </script>
@@ -268,12 +268,12 @@ onMounted(() => {
                     <div class="grid gap-2 md:col-span-1">
                       <Label for="account-payment-filter-deposit-date">Deposit Date</Label>
                       <Input
+                        class="flex-1 min-w-0 bg-transparent text-base outline-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm [color-scheme:light] dark:[color-scheme:dark] mt-0"
                         id="account-payment-filter-deposit-date"
-                        v-model="depositDateFilterModel"
+                        name="account-payment-filter-deposit-date"
                         type="date"
                         autocomplete="off"
-                        placeholder="Deposit Date"
-                        class="mt-0"
+                        v-model="depositDateFilterModel"
                       />
                     </div>
                     <div class="grid gap-2 md:col-span-1">

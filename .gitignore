@@ -16,6 +16,9 @@ resources/js/helper/lang.json
 # Environment configuration files
 .env
 .env.backup
+# Backup files that may contain sensitive data
+*.back
+*.bak
 
 # IDE files
 .vscode/

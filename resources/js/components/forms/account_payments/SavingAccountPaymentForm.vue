@@ -202,7 +202,7 @@ const openFilePreview = (type: string) => {
     <div class="grid gap-2">
       <Label for="deposit_date">Deposit Date<span class="text-red-400">*</span></Label>
       <Input
-        class="mt-1 block w-full"
+        class="flex-1 min-w-0 bg-transparent text-base outline-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm [color-scheme:light] dark:[color-scheme:dark]"
         id="deposit_date"
         name="deposit_date"
         type="date"

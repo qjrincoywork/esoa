@@ -5,37 +5,17 @@ namespace App\Http\Controllers\Settings;
 use App\Helpers\CustomResponse;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\ProfileUpdateRequest;
-use App\Http\Requests\User\UpdateRequest;
-use App\Models\{ Citizenship, CivilStatus, Department, Gender, Position, User };
+use App\Models\User;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{Auth, DB};
+use Illuminate\Support\Facades\{Auth, DB, Log};
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\Response as HttpResponse;
 
 class ProfileController extends Controller
 {
-    /**
-     * User model instance.
-     *
-     * @var User
-     */
-    protected $user;
-
-    /**
-     * UserController constructor.
-     *
-     * @param User $user
-     *
-     * @return void
-     */
-    public function __construct(User $user)
-    {
-        $this->user = $user;
-    }
-
     /**
      * Show the user's profile settings page.
      */
@@ -48,40 +28,36 @@ class ProfileController extends Controller
     }
 
     /**
-     * Update the user's profile information.
+     * Update the authenticated user's own profile information.
+     * Always acts on $request->user() — never accepts an id from the body.
      */
-    public function update(UpdateRequest $request)
+    public function update(ProfileUpdateRequest $request)
     {
-        $validated = $request->validated();
+        $user = $request->user();
 
         DB::beginTransaction();
 
         try {
-            $this->user->saveUser($validated);
+            $user->fill($request->validated());
 
-            // Commit transaction
+            if ($user->isDirty('email')) {
+                $user->email_verified_at = null;
+            }
+
+            $user->save();
+
             DB::commit();
 
             return to_route('profile.edit');
         } catch (\Exception $e) {
-            // Catch and handle any unexpected errors
             DB::rollBack();
 
-            // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
-                // Catch and handle any unexpected errors
-                return CustomResponse::error($e->getMessage(), HttpResponse::HTTP_INTERNAL_SERVER_ERROR);
+                return CustomResponse::serverError($e, 'ProfileController::update');
             }
+
+            return back()->withErrors(['error' => 'Update failed. Please try again.']);
         }
-        // $request->user()->fill($request->validated());
-
-        // if ($request->user()->isDirty('email')) {
-        //     $request->user()->email_verified_at = null;
-        // }
-
-        // $request->user()->save();
-
-        // return to_route('profile.edit');
     }
 
     /**

@@ -10,14 +10,14 @@ use Illuminate\Foundation\Auth\Access\Authorizable;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Spatie\Permission\Traits\HasRoles;
 
-class User extends Authenticatable implements AuthorizableContract
+class User extends Authenticatable implements AuthorizableContract, MustVerifyEmail
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, HasRoles, Notifiable, Authorizable, SoftDeletes;
-    // use HasFactory, HasRoles, Notifiable, TwoFactorAuthenticatable, Authorizable;
+    use HasFactory, HasRoles, Notifiable, TwoFactorAuthenticatable, Authorizable, SoftDeletes;
 
     /**
      * The attributes that are mass assignable.
@@ -118,13 +118,13 @@ class User extends Authenticatable implements AuthorizableContract
         return $result->paginate($perPage);
     }
 
-    public function saveUser(array $data) {
-        if (isset($data['id'])) {
-            $user = self::find($data['id']);
-            $user->update($data);
-            $user->userDetail()->updateOrCreate(['user_id' => $user->id], $data);
+    public function saveUser(array $data, ?self $target = null): void
+    {
+        if ($target !== null) {
+            $target->update($data);
+            $target->userDetail()->updateOrCreate(['user_id' => $target->id], $data);
         } else {
-            $data += ['password' => Hash::make(config('vc.default_password'))];
+            $data += ['password' => Hash::make(Str::random(12))];
             $user = self::create($data);
 
             $data += ['user_id' => $user->id];

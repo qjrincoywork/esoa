@@ -18,6 +18,9 @@ class RolePermissionSeeder extends Seeder
             'manager',
             'team_leader',
             'user',
+            'broker',
+            'account_branch_admin',
+            'billing_admin',
         ];
 
         $permissions = [
@@ -75,5 +78,26 @@ class RolePermissionSeeder extends Seeder
         }
 
         Role::findByName('superadmin')->syncPermissions(Permission::all());
+
+        $soaPermissions = Permission::whereIn('name', [
+            'soas.index',
+            'soas.create',
+            'soas.edit',
+            'soas.manage_file',
+            'soas.find_member',
+            'soas.member_files',
+        ])->get();
+
+        foreach (['broker', 'account_branch_admin'] as $roleName) {
+            Role::findByName($roleName)->syncPermissions($soaPermissions);
+        }
+
+        $billingAdminPermissions = Permission::whereIn('name', [
+            'soas.index',
+            'soas.edit',
+            'soas.manage_file',
+        ])->get();
+
+        Role::findByName('billing_admin')->syncPermissions($billingAdminPermissions);
     }
 }
