@@ -7,6 +7,7 @@ use App\Http\Controllers\{
     ConcernController,
     NavigationController,
     NavigationModuleController,
+    OfficialReceiptController,
     PermissionController,
     RoleController,
     SoaController,
@@ -164,6 +165,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/{id}/activities', 'activities')->name('activities');
             Route::get('/{id}/concerns', 'concerns')->name('concerns');
             Route::get('/{id}/account_payments', 'soaAccountPayments')->name('account_payments');
+            Route::get('/{id}/official_receipts', 'soaOfficialReceipts')->name('official_receipts');
             Route::post('/{id}/record_viewed', 'recordViewed')->name('record_viewed');
             Route::get('/{id}/view_billing_invoice', 'viewBillingInvoice')->name('view_billing_invoice');
             Route::get('/create', 'create')->name('create');
@@ -194,14 +196,33 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/destroy', 'destroy')->name('destroy');
         });
 
+        Route::prefix('official_receipts')->name('official_receipts.')->controller(OfficialReceiptController::class)->group(function () {
+            Route::get('/', 'index')->name('index');
+            Route::get('/preview_file', 'previewFile')->name('preview_file');
+            Route::get('/{id}/show', 'show')->name('show');
+            Route::get('/create', 'create')->name('create');
+            // Billing: issue a new OR linked to one or more SOAs
+            Route::post('/store', 'store')->name('store');
+            Route::get('/{id}/edit', 'edit')->name('edit');
+            // Billing: update an existing OR
+            Route::post('/update', 'update')->name('update');
+            Route::post('/destroy', 'destroy')->name('destroy');
+        });
+
         Route::prefix('account_payments')->name('account_payments.')->controller(AccountPaymentController::class)->group(function () {
             Route::get('/', 'index')->name('index');
             Route::get('/preview_file', 'previewFile')->name('preview_file');
             Route::get('/{id}/show', 'show')->name('show');
             Route::get('/create', 'create')->name('create');
+            // Client: create a new remittance advice
             Route::post('/store', 'store')->name('store');
             Route::get('/{id}/edit', 'edit')->name('edit');
+            // Client: update details (only while status = Submitted)
             Route::post('/update', 'update')->name('update');
+            // Billing: update remittance advice status only
+            Route::post('/update_status', 'updateStatus')->name('update_status');
+            // Billing: apply RA payment to one or more SOAs
+            Route::post('/apply_payment', 'applyPayment')->name('apply_payment');
             Route::post('/destroy', 'destroy')->name('destroy');
         });
     });

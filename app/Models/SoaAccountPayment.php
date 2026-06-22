@@ -13,5 +13,6 @@ class SoaAccountPayment extends Model
     protected $fillable = [
         'soa_id',
         'account_payment_id',
+        'applied_amount',
     ];
 }

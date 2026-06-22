@@ -100,6 +100,18 @@ return [
 
         'sqlsrv' => [
             'driver' => 'sqlsrv',
+            // 'read' => [
+            //     'host' => [
+            //         env('DB_READ_HOST', '192.170.11.57'), // your readable replica / AG listener (ReadOnly)
+            //         'options' => ['ApplicationIntent' => 'ReadOnly'],
+            //     ],
+            // ],
+            // 'write' => [
+            //     'host' => [
+            //         env('DB_HOST', '192.170.11.57'), // primary
+            //     ],
+            // ],
+            // 'sticky' => true, // see note below
             'url' => env('DB_URL'),
             'host' => env('DB_HOST', 'localhost'),
             'port' => env('DB_PORT', '1433'),

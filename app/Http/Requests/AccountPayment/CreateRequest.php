@@ -3,16 +3,13 @@
 namespace App\Http\Requests\AccountPayment;
 
 use App\Enums\AccountPaymentMode;
+use App\Enums\RemittanceAdviceStatus;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 
 class CreateRequest extends FormRequest
 {
-    /**
-     * Get the validation rules that apply to the request.
-     *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
-     */
     public function rules(): array
     {
         return [
@@ -20,6 +17,11 @@ class CreateRequest extends FormRequest
                 'required',
                 'integer',
                 'exists:users,id',
+            ],
+            'amount' => [
+                'required',
+                'numeric',
+                'min:0.01',
             ],
             'deposit_date' => [
                 'required',
@@ -64,22 +66,21 @@ class CreateRequest extends FormRequest
         ];
     }
 
-    /**
-     * Prepare the data for validation.
-     */
     protected function prepareForValidation(): void
     {
         $soaIdsInput = $this->input('soa_ids');
 
         if (is_string($soaIdsInput)) {
-            $decodedSoaIds = json_decode($soaIdsInput, true);
-            if (is_array($decodedSoaIds)) {
-                $this->merge(['soa_ids' => $decodedSoaIds]);
+            $decoded = json_decode($soaIdsInput, true);
+            if (is_array($decoded)) {
+                $this->merge(['soa_ids' => $decoded]);
             }
         }
 
         $this->merge([
-            'user_id' => auth()->id(),
+            'user_id' => Auth::id(),
+            // Status is always Submitted on creation — set by the system, not the client.
+            'status'  => RemittanceAdviceStatus::SUBMITTED,
         ]);
     }
 }

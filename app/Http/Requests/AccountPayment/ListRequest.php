@@ -14,15 +14,16 @@ class ListRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'deposit_date' => 'nullable|date',
+            'deposit_date'    => 'nullable|date',
             'mode_of_payment' => 'nullable|integer',
-            'created_by' => 'nullable|string|max:255',
-            'image' => 'nullable|string|max:255',
-            'pdf' => 'nullable|string|max:255',
-            'excel' => 'nullable|string|max:255',
-            'remarks' => 'nullable|string|max:1000',
-            'per_page' => 'nullable|integer|min:1|max:100',
-            'page' => 'nullable|integer|min:1',
+            'status'          => 'nullable|integer',
+            'created_by'      => 'nullable|string|max:255',
+            'image'           => 'nullable|string|max:255',
+            'pdf'             => 'nullable|string|max:255',
+            'excel'           => 'nullable|string|max:255',
+            'remarks'         => 'nullable|string|max:1000',
+            'per_page'        => 'nullable|integer|min:1|max:100',
+            'page'            => 'nullable|integer|min:1',
         ];
     }
 

@@ -90,6 +90,16 @@ class Soa extends Model
             'soa_account_payments',
             'soa_id',
             'account_payment_id'
+        )->withPivot('applied_amount');
+    }
+
+    public function officialReceipts(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            OfficialReceipt::class,
+            'soa_official_receipts',
+            'soa_id',
+            'official_receipt_id'
         );
     }
 

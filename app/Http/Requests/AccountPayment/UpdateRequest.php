@@ -3,16 +3,14 @@
 namespace App\Http\Requests\AccountPayment;
 
 use App\Enums\AccountPaymentMode;
+use App\Enums\RemittanceAdviceStatus;
+use App\Models\AccountPayment;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class UpdateRequest extends FormRequest
 {
-    /**
-     * Get the validation rules that apply to the request.
-     *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
-     */
     public function rules(): array
     {
         return [
@@ -20,6 +18,11 @@ class UpdateRequest extends FormRequest
                 'required',
                 'integer',
                 'exists:account_payments,id',
+            ],
+            'amount' => [
+                'required',
+                'numeric',
+                'min:0.01',
             ],
             'deposit_date' => [
                 'required',
@@ -31,19 +34,19 @@ class UpdateRequest extends FormRequest
                 Rule::in(AccountPaymentMode::getValues()),
             ],
             'image' => [
-                'required',
+                'nullable',
                 'file',
                 'mimes:jpg,jpeg,png',
                 'max:' . config('vc.max_file_size'),
             ],
             'pdf' => [
-                'required',
+                'nullable',
                 'file',
                 'mimes:pdf',
                 'max:' . config('vc.max_file_size'),
             ],
             'excel' => [
-                'required',
+                'nullable',
                 'file',
                 'mimes:xls,xlsx',
                 'max:' . config('vc.max_file_size'),
@@ -65,16 +68,37 @@ class UpdateRequest extends FormRequest
     }
 
     /**
-     * Prepare the data for validation.
+     * Clients may only edit a remittance advice while it is still Submitted.
+     * Once billing picks it up the record becomes read-only via this endpoint.
      */
+    public function after(): array
+    {
+        return [
+            function (Validator $validator) {
+                if ($validator->errors()->isNotEmpty()) {
+                    return;
+                }
+
+                $accountPayment = AccountPayment::find($this->integer('id'));
+
+                if ((int) $accountPayment->status !== RemittanceAdviceStatus::SUBMITTED) {
+                    $validator->errors()->add(
+                        'id',
+                        'This remittance advice can no longer be edited because it is already under review by the billing department.'
+                    );
+                }
+            },
+        ];
+    }
+
     protected function prepareForValidation(): void
     {
         $soaIdsInput = $this->input('soa_ids');
 
         if (is_string($soaIdsInput)) {
-            $decodedSoaIds = json_decode($soaIdsInput, true);
-            if (is_array($decodedSoaIds)) {
-                $this->merge(['soa_ids' => $decodedSoaIds]);
+            $decoded = json_decode($soaIdsInput, true);
+            if (is_array($decoded)) {
+                $this->merge(['soa_ids' => $decoded]);
             }
         }
     }
