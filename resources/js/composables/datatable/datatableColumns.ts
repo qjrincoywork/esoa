@@ -65,6 +65,7 @@ export function createActionColumn(customActions: ActionColumnOptions['customAct
         id?: number | string;
         status?: string;
         is_active?: number | boolean;
+        deleted_at?: string | null;
         file_pdf?: string | null;
         attachment?: string | null;
         remittance_advice?: string | null;

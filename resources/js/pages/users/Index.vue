@@ -92,6 +92,11 @@ const columns = computed(() => {
           ? { name: 'Deactivate', icon: 'ToggleRight', color: 'orange' }
           : { name: 'Activate',   icon: 'ToggleLeft',  color: 'green'  };
       }
+      if (key === 'destroy') {
+        entry.dynamicProps = (item: any) => item.deleted_at
+          ? { name: 'Restore', icon: 'RotateCcw', color: 'green' }
+          : { name: 'Delete',  icon: 'Trash2',    color: 'red'   };
+      }
       return entry;
     });
 

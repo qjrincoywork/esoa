@@ -222,26 +222,24 @@ export function useUsers() {
   };
 
   const deleteUser = async (user: User) => {
-    const deleteOrRestore = user.deleted_at ? 'Restore' : 'Delete'
-    const color = user.deleted_at ? 'green' : 'red';
-
-    const buttonClass = `bg-${color}-600
-      hover:bg-${color}-700
-      focus:ring-${color}-500
-      dark:bg-${color}-500
-      dark:hover:bg-${color}-600`;
+    const isDeleted = Boolean(user.deleted_at);
+    const action = isDeleted ? 'Restore' : 'Delete';
+    const buttonClass = isDeleted
+      ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500 dark:bg-green-500 dark:hover:bg-green-600'
+      : 'bg-red-600 hover:bg-red-700 focus:ring-red-500 dark:bg-red-500 dark:hover:bg-red-600';
 
     try {
       openModal({
-        modalTitle: `${deleteOrRestore} ${user?.username || ' User'}`,
-        buttonText: deleteOrRestore,
-        buttonClass: buttonClass,
+        modalTitle: `${action} ${user.username ?? user.email ?? 'User'}`,
+        buttonText: action,
+        buttonClass,
         component: DeleteForm,
         componentProps: {
-          user: user,
+          user,
+          isDeleted,
           onReady: (api: { getFormData: () => FormData | null }) => {
-            formApi = api
-          }
+            formApi = api;
+          },
         },
         size: 'sm',
         onSubmit: async () => {
@@ -252,7 +250,6 @@ export function useUsers() {
           showLoader();
           try {
             const response = await post(`/${slug.value}/destroy`, formData);
-
             if (!response.ok) {
               dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
             } else {
@@ -263,10 +260,9 @@ export function useUsers() {
           } catch (err) {
             dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
           } finally {
-            // Refresh current page to update datatable props
             hideLoader();
           }
-        }
+        },
       });
     } catch (error) {
       dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
