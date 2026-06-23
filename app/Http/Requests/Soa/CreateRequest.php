@@ -82,20 +82,7 @@ class CreateRequest extends FormRequest
                 'required',
                 'date',
             ],
-            'amount' => [
-                'required',
-                'numeric',
-                // new SoaAmountIsValid(),
-            ],
-            'amount_paid' => [
-                'nullable',
-                'numeric',
-            ],
             'payment_adjustment' => [
-                'nullable',
-                'numeric',
-            ],
-            'balance' => [
                 'nullable',
                 'numeric',
             ],
@@ -110,6 +97,11 @@ class CreateRequest extends FormRequest
                 'file',
                 'mimes:xls,xlsx',
                 'max:' . config('vc.max_file_size'), // 2MB (size is in KB)
+            ],
+            'amount' => [
+                'required',
+                'numeric',
+                // new SoaAmountIsValid(),
             ],
         ];
     }

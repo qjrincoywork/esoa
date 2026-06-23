@@ -10,6 +10,7 @@ use App\Http\Requests\User\{CreateRequest, DeleteRequest, ListRequest, ToggleAct
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
+use App\Http\Resources\UserListResource;
 use App\Models\{Account, Citizenship, CivilStatus, Department, Position, Suffix, User };
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -53,10 +54,10 @@ class UserController extends Controller
      */
     public function index(ListRequest $request)
     {
-        $users = $this->user->getUsers($request->validated())->toArray();
+        $users = $this->user->getUsers($request->validated());
 
         return Inertia::render('users/Index', [
-            'users' => $users,
+            'users' => new CommonResource(UserListResource::collection($users)),
         ]);
     }
 

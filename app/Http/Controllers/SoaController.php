@@ -15,7 +15,7 @@ use App\Helpers\CommonHelper;
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Soa\{AccountBranchMembersRequest, AdjustAmountRequest, BillRefsRequest, CreateRequest, FileListRequest, FileProxyRequest, FindMemberRequest, ListRequest, MemberFilesRequest, RecordViewedRequest, RecomputeTaxRequest, UpdateRequest, UpdateTagRequest };
+use App\Http\Requests\Soa\{AccountBranchMembersRequest, AdjustAmountRequest, BillRefsRequest, CreateRequest, DestroyRequest, FileListRequest, FileProxyRequest, FindMemberRequest, ListRequest, MemberFilesRequest, RecordViewedRequest, RecomputeTaxRequest, UpdateRequest, UpdateTagRequest };
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
@@ -794,6 +794,31 @@ class SoaController extends Controller
             if ($request->wantsJson() || $request->ajax()) {
                 // Catch and handle any unexpected errors
                 return CustomResponse::serverError($e, 'SoaController');
+            }
+        }
+    }
+
+    public function destroy(DestroyRequest $request)
+    {
+        $validated = $request->validated();
+        DB::beginTransaction();
+        try {
+            $soa = Soa::withTrashed()->findOrFail($validated['id']);
+            if ($soa->trashed()) {
+                $soa->restore();
+                $label = 'restored';
+            } else {
+                $soa->delete();
+                $label = 'deleted';
+            }
+            DB::commit();
+            if ($request->wantsJson() || $request->ajax()) {
+                return CustomResponse::ok("SOA {$label} successfully", Response::HTTP_OK);
+            }
+        } catch (\Exception $e) {
+            DB::rollBack();
+            if ($request->wantsJson() || $request->ajax()) {
+                return CustomResponse::serverError($e, 'SoaController::destroy');
             }
         }
     }

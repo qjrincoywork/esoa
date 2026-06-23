@@ -225,10 +225,16 @@ const columns = computed(() => {
       && m.slug.split('.')[1] != 'create'
       && m.slug.split('.')[1] != 'file_list'
     )
-    .map((m: { slug: string }) => ({
-      ...m,
-      handler: handlerMap[m.slug.split('.')[1]],
-    }))
+    .map((m: { slug: string }) => {
+      const key = m.slug.split('.')[1];
+      const entry: any = { ...m, handler: handlerMap[key] };
+      if (key === 'destroy') {
+        entry.dynamicProps = (item: any) => item.deleted_at
+          ? { name: 'Restore', icon: 'RotateCcw', color: 'green' }
+          : { name: 'Delete',  icon: 'Trash2',    color: 'red'   };
+      }
+      return entry;
+    })
 
   return subModules.length
     ? [...baseColumns, createActionColumn(subModules)]
