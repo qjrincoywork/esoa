@@ -33,6 +33,7 @@ class NavigationModuleSeeder extends Seeder
             ['nav' => 'ICT Admin', 'perm' => 'users.edit',            'name' => 'Edit User',                    'slug' => 'users.edit',                   'icon' => 'Pencil',         'color' => 'blue',   'url' => '/users/{id}/edit',             'parent' => 'users.index',           'order' => 4],
             ['nav' => 'ICT Admin', 'perm' => 'users.destroy',         'name' => 'Delete User',                  'slug' => 'users.destroy',                'icon' => 'Trash2',         'color' => 'red',    'url' => '/users/destroy',               'parent' => 'users.index',           'order' => 5],
             ['nav' => 'ICT Admin', 'perm' => 'users.verify',          'name' => 'Verify User',                  'slug' => 'users.verify',                 'icon' => 'ShieldCheck',    'color' => 'teal',   'url' => '/users/verify',                'parent' => 'users.index',           'order' => 1],
+            ['nav' => 'ICT Admin', 'perm' => 'users.toggle_active',   'name' => 'Toggle User Active Status',    'slug' => 'users.toggle_active',          'icon' => 'ToggleRight',    'color' => 'orange', 'url' => '/users/toggle_active',         'parent' => 'users.index',           'order' => 6],
 
             // Roles
             ['nav' => 'ICT Admin', 'perm' => 'roles.index',           'name' => 'Roles',                        'slug' => 'roles.index',                  'icon' => 'Lock',           'color' => null,     'url' => '/roles',                       'parent' => null,                    'order' => 6],

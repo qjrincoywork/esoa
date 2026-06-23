@@ -4,6 +4,7 @@ import DeleteForm from '@/components/forms/users/DeleteForm.vue';
 import SavingForm from '@/components/forms/users/SavingForm.vue';
 import UserRolesForm from '@/components/forms/users/UserRolesForm.vue';
 import VerifyForm from '@/components/forms/users/VerifyForm.vue';
+import ToggleActiveForm from '@/components/forms/users/ToggleActiveForm.vue';
 let formApi: { getFormData: () => FormData | null } | null = null;
 import { dispatchNotification } from '@/components/notification';
 import { showLoader, hideLoader } from '@/composables/useLoader';
@@ -387,6 +388,51 @@ export function useUsers() {
     });
   };
 
+  const toggleActiveUser = async (user: User) => {
+    const isCurrentlyActive = Number(user.is_active) !== 0;
+    const newActiveValue: 0 | 1 = isCurrentlyActive ? 0 : 1;
+    const action = isCurrentlyActive ? 'Deactivate' : 'Activate';
+    const buttonClass = isCurrentlyActive
+      ? 'bg-orange-600 hover:bg-orange-700 focus:ring-orange-500 dark:bg-orange-500 dark:hover:bg-orange-600'
+      : 'bg-green-600 hover:bg-green-700 focus:ring-green-500 dark:bg-green-500 dark:hover:bg-green-600';
+
+    openModal({
+      modalTitle: `${action} ${user.username ?? user.email ?? 'User'}`,
+      buttonText: action,
+      buttonClass,
+      component: ToggleActiveForm,
+      componentProps: {
+        user,
+        newActiveValue,
+        onReady: (api: { getFormData: () => FormData | null }) => {
+          formApi = api;
+        },
+      },
+      size: 'sm',
+      onSubmit: async () => {
+        if (!formApi) return;
+        const formData = formApi.getFormData();
+        if (!formData) return;
+
+        showLoader();
+        try {
+          const response = await post(`/${slug.value}/toggle_active`, formData);
+          if (!response.ok) {
+            dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+          } else {
+            dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+            closeModal();
+            router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+          }
+        } catch (err) {
+          dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+        } finally {
+          hideLoader();
+        }
+      },
+    });
+  };
+
   return {
     editUser,
     createUser,
@@ -395,6 +441,7 @@ export function useUsers() {
     getBranchesByParams,
     manageUserRoles,
     verifyUsers,
+    toggleActiveUser,
   };
 }
 
