@@ -170,7 +170,10 @@ class Soa extends Model
             })
             ->orderBy('created_at', OrderType::DESC);
 
-        if ($authUser && $authUser->hasRole('superadmin')) {
+        if ($authUser && (
+            $authUser->hasAnyRole(['superadmin', 'admin']) ||
+            $authUser->hasAnyPermission(['soas.destroy'])
+        )) {
             $query->withTrashed();
         }
 

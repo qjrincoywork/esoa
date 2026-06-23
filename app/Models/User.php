@@ -113,7 +113,11 @@ class User extends Authenticatable implements AuthorizableContract, MustVerifyEm
             ->with('userDetail')
             ->orderBy('id', 'desc');
 
-        if (auth()->user() && auth()->user()->hasRole('superadmin')) {
+        $authUser = auth()->user();
+        if ($authUser && (
+            $authUser->hasAnyRole(['superadmin', 'admin']) ||
+            $authUser->hasAnyPermission(['users.destroy'])
+        )) {
             $result->withTrashed();
         }
 

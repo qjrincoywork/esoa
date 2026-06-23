@@ -43,6 +43,7 @@ export interface Soa {
   id?: number
   user_id?: number
   soa_number?: string
+  soanum?: string
   account_type?: string
   account_code?: string
   branch_code?: string
@@ -62,6 +63,7 @@ export interface Soa {
   balance?: number
   file_pdf?: string
   file_xls?: string
+  deleted_at?: string | null
   soa_activities?: SoaActivity[]
 }
 

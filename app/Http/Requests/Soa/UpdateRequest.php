@@ -17,8 +17,7 @@ class UpdateRequest extends FormRequest
      */
     public function rules(): array
     {
-        $isAccountBranchAdmin = empty(auth()->user()->userDetail->employee_no);
-        if ($isAccountBranchAdmin) {
+        if ($this->user()?->hasRole('account_branch_admin')) {
             $rules = [
                 'id' => [
                     'required',
@@ -135,24 +134,16 @@ class UpdateRequest extends FormRequest
                     'required_unless:status,' . SoaStatus::ENDORSED,
                     'date',
                 ],
-                'amount' => [
-                    'required_unless:status,' . SoaStatus::ENDORSED,
-                    'numeric',
-                ],
-                'amount_paid' => [
-                    'nullable',
-                    'numeric',
-                ],
                 'payment_adjustment' => [
-                    'nullable',
-                    'numeric',
-                ],
-                'balance' => [
                     'nullable',
                     'numeric',
                 ],
                 'file_pdf' => $filePdfRules,
                 'file_xls' => $fileXlsRules,
+                'amount' => [
+                    'required_unless:status,' . SoaStatus::ENDORSED,
+                    'numeric',
+                ],
             ];
         }
 

@@ -595,19 +595,6 @@ watch(soa, (val: Soa | undefined) => {
           @update:to="(v) => { periodDateTo = v }"
         />
 
-        <div v-if="!isEndorsed" class="grid gap-2">
-          <Label for="amount">Amount<span class="text-red-400">*</span></Label>
-          <Input
-            id="amount"
-            type="number"
-            step="0.01"
-            class="w-full"
-            name="amount"
-            v-model="amount"
-            placeholder="0.00"
-          />
-        </div>
-
         <div class="grid gap-2">
           <Label for="file_pdf">PDF File<span class="text-red-400">*</span></Label>
           <p v-if="existingPdf" class="text-xs text-[var(--color-text-muted)]">
@@ -647,6 +634,19 @@ watch(soa, (val: Soa | undefined) => {
             accept=".xls,.xlsx"
             class="w-full"
             name="file_xls"
+          />
+        </div>
+
+        <div v-if="!isEndorsed" class="grid gap-2">
+          <Label for="amount">Amount<span class="text-red-400">*</span></Label>
+          <Input
+            id="amount"
+            type="number"
+            step="0.01"
+            class="w-full"
+            name="amount"
+            v-model="amount"
+            placeholder="0.00"
           />
         </div>
       </div>
