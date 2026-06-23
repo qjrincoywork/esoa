@@ -458,17 +458,24 @@ class SqlDatabase
                     }
                 });
             })
-            ->when(!empty($selectedRefs), function ($query) use ($selectedRefs) {
-                $placeholders = implode(',', array_fill(0, count($selectedRefs), '?'));
-                $query->orderByRaw(
-                    "CASE WHEN cr.cr_batchnum IN ({$placeholders}) THEN 0 ELSE 1 END",
-                    array_values($selectedRefs)
-                );
-            })
             ->orderByDesc('date_posted')
             ->orderBy('ref_id');
 
-        return $query->paginate($perPage);
+        $paginated = $query->paginate($perPage);
+
+        // Sort the current page's items so selected refs appear first.
+        // Done in PHP rather than via orderByRaw bindings to avoid SQL Server's
+        // binding-count mismatch on the paginator's COUNT sub-query.
+        if (!empty($selectedRefs)) {
+            $selectedSet = array_flip($selectedRefs);
+            $paginated->setCollection(
+                $paginated->getCollection()
+                    ->sortBy(fn($item) => isset($selectedSet[$item->ref_id]) ? 0 : 1)
+                    ->values()
+            );
+        }
+
+        return $paginated;
     }
 
     public function getClaimDetailsByParams($params)
@@ -679,16 +686,23 @@ class SqlDatabase
             ->when(isset($params['billing_date_to']) && !empty($params['billing_date_to']), function ($query) use ($params) {
                 $query->where('a.bl_dateposted', '<=', Carbon::parse($params['billing_date_to'])->endOfDay());
             })
-            ->when(!empty($selectedRefs), function ($query) use ($selectedRefs) {
-                $placeholders = implode(',', array_fill(0, count($selectedRefs), '?'));
-                $query->orderByRaw(
-                    "CASE WHEN a.bl_refid IN ({$placeholders}) THEN 0 ELSE 1 END",
-                    array_values($selectedRefs)
-                );
-            })
             ->orderBy('a.bl_dateposted', 'desc');
 
-        return $result->paginate($perPage);
+        $paginated = $result->paginate($perPage);
+
+        // Sort the current page's items so selected refs appear first.
+        // Done in PHP rather than via orderByRaw bindings to avoid SQL Server's
+        // binding-count mismatch on the paginator's COUNT sub-query.
+        if (!empty($selectedRefs)) {
+            $selectedSet = array_flip($selectedRefs);
+            $paginated->setCollection(
+                $paginated->getCollection()
+                    ->sortBy(fn($item) => isset($selectedSet[$item->ref_id]) ? 0 : 1)
+                    ->values()
+            );
+        }
+
+        return $paginated;
     }
 
     /**

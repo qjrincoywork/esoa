@@ -22,6 +22,12 @@ type AccountType = { value: string | number; name: string }
 type Branch = { value: string | number; name: string }
 type BillingRef = { value: string | number; name: string; balance_raw?: number | string }
 
+function toDateInput(value: string | null | undefined): string {
+  if (!value) return '';
+  const match = String(value).match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : '';
+}
+
 const { getAccountsByParams, getBranchesByParams, getBillingRefsByParams } = useSoas();
 const props = defineProps({
   soa: {
@@ -88,9 +94,9 @@ const soaNumber = ref(soa.value?.soa_number ?? '')
 const selectedBillType = ref<string | number>(soa.value?.bill_type ?? '')
 const selectedStatus = ref<string | number>(soa.value?.status ?? '1')
 const selectedBillRefFrom = ref<string | number>(soa.value?.billing_ref_from ?? '')
-const dueDate = ref(soa.value?.due_date ?? '')
-const periodDateFrom = ref(soa.value?.period_date_from ?? '')
-const periodDateTo = ref(soa.value?.period_date_to ?? '')
+const dueDate = ref(toDateInput(soa.value?.due_date))
+const periodDateFrom = ref(toDateInput(soa.value?.period_date_from))
+const periodDateTo = ref(toDateInput(soa.value?.period_date_to))
 const amount = ref(soa.value?.amount != null ? String(soa.value.amount) : '')
 const billingDateFrom = ref('')
 const billingDateTo = ref('')
@@ -240,16 +246,20 @@ const searchBillingRefsByParams = async (name = '', page = 1, append = false) =>
   if (name != null && name.trim() !== '') {
     params.name = name.trim();
   }
-  const result = await getBillingRefsByParams(params);
-
-  if (append) {
-    billing_refs.value = [...(billing_refs.value ?? []), ...result?.data];
-  } else {
-    billing_refs.value = result?.data ?? [];
+  try {
+    const result = await getBillingRefsByParams(params);
+    if (result) {
+      if (append) {
+        billing_refs.value = [...(billing_refs.value ?? []), ...(result.data ?? [])];
+      } else {
+        billing_refs.value = result.data ?? [];
+      }
+      billingRefPage.value = result.current_page;
+      billingRefLastPage.value = result.last_page;
+    }
+  } finally {
+    billingRefsLoadingMore.value = false;
   }
-  billingRefPage.value = result?.current_page;
-  billingRefLastPage.value = result?.last_page;
-  billingRefsLoadingMore.value = false;
 }
 
 function loadMoreData(input: string) {
@@ -319,6 +329,13 @@ watch([searchedBillingRef, selectedBillRefFrom], async () => {
     }
   }
 }, { immediate: true })
+watch([billingDateFrom, billingDateTo], () => {
+  if (!hasBillingRef.value || !selectedBillRefFrom.value) return;
+  billing_refs.value = [];
+  billingRefPage.value = 1;
+  billingRefLastPage.value = 1;
+  debouncedGetBillingRefs(searchedBillingRef.value);
+})
 
 // Reset dependent fields when switching account type or account
 watch(selectedAccountType, () => {
@@ -352,9 +369,9 @@ watch(soa, (val: Soa | undefined) => {
   if (val.account_type != null) selectedAccountType.value = String(val.account_type);
   if (val.bill_type != null) selectedBillType.value = String(val.bill_type);
   if (val.status != null) selectedStatus.value = String(val.status);
-  if (val.due_date != null) dueDate.value = val.due_date;
-  if (val.period_date_from != null) periodDateFrom.value = val.period_date_from;
-  if (val.period_date_to != null) periodDateTo.value = val.period_date_to;
+  if (val.due_date != null) dueDate.value = toDateInput(val.due_date);
+  if (val.period_date_from != null) periodDateFrom.value = toDateInput(val.period_date_from);
+  if (val.period_date_to != null) periodDateTo.value = toDateInput(val.period_date_to);
   if (val.amount != null) amount.value = String(val.amount);
   if (val.account_code != null) accountCode.value = String(val.account_code);
   if (val.branch_code != null) branchCode.value = String(val.branch_code);
@@ -445,6 +462,7 @@ watch(soa, (val: Soa | undefined) => {
 
       <div v-if="hasBillingRef" class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <DateRangePicker
+          class="md:col-span-2"
           id="billing-date"
           label="Billing Date Range"
           :from="billingDateFrom"
@@ -565,6 +583,7 @@ watch(soa, (val: Soa | undefined) => {
 
         <DateRangePicker
           v-if="!isEndorsed"
+          class="md:col-span-2"
           id="period-date"
           label="Period Date Range"
           :required="true"
