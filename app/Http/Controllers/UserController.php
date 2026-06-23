@@ -6,7 +6,7 @@ use App\Enums\{ AccountType, Gender, Server, UserType };
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\User\{CreateRequest, DeleteRequest, ListRequest, UpdateRequest, UpdateRoleRequest, VerifyRequest};
+use App\Http\Requests\User\{CreateRequest, DeleteRequest, ListRequest, ToggleActiveRequest, UpdateRequest, UpdateRoleRequest, VerifyRequest};
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
@@ -295,6 +295,37 @@ class UserController extends Controller
 
             if ($request->wantsJson() || $request->ajax()) {
                 return CustomResponse::serverError($e, 'UserController');
+            }
+        }
+    }
+
+    /**
+     * Set the is_active status for a single user.
+     * Accepts an explicit is_active value so the client drives the state
+     * rather than relying on a server-side read-then-flip.
+     */
+    public function toggleActive(ToggleActiveRequest $request)
+    {
+        $validated = $request->validated();
+
+        DB::beginTransaction();
+
+        try {
+            $target = User::findOrFail($validated['id']);
+            $target->update(['is_active' => $validated['is_active']]);
+
+            DB::commit();
+
+            $label = $validated['is_active'] ? 'activated' : 'deactivated';
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return CustomResponse::ok("User {$label} successfully", Response::HTTP_OK);
+            }
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return CustomResponse::serverError($e, 'UserController::toggleActive');
             }
         }
     }

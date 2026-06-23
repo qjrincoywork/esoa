@@ -21,6 +21,7 @@ export interface ActionColumnOptions {
     color?: string;
     handler?: (item: any) => void;
     class?: string;
+    dynamicProps?: (item: any) => Partial<{ name: string; icon: string | any; color: string }>;
   }>;
 }
 
@@ -61,8 +62,9 @@ export function createActionColumn(customActions: ActionColumnOptions['customAct
     header: 'Actions',
     cell: ({ row }) => {
       const item = row.original as {
-        id?: number | string
+        id?: number | string;
         status?: string;
+        is_active?: number | boolean;
         file_pdf?: string | null;
         attachment?: string | null;
         remittance_advice?: string | null;
@@ -86,9 +88,10 @@ export function createActionColumn(customActions: ActionColumnOptions['customAct
       // Render dynamic custom actions
       if (Array.isArray(customActions) && customActions.length > 0) {
         for (const action of customActions) {
-          const ActionIcon = action.icon || File;
-          const label = action.name || action.slug || 'Action';
-          const colorClass = ACTION_COLOR_CLASSES[action.color ?? ''] ?? ACTION_COLOR_CLASSES['gray'];
+          const resolved = action.dynamicProps ? { ...action, ...action.dynamicProps(item) } : action;
+          const ActionIcon = resolved.icon || File;
+          const label = resolved.name || resolved.slug || 'Action';
+          const colorClass = ACTION_COLOR_CLASSES[resolved.color ?? ''] ?? ACTION_COLOR_CLASSES['gray'];
           const css = `cursor-pointer p-1 ${colorClass} transition-colors rounded`;
 
           if (
@@ -128,8 +131,8 @@ export function createActionColumn(customActions: ActionColumnOptions['customAct
               },
             },
             [
-              typeof action.icon === 'string'
-                ? h(Icon, { name: action.icon, size: 18 })
+              typeof resolved.icon === 'string'
+                ? h(Icon, { name: resolved.icon, size: 18 })
                 : h(ActionIcon, { size: 18 })
             ]
           );

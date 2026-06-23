@@ -89,6 +89,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::post('/store', 'store')->name('store');
                 Route::post('/destroy', 'destroy')->name('destroy');
                 Route::post('/verify', 'verify')->name('verify');
+                Route::post('/toggle_active', 'toggleActive')->name('toggle_active');
         });
 
         //Roles

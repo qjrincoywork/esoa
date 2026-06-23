@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue';
+import { ref, watch, computed, h } from 'vue';
 import { Head, router, usePage } from '@inertiajs/vue3';
 import { createColumnHelper } from '@tanstack/vue-table';
 import { type BreadcrumbItem } from '@/types';
@@ -31,7 +31,7 @@ const users = computed(() => {
     }
     return propsUsers;
 });
-const { createUser, editUser, deleteUser, manageUserRoles, verifyUsers } = useUsers();
+const { createUser, editUser, deleteUser, manageUserRoles, verifyUsers, toggleActiveUser } = useUsers();
 const columnHelper = createColumnHelper();
 const pagination = ref({
 	current_page: users.value.current_page,
@@ -51,6 +51,24 @@ const baseColumns: any[] = [
   columnHelper.accessor('email', {
     header: 'Email',
   }),
+  columnHelper.accessor('is_active', {
+    header: 'Status',
+    cell: (info: any) => {
+      const active = Number(info.getValue()) !== 0;
+      return h(
+        'span',
+        {
+          class: [
+            'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
+            active
+              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+              : 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400',
+          ],
+        },
+        active ? 'Active' : 'Inactive',
+      );
+    },
+  }),
 ]
 
 const handlerMap: Record<string, Function> = {
@@ -60,15 +78,22 @@ const handlerMap: Record<string, Function> = {
   destroy: deleteUser,
   edit_roles: (user: any) => manageUserRoles(user),
   verify: (user: any) => verifyUsers([user]),
+  toggle_active: (user: any) => toggleActiveUser(user),
 }
 
 const columns = computed(() => {
   const subModules = page.props.sub_modules
     .filter((m: any) => hasPermission(m.slug) && m.slug.split('.')[1] !== 'create')
-    .map((m: any) => ({
-      ...m,
-      handler: handlerMap[m.slug.split('.')[1]],
-    }))
+    .map((m: any) => {
+      const key = m.slug.split('.')[1];
+      const entry: any = { ...m, handler: handlerMap[key] };
+      if (key === 'toggle_active') {
+        entry.dynamicProps = (item: any) => Number(item.is_active) !== 0
+          ? { name: 'Deactivate', icon: 'ToggleRight', color: 'orange' }
+          : { name: 'Activate',   icon: 'ToggleLeft',  color: 'green'  };
+      }
+      return entry;
+    });
 
   return [...baseColumns, createActionColumn([...subModules])]
 })
