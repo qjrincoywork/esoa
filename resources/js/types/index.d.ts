@@ -109,6 +109,7 @@ export interface UserDetail {
   suffix: string | number;
   birthdate: string;
   employee_no: string;
+  email_verified_at: string;
 }
 
 export interface Permissions {
