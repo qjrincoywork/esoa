@@ -157,7 +157,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/preview_file', 'previewFile')->name('preview_file');
             Route::get('/find_member', 'findMember')->name('find_member');
             Route::get('/member_files', 'memberFiles')->name('member_files');
-            Route::get('/tax_computation', 'taxComputation')->name('tax_computation');
             Route::get('/get_accounts', 'getAccounts')->name('get_accounts');
             Route::get('/get_billing_refs', 'getBillingRefs')->name('get_billing_refs');
             Route::get('/get_branches', 'getBranches')->name('get_branches');
@@ -175,11 +174,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 ->where('type', 'pdf|excel');
             Route::get('/{account_code}/{branch_code}/members', 'accountBranchMembers')->name('account_branch_members');
             Route::get('/{id}/manage_file', 'manageFile')->name('manage_file');
-            Route::get('/{id}/untag', 'untag')->name('untag');
-            Route::post('/recompute_tax', 'recomputeTax')->name('recompute_tax');
             Route::post('/adjust_amount', 'adjustAmount')->name('adjust_amount');
             Route::post('/update', 'update')->name('update');
-            Route::post('/update_tag', 'updateTag')->name('update_tag');
             Route::post('/destroy', 'destroy')->name('destroy');
         });
 

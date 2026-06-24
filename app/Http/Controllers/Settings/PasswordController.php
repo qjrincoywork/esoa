@@ -31,6 +31,7 @@ class PasswordController extends Controller
 
         $request->user()->update([
             'password' => $validated['password'],
+            'temporary_password_expires_at' => null,
         ]);
 
         return back();

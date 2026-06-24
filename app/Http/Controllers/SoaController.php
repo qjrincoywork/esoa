@@ -662,67 +662,6 @@ class SoaController extends Controller
     }
 
     /**
-     * Untag the specified soa from a user.
-     */
-    public function untag(Request $request)
-    {
-        // Return JSON for AJAX requests (no URL change)
-        if ($request->wantsJson() || $request->ajax()) {
-            return response()->json([
-                'untag_types' => UntagType::list(),
-            ]);
-        }
-    }
-
-    /**
-     * Update the tag of the specified soa from a user.
-     */
-    public function updateTag(UpdateTagRequest $request)
-    {
-        $validated = $request->validated();
-        DB::connection(Server::SOA)->beginTransaction();
-
-        try {
-            switch ($validated['untag_type']) {
-                case UntagType::USER_ERROR:
-                    $validated['reason'] = __('esoa.reason.user_error');
-                    break;
-                case UntagType::CLIENT_ERROR:
-                    $validated['reason'] = __('esoa.reason.client_error');
-                    break;
-                case UntagType::BOUNCED_RETURNED_CHECK:
-                    $validated['reason'] = __('esoa.reason.bounced_returned_check');
-                    break;
-            }
-            $soa = (new $this->sqlDatabase(Server::SOA))->getSoa($validated['id']);
-
-            if (!$soa) {
-                throw new \Exception('SOA record not found.');
-            }
-
-            // (new $this->sqlDatabase(Server::SOA))->untagSoa($soa, $validated);
-            Mail::to(config('vc.contact_email'))->send(new NewSoaUploaded($soa));
-
-            // Commit transaction
-            DB::connection(Server::SOA)->commit();
-
-            // Return JSON for AJAX requests (no URL change)
-            if ($request->wantsJson() || $request->ajax()) {
-                return CustomResponse::ok('Retraction Completed', Response::HTTP_OK);
-            }
-        } catch (\Exception $e) {
-            // Catch and handle any unexpected errors
-            DB::connection(Server::SOA)->rollBack();
-
-            // Return JSON for AJAX requests (no URL change)
-            if ($request->wantsJson() || $request->ajax()) {
-                // Catch and handle any unexpected errors
-                return CustomResponse::serverError($e, 'SoaController');
-            }
-        }
-    }
-
-    /**
      * Display the Find Member search page, or return paginated JSON results.
      * The DB call is intentionally inside the wantsJson() branch so the initial
      * Inertia page render never triggers an HMS query.
@@ -767,35 +706,6 @@ class SoaController extends Controller
         }, $paths);
 
         return response()->json(['files' => $files]);
-    }
-
-    public function taxComputation(Request $request)
-    {
-        return Inertia::render('soas/TaxComputation');
-    }
-
-    public function recomputeTax(RecomputeTaxRequest $request)
-    {
-        $validated = $request->validated();
-        // DB::connection(Server::HMS)->beginTransaction();
-
-        try {
-            // Commit transaction
-            // DB::connection(Server::HMS)->commit();
-            // Return JSON for AJAX requests (no URL change)
-            if ($request->wantsJson() || $request->ajax()) {
-                return CustomResponse::ok('Retraction Completed', Response::HTTP_OK);
-            }
-        } catch (\Exception $e) {
-            // Catch and handle any unexpected errors
-            // DB::connection(Server::HMS)->rollBack();
-
-            // Return JSON for AJAX requests (no URL change)
-            if ($request->wantsJson() || $request->ajax()) {
-                // Catch and handle any unexpected errors
-                return CustomResponse::serverError($e, 'SoaController');
-            }
-        }
     }
 
     public function destroy(DestroyRequest $request)
