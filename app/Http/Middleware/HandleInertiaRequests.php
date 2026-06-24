@@ -68,6 +68,7 @@ class HandleInertiaRequests extends Middleware
                         'employee_no' => $authUser?->userDetail?->employee_no,
                     ],
                     'roles' => $authUser?->getRoleNames()->toArray(),
+                    'email_verified_at' => $authUser?->email_verified_at,
                 ],
                 'is_superadmin' => $authUser?->hasRole('superadmin'),
                 'permissions' => $userPermissions,

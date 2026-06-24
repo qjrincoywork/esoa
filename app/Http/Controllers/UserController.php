@@ -11,6 +11,9 @@ use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
 use App\Http\Resources\UserListResource;
+use App\Mail\UserWelcome;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use App\Models\{Account, Citizenship, CivilStatus, Department, Position, Suffix, User };
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -91,24 +94,37 @@ class UserController extends Controller
     public function store(CreateRequest $request)
     {
         $validated = $request->validated();
+        $creation = null;
 
         DB::beginTransaction();
 
         try {
-            $this->user->saveUser($validated);
-
-            // Commit transaction
+            $creation = $this->user->saveUser($validated);
             DB::commit();
-
-            // Return JSON for AJAX requests (no URL change)
-            if ($request->wantsJson() || $request->ajax()) {
-                return CustomResponse::created('User Created successfully', Response::HTTP_CREATED);
-            }
         } catch (\Exception $e) {
-            // Catch and handle any unexpected errors
             DB::rollBack();
-
             return CustomResponse::serverError($e, 'UserController');
+        }
+
+        // Send welcome email after the DB commits so a mail failure never rolls back user creation
+        if ($creation) {
+            try {
+                $creation['user']->load('userDetail');
+                $expiresAt = $creation['user']->temporary_password_expires_at
+                    ?->format('F j, Y \a\t h:i A');
+
+                Mail::to($creation['user']->email)->send(new UserWelcome(
+                    $creation['user'],
+                    $creation['plain_password'],
+                    $expiresAt ?? '',
+                ));
+            } catch (\Throwable $e) {
+                Log::error('UserWelcome mail failed', ['user_id' => $creation['user']->id ?? null]);
+            }
+        }
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return CustomResponse::created('User Created successfully', Response::HTTP_CREATED);
         }
     }
 

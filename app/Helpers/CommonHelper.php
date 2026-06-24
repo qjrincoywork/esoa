@@ -450,9 +450,9 @@ class CommonHelper
             abort(Response::HTTP_FORBIDDEN, 'Invalid preview token.');
         }
 
-        // if ($payload['exp'] < now()->timestamp) {
-        //     abort(Response::HTTP_FORBIDDEN, 'Preview token expired.');
-        // }
+        if ($payload['exp'] < now()->timestamp) {
+            abort(Response::HTTP_FORBIDDEN, 'Preview token expired.');
+        }
 
         if ($currentUserId === null || $payload['uid'] !== $currentUserId) {
             abort(Response::HTTP_FORBIDDEN);

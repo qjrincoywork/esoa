@@ -28,6 +28,7 @@ class User extends Authenticatable implements AuthorizableContract, MustVerifyEm
         'username',
         'email',
         'password',
+        'temporary_password_expires_at',
         'is_active',
         'is_approved',
     ];
@@ -55,6 +56,7 @@ class User extends Authenticatable implements AuthorizableContract, MustVerifyEm
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
+            'temporary_password_expires_at' => 'datetime',
             'is_active' => 'boolean',
             'is_approved' => 'boolean',
         ];
@@ -124,17 +126,32 @@ class User extends Authenticatable implements AuthorizableContract, MustVerifyEm
         return $result->paginate($perPage);
     }
 
-    public function saveUser(array $data, ?self $target = null): void
+    /**
+     * Create or update a user and their detail record.
+     *
+     * Returns ['user' => User, 'plain_password' => string] on creation so the
+     * caller can send the welcome email. Returns null on update.
+     */
+    public function saveUser(array $data, ?self $target = null): ?array
     {
         if ($target !== null) {
             $target->update($data);
             $target->userDetail()->updateOrCreate(['user_id' => $target->id], $data);
-        } else {
-            $data += ['password' => Hash::make(Str::random(12))];
-            $user = self::create($data);
-
-            $data += ['user_id' => $user->id];
-            $user->userDetail()->create($data);
+            return null;
         }
+
+        $plainPassword = Str::password(16, letters: true, numbers: true, symbols: false, spaces: false);
+
+        $data['password'] = Hash::make($plainPassword);
+        $data['temporary_password_expires_at'] = now()->addHours(
+            config('vc.temp_password_expires_hours', 72)
+        );
+
+        $user = self::create($data);
+
+        $data['user_id'] = $user->id;
+        $user->userDetail()->create($data);
+
+        return ['user' => $user, 'plain_password' => $plainPassword];
     }
 }
