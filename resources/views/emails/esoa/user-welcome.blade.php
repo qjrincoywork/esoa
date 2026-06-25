@@ -61,8 +61,14 @@
        target="_blank"
        rel="noopener noreferrer"
        style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 600; padding: 12px 32px; border-radius: 6px; letter-spacing: 0.5px;">
-      Log In to ESOA
+      Click Here to Log In to ESOA
     </a>
+    <p style="margin: 8px 0 0 0; color: #555555; font-size: 13px; line-height: 1.6;">
+      or copy and paste the following URL into your browser:
+    </p>
+    <p style="margin: 8px 0 0 0; color: #555555; font-size: 13px; line-height: 1.6;">
+      <a href="{{ url(config('app.url')) }}" style="color: #667eea; text-decoration: none;">{{ url(config('app.url')) }}</a>
+    </p>
   </div>
 
   {{-- Security Notice --}}
