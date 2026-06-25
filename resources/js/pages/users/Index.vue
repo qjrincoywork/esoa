@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { createActionColumn } from '@/composables/datatable/datatableColumns';
 import { useUsers } from '@/composables/users';
 import { useModulePermissions } from '@/composables/useModulePermissions';
+import { UserRoundCog, ToggleLeft, ToggleRight, Trash2, RotateCcw } from 'lucide-vue-next';
 
 type UsersPagination = {
     current_page: number
@@ -31,7 +32,7 @@ const users = computed(() => {
     }
     return propsUsers;
 });
-const { createUser, editUser, deleteUser, manageUserRoles, bulkManageUserRoles, verifyUsers, toggleActiveUser } = useUsers();
+const { createUser, editUser, deleteUser, manageUserRoles, bulkManageUserRoles, bulkToggleActiveUsers, bulkDeleteUsers, verifyUsers, toggleActiveUser } = useUsers();
 const columnHelper = createColumnHelper();
 const pagination = ref({
 	current_page: users.value.current_page,
@@ -263,8 +264,41 @@ watch(
                         v-if="hasPermission(`${slug}.edit_roles`)"
                         size="sm"
                         @click="bulkManageUserRoles(selectedRows.map((r: any) => r.original))">
-                        Manage Roles
+                        Manage Roles <UserRoundCog class="w-4 h-4 ml-1" />
                     </Button>
+                    <template v-if="hasPermission(`${slug}.toggle_active`)">
+                        <Button
+                            v-if="selectedRows.some(r => Number(r.original.is_active) === 0)"
+                            class="cursor-pointer"
+                            size="sm"
+                            @click="bulkToggleActiveUsers(selectedRows.map(r => r.original).filter(u => Number(u.is_active) === 0), 1)">
+                            Activate <ToggleLeft class="w-4 h-4 ml-1" />
+                        </Button>
+                        <Button
+                            v-if="selectedRows.some(r => Number(r.original.is_active) !== 0)"
+                            class="cursor-pointer"
+                            size="sm"
+                            @click="bulkToggleActiveUsers(selectedRows.map(r => r.original).filter(u => Number(u.is_active) !== 0), 0)">
+                            Deactivate <ToggleRight class="w-4 h-4 ml-1" />
+                        </Button>
+                    </template>
+                    <template v-if="hasPermission(`${slug}.destroy`)">
+                        <Button
+                            v-if="selectedRows.some(r => !r.original.deleted_at)"
+                            class="cursor-pointer"
+                            size="sm"
+                            variant="destructive"
+                            @click="bulkDeleteUsers(selectedRows.map(r => r.original).filter(u => !u.deleted_at), 'delete')">
+                            Delete <Trash2 class="w-4 h-4 ml-1" />
+                        </Button>
+                        <Button
+                            v-if="selectedRows.some(r => r.original.deleted_at)"
+                            class="cursor-pointer"
+                            size="sm"
+                            @click="bulkDeleteUsers(selectedRows.map(r => r.original).filter(u => u.deleted_at), 'restore')">
+                            Restore <RotateCcw class="w-4 h-4 ml-1" />
+                        </Button>
+                    </template>
                 </template>
             </Datatable>
         </div>

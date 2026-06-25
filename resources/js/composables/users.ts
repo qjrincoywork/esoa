@@ -4,6 +4,8 @@ import DeleteForm from '@/components/forms/users/DeleteForm.vue';
 import SavingForm from '@/components/forms/users/SavingForm.vue';
 import UserRolesForm from '@/components/forms/users/UserRolesForm.vue';
 import BulkUserRolesForm from '@/components/forms/users/BulkUserRolesForm.vue';
+import BulkToggleActiveForm from '@/components/forms/users/BulkToggleActiveForm.vue';
+import BulkDeleteForm from '@/components/forms/users/BulkDeleteForm.vue';
 import VerifyForm from '@/components/forms/users/VerifyForm.vue';
 import ToggleActiveForm from '@/components/forms/users/ToggleActiveForm.vue';
 let formApi: { getFormData: () => FormData | null } | null = null;
@@ -440,6 +442,101 @@ export function useUsers() {
     });
   };
 
+  const bulkToggleActiveUsers = async (users: User[], newActiveValue: 0 | 1) => {
+    if (!users.length) return;
+
+    const action = newActiveValue ? 'Activate' : 'Deactivate';
+    const buttonClass = newActiveValue
+      ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500 dark:bg-green-500 dark:hover:bg-green-600'
+      : 'bg-orange-600 hover:bg-orange-700 focus:ring-orange-500 dark:bg-orange-500 dark:hover:bg-orange-600';
+
+    openModal({
+      modalTitle: users.length === 1
+        ? `${action} ${users[0]?.username || 'User'}`
+        : `${action} ${users.length} Users`,
+      buttonText: action,
+      buttonClass,
+      component: BulkToggleActiveForm,
+      componentProps: {
+        users,
+        newActiveValue,
+        onReady: (api: { getFormData: () => FormData | null }) => {
+          formApi = api;
+        },
+      },
+      size: users.length > 3 ? 'md' : 'sm',
+      onSubmit: async () => {
+        if (!formApi) return;
+        const formData = formApi.getFormData();
+        if (!formData) return;
+
+        showLoader();
+        try {
+          const response = await post(`/${slug.value}/bulk_toggle_active`, formData);
+          if (!response.ok) {
+            dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+          } else {
+            dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+            closeModal();
+            router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+          }
+        } catch (err) {
+          dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+        } finally {
+          hideLoader();
+        }
+      },
+    });
+  };
+
+  const bulkDeleteUsers = async (users: User[], action: 'delete' | 'restore') => {
+    if (!users.length) return;
+
+    const isRestore = action === 'restore';
+    const label = isRestore ? 'Restore' : 'Delete';
+    const buttonClass = isRestore
+      ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500 dark:bg-green-500 dark:hover:bg-green-600'
+      : 'bg-red-600 hover:bg-red-700 focus:ring-red-500 dark:bg-red-500 dark:hover:bg-red-600';
+
+    openModal({
+      modalTitle: users.length === 1
+        ? `${label} ${users[0]?.username || 'User'}`
+        : `${label} ${users.length} Users`,
+      buttonText: label,
+      buttonClass,
+      component: BulkDeleteForm,
+      componentProps: {
+        users,
+        action,
+        onReady: (api: { getFormData: () => FormData | null }) => {
+          formApi = api;
+        },
+      },
+      size: users.length > 3 ? 'md' : 'sm',
+      onSubmit: async () => {
+        if (!formApi) return;
+        const formData = formApi.getFormData();
+        if (!formData) return;
+
+        showLoader();
+        try {
+          const response = await post(`/${slug.value}/bulk_destroy`, formData);
+          if (!response.ok) {
+            dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+          } else {
+            dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+            closeModal();
+            router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+          }
+        } catch (err) {
+          dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+        } finally {
+          hideLoader();
+        }
+      },
+    });
+  };
+
   const toggleActiveUser = async (user: User) => {
     const isCurrentlyActive = Number(user.is_active) !== 0;
     const newActiveValue: 0 | 1 = isCurrentlyActive ? 0 : 1;
@@ -493,6 +590,8 @@ export function useUsers() {
     getBranchesByParams,
     manageUserRoles,
     bulkManageUserRoles,
+    bulkToggleActiveUsers,
+    bulkDeleteUsers,
     verifyUsers,
     toggleActiveUser,
   };
