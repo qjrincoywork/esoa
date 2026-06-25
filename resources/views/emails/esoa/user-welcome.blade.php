@@ -50,7 +50,7 @@
     <ol style="margin: 0; padding-left: 18px; color: #555555; font-size: 13px; line-height: 2;">
       <li>Visit the ESOA login page using the button below.</li>
       <li>Enter your username/email and the temporary password above.</li>
-      <li>You will be prompted to set a new, permanent password.</li>
+      <li>Once logged in, please change your temporary password to a new permanent password.</li>
       <li>Keep your new password confidential and do not share it with anyone.</li>
     </ol>
   </div>
