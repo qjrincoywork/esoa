@@ -10,6 +10,7 @@ return [
     | The API Key
     |
     */
+    'app_name' => env('APP_NAME', 'eSOA'),
     'api_key' => env('VC_API_KEY'),
     'api_auth_token' => 'API_AUTH_TOKEN',
 
