@@ -6,7 +6,7 @@ use App\Enums\{ AccountType, Gender, Server, UserType };
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\User\{BulkUpdateRoleRequest, CreateRequest, DeleteRequest, ListRequest, ToggleActiveRequest, UpdateRequest, UpdateRoleRequest, VerifyRequest};
+use App\Http\Requests\User\{BulkDestroyRequest, BulkToggleActiveRequest, BulkUpdateRoleRequest, CreateRequest, DeleteRequest, ListRequest, ToggleActiveRequest, UpdateRequest, UpdateRoleRequest, VerifyRequest};
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
@@ -391,6 +391,81 @@ class UserController extends Controller
             DB::rollBack();
 
             return CustomResponse::serverError($e, 'UserController::bulkUpdateRoles');
+        }
+    }
+
+    /**
+     * Set the is_active status for multiple users at once.
+     */
+    public function bulkToggleActive(BulkToggleActiveRequest $request)
+    {
+        $validated = $request->validated();
+
+        DB::beginTransaction();
+
+        try {
+            $this->user->whereIn('id', $validated['user_ids'])
+                ->update(['is_active' => $validated['is_active']]);
+
+            DB::commit();
+
+            $count   = count($validated['user_ids']);
+            $label   = $validated['is_active'] ? 'activated' : 'deactivated';
+            $message = $count === 1
+                ? "User {$label} successfully"
+                : "{$count} users {$label} successfully";
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return CustomResponse::ok($message, Response::HTTP_OK);
+            }
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return CustomResponse::serverError($e, 'UserController::bulkToggleActive');
+            }
+        }
+    }
+
+    /**
+     * Soft-delete or restore multiple users at once.
+     */
+    public function bulkDestroy(BulkDestroyRequest $request)
+    {
+        $validated = $request->validated();
+        $isRestore = $validated['action'] === 'restore';
+
+        DB::beginTransaction();
+
+        try {
+            if ($isRestore) {
+                $this->user->withTrashed()
+                    ->whereIn('id', $validated['user_ids'])
+                    ->whereNotNull('deleted_at')
+                    ->restore();
+            } else {
+                $this->user->whereIn('id', $validated['user_ids'])
+                    ->whereNull('deleted_at')
+                    ->delete();
+            }
+
+            DB::commit();
+
+            $count   = count($validated['user_ids']);
+            $label   = $isRestore ? 'restored' : 'deleted';
+            $message = $count === 1
+                ? "User {$label} successfully"
+                : "{$count} users {$label} successfully";
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return CustomResponse::ok($message, Response::HTTP_OK);
+            }
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return CustomResponse::serverError($e, 'UserController::bulkDestroy');
+            }
         }
     }
 
