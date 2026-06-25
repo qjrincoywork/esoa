@@ -84,7 +84,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::get('/get_branches', 'getBranches')->name('get_branches');
                 Route::post('/update_access', 'updateAccess')->name('update_access');
                 Route::get('/{id}/edit_roles', 'editRoles')->name('edit_roles');
+                Route::get('/all_roles', 'allRoles')->name('all_roles');
                 Route::post('/update_roles', 'updateRoles')->name('update_roles');
+                Route::post('/bulk_update_roles', 'bulkUpdateRoles')->name('bulk_update_roles');
                 Route::post('/update', 'update')->name('update');
                 Route::post('/store', 'store')->name('store');
                 Route::post('/destroy', 'destroy')->name('destroy');

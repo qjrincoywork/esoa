@@ -31,7 +31,7 @@ const users = computed(() => {
     }
     return propsUsers;
 });
-const { createUser, editUser, deleteUser, manageUserRoles, verifyUsers, toggleActiveUser } = useUsers();
+const { createUser, editUser, deleteUser, manageUserRoles, bulkManageUserRoles, verifyUsers, toggleActiveUser } = useUsers();
 const columnHelper = createColumnHelper();
 const pagination = ref({
 	current_page: users.value.current_page,
@@ -219,7 +219,7 @@ watch(
         <Head title="Users" />
         <div class="bg-[var(--color-surface)] shadow-sm border border-[var(--color-border)] p-6">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-                <Button v-if="canCreate" :onClick="createUser">Create</Button>
+                <Button class="cursor-pointer" v-if="canCreate" :onClick="createUser">Create</Button>
                 <div class="relative w-full sm:w-64">
                     <label class="sr-only" for="user-search">Search users</label>
                     <input
@@ -257,6 +257,15 @@ watch(
                 empty-description="System users will appear here. Use search, pagination, or change rows per page to load data."
                 export-file-name="users_list"
                 @update:pagination="(newPagination: typeof pagination) => { hasInitialized = true; pagination = newPagination }">
+                <template #bulk-actions="{ selectedRows }">
+                    <Button
+                        class="cursor-pointer"
+                        v-if="hasPermission(`${slug}.edit_roles`)"
+                        size="sm"
+                        @click="bulkManageUserRoles(selectedRows.map((r: any) => r.original))">
+                        Manage Roles
+                    </Button>
+                </template>
             </Datatable>
         </div>
     </AppLayout>
