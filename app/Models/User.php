@@ -103,11 +103,10 @@ class User extends Authenticatable implements AuthorizableContract, MustVerifyEm
     {
         // Pagination
         $perPage = $params['per_page'] ?? config('vc.default_pages');
-        $result = self::when(isset($params['search_string']), function ($query) use ($params) {
-                $query->where('email', 'LIKE', '%' . $params['search_string'] . '%');
-            })
+        $result = self::query()
             ->when(isset($params['search_string']), function ($query) use ($params) {
-                $query->where('username', 'LIKE', '%' . $params['search_string'] . '%');
+                $query->where('email', 'LIKE', '%' . $params['search_string'] . '%')
+                    ->orWhere('username', 'LIKE', '%' . $params['search_string'] . '%');
             })
             ->when(isset($params['is_active']), function ($query) use ($params) {
                 $query->where('is_active', $params['is_active']);
