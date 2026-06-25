@@ -60,7 +60,11 @@ class UserController extends Controller
         $users = $this->user->getUsers($request->validated());
 
         return Inertia::render('users/Index', [
-            'users' => new CommonResource(UserListResource::collection($users)),
+            'users'          => new CommonResource(UserListResource::collection($users)),
+            'filter_options' => [
+                'user_types'  => UserType::list(),
+                'departments' => Department::select(['id', 'name'])->get()->toArray(),
+            ],
         ]);
     }
 

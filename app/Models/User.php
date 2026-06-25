@@ -12,6 +12,7 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Laravel\Fortify\TwoFactorAuthenticatable;
+use App\Enums\UserType;
 use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable implements AuthorizableContract, MustVerifyEmail
@@ -111,7 +112,14 @@ class User extends Authenticatable implements AuthorizableContract, MustVerifyEm
             ->when(isset($params['is_active']), function ($query) use ($params) {
                 $query->where('is_active', $params['is_active']);
             })
-            ->with('userDetail')
+            ->when(isset($params['type']), function ($query) use ($params) {
+                $query->whereHas('userDetail', fn ($q) => $q->where('type', $params['type']));
+            })
+            ->when(
+                isset($params['department_id']) && isset($params['type']) && (int) $params['type'] === UserType::VC_EMPLOYEE,
+                fn ($query) => $query->whereHas('userDetail', fn ($q) => $q->where('department_id', $params['department_id']))
+            )
+            ->with('userDetail.department')
             ->orderBy('id', 'desc');
 
         $authUser = auth()->user();
