@@ -6,7 +6,7 @@ use App\Enums\{ AccountType, Gender, Server, UserType };
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\User\{CreateRequest, DeleteRequest, ListRequest, ToggleActiveRequest, UpdateRequest, UpdateRoleRequest, VerifyRequest};
+use App\Http\Requests\User\{BulkUpdateRoleRequest, CreateRequest, DeleteRequest, ListRequest, ToggleActiveRequest, UpdateRequest, UpdateRoleRequest, VerifyRequest};
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
@@ -344,6 +344,53 @@ class UserController extends Controller
             if ($request->wantsJson() || $request->ajax()) {
                 return CustomResponse::serverError($e, 'UserController::toggleActive');
             }
+        }
+    }
+
+    /**
+     * Return all available roles (used by bulk role assignment).
+     */
+    public function allRoles(Request $request)
+    {
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'all_roles' => Role::query()->get(['id', 'name', 'guard_name']),
+            ]);
+        }
+    }
+
+    /**
+     * Sync the same set of roles across multiple users at once.
+     */
+    public function bulkUpdateRoles(BulkUpdateRoleRequest $request)
+    {
+        $validated = $request->validated();
+        $userIds   = $validated['user_ids'];
+        $roleIds   = $validated['roles'] ?? [];
+
+        DB::beginTransaction();
+
+        try {
+            $users = $this->user->whereIn('id', $userIds)->get();
+
+            foreach ($users as $user) {
+                $user->roles()->sync($roleIds);
+            }
+
+            DB::commit();
+
+            app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+            $count   = count($userIds);
+            $message = $count === 1
+                ? 'Roles updated for 1 user successfully'
+                : "Roles updated for {$count} users successfully";
+
+            return CustomResponse::ok($message, Response::HTTP_OK);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return CustomResponse::serverError($e, 'UserController::bulkUpdateRoles');
         }
     }
 

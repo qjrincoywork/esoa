@@ -3,6 +3,7 @@ import { useAjax } from '@/composables/useAjax';
 import DeleteForm from '@/components/forms/users/DeleteForm.vue';
 import SavingForm from '@/components/forms/users/SavingForm.vue';
 import UserRolesForm from '@/components/forms/users/UserRolesForm.vue';
+import BulkUserRolesForm from '@/components/forms/users/BulkUserRolesForm.vue';
 import VerifyForm from '@/components/forms/users/VerifyForm.vue';
 import ToggleActiveForm from '@/components/forms/users/ToggleActiveForm.vue';
 let formApi: { getFormData: () => FormData | null } | null = null;
@@ -342,6 +343,61 @@ export function useUsers() {
     }
   }
 
+  const bulkManageUserRoles = async (users: User[]) => {
+    if (!users.length) return
+
+    try {
+      const response = await get<{ all_roles: Role[] }>(`/${slug.value}/all_roles`)
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch roles')
+      }
+
+      const payload = response.data
+      if (!payload) return
+
+      openModal({
+        modalTitle: users.length === 1
+          ? `Manage Roles: ${users[0]?.username || users[0]?.id}`
+          : `Manage Roles for ${users.length} Users`,
+        buttonText: 'Save',
+        component: BulkUserRolesForm,
+        componentProps: {
+          users,
+          all_roles: payload.all_roles ?? [],
+          onReady: (api: { getFormData: () => FormData | null }) => {
+            formApi = api
+          },
+        },
+        size: 'lg',
+        onSubmit: async () => {
+          if (!formApi) return
+          const formData = formApi.getFormData()
+          if (!formData) return
+
+          showLoader()
+          try {
+            const response = await post(`/${slug.value}/bulk_update_roles`, formData)
+
+            if (!response.ok) {
+              dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' })
+            } else {
+              dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' })
+              closeModal()
+              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true })
+            }
+          } catch (err) {
+            dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' })
+          } finally {
+            hideLoader()
+          }
+        },
+      })
+    } catch (error) {
+      dispatchNotification({ title: 'Error', content: 'Internal Server Error', type: 'error' })
+    }
+  }
+
   const verifyUsers = async (users: User[]) => {
     if (!users.length) return;
 
@@ -436,6 +492,7 @@ export function useUsers() {
     getAccountsByParams,
     getBranchesByParams,
     manageUserRoles,
+    bulkManageUserRoles,
     verifyUsers,
     toggleActiveUser,
   };
