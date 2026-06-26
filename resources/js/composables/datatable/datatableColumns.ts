@@ -98,7 +98,7 @@ export function createActionColumn(customActions: ActionColumnOptions['customAct
           if (
             (item.status?.toLowerCase() == 'paid' && action.slug == 'soas.edit')
             || (
-              (userDetail.value?.employee_no == null || userDetail.value?.employee_no == '')
+              !userDetail.value?.has_employee_no
               && item.status?.toLowerCase() == 'endorsed'
               && action.slug == 'soas.edit'
             )

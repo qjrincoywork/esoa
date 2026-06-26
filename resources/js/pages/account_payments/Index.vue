@@ -225,8 +225,8 @@ const breadcrumbItems: BreadcrumbItem[] = [
 
 /**
  * When navigating from the SOA details pane's Remittance Advices tab, a ?open={id}
- * param is appended and the row data is stored in sessionStorage. On mount we detect
- * this, retrieve the stored data, open the view pane, then clean up.
+ * param is appended. On mount we detect this, re-fetch the record server-side via XHR,
+ * open the view pane, then clean the URL. No sessionStorage is used.
  */
 onMounted(async () => {
   const openId = new URLSearchParams(window.location.search).get('open');

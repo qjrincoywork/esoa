@@ -58,27 +58,6 @@ class SoaController extends Controller
     }
 
     /**
-     * Ensure the authenticated user may modify the given Eloquent SOA (same scope as list filters).
-     */
-    protected function assertUserMayAccessModelSoa(Soa $soa): void
-    {
-        $authUser = auth()->user();
-        if (!$authUser) {
-            abort(Response::HTTP_UNAUTHORIZED);
-        }
-        if ($authUser->hasRole('superadmin')) {
-            return;
-        }
-        $detail = $authUser->userDetail;
-        if ($detail && isset($detail->account_code) && $soa->account_code !== $detail->account_code) {
-            abort(Response::HTTP_FORBIDDEN);
-        }
-        if ($detail && isset($detail->branch_code) && $soa->branch_code !== null && $soa->branch_code !== '' && $soa->branch_code !== $detail->branch_code) {
-            abort(Response::HTTP_FORBIDDEN);
-        }
-    }
-
-    /**
      * Fetch a file from the given URL.
      *
      * @param Request $request
@@ -263,7 +242,7 @@ class SoaController extends Controller
     {
         $soa = $this->soa->findOrFail($id);
         $this->recordBillingInvoiceViewedIfEligible($soa, request()->user());
-        $this->assertUserMayAccessModelSoa($soa);
+        CommonHelper::assertUserMayAccessModel(request());
 
         $path = match ($type) {
             'pdf' => $soa->file_pdf,
@@ -396,18 +375,6 @@ class SoaController extends Controller
     }
 
     /**
-     * Display the specified resource.
-     */
-    public function show(int $id)
-    {
-        $soa = (new $this->sqlDatabase(Server::SOA))->getSoa($id);
-
-        return Inertia::render('soas/Index', [
-            'soa' => OldSoaResource::make($soa)
-        ]);
-    }
-
-    /**
      * Add to or deduct from the Eloquent SOA amount (List / right-pane context).
      * Writes a {@see SoaActivity} row for the audit trail.
      */
@@ -416,7 +383,7 @@ class SoaController extends Controller
         $validated = $request->validated();
         $soa = $this->soa->findOrFail($validated['soa_id']);
 
-        $this->assertUserMayAccessModelSoa($soa);
+        CommonHelper::assertUserMayAccessModel($request);
 
         $current = (float) $soa->amount;
         $delta = (float) $validated['amount'];
@@ -491,7 +458,7 @@ class SoaController extends Controller
     public function concerns(Request $request, int $id)
     {
         $soa = $this->soa->findOrFail($id);
-        $this->assertUserMayAccessModelSoa($soa);
+        CommonHelper::assertUserMayAccessModel($request);
 
         $perPage = (int) $request->get('per_page', config('vc.default_pages'));
         $concerns = $soa->concerns()
@@ -508,7 +475,7 @@ class SoaController extends Controller
     public function soaAccountPayments(Request $request, int $id)
     {
         $soa = $this->soa->findOrFail($id);
-        $this->assertUserMayAccessModelSoa($soa);
+        CommonHelper::assertUserMayAccessModel($request);
 
         $perPage = (int) $request->get('per_page', config('vc.default_pages'));
         $accountPayments = $soa->accountPayments()
@@ -577,7 +544,7 @@ class SoaController extends Controller
     public function edit(Request $request, int $id)
     {
         $soa = $this->soa->findOrFail($id);
-        $this->assertUserMayAccessModelSoa($soa);
+        CommonHelper::assertUserMayAccessModel($request);
 
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {

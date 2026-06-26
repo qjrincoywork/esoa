@@ -133,6 +133,7 @@ class ConcernController extends Controller
      */
     public function edit($id, Request $request)
     {
+        CommonHelper::assertUserMayAccessModel($request);
         $concern = $this->concern->findOrFail($id);
         if ($concern) {
             $concern->attachment_preview_token = $concern->attachment && $request->user()
@@ -159,15 +160,10 @@ class ConcernController extends Controller
      */
     public function update(UpdateRequest $request)
     {
+        CommonHelper::assertUserMayAccessModel($request);
         DB::beginTransaction();
         try {
             $concern = Concern::findOrFail($request->id);
-
-            $authUser = $request->user();
-            if (!$authUser->hasAnyRole(['superadmin', 'admin']) && $concern->user_id !== $authUser->id) {
-                return CustomResponse::error('Forbidden', Response::HTTP_FORBIDDEN);
-            }
-
             $validated = $request->validated();
             if (!empty($validated['soa_ids'])) {
                 // Attach ids
