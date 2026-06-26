@@ -50,7 +50,7 @@ const userDetail = computed(() => user.value?.user_detail as UserDetail);
 const savingForm = ref<HTMLFormElement | null>(null)
 const selectedStatus = ref<string | number>(soa.value?.status ?? '2')
 const isSyncingFromSoa = ref(false)
-const isAccountBranchAdmin = userDetail.value?.employee_no == '' || userDetail.value?.employee_no == null;
+const isAccountBranchAdmin = !userDetail.value?.has_employee_no;
 
 const filteredStatusTypes = computed(() => {
   return isAccountBranchAdmin ? status_types.value?.filter(s => (s.value == 2 || s.value == 4)) : []

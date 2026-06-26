@@ -55,24 +55,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Superadmin-only routes - only admins can access these
     Route::middleware(['role:superadmin'])->group(function () {
         Route::resource('admin', AdminController::class)->middleware('check_permissions');
-        Route::prefix('admin')->name('admin.')
-            ->middleware('check_permissions')
-            ->controller(AdminController::class)->group(function () {
-                Route::get('/start_import', 'startImport')->name('startImport');
-                Route::get('/import_main_accounts', 'importMainAccounts')->name('importMainAccounts');
-                Route::get('/import_accounts', 'importAccounts')->name('importAccounts');
-                Route::get('/import_branches', 'importBranches')->name('importBranches');
-        });
         Route::prefix('users')->name('users.')
             ->middleware('check_permissions')
             ->controller(UserController::class)->group(function () {
                 Route::get('/', 'index')->name('index');
                 Route::get('/{id}/edit', 'edit')->name('edit');
                 Route::get('/create', 'create')->name('create');
-                Route::get('/access', 'access')->name('access');
                 Route::get('/get_accounts', 'getAccounts')->name('get_accounts');
                 Route::get('/get_branches', 'getBranches')->name('get_branches');
-                Route::post('/update_access', 'updateAccess')->name('update_access');
                 Route::get('/{id}/edit_roles', 'editRoles')->name('edit_roles');
                 Route::get('/all_roles', 'allRoles')->name('all_roles');
                 Route::post('/update_roles', 'updateRoles')->name('update_roles');
@@ -167,7 +157,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 ->name('billing_attachments')
                 ->where('type', 'pdf|excel');
             Route::get('/{account_code}/{branch_code}/members', 'accountBranchMembers')->name('account_branch_members');
-            Route::get('/{id}/manage_file', 'manageFile')->name('manage_file');
             Route::post('/adjust_amount', 'adjustAmount')->name('adjust_amount');
             Route::post('/update', 'update')->name('update');
             Route::post('/destroy', 'destroy')->name('destroy');
@@ -180,7 +169,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/create', 'create')->name('create');
             Route::post('/store', 'store')->name('store');
             Route::get('/{id}/edit', 'edit')->name('edit');
-            Route::get('/{id}/untag', 'untag')->name('untag');
             Route::post('/update', 'update')->name('update');
             Route::post('/destroy', 'destroy')->name('destroy');
         });

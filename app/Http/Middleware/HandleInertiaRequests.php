@@ -65,7 +65,7 @@ class HandleInertiaRequests extends Middleware
                         'type' => $authUser?->userDetail?->type,
                         'first_name' => $authUser?->userDetail?->first_name,
                         'last_name' => $authUser?->userDetail?->last_name,
-                        'employee_no' => $authUser?->userDetail?->employee_no,
+                        'has_employee_no' => !empty($authUser?->userDetail?->employee_no),
                     ],
                     'roles' => $authUser?->getRoleNames()->toArray(),
                     'email_verified_at' => $authUser?->email_verified_at,

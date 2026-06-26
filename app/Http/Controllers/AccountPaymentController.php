@@ -157,15 +157,11 @@ class AccountPaymentController extends Controller
      */
     public function update(UpdateRequest $request)
     {
+        CommonHelper::assertUserMayAccessModel($request);
         $validated = $request->validated();
         DB::beginTransaction();
         try {
             $accountPayment = AccountPayment::findOrFail($validated['id']);
-
-            $authUser = $request->user();
-            if (!$authUser->hasAnyRole(['superadmin', 'admin']) && $accountPayment->user_id !== $authUser->id) {
-                return CustomResponse::error('Forbidden', Response::HTTP_FORBIDDEN);
-            }
             if (!empty($validated['soa_ids'])) {
                 // Attach ids
                 $accountPayment->soas()->sync(
@@ -207,10 +203,7 @@ class AccountPaymentController extends Controller
         try {
             $accountPayment = AccountPayment::withTrashed()->findOrFail($validated['id']);
 
-            $authUser = $request->user();
-            if (!$authUser->hasAnyRole(['superadmin', 'admin']) && $accountPayment->user_id !== $authUser->id) {
-                return CustomResponse::error('Forbidden', Response::HTTP_FORBIDDEN);
-            }
+            CommonHelper::assertUserMayAccessModel($request);
 
             if ($accountPayment->trashed()) {
                 $accountPayment->restore();

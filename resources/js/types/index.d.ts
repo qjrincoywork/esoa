@@ -108,7 +108,8 @@ export interface UserDetail {
   last_name: string;
   suffix: string | number;
   birthdate: string;
-  employee_no: string;
+  employee_no?: string;
+  has_employee_no?: boolean;
   email_verified_at: string;
 }
 

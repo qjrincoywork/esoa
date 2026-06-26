@@ -196,7 +196,7 @@ export function useSoas() {
       let isAccountBranchAdmin = true;
       // Other users get the full form (SavingSoaForm).
       if (
-        (user.value?.user_detail?.employee_no != '' && user.value?.user_detail?.employee_no != null)
+        user.value?.user_detail?.has_employee_no
         || auth.value?.is_superadmin
       ) {
         isAccountBranchAdmin = false;
@@ -384,7 +384,7 @@ export function useSoas() {
     try {
       // Record "viewed" activity for account_branch_admin users only (best-effort).
       // Backend enforces role + de-duplication (one per SOA).
-      const isAccountBranchAdmin = user.value?.user_detail?.employee_no == '' || user.value?.user_detail?.employee_no == null;
+      const isAccountBranchAdmin = !user.value?.user_detail?.has_employee_no;
       if (isAccountBranchAdmin && soa?.id != null) {
         void post(`/${slug.value}/${soa.id}/record_viewed`, {});
       }

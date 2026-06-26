@@ -307,21 +307,26 @@ class CommonHelper
         }
     }
 
-    public static function assertUserMayAccessModel($model): void
+    public static function assertUserMayAccessModel($request, $model = null): void
     {
-        $authUser = auth()->user();
+        $authUser = $request->user();
         if (!$authUser) {
             abort(Response::HTTP_UNAUTHORIZED);
         }
-        if ($model->user_id !== $authUser->id) {
-            abort(Response::HTTP_FORBIDDEN);
+        if ($model && $model instanceof Model) {
+            if ($model->user_id !== $authUser->id) {
+                abort(Response::HTTP_FORBIDDEN);
+            }
+            return;
         }
         if (
             $authUser->hasRole('superadmin')
             || $authUser->hasRole('billing_admin')
-            || ($model->user_id === $authUser->id)
+            || $authUser->hasAnyPermission([$request->route()->getName()])
         ) {
             return;
+        } else {
+            abort(Response::HTTP_FORBIDDEN);
         }
     }
 

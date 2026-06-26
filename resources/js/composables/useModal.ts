@@ -45,7 +45,7 @@ const submitUrl = ref<string | null>(null);
 const submitMethod = ref<HttpMethod>('post');
 const submitData = ref<Record<string, any>>({});
 const size = ref<ModalSize>('md');
-const closeOnClickOutside = ref(true);
+const closeOnClickOutside = ref(false);
 
 export function useModal() {
   const openModal = (options: ModalOptions = {}) => {

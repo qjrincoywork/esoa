@@ -9,6 +9,15 @@ use Illuminate\Validation\Rule;
 
 class UpdateRequest extends FormRequest
 {
+    public function authorize(): bool
+    {
+        $user = $this->user();
+        return $user !== null && (
+            $user->hasAnyRole(['superadmin', 'admin']) ||
+            $user->hasAnyPermission(['concerns.update'])
+        );
+    }
+
     /**
      * Get the validation rules that apply to the request.
      *
