@@ -258,7 +258,7 @@ export function useUsers() {
             } else {
               dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
               closeModal();
-              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+              router.get(window.location.href, {}, { preserveState: false, preserveScroll: true, replace: true });
             }
           } catch (err) {
             dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
@@ -321,7 +321,7 @@ export function useUsers() {
                 type: 'success',
               })
               closeModal()
-              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true })
+              router.get(window.location.href, {}, { preserveState: false, preserveScroll: true, replace: true });
             }
           } catch (err) {
             dispatchNotification({
@@ -386,7 +386,7 @@ export function useUsers() {
             } else {
               dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' })
               closeModal()
-              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true })
+              router.get(window.location.href, {}, { preserveState: false, preserveScroll: true, replace: true })
             }
           } catch (err) {
             dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' })
@@ -431,7 +431,7 @@ export function useUsers() {
           } else {
             dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
             closeModal();
-            router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+            router.get(window.location.href, {}, { preserveState: false, preserveScroll: true, replace: true });
           }
         } catch (err) {
           dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
@@ -478,7 +478,7 @@ export function useUsers() {
           } else {
             dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
             closeModal();
-            router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+            router.get(window.location.href, {}, { preserveState: false, preserveScroll: true, replace: true });
           }
         } catch (err) {
           dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
@@ -526,7 +526,7 @@ export function useUsers() {
           } else {
             dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
             closeModal();
-            router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+            router.get(window.location.href, {}, { preserveState: false, preserveScroll: true, replace: true });
           }
         } catch (err) {
           dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
@@ -571,7 +571,7 @@ export function useUsers() {
           } else {
             dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
             closeModal();
-            router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+            router.get(window.location.href, {}, { preserveState: false, preserveScroll: true, replace: true });
           }
         } catch (err) {
           dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
