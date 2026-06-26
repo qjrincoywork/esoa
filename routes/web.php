@@ -48,16 +48,6 @@ Route::get('/', function () {
     ]);
 })->name('home');
 
-// for manual testing of import jobs
-Route::prefix('admin')->name('admin.')
-    // ->middleware('check_permissions')
-    ->controller(AdminController::class)->group(function () {
-        // Route::get('/import_soa', 'importSoa')->name('importSoa');
-        // Route::get('/start_import', 'startImport')->name('startImport');
-        // Route::get('/import_main_accounts', 'importMainAccounts')->name('importMainAccounts');
-        // Route::get('/import_accounts', 'importAccounts')->name('importAccounts');
-        // Route::get('/import_branches', 'importBranches')->name('importBranches');
-});
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', function () {
         return Inertia::render('Home');
