@@ -50,14 +50,14 @@ class UpdateRequest extends FormRequest
             'branch_code' => [
                 'nullable',
                 'string',
-                'max:191'
+                'max:' . config('vc.max_string_limit'),
                 //new IsDataExists('branches'),
             ],
             'agent_code' => [
                 'nullable',
                 'required_if:type,' . UserType::BROKER,
                 'string',
-                'max:191'
+                'max:' . config('vc.max_string_limit'),
                 //new IsDataExists('agents'),
             ],
             'gender_id' => [
@@ -88,44 +88,52 @@ class UpdateRequest extends FormRequest
             'employee_no' => [
                 'required_if:type,' . UserType::VC_EMPLOYEE,
                 'string',
-                'max:191'
+                'max:' . config('vc.max_string_limit'),
             ],
             'first_name' => [
                 'required',
                 'string',
-                'max:191'
+                'max:' . config('vc.max_string_limit'),
             ],
             'last_name' => [
                 'required',
                 'string',
-                'max:191'
+                'max:' . config('vc.max_string_limit'),
             ],
             'middle_name' => [
                 'nullable',
                 'string',
-                'max:191'
+                'max:' . config('vc.max_string_limit'),
             ],
             'suffix' => [
                 'nullable',
                 'string',
-                'max:191'
+                'max:' . config('vc.max_string_limit'),
             ],
             'birthdate' => [
                 'nullable',
                 'date',
-                'max:191'
+                'max:' . config('vc.max_string_limit'),
             ],
             'username' => [
                 'required',
                 'string',
-                'max:191',
+                'min:3',
+                // Starts with a letter
+                // Only letters, numbers, _, ., -
+                // No consecutive symbols
+                // Ends with a letter or number
+                'regex:/^(?=.{3,30}$)[A-Za-z](?!.*[._-]{2})[A-Za-z0-9._-]*[A-Za-z0-9]$/',
+                'max:' . config('vc.max_string_limit'),
                 Rule::unique(User::class)->ignore(request()->input('id')),
+                // Reserved words
+                Rule::notIn(config('vc.reserved_usernames')),
             ],
             'email' => [
                 'required',
                 'string',
                 'email',
-                'max:191',
+                'max:' . config('vc.max_string_limit'),
                 Rule::unique(User::class)->ignore(request()->input('id')),
             ],
         ];
