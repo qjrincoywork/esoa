@@ -150,18 +150,6 @@ class UpdateRequest extends FormRequest
         return $rules;
     }
 
-    // protected function prepareForValidation(): void
-    // {
-    //     $existingFilePdf = Soa::whereKey($this->input('id'))->value('file_pdf');
-    //     // if (!$existingFilePdf || !$this->hasFile('file_pdf')) {
-    //     //     return;
-    //     // }
-
-    //     $this->merge([
-    //         'file_pdf' => $this->hasFile('file_pdf') ? $this->file('file_pdf') : $existingFilePdf ?? null,
-    //     ]);
-    // }
-
     /**
      * Get the error messages for the defined validation rules.
      *
@@ -182,6 +170,13 @@ class UpdateRequest extends FormRequest
         $this->merge([
             'billing_ref' => json_decode($this->input('billing_ref'), true),
             'user_id' => auth()->user()->id,
+        ]);
+    }
+
+    protected function passedValidation(): void
+    {
+        $this->merge([
+            'account_type' => str_starts_with($this->input('account_code'), 'TP') ? AccountType::TPA : AccountType::HMO,
         ]);
     }
 }

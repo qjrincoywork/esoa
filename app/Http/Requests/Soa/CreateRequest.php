@@ -126,4 +126,11 @@ class CreateRequest extends FormRequest
             'user_id' => auth()->user()->id,
         ]);
     }
+
+    protected function passedValidation(): void
+    {
+        $this->merge([
+            'account_type' => str_starts_with($this->input('account_code'), 'TP') ? AccountType::TPA : AccountType::HMO,
+        ]);
+    }
 }
