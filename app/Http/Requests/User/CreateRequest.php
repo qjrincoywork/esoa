@@ -3,8 +3,8 @@
 namespace App\Http\Requests\User;
 
 use App\Enums\AccountType;
-use App\Enums\BooleanAsInteger;
 use App\Enums\UserType;
+use App\Models\User;
 use App\Rules\IsDataExists;
 use Illuminate\Validation\Rule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -39,14 +39,14 @@ class CreateRequest extends FormRequest
             'branch_code' => [
                 'nullable',
                 'string',
-                'max:191'
+                'max:' . config('vc.max_string_limit'),
                 //new IsDataExists('branches'),
             ],
             'agent_code' => [
                 'nullable',
                 'required_if:type,' . UserType::BROKER,
                 'string',
-                'max:191'
+                'max:' . config('vc.max_string_limit'),
                 //new IsDataExists('agents'),
             ],
             'department_id' => [
@@ -62,27 +62,27 @@ class CreateRequest extends FormRequest
             'employee_no' => [
                 'required_if:type,' . UserType::VC_EMPLOYEE,
                 'string',
-                'max:191'
+                'max:' . config('vc.max_string_limit'),
             ],
             'first_name' => [
                 'required',
                 'string',
-                'max:191'
+                'max:' . config('vc.max_string_limit'),
             ],
             'middle_name' => [
                 'nullable',
                 'string',
-                'max:191'
+                'max:' . config('vc.max_string_limit'),
             ],
             'last_name' => [
                 'required',
                 'string',
-                'max:191'
+                'max:' . config('vc.max_string_limit'),
             ],
             'suffix' => [
                 'nullable',
                 'string',
-                'max:191'
+                'max:' . config('vc.max_string_limit'),
             ],
             'gender_id' => [
                 'required',
@@ -102,18 +102,27 @@ class CreateRequest extends FormRequest
             'birthdate' => [
                 'nullable',
                 'date',
-                'max:191'
+                'max:' . config('vc.max_string_limit'),
             ],
             'username' => [
                 'required',
                 'string',
-                'max:191',
-                'unique:users,username'
+                'max:' . config('vc.max_string_limit'),
+                'min:' . config('vc.min_username_string_limit'),
+                // Starts with a letter
+                // Only letters, numbers, _, ., -
+                // No consecutive symbols
+                // Ends with a letter or number
+                'regex:/^(?=.{3,30}$)[A-Za-z](?!.*[._-]{2})[A-Za-z0-9._-]*[A-Za-z0-9]$/',
+                'max:' . config('vc.max_string_limit'),
+                // Reserved words
+                Rule::notIn(config('vc.reserved_usernames')),
+                'unique:users,username',
             ],
             'email' => [
                 'required',
                 'string',
-                'max:191',
+                'max:' . config('vc.max_string_limit'),
                 'unique:users,email'
             ],
         ];

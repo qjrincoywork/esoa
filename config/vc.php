@@ -22,6 +22,7 @@ return [
     'max_per_pages' => 100,
     'soa_export_max_rows' => 7000,
     'file_preview_token_ttl_minutes' => 10,//FILE_PREVIEW_TOKEN_TTL_MINUTES
+    'min_username_string_limit' => 3,
     'max_string_limit' => 191,
     'max_file_size' => 2048, // 2MB in KB
     'max_text_limit' => 800,
@@ -61,5 +62,17 @@ return [
         'Period End Date',
         'Contract Start Date',
         'Contract End Date',
+    ],
+    'reserved_usernames' => [
+        'admin',
+        'administrator',
+        'root',
+        'system',
+        'support',
+        'api',
+        'null',
+        'guest',
+        'anonymous',
+        'superadmin',
     ],
 ];
