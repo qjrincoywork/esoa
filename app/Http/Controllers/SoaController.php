@@ -517,7 +517,7 @@ class SoaController extends Controller
      */
     private function recordBillingInvoiceViewedIfEligible(Soa $soa, $user): void
     {
-        if (!$user || !$user->hasRole('account_branch_admin')) {
+        if (!$user || !$user->hasAnyRole(['account_branch_admin', 'group_account_admin'])) {
             return;
         }
 
@@ -573,8 +573,8 @@ class SoaController extends Controller
                 CommonHelper::validateNotPaid($soa, SoaStatus::PAID);
 
                 $soaNumber = $validated['soa_number'] ?? $soa->soa_number;
-                $isAccountBranchAdmin = empty(auth()->user()->userDetail->employee_no);
-                if (!$isAccountBranchAdmin) {
+                $canUploadFiles = !auth()->user()->hasAnyRole(['account_branch_admin', 'group_account_admin']);
+                if ($canUploadFiles) {
                     CommonHelper::storeUploadedFiles(
                         $soaNumber,
                         $validated['account_code'],
@@ -607,7 +607,7 @@ class SoaController extends Controller
                     $statusChangedTo = $changes['status'] ?? null;
                     if (
                         in_array($statusChangedTo, config('vc.allowed_soa_status_for_account_branch_admin'))
-                        && $request->user()->hasRole('account_branch_admin')
+                        && $request->user()->hasAnyRole(['account_branch_admin', 'group_account_admin'])
                     ) {
                         CommonHelper::sendBillingInvoiceEmail($soa, $request->user(), BillingInvoiceStatusChanged::class);
                     }

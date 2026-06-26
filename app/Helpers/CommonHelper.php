@@ -246,7 +246,7 @@ class CommonHelper
         self::setClientName($model);
         $model->contact = config('vc.contact_email');
 
-        $isAccountBranchAdmin = $user->hasRole('account_branch_admin');
+        $isAccountBranchAdmin = $user->hasAnyRole(['account_branch_admin', 'group_account_admin']);
         $billingNotificationEmail = config('vc.billing_notification_email', 'billing@example.com');
 
         $toEmail = $isAccountBranchAdmin

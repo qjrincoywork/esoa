@@ -56,7 +56,7 @@ class AccountPayment extends Model
         $authUser = auth()->user();
 
         return self::with(['user'])
-            ->when($authUser && ($authUser->hasRole('broker') || $authUser->hasRole('account_branch_admin')), function ($query) use ($authUser) {
+            ->when($authUser && ($authUser->hasRole('broker') || $authUser->hasAnyRole(['account_branch_admin', 'group_account_admin'])), function ($query) use ($authUser) {
                 $query->where('user_id', $authUser->id);
             })
             ->when($authUser && $authUser->hasRole('superadmin'), function ($query) {

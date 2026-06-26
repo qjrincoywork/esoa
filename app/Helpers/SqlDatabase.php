@@ -285,9 +285,28 @@ class SqlDatabase
         }
 
         if ($authUser?->hasRole('account_branch_admin')) {
-            $query->where('c.ch_accountid', $authUser->userDetail?->account_code ?? null);
-            if (!empty($authUser->userDetail?->branch_code)) {
-                $query->where('c.ch_branch_code', $authUser->userDetail->branch_code);
+            $firstAccount = $authUser->userAccounts->first();
+            $query->where('c.ch_accountid', $firstAccount?->account_code ?? null);
+            if (!empty($firstAccount?->branch_code)) {
+                $query->where('c.ch_branch_code', $firstAccount->branch_code);
+            }
+        }
+
+        if ($authUser?->hasRole('group_account_admin')) {
+            $userAccounts = $authUser->userAccounts;
+            if ($userAccounts->isEmpty()) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->where(function ($q) use ($userAccounts) {
+                    foreach ($userAccounts as $ua) {
+                        $q->orWhere(function ($sub) use ($ua) {
+                            $sub->where('c.ch_accountid', $ua->account_code);
+                            if (!empty($ua->branch_code)) {
+                                $sub->where('c.ch_branch_code', $ua->branch_code);
+                            }
+                        });
+                    }
+                });
             }
         }
 
@@ -333,10 +352,28 @@ class SqlDatabase
         }
 
         if ($authUser?->hasRole('account_branch_admin')) {
-            $query->where('c.ch_accountid', $authUser->userDetail?->account_code ?? null);
+            $firstAccount = $authUser->userAccounts->first();
+            $query->where('c.ch_accountid', $firstAccount?->account_code ?? null);
+            if (!empty($firstAccount?->branch_code)) {
+                $query->where('c.ch_branch_code', $firstAccount->branch_code);
+            }
+        }
 
-            if (!empty($authUser->userDetail?->branch_code)) {
-                $query->where('c.ch_branch_code', $authUser->userDetail?->branch_code);
+        if ($authUser?->hasRole('group_account_admin')) {
+            $userAccounts = $authUser->userAccounts;
+            if ($userAccounts->isEmpty()) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->where(function ($q) use ($userAccounts) {
+                    foreach ($userAccounts as $ua) {
+                        $q->orWhere(function ($sub) use ($ua) {
+                            $sub->where('c.ch_accountid', $ua->account_code);
+                            if (!empty($ua->branch_code)) {
+                                $sub->where('c.ch_branch_code', $ua->branch_code);
+                            }
+                        });
+                    }
+                });
             }
         }
 
@@ -350,8 +387,34 @@ class SqlDatabase
     {
         $accountCode = $params['account_code'] ?? null;
 
-        if ($authUser?->hasRole('account_branch_admin') && !empty($authUser->userDetail?->account_code)) {
-            $accountCode = $authUser->userDetail->account_code;
+        if ($authUser?->hasRole('account_branch_admin')) {
+            $firstAccount = $authUser->userAccounts->first();
+            if (!empty($firstAccount?->account_code)) {
+                $accountCode = $firstAccount->account_code;
+            }
+        }
+
+        if ($authUser?->hasRole('group_account_admin')) {
+            $userAccounts = $authUser->userAccounts;
+            if ($userAccounts->isEmpty()) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->where(function ($q) use ($userAccounts) {
+                    foreach ($userAccounts as $ua) {
+                        if (!empty($ua->account_code)) {
+                            $q->orWhereRaw('SUBSTRING(c.cl_policynumber, 1, 11) = ?', [$ua->account_code]);
+                        }
+                    }
+                });
+                $accountCode = $userAccounts->first()?->account_code ?? '';
+            }
+            if (!empty($params['billing_date_from'])) {
+                $query->where('c.cl_processdate', '>=', Carbon::parse($params['billing_date_from'])->startOfDay());
+            }
+            if (!empty($params['billing_date_to'])) {
+                $query->where('c.cl_processdate', '<=', Carbon::parse($params['billing_date_to'])->endOfDay());
+            }
+            return $accountCode ?? '';
         }
 
         if (!empty($accountCode)) {
@@ -371,8 +434,11 @@ class SqlDatabase
 
         $branchCode = $params['branch_code'] ?? null;
 
-        if ($authUser?->hasRole('account_branch_admin') && !empty($authUser->userDetail?->branch_code)) {
-            $branchCode = $authUser->userDetail->branch_code;
+        if ($authUser?->hasRole('account_branch_admin')) {
+            $firstAccount = $authUser->userAccounts->first();
+            if (!empty($firstAccount?->branch_code)) {
+                $branchCode = $firstAccount->branch_code;
+            }
         }
 
         if (!empty($branchCode) && !empty($accountCode)) {
@@ -430,6 +496,7 @@ class SqlDatabase
             empty($accountCode)
             && !$authUser?->hasRole('broker')
             && !$authUser?->hasRole('account_branch_admin')
+            && !$authUser?->hasRole('group_account_admin')
         ) {
             return $this->db->table('Claims_Receiving')->whereRaw('1 = 0')->simplePaginate($perPage);
         }
@@ -594,9 +661,28 @@ class SqlDatabase
         }
 
         if ($authUser?->hasRole('account_branch_admin')) {
-            $query->where('c.ch_accountid', $authUser->userDetail?->account_code ?? null);
-            if (!empty($authUser->userDetail?->branch_code)) {
-                $query->where('c.ch_branch_code', $authUser->userDetail->branch_code);
+            $firstAccount = $authUser->userAccounts->first();
+            $query->where('c.ch_accountid', $firstAccount?->account_code ?? null);
+            if (!empty($firstAccount?->branch_code)) {
+                $query->where('c.ch_branch_code', $firstAccount->branch_code);
+            }
+        }
+
+        if ($authUser?->hasRole('group_account_admin')) {
+            $userAccounts = $authUser->userAccounts;
+            if ($userAccounts->isEmpty()) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->where(function ($q) use ($userAccounts) {
+                    foreach ($userAccounts as $ua) {
+                        $q->orWhere(function ($sub) use ($ua) {
+                            $sub->where('c.ch_accountid', $ua->account_code);
+                            if (!empty($ua->branch_code)) {
+                                $sub->where('c.ch_branch_code', $ua->branch_code);
+                            }
+                        });
+                    }
+                });
             }
         }
 

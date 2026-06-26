@@ -169,7 +169,7 @@ class UserController extends Controller
      */
     public function edit(int $id, Request $request)
     {
-        $user = $this->user->with('userDetail')->findOrFail($id)->toArray();
+        $user = $this->user->with(['userDetail', 'userAccounts'])->findOrFail($id)->toArray();
         $suffixes = Suffix::select(['id', 'name'])->get()->toArray();
         $civil_statuses = CivilStatus::select(['id', 'name'])->get()->toArray();
         $citizenships = Citizenship::select(['id', 'name'])->get()->toArray();

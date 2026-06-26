@@ -162,17 +162,14 @@ class Soa extends Model
                     ->getAccountsOfAgent($authUser->userDetail?->agent_code ?? null);
                 $query->whereIn('account_code', $agentAccounts);
             })
-            ->when($authUser->hasRole('account_branch_admin'), function ($query) use ($authUser) {
-                $query->where('account_code', $authUser->userDetail?->account_code ?? null);
-                if (!empty($authUser->userDetail?->branch_code)) {
-                    $query->where('branch_code', $authUser->userDetail?->branch_code);
-                }
+            ->when($authUser->hasAnyRole(['account_branch_admin', 'group_account_admin']), function ($query) use ($authUser) {
+                $this->applyUserAccountRestriction($query, $authUser);
             })
             ->orderBy('created_at', OrderType::DESC);
 
         if ($authUser && (
             $authUser->hasAnyRole(['superadmin', 'admin']) ||
-            $authUser->hasAnyPermission(['soas.destroy'])
+            $authUser->hasAnyPermission(request()->route()?->getName())
         )) {
             $query->withTrashed();
         }
@@ -190,6 +187,7 @@ class Soa extends Model
     {
         $perPage = $params['per_page'] ?? config('vc.default_pages');
 
+        dd($this->listQuery($params)->toSql());
         return $this->listQuery($params)->paginate($perPage);
     }
 
@@ -212,12 +210,7 @@ class Soa extends Model
             $result[] = [
                 'value' => $soaAging,
                 'count' => self::query()
-                    ->when($authUser->hasRole('account_branch_admin'), function ($query) use ($authUser) {
-                        $query->where('account_code', $authUser->userDetail?->account_code ?? null);
-                        if (!empty($authUser->userDetail?->branch_code)) {
-                            $query->where('branch_code', $authUser->userDetail?->branch_code);
-                        }
-                    })
+                    ->tap(fn (Builder $q) => $this->applyUserAccountRestriction($q, $authUser))
                     ->tap(fn (Builder $q) => $this->applyListSearchFiltersDueIn($q, in_array($soaAging, $statusValues) ? ['status' => $soaAging] : ['due_in' => $soaAging]))
                     ->where('status', '!=', SoaStatus::PAID)
                     ->count(),
@@ -225,6 +218,46 @@ class Soa extends Model
         }
 
         return $result;
+    }
+
+    /**
+     * Restrict the query to SOAs the authenticated user is allowed to see based on their role.
+     * - account_branch_admin: limited to their single account (and branch if set).
+     * - group_account_admin:  limited to all account/branch pairs in their user_accounts.
+     * Other roles are unrestricted (handled separately, e.g. broker).
+     */
+    protected function applyUserAccountRestriction(Builder $query, ?User $authUser): void
+    {
+        if (!$authUser) {
+            return;
+        }
+
+        if ($authUser->hasRole('account_branch_admin')) {
+            $firstAccount = $authUser->userAccounts->first();
+            $query->where('account_code', $firstAccount?->account_code ?? null);
+            if (!empty($firstAccount?->branch_code)) {
+                $query->where('branch_code', $firstAccount->branch_code);
+            }
+            return;
+        }
+
+        if ($authUser->hasRole('group_account_admin')) {
+            $userAccounts = $authUser->userAccounts;
+            if ($userAccounts->isEmpty()) {
+                $query->whereRaw('1 = 0');
+                return;
+            }
+            $query->where(function (Builder $q) use ($userAccounts) {
+                foreach ($userAccounts as $ua) {
+                    $q->orWhere(function (Builder $sub) use ($ua) {
+                        $sub->where('account_code', $ua->account_code);
+                        if (!empty($ua->branch_code)) {
+                            $sub->where('branch_code', $ua->branch_code);
+                        }
+                    });
+                }
+            });
+        }
     }
 
     /**
