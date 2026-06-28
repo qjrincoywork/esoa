@@ -206,11 +206,6 @@ class ConcernController extends Controller
         try {
             $concern = Concern::withTrashed()->findOrFail($validated['id']);
 
-            $authUser = $request->user();
-            if (!$authUser->hasAnyRole(['superadmin', 'admin']) && $concern->user_id !== $authUser->id) {
-                return CustomResponse::error('Forbidden', Response::HTTP_FORBIDDEN);
-            }
-
             if ($concern->trashed()) {
                 $concern->restore();
                 $message = 'Restored';
