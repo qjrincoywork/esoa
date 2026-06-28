@@ -34,13 +34,34 @@ class CreateRequest extends FormRequest
                 'required_if:type,' . UserType::ACCOUNT_BRANCH_ADMIN,
                 'nullable',
                 'string',
-                //new IsDataExists('accounts'),
+                'max:' . config('vc.max_string_limit'),
             ],
             'branch_code' => [
                 'nullable',
                 'string',
                 'max:' . config('vc.max_string_limit'),
-                //new IsDataExists('branches'),
+            ],
+            // GROUP_ACCOUNT_ADMIN: array of account/branch pairs
+            'user_accounts' => [
+                'required_if:type,' . UserType::GROUP_ACCOUNT_ADMIN,
+                'nullable',
+                'array',
+                'min:1',
+            ],
+            'user_accounts.*.account_type' => [
+                'nullable',
+                'string',
+                Rule::in(AccountType::getValues()),
+            ],
+            'user_accounts.*.account_code' => [
+                'required',
+                'string',
+                'max:' . config('vc.max_string_limit'),
+            ],
+            'user_accounts.*.branch_code' => [
+                'nullable',
+                'string',
+                'max:' . config('vc.max_string_limit'),
             ],
             'agent_code' => [
                 'nullable',
@@ -142,9 +163,11 @@ class CreateRequest extends FormRequest
             'department_id.required_if' => 'The Department field is required',
             'employee_no.required_if' => 'The Employee No. field is required',
             'position_id.required_if' => 'The Position field is required',
-            'account_type.required_if' => 'The Account Type field is required',
-            'account_code.required_if' => 'The Account field is required',
-            'agent_code.required_if' => 'The Agent Code field is required',
+            'account_type.required_if'              => 'The Account Type field is required',
+            'account_code.required_if'              => 'The Account field is required',
+            'agent_code.required_if'                => 'The Agent Code field is required',
+            'user_accounts.required_if'             => 'At least one account is required for Group Account Admin',
+            'user_accounts.*.account_code.required' => 'Account Code is required for each account entry',
         ];
     }
 }

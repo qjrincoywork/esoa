@@ -141,7 +141,7 @@ const existingExcel = computed(() => {
   return { name: fileBasename(String(path)), href: `/soas/${id}/attachment/excel` }
 })
 const filteredStatusTypes = computed(() => {
-  if (userDetail.value?.employee_no) {
+  if (userDetail.value?.has_employee_no) {
     return status_types.value?.filter(s => s.value !== 2)
   }
   return status_types.value?.filter(s => s.value == 2)

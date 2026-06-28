@@ -17,7 +17,7 @@ class UpdateRequest extends FormRequest
      */
     public function rules(): array
     {
-        if ($this->user()?->hasRole('account_branch_admin')) {
+        if ($this->user()?->hasAnyRole(['account_branch_admin', 'group_account_admin'])) {
             $rules = [
                 'id' => [
                     'required',

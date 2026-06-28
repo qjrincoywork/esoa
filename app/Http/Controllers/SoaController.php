@@ -242,7 +242,7 @@ class SoaController extends Controller
     {
         $soa = $this->soa->findOrFail($id);
         $this->recordBillingInvoiceViewedIfEligible($soa, request()->user());
-        CommonHelper::assertUserMayAccessModel(request());
+        CommonHelper::assertUserMayAccessModel(request(), $soa);
 
         $path = match ($type) {
             'pdf' => $soa->file_pdf,
@@ -340,10 +340,10 @@ class SoaController extends Controller
 
     public function getAccounts(Request $request)
     {
-        $accounts = (new $this->sqlDatabase(Server::HMS))->getAccountsByParams($request->all());
-
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
+            $accounts = (new $this->sqlDatabase(Server::HMS))->getAccountsByParams($request->all());
+
             return response()->json([
                 'accounts' => new CommonResource(AccountResource::collection($accounts))
             ]);
@@ -352,10 +352,10 @@ class SoaController extends Controller
 
     public function getBillingRefs(BillRefsRequest $request)
     {
-        $billingRefs = (new $this->sqlDatabase(Server::HMS))->getBillingRefsByParams($request->validated());
-
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
+            $billingRefs = (new $this->sqlDatabase(Server::HMS))->getBillingRefsByParams($request->validated());
+
             return response()->json([
                 'billing_refs' => new CommonResource(BillingRefResource::collection($billingRefs))
             ]);
@@ -364,10 +364,10 @@ class SoaController extends Controller
 
     public function getBranches(Request $request)
     {
-        $branches = (new $this->sqlDatabase(Server::HMS))->getBranchesByParams($request->all());
-
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
+            $branches = (new $this->sqlDatabase(Server::HMS))->getBranchesByParams($request->all());
+
             return response()->json([
                 'branches' => new CommonResource(BranchResource::collection($branches))
             ]);
@@ -517,7 +517,7 @@ class SoaController extends Controller
      */
     private function recordBillingInvoiceViewedIfEligible(Soa $soa, $user): void
     {
-        if (!$user || !$user->hasRole('account_branch_admin')) {
+        if (!$user || !$user->hasAnyRole(['account_branch_admin', 'group_account_admin'])) {
             return;
         }
 
@@ -544,7 +544,7 @@ class SoaController extends Controller
     public function edit(Request $request, int $id)
     {
         $soa = $this->soa->findOrFail($id);
-        CommonHelper::assertUserMayAccessModel($request);
+        CommonHelper::assertUserMayAccessModel($request, $soa);
 
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
@@ -573,8 +573,8 @@ class SoaController extends Controller
                 CommonHelper::validateNotPaid($soa, SoaStatus::PAID);
 
                 $soaNumber = $validated['soa_number'] ?? $soa->soa_number;
-                $isAccountBranchAdmin = empty(auth()->user()->userDetail->employee_no);
-                if (!$isAccountBranchAdmin) {
+                $canUploadFiles = !auth()->user()->hasAnyRole(['account_branch_admin', 'group_account_admin']);
+                if ($canUploadFiles) {
                     CommonHelper::storeUploadedFiles(
                         $soaNumber,
                         $validated['account_code'],
@@ -607,7 +607,7 @@ class SoaController extends Controller
                     $statusChangedTo = $changes['status'] ?? null;
                     if (
                         in_array($statusChangedTo, config('vc.allowed_soa_status_for_account_branch_admin'))
-                        && $request->user()->hasRole('account_branch_admin')
+                        && $request->user()->hasAnyRole(['account_branch_admin', 'group_account_admin'])
                     ) {
                         CommonHelper::sendBillingInvoiceEmail($soa, $request->user(), BillingInvoiceStatusChanged::class);
                     }
@@ -677,6 +677,7 @@ class SoaController extends Controller
 
     public function destroy(DestroyRequest $request)
     {
+        CommonHelper::assertUserMayAccessModel($request);
         $validated = $request->validated();
         DB::beginTransaction();
         try {

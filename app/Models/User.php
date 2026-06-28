@@ -94,6 +94,11 @@ class User extends Authenticatable implements AuthorizableContract, MustVerifyEm
         return $this->hasMany(SoaActivity::class, 'user_id');
     }
 
+    public function userAccounts(): HasMany
+    {
+        return $this->hasMany(UserAccount::class, 'user_id');
+    }
+
     /**
      * Get users with optional filters and pagination.
      *
@@ -144,6 +149,7 @@ class User extends Authenticatable implements AuthorizableContract, MustVerifyEm
         if ($target !== null) {
             $target->update($data);
             $target->userDetail()->updateOrCreate(['user_id' => $target->id], $data);
+            $this->syncUserAccounts($target, $data);
             return null;
         }
 
@@ -158,7 +164,48 @@ class User extends Authenticatable implements AuthorizableContract, MustVerifyEm
 
         $data['user_id'] = $user->id;
         $user->userDetail()->create($data);
+        $this->syncUserAccounts($user, $data);
 
         return ['user' => $user, 'plain_password' => $plainPassword];
+    }
+
+    /**
+     * Sync the user_accounts table based on the user type and submitted form data.
+     * - ACCOUNT_BRANCH_ADMIN (type 2): single account_code/branch_code as top-level fields.
+     * - GROUP_ACCOUNT_ADMIN  (type 4): array of {account_type, account_code, branch_code} entries.
+     * - Other types: remove all user_accounts.
+     */
+    private function syncUserAccounts(self $user, array $data): void
+    {
+        $type = (int) ($data['type'] ?? 0);
+
+        if ($type === UserType::ACCOUNT_BRANCH_ADMIN && !empty($data['account_code'])) {
+            $user->userAccounts()->delete();
+            $user->userAccounts()->create([
+                'account_type' => $data['account_type'] ?? null,
+                'account_code' => $data['account_code'],
+                'branch_code'  => $data['branch_code'] ?? null,
+            ]);
+            return;
+        }
+
+        if ($type === UserType::GROUP_ACCOUNT_ADMIN && !empty($data['user_accounts'])) {
+            $user->userAccounts()->delete();
+            foreach ($data['user_accounts'] as $ua) {
+                if (!empty($ua['account_code'])) {
+                    $user->userAccounts()->create([
+                        'account_type' => $ua['account_type'] ?? null,
+                        'account_code' => $ua['account_code'],
+                        'branch_code'  => $ua['branch_code'] ?? null,
+                    ]);
+                }
+            }
+            return;
+        }
+
+        // VC_EMPLOYEE, BROKER, or type change — clear any residual accounts
+        if (!in_array($type, [UserType::ACCOUNT_BRANCH_ADMIN, UserType::GROUP_ACCOUNT_ADMIN])) {
+            $user->userAccounts()->delete();
+        }
     }
 }

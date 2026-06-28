@@ -310,7 +310,7 @@ const clearFilters = () => {
 };
 
 const filtersActive = computed(() => soaListFiltersActive(filters.value));
-const isAccountBranchAdmin = computed(() => !userDetail.value?.has_employee_no);
+const isAccountBranchAdmin = computed(() => userDetail.value?.type === 2);
 
 const selectedAccountCode = computed(() =>
   isAccountBranchAdmin.value

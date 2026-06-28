@@ -60,7 +60,7 @@ export function useModal() {
     submitData.value = options.submitData || {};
     size.value = options.size || 'md';
     hasSubmitButton.value = options.hasSubmitButton !== undefined ? options.hasSubmitButton : true;
-    closeOnClickOutside.value = options.closeOnClickOutside ?? true;
+    closeOnClickOutside.value = options.closeOnClickOutside ?? false;
     visible.value = true;
   };
 

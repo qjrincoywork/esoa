@@ -246,7 +246,7 @@ class CommonHelper
         self::setClientName($model);
         $model->contact = config('vc.contact_email');
 
-        $isAccountBranchAdmin = $user->hasRole('account_branch_admin');
+        $isAccountBranchAdmin = $user->hasAnyRole(['account_branch_admin', 'group_account_admin']);
         $billingNotificationEmail = config('vc.billing_notification_email', 'billing@example.com');
 
         $toEmail = $isAccountBranchAdmin
@@ -314,10 +314,23 @@ class CommonHelper
             abort(Response::HTTP_UNAUTHORIZED);
         }
         if ($model && $model instanceof Model) {
-            if ($model->user_id !== $authUser->id) {
-                abort(Response::HTTP_FORBIDDEN);
+            switch ($authUser->getRoleNames()->first()) {
+                case 'account_branch_admin':
+                case 'group_account_admin':
+                    $userAccounts = $authUser->userAccounts;
+                    if ($userAccounts->isEmpty()) {
+                        abort(Response::HTTP_FORBIDDEN);
+                    }
+                    $exists = $userAccounts->where('account_code', $model->account_code)
+                        ->when(!empty($model->branch_code), function ($q) use ($model) {
+                            $q->where('branch_code', $model->branch_code);
+                        })
+                        ->first();
+                    if (!$exists) {
+                        abort(Response::HTTP_FORBIDDEN);
+                    }
+                    return;
             }
-            return;
         }
         if (
             $authUser->hasRole('superadmin')
