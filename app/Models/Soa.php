@@ -167,10 +167,7 @@ class Soa extends Model
             })
             ->orderBy('created_at', OrderType::DESC);
 
-        if ($authUser && (
-            $authUser->hasAnyRole(['superadmin', 'admin']) ||
-            $authUser->hasAnyPermission(request()->route()?->getName())
-        )) {
+        if ($authUser && $authUser->hasAnyRole(['superadmin', 'admin'])) {
             $query->withTrashed();
         }
 
@@ -187,7 +184,6 @@ class Soa extends Model
     {
         $perPage = $params['per_page'] ?? config('vc.default_pages');
 
-        dd($this->listQuery($params)->toSql());
         return $this->listQuery($params)->paginate($perPage);
     }
 

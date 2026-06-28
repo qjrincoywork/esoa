@@ -314,10 +314,23 @@ class CommonHelper
             abort(Response::HTTP_UNAUTHORIZED);
         }
         if ($model && $model instanceof Model) {
-            if ($model->user_id !== $authUser->id) {
-                abort(Response::HTTP_FORBIDDEN);
+            switch ($authUser->getRoleNames()->first()) {
+                case 'account_branch_admin':
+                case 'group_account_admin':
+                    $userAccounts = $authUser->userAccounts;
+                    if ($userAccounts->isEmpty()) {
+                        abort(Response::HTTP_FORBIDDEN);
+                    }
+                    $exists = $userAccounts->where('account_code', $model->account_code)
+                        ->when(!empty($model->branch_code), function ($q) use ($model) {
+                            $q->where('branch_code', $model->branch_code);
+                        })
+                        ->first();
+                    if (!$exists) {
+                        abort(Response::HTTP_FORBIDDEN);
+                    }
+                    return;
             }
-            return;
         }
         if (
             $authUser->hasRole('superadmin')
