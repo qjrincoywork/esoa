@@ -7,6 +7,7 @@ import { useUsers } from '@/composables/users';
 import { debounce } from '@/composables/utilities/helper';
 import { Select, SelectTrigger, SelectContent, SelectGroup, SelectLabel, SelectItem, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import UserAccountsList from '@/components/forms/users/UserAccountsList.vue';
 
 type Type = { value: string | number; name: string }
 type AccountType = { value: string | number; name: string }
@@ -48,11 +49,6 @@ type UserBasic = {
   user_detail?: UserDetail
   user_accounts?: Array<{ account_type?: string; account_code?: string; branch_code?: string }>
 }
-
-const USER_TYPE_VC_EMPLOYEE       = 1
-const USER_TYPE_ACCOUNT_BRANCH    = 2
-const USER_TYPE_BROKER            = 3
-const USER_TYPE_GROUP_ACCOUNT     = 4
 
 const props = defineProps({
   user: {
@@ -174,6 +170,7 @@ const hasMoreNewAccounts   = computed(() => newAccountPage.value < newAccountLas
 const hasMoreNewBranches   = computed(() => newBranchPage.value < newBranchLastPage.value)
 const searchedNewAccount   = ref('')
 const searchedNewBranch    = ref('')
+const duplicateError       = ref('')
 const newSelectedAccount   = computed(() =>
   newAccounts.value.find((a: Account) => String(a.value) === newAccountCode.value)
 )
@@ -289,6 +286,14 @@ const debouncedGetNewBranches: (...args: any[]) => void = debounce((evOrName?: a
 
 function addUserAccount() {
   if (!newAccountCode.value) return;
+  const isDuplicate = selectedUserAccounts.value.some(
+    (ua: SelectedUserAccount) => ua.account_code === newAccountCode.value && ua.branch_code === newBranchCode.value
+  );
+  if (isDuplicate) {
+    duplicateError.value = 'This account / branch combination has already been added.';
+    return;
+  }
+  duplicateError.value = '';
   const account = newAccounts.value.find((a: Account) => String(a.value) === newAccountCode.value);
   const branch  = newBranches.value.find((b: Branch)  => String(b.value) === newBranchCode.value);
   selectedUserAccounts.value.push({
@@ -346,6 +351,7 @@ watch([selectedAccount, searchedBranchName], async () => {
 
 // Reset GROUP_ACCOUNT_ADMIN picker fields when account type changes
 watch(newAccountType, () => {
+  duplicateError.value     = '';
   newAccountCode.value     = '';
   newBranchCode.value      = '';
   newBranches.value        = [];
@@ -353,10 +359,12 @@ watch(newAccountType, () => {
   searchedNewBranch.value  = '';
 })
 watch(newAccountCode, () => {
+  duplicateError.value     = '';
   newBranchCode.value      = '';
   newBranches.value        = [];
   searchedNewBranch.value  = '';
 })
+watch(newBranchCode, () => { duplicateError.value = ''; })
 watch([newAccountType, searchedNewAccount], async () => {
   newAccounts.value = [];
   if (newAccountType.value) {
@@ -500,36 +508,15 @@ watch([newSelectedAccount, searchedNewBranch], async () => {
             + Add
           </Button>
         </div>
+        <p v-if="duplicateError" class="text-sm text-red-500">{{ duplicateError }}</p>
       </div>
 
       <!-- Selected list -->
-      <div v-if="selectedUserAccounts.length" class="rounded-lg border overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="border-b bg-[var(--color-surface)] text-[var(--color-text-muted)]">
-              <th class="px-3 py-2 text-left font-medium">Account Type</th>
-              <th class="px-3 py-2 text-left font-medium">Account</th>
-              <th class="px-3 py-2 text-left font-medium">Branch</th>
-              <th class="px-3 py-2 w-16"></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(ua, i) in selectedUserAccounts" :key="i" class="border-b last:border-0">
-              <td class="px-3 py-2">{{ ua.account_type || '—' }}</td>
-              <td class="px-3 py-2">{{ ua.account_name || ua.account_code }}</td>
-              <td class="px-3 py-2">{{ ua.branch_name || ua.branch_code || '—' }}</td>
-              <td class="px-3 py-2">
-                <Button type="button" variant="ghost" size="sm"
-                  class="text-red-500 hover:text-red-700 h-7 px-2"
-                  @click="removeUserAccount(i)">
-                  Remove
-                </Button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <p v-else class="text-sm text-[var(--color-text-muted)]">No accounts added yet.</p>
+      <UserAccountsList
+        :items="selectedUserAccounts"
+        :account-types="account_types"
+        @remove="removeUserAccount"
+      />
     </div>
 
     <!-- ── VC Employee (type 1) ──────────────────────────────────────────── -->
