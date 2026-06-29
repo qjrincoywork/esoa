@@ -87,6 +87,14 @@ class ImportUploadsJob implements ShouldQueue
             : null;
 
         $soa = new Soa();
+
+        if ($upload->up_status == 0 && $upload->up_endorsedtoacct == 0) {
+            $status = SoaStatus::UNPAID;
+        } else if ($upload->up_status == 0 && $upload->up_endorsedtoacct == 1) {
+            $status = SoaStatus::ENDORSED;
+        } else {
+            $status = SoaStatus::PAID;
+        }
         $soa->fill([
             'user_id' => $this->authId,
             'soa_number' => $upload->up_soanum,
@@ -96,9 +104,7 @@ class ImportUploadsJob implements ShouldQueue
             'account_code' => $upload->up_accode,
             'branch_code' => ! empty($upload->up_branchcode) ? $upload->up_branchcode : null,
             'bill_type' => BillType::oldValue($upload->up_billtype),
-            'status' => ! empty($upload->up_endorsedtoacct)
-                ? SoaStatus::ENDORSED
-                : SoaStatus::UNPAID,
+            'status' => $status,
             'due_date' => $upload->up_due_date,
             'period_date_from' => $upload->up_poc_start,
             'period_date_to' => $upload->up_poc_end,

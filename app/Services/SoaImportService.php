@@ -77,7 +77,7 @@ class SoaImportService
                 'up_endorsedtoacct',
             ])
             ->whereNull('up_delete_date')
-            ->where('up_status', $config['status'])
+            // ->where('up_status', $config['status'])
             ->whereNotNull('up_macode')
             ->whereRaw("LTRIM(RTRIM([up_macode])) <> ''")
             ->where(function (Builder $query) use ($config) {
