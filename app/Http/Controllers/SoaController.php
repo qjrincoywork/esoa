@@ -66,6 +66,7 @@ class SoaController extends Controller
      */
     public function fileProxy(FileProxyRequest $request)
     {
+        CommonHelper::assertUserMayAccessModel($request);
         $path = $request->get('url', '');
 
         // Block absolute URLs and path traversal — only relative paths allowed
@@ -197,8 +198,8 @@ class SoaController extends Controller
      */
     public function fileList(FileListRequest $request)
     {
+        CommonHelper::assertUserMayAccessModel($request);
         $validated = $request->validated();
-        $billing = (new $this->sqlDatabase(Server::HMS))->getBillingByParams($validated);
         //http://192.170.11.185/dmis_finance/file/rm/ //EO-2832655-003, EO-3085829-004
         $files = [];
         if (isset($validated['claimnum']) && !empty($validated['claimnum'])) {
@@ -429,6 +430,7 @@ class SoaController extends Controller
      */
     public function activities(Request $request, int $id)
     {
+        CommonHelper::assertUserMayAccessModel($request);
         $soa = $this->soa->findOrFail($id);
 
         $perPage = (int) $request->get('per_page', config('vc.default_pages'));
@@ -563,6 +565,7 @@ class SoaController extends Controller
      */
     public function update(UpdateRequest $request)
     {
+        CommonHelper::assertUserMayAccessModel($request);
         $validated = $request->validated();
         DB::beginTransaction();
 
@@ -656,6 +659,7 @@ class SoaController extends Controller
      */
     public function memberFiles(MemberFilesRequest $request)
     {
+        CommonHelper::assertUserMayAccessModel($request);
         $claimnum = $request->validated('claimnum');
         $userId = (int) auth()->id();
 

@@ -4,6 +4,7 @@ use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
+use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
 
@@ -48,5 +49,10 @@ return Application::configure(basePath: dirname(__DIR__))
             });
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
+        $exceptions->respond(function (Response $response) {
+            if ($response->getStatusCode() === 419) {
+                return redirect()->route('login');
+            }
+            return $response;
+        });
     })->create();
