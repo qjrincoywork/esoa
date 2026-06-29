@@ -200,6 +200,7 @@ class ConcernController extends Controller
      */
     public function destroy(DeleteRequest $request)
     {
+        CommonHelper::assertUserMayAccessModel($request);
         $validated = $request->validated();
 
         DB::beginTransaction();

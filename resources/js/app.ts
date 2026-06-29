@@ -37,6 +37,11 @@ const bootstrap = async (): Promise<void> => {
                 syncCsrfTokenFromPage(event.detail.page);
             });
 
+            router.on('invalid-token', (event) => {
+                event.preventDefault();
+                window.location.href = '/login';
+            });
+
             createApp({ render: () => h(App, props) })
                 .use(plugin)
                 .component('Loader', Loader)
