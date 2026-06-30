@@ -133,6 +133,7 @@ class AccountPaymentController extends Controller
      */
     public function edit($id, Request $request)
     {
+        CommonHelper::assertUserMayAccessModel($request);
         $accountPayment = $this->accountPayment->with('soas')->findOrFail($id);
         if ($accountPayment) {
             $accountPayment->remittance_advice_preview_token = $accountPayment->remittance_advice && $request->user()
@@ -198,13 +199,11 @@ class AccountPaymentController extends Controller
      */
     public function destroy(DeleteRequest $request)
     {
+        CommonHelper::assertUserMayAccessModel($request);
         $validated = $request->validated();
         DB::beginTransaction();
         try {
             $accountPayment = AccountPayment::withTrashed()->findOrFail($validated['id']);
-
-            CommonHelper::assertUserMayAccessModel($request);
-
             if ($accountPayment->trashed()) {
                 $accountPayment->restore();
                 $message = 'Restored';

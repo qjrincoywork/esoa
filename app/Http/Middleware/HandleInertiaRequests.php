@@ -74,8 +74,6 @@ class HandleInertiaRequests extends Middleware
                         'account_code'   => $sharedAccountCode,
                         'branch_code'    => $sharedBranchCode,
                         'type'           => $userType,
-                        'first_name'     => $authUser?->userDetail?->first_name,
-                        'last_name'      => $authUser?->userDetail?->last_name,
                         'has_employee_no' => !empty($authUser?->userDetail?->employee_no),
                     ],
                     'user_accounts' => $userType === UserType::GROUP_ACCOUNT_ADMIN
