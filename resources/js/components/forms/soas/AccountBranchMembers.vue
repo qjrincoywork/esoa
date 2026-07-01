@@ -150,7 +150,12 @@ const fetchMembers = async () => {
     page: pagination.value.current_page,
     per_page: pagination.value.per_page,
     billing_ref: props.soa?.billing_ref ?? [],
+    period_date_from: props.soa?.period_date_from ?? [],
+    period_date_to: props.soa?.period_date_to ?? [],
   };
+  if (props.soa?.billing_ref) {
+    params.billing_ref = props.soa?.billing_ref;
+  }
 
   const term = searchText.value.trim();
   if (term) {

@@ -20,9 +20,8 @@ class FileListRequest extends FormRequest
                 'exists:soas,id',
             ],
             'billing_ref' => [
-                'required',
+                'nullable',
                 'string',
-                'max:' . config('vc.max_string_limit'),
             ],
             'claimnum' => [
                 'nullable',
@@ -35,9 +34,8 @@ class FileListRequest extends FormRequest
                 'max:' . config('vc.max_string_limit'),
             ],
             'billing_ref_from' => [
-                'required',
+                'required_with:billing_ref',
                 'string',
-                'max:' . config('vc.max_string_limit'),
             ],
         ];
     }
