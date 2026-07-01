@@ -16,7 +16,8 @@ class SoaStatusIsValid implements ValidationRule
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
         $filteredStatusTypes = [];
-        $isAccountBranchAdmin = empty(auth()->user()->userDetail->employee_no);
+        $authUser = auth()->user();
+        $isAccountBranchAdmin = $authUser->hasAnyRole(['account_branch_admin', 'group_account_admin']);
         if ($isAccountBranchAdmin) {
             $filteredStatusTypes = array_filter(SoaStatus::getValues(), function ($value) {
                 return in_array($value, config('vc.allowed_soa_status_for_account_branch_admin'));

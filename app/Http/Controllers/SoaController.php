@@ -15,7 +15,7 @@ use App\Helpers\CommonHelper;
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Soa\{AccountBranchMembersRequest, AdjustAmountRequest, BillRefsRequest, CreateRequest, FileListRequest, FileProxyRequest, FindMemberRequest, ListRequest, MemberFilesRequest, RecordViewedRequest, RecomputeTaxRequest, UpdateRequest, UpdateTagRequest };
+use App\Http\Requests\Soa\{AccountBranchMembersRequest, AdjustAmountRequest, BillRefsRequest, CreateRequest, DestroyRequest, FileListRequest, FileProxyRequest, FindMemberRequest, ListRequest, MemberFilesRequest, RecordViewedRequest, RecomputeTaxRequest, UpdateRequest, UpdateTagRequest };
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
@@ -58,27 +58,6 @@ class SoaController extends Controller
     }
 
     /**
-     * Ensure the authenticated user may modify the given Eloquent SOA (same scope as list filters).
-     */
-    protected function assertUserMayAccessModelSoa(Soa $soa): void
-    {
-        $authUser = auth()->user();
-        if (!$authUser) {
-            abort(Response::HTTP_UNAUTHORIZED);
-        }
-        if ($authUser->hasRole('superadmin')) {
-            return;
-        }
-        $detail = $authUser->userDetail;
-        if ($detail && isset($detail->account_code) && $soa->account_code !== $detail->account_code) {
-            abort(Response::HTTP_FORBIDDEN);
-        }
-        if ($detail && isset($detail->branch_code) && $soa->branch_code !== null && $soa->branch_code !== '' && $soa->branch_code !== $detail->branch_code) {
-            abort(Response::HTTP_FORBIDDEN);
-        }
-    }
-
-    /**
      * Fetch a file from the given URL.
      *
      * @param Request $request
@@ -87,27 +66,37 @@ class SoaController extends Controller
      */
     public function fileProxy(FileProxyRequest $request)
     {
-        $fileUrl = env('VC_ADMIN_DOMAIN') . $request->get('url');
+        CommonHelper::assertUserMayAccessModel($request);
+        $path = $request->get('url', '');
 
-        if (!$fileUrl) {
-            return CustomResponse::error('URL parameter is required', Response::HTTP_BAD_REQUEST);
+        // Block absolute URLs and path traversal — only relative paths allowed
+        if (preg_match('#^https?://#i', $path) || str_contains($path, '..') || str_contains($path, "\0")) {
+            return CustomResponse::error('Invalid URL', Response::HTTP_BAD_REQUEST);
         }
 
+        $allowedBase = rtrim(config('vc.admin_domain'), '/');
+
+        if (empty($allowedBase)) {
+            return CustomResponse::error('Proxy not configured', Response::HTTP_SERVICE_UNAVAILABLE);
+        }
+
+        $fileUrl = $allowedBase . '/' . ltrim($path, '/');
+
         try {
-            $response = Http::withoutVerifying()->timeout(15)->get($fileUrl);
+            // TLS verification enabled — withoutVerifying() removed
+            $response = Http::timeout(15)->get($fileUrl);
             $contentType = $response->header('Content-Type') ?? 'application/octet-stream';
 
             if ($response->successful()) {
                 return response($response->body(), Response::HTTP_OK, [
                     'Content-Type' => $contentType,
-                    'Access-Control-Allow-Origin' => '*',
                     'Content-Disposition' => 'inline',
                 ]);
-            } else {
-                return CustomResponse::error('Failed to fetch PDF', $response->status());
             }
+
+            return CustomResponse::error('Failed to fetch file', $response->status());
         } catch (\Exception $e) {
-            return CustomResponse::error('An error occurred: ' . $e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+            return CustomResponse::serverError($e, 'SoaController::fileProxy');
         }
     }
 
@@ -209,8 +198,8 @@ class SoaController extends Controller
      */
     public function fileList(FileListRequest $request)
     {
+        CommonHelper::assertUserMayAccessModel($request);
         $validated = $request->validated();
-        $billing = (new $this->sqlDatabase(Server::HMS))->getBillingByParams($validated);
         //http://192.170.11.185/dmis_finance/file/rm/ //EO-2832655-003, EO-3085829-004
         $files = [];
         if (isset($validated['claimnum']) && !empty($validated['claimnum'])) {
@@ -254,7 +243,7 @@ class SoaController extends Controller
     {
         $soa = $this->soa->findOrFail($id);
         $this->recordBillingInvoiceViewedIfEligible($soa, request()->user());
-        $this->assertUserMayAccessModelSoa($soa);
+        CommonHelper::assertUserMayAccessModel(request(), $soa);
 
         $path = match ($type) {
             'pdf' => $soa->file_pdf,
@@ -345,17 +334,17 @@ class SoaController extends Controller
             }
         } catch (\Exception $e) {
             if ($request->wantsJson() || $request->ajax()) {
-                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+                return CustomResponse::serverError($e, 'SoaController');
             }
         }
     }
 
     public function getAccounts(Request $request)
     {
-        $accounts = (new $this->sqlDatabase(Server::HMS))->getAccountsByParams($request->all());
-
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
+            $accounts = (new $this->sqlDatabase(Server::HMS))->getAccountsByParams($request->all());
+
             return response()->json([
                 'accounts' => new CommonResource(AccountResource::collection($accounts))
             ]);
@@ -364,10 +353,10 @@ class SoaController extends Controller
 
     public function getBillingRefs(BillRefsRequest $request)
     {
-        $billingRefs = (new $this->sqlDatabase(Server::HMS))->getBillingRefsByParams($request->validated());
-
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
+            $billingRefs = (new $this->sqlDatabase(Server::HMS))->getBillingRefsByParams($request->validated());
+
             return response()->json([
                 'billing_refs' => new CommonResource(BillingRefResource::collection($billingRefs))
             ]);
@@ -376,26 +365,14 @@ class SoaController extends Controller
 
     public function getBranches(Request $request)
     {
-        $branches = (new $this->sqlDatabase(Server::HMS))->getBranchesByParams($request->all());
-
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
+            $branches = (new $this->sqlDatabase(Server::HMS))->getBranchesByParams($request->all());
+
             return response()->json([
                 'branches' => new CommonResource(BranchResource::collection($branches))
             ]);
         }
-    }
-
-    /**
-     * Display the specified resource.
-     */
-    public function show(int $id)
-    {
-        $soa = (new $this->sqlDatabase(Server::SOA))->getSoa($id);
-
-        return Inertia::render('soas/Index', [
-            'soa' => OldSoaResource::make($soa)
-        ]);
     }
 
     /**
@@ -407,7 +384,7 @@ class SoaController extends Controller
         $validated = $request->validated();
         $soa = $this->soa->findOrFail($validated['soa_id']);
 
-        $this->assertUserMayAccessModelSoa($soa);
+        CommonHelper::assertUserMayAccessModel($request);
 
         $current = (float) $soa->amount;
         $delta = (float) $validated['amount'];
@@ -453,6 +430,7 @@ class SoaController extends Controller
      */
     public function activities(Request $request, int $id)
     {
+        CommonHelper::assertUserMayAccessModel($request);
         $soa = $this->soa->findOrFail($id);
 
         $perPage = (int) $request->get('per_page', config('vc.default_pages'));
@@ -482,7 +460,7 @@ class SoaController extends Controller
     public function concerns(Request $request, int $id)
     {
         $soa = $this->soa->findOrFail($id);
-        $this->assertUserMayAccessModelSoa($soa);
+        CommonHelper::assertUserMayAccessModel($request);
 
         $perPage = (int) $request->get('per_page', config('vc.default_pages'));
         $concerns = $soa->concerns()
@@ -499,7 +477,7 @@ class SoaController extends Controller
     public function soaAccountPayments(Request $request, int $id)
     {
         $soa = $this->soa->findOrFail($id);
-        $this->assertUserMayAccessModelSoa($soa);
+        CommonHelper::assertUserMayAccessModel($request);
 
         $perPage = (int) $request->get('per_page', config('vc.default_pages'));
         $accountPayments = $soa->accountPayments()
@@ -541,7 +519,7 @@ class SoaController extends Controller
      */
     private function recordBillingInvoiceViewedIfEligible(Soa $soa, $user): void
     {
-        if (!$user || !$user->hasRole('account_branch_admin')) {
+        if (!$user || !$user->hasAnyRole(['account_branch_admin', 'group_account_admin'])) {
             return;
         }
 
@@ -568,7 +546,7 @@ class SoaController extends Controller
     public function edit(Request $request, int $id)
     {
         $soa = $this->soa->findOrFail($id);
-        $this->assertUserMayAccessModelSoa($soa);
+        CommonHelper::assertUserMayAccessModel($request, $soa);
 
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
@@ -587,6 +565,7 @@ class SoaController extends Controller
      */
     public function update(UpdateRequest $request)
     {
+        CommonHelper::assertUserMayAccessModel($request);
         $validated = $request->validated();
         DB::beginTransaction();
 
@@ -597,8 +576,8 @@ class SoaController extends Controller
                 CommonHelper::validateNotPaid($soa, SoaStatus::PAID);
 
                 $soaNumber = $validated['soa_number'] ?? $soa->soa_number;
-                $isAccountBranchAdmin = empty(auth()->user()->userDetail->employee_no);
-                if (!$isAccountBranchAdmin) {
+                $canUploadFiles = !auth()->user()->hasAnyRole(['account_branch_admin', 'group_account_admin']);
+                if ($canUploadFiles) {
                     CommonHelper::storeUploadedFiles(
                         $soaNumber,
                         $validated['account_code'],
@@ -631,7 +610,7 @@ class SoaController extends Controller
                     $statusChangedTo = $changes['status'] ?? null;
                     if (
                         in_array($statusChangedTo, config('vc.allowed_soa_status_for_account_branch_admin'))
-                        && $request->user()->hasRole('account_branch_admin')
+                        && $request->user()->hasAnyRole(['account_branch_admin', 'group_account_admin'])
                     ) {
                         CommonHelper::sendBillingInvoiceEmail($soa, $request->user(), BillingInvoiceStatusChanged::class);
                     }
@@ -647,86 +626,27 @@ class SoaController extends Controller
         } catch (\Throwable $e) {
             DB::rollBack();
             if ($request->wantsJson() || $request->ajax()) {
-                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
-            }
-        }
-    }
-
-    /**
-     * Untag the specified soa from a user.
-     */
-    public function untag(Request $request)
-    {
-        // Return JSON for AJAX requests (no URL change)
-        if ($request->wantsJson() || $request->ajax()) {
-            return response()->json([
-                'untag_types' => UntagType::list(),
-            ]);
-        }
-    }
-
-    /**
-     * Update the tag of the specified soa from a user.
-     */
-    public function updateTag(UpdateTagRequest $request)
-    {
-        $validated = $request->validated();
-        DB::connection(Server::SOA)->beginTransaction();
-
-        try {
-            switch ($validated['untag_type']) {
-                case UntagType::USER_ERROR:
-                    $validated['reason'] = __('esoa.reason.user_error');
-                    break;
-                case UntagType::CLIENT_ERROR:
-                    $validated['reason'] = __('esoa.reason.client_error');
-                    break;
-                case UntagType::BOUNCED_RETURNED_CHECK:
-                    $validated['reason'] = __('esoa.reason.bounced_returned_check');
-                    break;
-            }
-            $soa = (new $this->sqlDatabase(Server::SOA))->getSoa($validated['id']);
-
-            if (!$soa) {
-                throw new \Exception('SOA record not found.');
-            }
-
-            // (new $this->sqlDatabase(Server::SOA))->untagSoa($soa, $validated);
-            Mail::to('quirjohnincoy.work@gmail.com')->send(new NewSoaUploaded($soa));
-
-            // Commit transaction
-            DB::connection(Server::SOA)->commit();
-
-            // Return JSON for AJAX requests (no URL change)
-            if ($request->wantsJson() || $request->ajax()) {
-                return CustomResponse::ok('Retraction Completed', Response::HTTP_OK);
-            }
-        } catch (\Exception $e) {
-            // Catch and handle any unexpected errors
-            DB::connection(Server::SOA)->rollBack();
-
-            // Return JSON for AJAX requests (no URL change)
-            if ($request->wantsJson() || $request->ajax()) {
-                // Catch and handle any unexpected errors
-                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+                return CustomResponse::serverError($e, 'SoaController');
             }
         }
     }
 
     /**
      * Display the Find Member search page, or return paginated JSON results.
+     * The DB call is intentionally inside the wantsJson() branch so the initial
+     * Inertia page render never triggers an HMS query.
      */
     public function findMember(FindMemberRequest $request)
     {
-        $members = (new $this->sqlDatabase(Server::HMS))->getMembersByParams($request->validated());
-
         if ($request->wantsJson()) {
+            $members = (new $this->sqlDatabase(Server::HMS))->getMembersByParams($request->validated());
+
             return response()->json([
-                'data' => MemberResource::collection($members)->resolve(),
+                'data'         => MemberResource::collection($members)->resolve(),
                 'current_page' => $members->currentPage(),
-                'last_page' => $members->lastPage(),
-                'total' => $members->total(),
-                'per_page' => $members->perPage(),
+                'last_page'    => $members->lastPage(),
+                'total'        => $members->total(),
+                'per_page'     => $members->perPage(),
             ]);
         }
 
@@ -739,6 +659,7 @@ class SoaController extends Controller
      */
     public function memberFiles(MemberFilesRequest $request)
     {
+        CommonHelper::assertUserMayAccessModel($request);
         $claimnum = $request->validated('claimnum');
         $userId = (int) auth()->id();
 
@@ -758,31 +679,28 @@ class SoaController extends Controller
         return response()->json(['files' => $files]);
     }
 
-    public function taxComputation(Request $request)
+    public function destroy(DestroyRequest $request)
     {
-        return Inertia::render('soas/TaxComputation');
-    }
-
-    public function recomputeTax(RecomputeTaxRequest $request)
-    {
+        CommonHelper::assertUserMayAccessModel($request);
         $validated = $request->validated();
-        // DB::connection(Server::HMS)->beginTransaction();
-
+        DB::beginTransaction();
         try {
-            // Commit transaction
-            // DB::connection(Server::HMS)->commit();
-            // Return JSON for AJAX requests (no URL change)
+            $soa = Soa::withTrashed()->findOrFail($validated['id']);
+            if ($soa->trashed()) {
+                $soa->restore();
+                $label = 'restored';
+            } else {
+                $soa->delete();
+                $label = 'deleted';
+            }
+            DB::commit();
             if ($request->wantsJson() || $request->ajax()) {
-                return CustomResponse::ok('Retraction Completed', Response::HTTP_OK);
+                return CustomResponse::ok("SOA {$label} successfully", Response::HTTP_OK);
             }
         } catch (\Exception $e) {
-            // Catch and handle any unexpected errors
-            // DB::connection(Server::HMS)->rollBack();
-
-            // Return JSON for AJAX requests (no URL change)
+            DB::rollBack();
             if ($request->wantsJson() || $request->ajax()) {
-                // Catch and handle any unexpected errors
-                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+                return CustomResponse::serverError($e, 'SoaController::destroy');
             }
         }
     }

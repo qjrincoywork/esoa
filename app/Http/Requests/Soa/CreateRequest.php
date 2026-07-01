@@ -82,20 +82,7 @@ class CreateRequest extends FormRequest
                 'required',
                 'date',
             ],
-            'amount' => [
-                'required',
-                'numeric',
-                // new SoaAmountIsValid(),
-            ],
-            'amount_paid' => [
-                'nullable',
-                'numeric',
-            ],
             'payment_adjustment' => [
-                'nullable',
-                'numeric',
-            ],
-            'balance' => [
                 'nullable',
                 'numeric',
             ],
@@ -110,6 +97,11 @@ class CreateRequest extends FormRequest
                 'file',
                 'mimes:xls,xlsx',
                 'max:' . config('vc.max_file_size'), // 2MB (size is in KB)
+            ],
+            'amount' => [
+                'required',
+                'numeric',
+                // new SoaAmountIsValid(),
             ],
         ];
     }
@@ -132,6 +124,13 @@ class CreateRequest extends FormRequest
         $this->merge([
             'billing_ref' => json_decode($this->input('billing_ref'), true),
             'user_id' => auth()->user()->id,
+        ]);
+    }
+
+    protected function passedValidation(): void
+    {
+        $this->merge([
+            'account_type' => str_starts_with($this->input('account_code'), 'TP') ? AccountType::TPA : AccountType::HMO,
         ]);
     }
 }

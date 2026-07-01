@@ -114,8 +114,6 @@ return [
         ],
         'hms' => [
             'driver' => 'sqlsrv',
-            // 'url' => env('DB_URL'),
-            // 'port' => env('DB_PORT', '1433'),
             'host' => env('HMS_DB_HOST'),
             'database' => env('HMS_DB_DATABASE'),
             'username' => SqlServer::escapeCredential(env('HMS_DB_USERNAME')),
@@ -123,10 +121,8 @@ return [
             'charset' => env('DB_CHARSET', 'utf8'),
             'prefix' => '',
             'prefix_indexes' => true,
-            'trust_server_certificate' => true,
+            'trust_server_certificate' => env('HMS_DB_TRUST_SERVER_CERTIFICATE', false),
             'odbc_driver' => 'ODBC Driver 18 for SQL Server',
-            // 'encrypt' => env('DB_ENCRYPT', 'yes'),
-            // 'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', 'false'),
         ],
         'oi_users' => [
             'driver' => 'sqlsrv',
@@ -144,8 +140,7 @@ return [
         ],
         'soa' => [
             'driver' => 'sqlsrv',
-            'url' => env('DB_URL'),
-            'port' => env('SOA_DB_PORT', '1433'), // 'port' => env('DB_PORT', '1433'),
+            'port' => env('SOA_DB_PORT', '1433'),
             'host' => env('SOA_DB_HOST'),
             'database' => env('SOA_DB_DATABASE'),
             'username' => SqlServer::escapeCredential(env('SOA_DB_USERNAME')),
@@ -153,16 +148,8 @@ return [
             'charset' => env('DB_CHARSET', 'utf8'),
             'prefix' => '',
             'prefix_indexes' => true,
-            // 'encrypt' => 'optional',
-            'trust_server_certificate' => true,
+            'trust_server_certificate' => env('SOA_DB_TRUST_SERVER_CERTIFICATE', false),
             'odbc_driver' => 'ODBC Driver 18 for SQL Server',
-            // 'encrypt' => env('DB_ENCRYPT', 'yes'),
-            // 'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', 'false'),
-            // 'encrypt' => 'yes', // or true
-            // 'options' => [
-            //     PDO::SQLSRV_ATTR_DRIVER_BUFFERING => PDO::SQLSRV_BUFFERED,
-            //     'TrustServerCertificate' => true,
-            // ],
         ],
         'cenuser' => [
             'driver' => 'sqlsrv',

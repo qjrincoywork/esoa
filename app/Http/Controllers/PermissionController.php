@@ -86,7 +86,7 @@ class PermissionController extends Controller
             // Catch and handle any unexpected errors
             DB::rollBack();
 
-            return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+            return CustomResponse::serverError($e, 'PermissionController');
         }
     }
 
@@ -139,7 +139,7 @@ class PermissionController extends Controller
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
-                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+                return CustomResponse::serverError($e, 'PermissionController::update');
             }
         }
     }
@@ -170,11 +170,8 @@ class PermissionController extends Controller
             // Catch and handle any unexpected errors
             DB::rollBack();
 
-            // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
-                return response()->json([
-                    'message' => $e->getMessage()
-                ], Response::HTTP_INTERNAL_SERVER_ERROR);
+                return CustomResponse::serverError($e, 'PermissionController');
             }
         }
     }

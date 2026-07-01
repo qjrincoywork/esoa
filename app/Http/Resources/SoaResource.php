@@ -41,6 +41,7 @@ class SoaResource extends JsonResource
             'amount_raw' => (float) $this->amount,
             'file_pdf' => $this->file_pdf,
             'file_xls' => $this->file_xls,
+            'deleted_at' => $this->deleted_at,
             'status_color' => SoaStatus::color((int) $this->status),
             'status' => SoaStatus::label((int) $this->status),
             'soa_activities' => $this->whenLoaded('soaActivity', function () use ($request) {

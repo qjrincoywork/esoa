@@ -6,10 +6,14 @@ use App\Enums\{ AccountType, Gender, Server, UserType };
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\User\{CreateRequest, DeleteRequest, ListRequest, UpdateRequest, UpdateRoleRequest, VerifyRequest};
+use App\Http\Requests\User\{BulkDestroyRequest, BulkToggleActiveRequest, BulkUpdateRoleRequest, CreateRequest, DeleteRequest, ListRequest, ToggleActiveRequest, UpdateRequest, UpdateRoleRequest, VerifyRequest};
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
+use App\Http\Resources\UserListResource;
+use App\Mail\UserWelcome;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use App\Models\{Account, Citizenship, CivilStatus, Department, Position, Suffix, User };
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -53,10 +57,14 @@ class UserController extends Controller
      */
     public function index(ListRequest $request)
     {
-        $users = $this->user->getUsers($request->validated())->toArray();
+        $users = $this->user->getUsers($request->validated());
 
         return Inertia::render('users/Index', [
-            'users' => $users,
+            'users'          => new CommonResource(UserListResource::collection($users)),
+            'filter_options' => [
+                'user_types'  => UserType::list(),
+                'departments' => Department::select(['id', 'name'])->get()->toArray(),
+            ],
         ]);
     }
 
@@ -90,24 +98,37 @@ class UserController extends Controller
     public function store(CreateRequest $request)
     {
         $validated = $request->validated();
+        $creation = null;
 
         DB::beginTransaction();
 
         try {
-            $this->user->saveUser($validated);
-
-            // Commit transaction
+            $creation = $this->user->saveUser($validated);
             DB::commit();
-
-            // Return JSON for AJAX requests (no URL change)
-            if ($request->wantsJson() || $request->ajax()) {
-                return CustomResponse::created('User Created successfully', Response::HTTP_CREATED);
-            }
         } catch (\Exception $e) {
-            // Catch and handle any unexpected errors
             DB::rollBack();
+            return CustomResponse::serverError($e, 'UserController');
+        }
 
-            return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+        // Send welcome email after the DB commits so a mail failure never rolls back user creation
+        if ($creation) {
+            try {
+                $creation['user']->load('userDetail');
+                $expiresAt = $creation['user']->temporary_password_expires_at
+                    ?->format('F j, Y \a\t h:i A');
+
+                Mail::to($creation['user']->email)->send(new UserWelcome(
+                    $creation['user'],
+                    $creation['plain_password'],
+                    $expiresAt ?? '',
+                ));
+            } catch (\Throwable $e) {
+                Log::error('UserWelcome mail failed', ['user_id' => $creation['user']->id ?? null]);
+            }
+        }
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return CustomResponse::created('User Created successfully', Response::HTTP_CREATED);
         }
     }
 
@@ -148,7 +169,7 @@ class UserController extends Controller
      */
     public function edit(int $id, Request $request)
     {
-        $user = $this->user->with('userDetail')->findOrFail($id)->toArray();
+        $user = $this->user->with(['userDetail', 'userAccounts'])->findOrFail($id)->toArray();
         $suffixes = Suffix::select(['id', 'name'])->get()->toArray();
         $civil_statuses = CivilStatus::select(['id', 'name'])->get()->toArray();
         $citizenships = Citizenship::select(['id', 'name'])->get()->toArray();
@@ -179,23 +200,20 @@ class UserController extends Controller
         DB::beginTransaction();
 
         try {
-            $this->user->saveUser($request->validated());
+            $validated = $request->validated();
+            $target = User::findOrFail($validated['id']);
+            $this->user->saveUser($validated, $target);
 
-            // Commit transaction
             DB::commit();
 
-            // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
                 return CustomResponse::ok('User Updated successfully', Response::HTTP_OK);
             }
         } catch (\Exception $e) {
-            // Catch and handle any unexpected errors
             DB::rollBack();
 
-            // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
-                // Catch and handle any unexpected errors
-                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+                return CustomResponse::serverError($e, 'UserController::update');
             }
         }
     }
@@ -235,7 +253,7 @@ class UserController extends Controller
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
-                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+                return CustomResponse::serverError($e, 'UserController');
             }
         }
     }
@@ -297,7 +315,160 @@ class UserController extends Controller
             DB::rollBack();
 
             if ($request->wantsJson() || $request->ajax()) {
-                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+                return CustomResponse::serverError($e, 'UserController');
+            }
+        }
+    }
+
+    /**
+     * Set the is_active status for a single user.
+     * Accepts an explicit is_active value so the client drives the state
+     * rather than relying on a server-side read-then-flip.
+     */
+    public function toggleActive(ToggleActiveRequest $request)
+    {
+        $validated = $request->validated();
+
+        DB::beginTransaction();
+
+        try {
+            $target = User::findOrFail($validated['id']);
+            $target->update(['is_active' => $validated['is_active']]);
+
+            DB::commit();
+
+            $label = $validated['is_active'] ? 'activated' : 'deactivated';
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return CustomResponse::ok("User {$label} successfully", Response::HTTP_OK);
+            }
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return CustomResponse::serverError($e, 'UserController::toggleActive');
+            }
+        }
+    }
+
+    /**
+     * Return all available roles (used by bulk role assignment).
+     */
+    public function allRoles(Request $request)
+    {
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'all_roles' => Role::query()->get(['id', 'name', 'guard_name']),
+            ]);
+        }
+    }
+
+    /**
+     * Sync the same set of roles across multiple users at once.
+     */
+    public function bulkUpdateRoles(BulkUpdateRoleRequest $request)
+    {
+        $validated = $request->validated();
+        $userIds   = $validated['user_ids'];
+        $roleIds   = $validated['roles'] ?? [];
+
+        DB::beginTransaction();
+
+        try {
+            $users = $this->user->whereIn('id', $userIds)->get();
+
+            foreach ($users as $user) {
+                $user->roles()->sync($roleIds);
+            }
+
+            DB::commit();
+
+            app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+            $count   = count($userIds);
+            $message = $count === 1
+                ? 'Roles updated for 1 user successfully'
+                : "Roles updated for {$count} users successfully";
+
+            return CustomResponse::ok($message, Response::HTTP_OK);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return CustomResponse::serverError($e, 'UserController::bulkUpdateRoles');
+        }
+    }
+
+    /**
+     * Set the is_active status for multiple users at once.
+     */
+    public function bulkToggleActive(BulkToggleActiveRequest $request)
+    {
+        $validated = $request->validated();
+
+        DB::beginTransaction();
+
+        try {
+            $this->user->whereIn('id', $validated['user_ids'])
+                ->update(['is_active' => $validated['is_active']]);
+
+            DB::commit();
+
+            $count   = count($validated['user_ids']);
+            $label   = $validated['is_active'] ? 'activated' : 'deactivated';
+            $message = $count === 1
+                ? "User {$label} successfully"
+                : "{$count} users {$label} successfully";
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return CustomResponse::ok($message, Response::HTTP_OK);
+            }
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return CustomResponse::serverError($e, 'UserController::bulkToggleActive');
+            }
+        }
+    }
+
+    /**
+     * Soft-delete or restore multiple users at once.
+     */
+    public function bulkDestroy(BulkDestroyRequest $request)
+    {
+        $validated = $request->validated();
+        $isRestore = $validated['action'] === 'restore';
+
+        DB::beginTransaction();
+
+        try {
+            if ($isRestore) {
+                $this->user->withTrashed()
+                    ->whereIn('id', $validated['user_ids'])
+                    ->whereNotNull('deleted_at')
+                    ->restore();
+            } else {
+                $this->user->whereIn('id', $validated['user_ids'])
+                    ->whereNull('deleted_at')
+                    ->delete();
+            }
+
+            DB::commit();
+
+            $count   = count($validated['user_ids']);
+            $label   = $isRestore ? 'restored' : 'deleted';
+            $message = $count === 1
+                ? "User {$label} successfully"
+                : "{$count} users {$label} successfully";
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return CustomResponse::ok($message, Response::HTTP_OK);
+            }
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            if ($request->wantsJson() || $request->ajax()) {
+                return CustomResponse::serverError($e, 'UserController::bulkDestroy');
             }
         }
     }
@@ -325,7 +496,7 @@ class UserController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
 
-            return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+            return CustomResponse::serverError($e, 'UserController');
         }
     }
 }

@@ -17,8 +17,7 @@ class UpdateRequest extends FormRequest
      */
     public function rules(): array
     {
-        $isAccountBranchAdmin = empty(auth()->user()->userDetail->employee_no);
-        if ($isAccountBranchAdmin) {
+        if ($this->user()?->hasAnyRole(['account_branch_admin', 'group_account_admin'])) {
             $rules = [
                 'id' => [
                     'required',
@@ -135,41 +134,21 @@ class UpdateRequest extends FormRequest
                     'required_unless:status,' . SoaStatus::ENDORSED,
                     'date',
                 ],
-                'amount' => [
-                    'required_unless:status,' . SoaStatus::ENDORSED,
-                    'numeric',
-                ],
-                'amount_paid' => [
-                    'nullable',
-                    'numeric',
-                ],
                 'payment_adjustment' => [
-                    'nullable',
-                    'numeric',
-                ],
-                'balance' => [
                     'nullable',
                     'numeric',
                 ],
                 'file_pdf' => $filePdfRules,
                 'file_xls' => $fileXlsRules,
+                'amount' => [
+                    'required_unless:status,' . SoaStatus::ENDORSED,
+                    'numeric',
+                ],
             ];
         }
 
         return $rules;
     }
-
-    // protected function prepareForValidation(): void
-    // {
-    //     $existingFilePdf = Soa::whereKey($this->input('id'))->value('file_pdf');
-    //     // if (!$existingFilePdf || !$this->hasFile('file_pdf')) {
-    //     //     return;
-    //     // }
-
-    //     $this->merge([
-    //         'file_pdf' => $this->hasFile('file_pdf') ? $this->file('file_pdf') : $existingFilePdf ?? null,
-    //     ]);
-    // }
 
     /**
      * Get the error messages for the defined validation rules.
@@ -191,6 +170,13 @@ class UpdateRequest extends FormRequest
         $this->merge([
             'billing_ref' => json_decode($this->input('billing_ref'), true),
             'user_id' => auth()->user()->id,
+        ]);
+    }
+
+    protected function passedValidation(): void
+    {
+        $this->merge([
+            'account_type' => str_starts_with($this->input('account_code'), 'TP') ? AccountType::TPA : AccountType::HMO,
         ]);
     }
 }

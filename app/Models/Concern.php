@@ -54,7 +54,7 @@ class Concern extends Model
     {
         $authUser = auth()->user();
         $concerns = self::with(['user', 'soas'])
-            ->when($authUser->hasRole('broker') || $authUser->hasRole('account_branch_admin'), function ($query) use ($authUser) {
+            ->when($authUser->hasRole('broker') || $authUser->hasAnyRole(['account_branch_admin', 'group_account_admin']), function ($query) use ($authUser) {
                     $query->where('user_id', $authUser->id);
                 }
             )

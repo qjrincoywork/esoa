@@ -247,24 +247,24 @@ const breadcrumbItems: BreadcrumbItem[] = [
 
 /**
  * When navigating from the SOA details pane's Concerns tab, a ?open={id} param
- * is appended and the row data is stored in sessionStorage. On mount we detect
- * this, retrieve the stored data, open the view pane, then clean up.
+ * is appended. On mount we detect this, re-fetch the record server-side via XHR,
+ * open the view pane, then clean the URL. No sessionStorage is used.
  */
-onMounted(() => {
+onMounted(async () => {
   const openId = new URLSearchParams(window.location.search).get('open');
   if (!openId) return;
 
-  const key = `concern_view_${openId}`;
-  const stored = sessionStorage.getItem(key);
-  if (!stored) return;
+  history.replaceState(null, '', window.location.pathname);
 
   try {
-    const concern = JSON.parse(stored);
-    sessionStorage.removeItem(key);
-    history.replaceState(null, '', window.location.pathname);
-    viewConcern(concern);
+    const res = await fetch(`/concerns/${openId}/edit`, {
+      headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data?.concern) viewConcern(data.concern);
   } catch {
-    sessionStorage.removeItem(key);
+    // Silently ignore — user can find the record in the list
   }
 });
 </script>
@@ -280,7 +280,7 @@ onMounted(() => {
             <Button class="cursor-pointer" v-if="canCreate" :onClick="newConcern">Submit Concern</Button>
           </div>
         </div>
-        <div v-if="userDetail?.employee_no || auth?.is_superadmin" class="grid gap-2 md:col-span-1 w-1/2">
+        <div v-if="userDetail?.has_employee_no || auth?.is_superadmin" class="grid gap-2 md:col-span-1 w-1/2">
           <Accordion type="single" collapsible>
             <AccordionItem value="filters">
               <AccordionTrigger class="cursor-pointer">Filters</AccordionTrigger>

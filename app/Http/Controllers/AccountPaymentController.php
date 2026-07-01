@@ -99,7 +99,7 @@ class AccountPaymentController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
 
-            return response()->json(['message' => 'Failed to create account payment: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return CustomResponse::serverError($e, 'AccountPaymentController::store');
         }
     }
 
@@ -133,6 +133,7 @@ class AccountPaymentController extends Controller
      */
     public function edit($id, Request $request)
     {
+        CommonHelper::assertUserMayAccessModel($request);
         $accountPayment = $this->accountPayment->with('soas')->findOrFail($id);
         if ($accountPayment) {
             $accountPayment->remittance_advice_preview_token = $accountPayment->remittance_advice && $request->user()
@@ -157,6 +158,7 @@ class AccountPaymentController extends Controller
      */
     public function update(UpdateRequest $request)
     {
+        CommonHelper::assertUserMayAccessModel($request);
         $validated = $request->validated();
         DB::beginTransaction();
         try {
@@ -188,7 +190,7 @@ class AccountPaymentController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
 
-            return response()->json(['message' => 'Failed to update account payment: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return CustomResponse::serverError($e, 'AccountPaymentController::update');
         }
     }
 
@@ -197,11 +199,11 @@ class AccountPaymentController extends Controller
      */
     public function destroy(DeleteRequest $request)
     {
+        CommonHelper::assertUserMayAccessModel($request);
         $validated = $request->validated();
         DB::beginTransaction();
         try {
             $accountPayment = AccountPayment::withTrashed()->findOrFail($validated['id']);
-
             if ($accountPayment->trashed()) {
                 $accountPayment->restore();
                 $message = 'Restored';
@@ -219,7 +221,7 @@ class AccountPaymentController extends Controller
             DB::rollBack();
 
             if ($request->wantsJson() || $request->ajax()) {
-                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+                return CustomResponse::serverError($e, 'AccountPaymentController::destroy');
             }
         }
     }

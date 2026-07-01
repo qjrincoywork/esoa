@@ -1,14 +1,14 @@
 import { useModal } from '@/composables/useModal';
 import { usePane } from '@/composables/usePane';
 import { useAjax } from '@/composables/useAjax';
-import DeleteForm from '@/components/forms/soas/DeleteForm.vue';
+import DeleteSoaForm from '@/components/forms/soas/DeleteSoaForm.vue';
 import SavingSoaForm from '@/components/forms/soas/SavingSoaForm.vue';
 import AccountBranchUpdateForm from '@/components/forms/soas/AccountBranchUpdateForm.vue';
 import ViewForm from '@/components/forms/soas/ViewForm.vue';
 import UntagForm from '@/components/forms/soas/UntagForm.vue';
 import ManageFileForm from '@/components/forms/soas/ManageFileForm.vue';
-import { ref, shallowRef, toRef, type Component, type Ref } from 'vue';
-import { Soa } from '@/types';
+import { computed, ref, shallowRef, toRef, type Component, type Ref } from 'vue';
+import { Auth, Soa, User } from '@/types';
 let formApi: { getFormData: () => FormData | null } | null = null;
 
 /** Client-side overlays for list rows until the next Inertia `soas` refresh (module singleton). */
@@ -48,7 +48,9 @@ export function useSoas() {
     topPane,
   } = usePane();
   const { get, post } = useAjax();
-  const authUser = (page.props as { auth?: { user?: { id?: number; user_detail?: unknown } } }).auth?.user;
+  const auth = computed(() => (page.props as any).auth as Auth);
+  const user = computed(() => auth.value?.user as User);
+  // const authUser = (page.props as { auth?: { user?: { id?: number; user_detail?: unknown } } }).auth?.user;
 
   const rightPaneVisible = toRef(rightPane, 'open');
   const rightPaneTitle = toRef(rightPane, 'title');
@@ -191,13 +193,20 @@ export function useSoas() {
       const payload = response.data;
 
       if (!payload) return;
-      const isAccountBranchAdmin = authUser?.user_detail?.employee_no == '' || authUser?.user_detail?.employee_no == null;
+      let isAccountBranchAdmin = true;
+      // Other users get the full form (SavingSoaForm).
+      if (
+        user.value?.user_detail?.has_employee_no
+        || auth.value?.is_superadmin
+      ) {
+        isAccountBranchAdmin = false;
+      }
       const formComponent = isAccountBranchAdmin ? AccountBranchUpdateForm : SavingSoaForm;
       const formComponentProps = isAccountBranchAdmin
         ? {
             soa: payload.soa,
             status_types: payload.status_types ?? [],
-            user: authUser ?? undefined,
+            user: user.value ?? undefined,
             onReady: (api: { getFormData: () => FormData | null }) => {
               formApi = api
             }
@@ -208,7 +217,7 @@ export function useSoas() {
           bill_types: payload.bill_types ?? [],
           status_types: payload.status_types ?? [],
           billing_ref_from_types: payload.billing_ref_from_types ?? [],
-          user: authUser ?? undefined,
+          user: user.value ?? undefined,
           onReady: (api: { getFormData: () => FormData | null }) => {
             formApi = api
           }
@@ -219,7 +228,7 @@ export function useSoas() {
         buttonText: 'Update',
         component: formComponent,
         componentProps: formComponentProps,
-        size: 'xl',
+        size: 'xl3',
         onSubmit: async () => {
           if (!formApi) return;
 
@@ -282,12 +291,12 @@ export function useSoas() {
           bill_types: payload.bill_types ?? [],
           status_types: payload.status_types ?? [],
           billing_ref_from_types: payload.billing_ref_from_types ?? [],
-          user: authUser ?? undefined,
+          user: user.value ?? undefined,
           onReady: (api: { getFormData: () => FormData | null }) => {
             formApi = api
           }
         },
-        size: 'xl2',
+        size: 'xl3',
         onSubmit: async () => {
           if (!formApi) return;
 
@@ -375,7 +384,7 @@ export function useSoas() {
     try {
       // Record "viewed" activity for account_branch_admin users only (best-effort).
       // Backend enforces role + de-duplication (one per SOA).
-      const isAccountBranchAdmin = authUser?.user_detail?.employee_no == '' || authUser?.user_detail?.employee_no == null;
+      const isAccountBranchAdmin = !user.value?.user_detail?.has_employee_no;
       if (isAccountBranchAdmin && soa?.id != null) {
         void post(`/${slug.value}/${soa.id}/record_viewed`, {});
       }
@@ -464,55 +473,48 @@ export function useSoas() {
   };
 
   const deleteSoa = async (soa: Soa) => {
-    const deleteOrRestore = soa.deleted_at ? 'Restore' : 'Delete'
-    const color = soa.deleted_at ? 'green' : 'red';
+    const isDeleted = Boolean(soa.deleted_at);
+    const action = isDeleted ? 'Restore' : 'Delete';
+    const buttonClass = isDeleted
+      ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500 dark:bg-green-500 dark:hover:bg-green-600'
+      : 'bg-red-600 hover:bg-red-700 focus:ring-red-500 dark:bg-red-500 dark:hover:bg-red-600';
+    const label = soa.soanum ?? soa.soa_number ?? 'SOA';
 
-    const buttonClass = `bg-${color}-600
-      hover:bg-${color}-700
-      focus:ring-${color}-500
-      dark:bg-${color}-500
-      dark:hover:bg-${color}-600`;
-
-    try {
-      openModal({
-        modalTitle: `${deleteOrRestore} ${soa?.name || ' Soa'}`,
-        buttonText: deleteOrRestore,
-        buttonClass: buttonClass,
-        component: DeleteForm,
-        componentProps: {
-          soa: soa,
-          onReady: (api: { getFormData: () => FormData | null }) => {
-            formApi = api
-          }
+    openModal({
+      modalTitle: `${action} ${label}`,
+      buttonText: action,
+      buttonClass,
+      component: DeleteSoaForm,
+      componentProps: {
+        soa,
+        isDeleted,
+        onReady: (api: { getFormData: () => FormData | null }) => {
+          formApi = api;
         },
-        size: 'sm',
-        onSubmit: async () => {
-          if (!formApi) return;
-          const formData = formApi.getFormData();
-          if (!formData) return;
+      },
+      size: 'sm',
+      onSubmit: async () => {
+        if (!formApi) return;
+        const formData = formApi.getFormData();
+        if (!formData) return;
 
-          showLoader();
-          try {
-            const response = await post(`/${slug.value}/destroy`, formData);
-
-            if (!response.ok) {
-              dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
-            } else {
-              dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
-              closeModal();
-              // Refresh current page to update datatable props
-              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
-            }
-          } catch (err) {
-            dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
-          } finally {
-            hideLoader();
+        showLoader();
+        try {
+          const response = await post(`/${slug.value}/destroy`, formData);
+          if (!response.ok) {
+            dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+          } else {
+            dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+            closeModal();
+            router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
           }
+        } catch {
+          dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+        } finally {
+          hideLoader();
         }
-      });
-    } catch (error) {
-      dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
-    }
+      },
+    });
   };
 
   const exportBillingInvoices = async (params: Record<string, string | number>) => {

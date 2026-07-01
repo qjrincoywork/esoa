@@ -43,6 +43,7 @@ export interface Soa {
   id?: number
   user_id?: number
   soa_number?: string
+  soanum?: string
   account_type?: string
   account_code?: string
   branch_code?: string
@@ -62,6 +63,7 @@ export interface Soa {
   balance?: number
   file_pdf?: string
   file_xls?: string
+  deleted_at?: string | null
   soa_activities?: SoaActivity[]
 }
 
@@ -82,20 +84,30 @@ export type AppPageProps<
   sidebarOpen: boolean;
 };
 
+export interface UserAccount {
+  account_type?: string | null;
+  account_code: string;
+  branch_code?: string | null;
+}
+
 export interface User {
   id: number;
   username: string;
   email: string;
   user_detail: UserDetail;
+  /** Populated only for GROUP_ACCOUNT_ADMIN users (type 4). */
+  user_accounts?: UserAccount[] | null;
   is_superadmin: boolean;
   permissions: Permissions[];
 }
 
 export interface UserDetail {
-  account_type: string;
+  /** Integer user type (UserType enum). */
   type: number;
-  account_code: string;
-  branch_code: string;
+  /** Populated only for ACCOUNT_BRANCH_ADMIN (type 2), derived from user_accounts. */
+  account_type?: string | null;
+  account_code?: string | null;
+  branch_code?: string | null;
   gender_id: number;
   civil_status_id: number;
   citizenship_id: number;
@@ -106,7 +118,9 @@ export interface UserDetail {
   last_name: string;
   suffix: string | number;
   birthdate: string;
-  employee_no: string;
+  employee_no?: string;
+  has_employee_no?: boolean;
+  email_verified_at: string;
 }
 
 export interface Permissions {

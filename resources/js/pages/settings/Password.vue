@@ -107,9 +107,9 @@ const currentPasswordInput = ref<HTMLInputElement | null>(null);
                         >
                             <p
                                 v-show="recentlySuccessful"
-                                class="text-sm text-neutral-600"
+                                class="text-sm text-green-600"
                             >
-                                Saved.
+                                Successfully updated.
                             </p>
                         </Transition>
                     </div>

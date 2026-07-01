@@ -3,8 +3,8 @@
 namespace App\Http\Requests\User;
 
 use App\Enums\AccountType;
-use App\Enums\BooleanAsInteger;
 use App\Enums\UserType;
+use App\Models\User;
 use App\Rules\IsDataExists;
 use Illuminate\Validation\Rule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -34,19 +34,40 @@ class CreateRequest extends FormRequest
                 'required_if:type,' . UserType::ACCOUNT_BRANCH_ADMIN,
                 'nullable',
                 'string',
-                //new IsDataExists('accounts'),
+                'max:' . config('vc.max_string_limit'),
             ],
             'branch_code' => [
                 'nullable',
                 'string',
-                'max:191'
-                //new IsDataExists('branches'),
+                'max:' . config('vc.max_string_limit'),
+            ],
+            // GROUP_ACCOUNT_ADMIN: array of account/branch pairs
+            'user_accounts' => [
+                'required_if:type,' . UserType::GROUP_ACCOUNT_ADMIN,
+                'nullable',
+                'array',
+                'min:1',
+            ],
+            'user_accounts.*.account_type' => [
+                'nullable',
+                'string',
+                Rule::in(AccountType::getValues()),
+            ],
+            'user_accounts.*.account_code' => [
+                'required',
+                'string',
+                'max:' . config('vc.max_string_limit'),
+            ],
+            'user_accounts.*.branch_code' => [
+                'nullable',
+                'string',
+                'max:' . config('vc.max_string_limit'),
             ],
             'agent_code' => [
                 'nullable',
                 'required_if:type,' . UserType::BROKER,
                 'string',
-                'max:191'
+                'max:' . config('vc.max_string_limit'),
                 //new IsDataExists('agents'),
             ],
             'department_id' => [
@@ -62,27 +83,27 @@ class CreateRequest extends FormRequest
             'employee_no' => [
                 'required_if:type,' . UserType::VC_EMPLOYEE,
                 'string',
-                'max:191'
+                'max:' . config('vc.max_string_limit'),
             ],
             'first_name' => [
                 'required',
                 'string',
-                'max:191'
+                'max:' . config('vc.max_string_limit'),
             ],
             'middle_name' => [
                 'nullable',
                 'string',
-                'max:191'
+                'max:' . config('vc.max_string_limit'),
             ],
             'last_name' => [
                 'required',
                 'string',
-                'max:191'
+                'max:' . config('vc.max_string_limit'),
             ],
             'suffix' => [
                 'nullable',
                 'string',
-                'max:191'
+                'max:' . config('vc.max_string_limit'),
             ],
             'gender_id' => [
                 'required',
@@ -102,18 +123,27 @@ class CreateRequest extends FormRequest
             'birthdate' => [
                 'nullable',
                 'date',
-                'max:191'
+                'max:' . config('vc.max_string_limit'),
             ],
             'username' => [
                 'required',
                 'string',
-                'max:191',
-                'unique:users,username'
+                'max:' . config('vc.max_string_limit'),
+                'min:' . config('vc.min_username_string_limit'),
+                // Starts with a letter
+                // Only letters, numbers, _, ., -
+                // No consecutive symbols
+                // Ends with a letter or number
+                'regex:/^(?=.{3,30}$)[A-Za-z](?!.*[._-]{2})[A-Za-z0-9._-]*[A-Za-z0-9]$/',
+                'max:' . config('vc.max_string_limit'),
+                // Reserved words
+                Rule::notIn(config('vc.reserved_usernames')),
+                'unique:users,username',
             ],
             'email' => [
                 'required',
                 'string',
-                'max:191',
+                'max:' . config('vc.max_string_limit'),
                 'unique:users,email'
             ],
         ];
@@ -133,9 +163,11 @@ class CreateRequest extends FormRequest
             'department_id.required_if' => 'The Department field is required',
             'employee_no.required_if' => 'The Employee No. field is required',
             'position_id.required_if' => 'The Position field is required',
-            'account_type.required_if' => 'The Account Type field is required',
-            'account_code.required_if' => 'The Account field is required',
-            'agent_code.required_if' => 'The Agent Code field is required',
+            'account_type.required_if'              => 'The Account Type field is required',
+            'account_code.required_if'              => 'The Account field is required',
+            'agent_code.required_if'                => 'The Agent Code field is required',
+            'user_accounts.required_if'             => 'At least one account is required for Group Account Admin',
+            'user_accounts.*.account_code.required' => 'Account Code is required for each account entry',
         ];
     }
 }

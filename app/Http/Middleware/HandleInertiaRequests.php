@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Enums\UserType;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -48,6 +49,16 @@ class HandleInertiaRequests extends Middleware
             : [];
         $navigationService = app(\App\Services\NavigationService::class);
 
+        $userType      = $authUser?->userDetail?->type;
+        $userAccounts  = $authUser?->userAccounts ?? collect();
+        $firstAccount  = $userAccounts->first();
+
+        // For ACCOUNT_BRANCH_ADMIN: surface the single account on user_detail for backwards-compat.
+        // For GROUP_ACCOUNT_ADMIN: those fields are null on user_detail; full list surfaced separately.
+        $sharedAccountType = $userType === UserType::ACCOUNT_BRANCH_ADMIN ? $firstAccount?->account_type : null;
+        $sharedAccountCode = $userType === UserType::ACCOUNT_BRANCH_ADMIN ? $firstAccount?->account_code : null;
+        $sharedBranchCode  = $userType === UserType::ACCOUNT_BRANCH_ADMIN ? $firstAccount?->branch_code  : null;
+
         return [
             ...parent::share($request),
             'csrf_token' => csrf_token(),
@@ -59,22 +70,21 @@ class HandleInertiaRequests extends Middleware
                     'username' => $authUser?->username,
                     'email' => $authUser?->email,
                     'user_detail' => [
-                        'account_type' => $authUser?->userDetail?->account_type,
-                        'account_code' => $authUser?->userDetail?->account_code,
-                        'branch_code' => $authUser?->userDetail?->branch_code,
-                        'type' => $authUser?->userDetail?->type,
-                        'suffix' => $authUser?->userDetail?->suffix,
-                        'gender_id' => $authUser?->userDetail?->gender_id,
-                        'civil_status_id' => $authUser?->userDetail?->civil_status_id,
-                        'citizenship_id' => $authUser?->userDetail?->citizenship_id,
-                        'department_id' => $authUser?->userDetail?->department_id,
-                        'position_id' => $authUser?->userDetail?->position_id,
-                        'first_name' => $authUser?->userDetail?->first_name,
-                        'middle_name' => $authUser?->userDetail?->middle_name,
-                        'last_name' => $authUser?->userDetail?->last_name,
-                        'birthdate' => $authUser?->userDetail?->birthdate,
-                        'employee_no' => $authUser?->userDetail?->employee_no,
+                        'account_type'   => $sharedAccountType,
+                        'account_code'   => $sharedAccountCode,
+                        'branch_code'    => $sharedBranchCode,
+                        'type'           => $userType,
+                        'has_employee_no' => !empty($authUser?->userDetail?->employee_no),
                     ],
+                    'user_accounts' => $userType === UserType::GROUP_ACCOUNT_ADMIN
+                        ? $userAccounts->map(fn ($ua) => [
+                            'account_type' => $ua->account_type,
+                            'account_code' => $ua->account_code,
+                            'branch_code'  => $ua->branch_code,
+                        ])->values()
+                        : null,
+                    'roles' => $authUser?->getRoleNames()->toArray(),
+                    'email_verified_at' => $authUser?->email_verified_at,
                 ],
                 'is_superadmin' => $authUser?->hasRole('superadmin'),
                 'permissions' => $userPermissions,

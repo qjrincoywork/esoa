@@ -12,6 +12,11 @@ use Illuminate\Validation\Rule;
 
 class UpdateRequest extends FormRequest
 {
+    public function authorize(): bool
+    {
+        return $this->user()?->hasAnyRole(['superadmin', 'admin']) ?? false;
+    }
+
     /**
      * Get the validation rules that apply to the request.
      *
@@ -40,19 +45,40 @@ class UpdateRequest extends FormRequest
                 'required_if:type,' . UserType::ACCOUNT_BRANCH_ADMIN,
                 'nullable',
                 'string',
-                //new IsDataExists('accounts'),
+                'max:' . config('vc.max_string_limit'),
             ],
             'branch_code' => [
                 'nullable',
                 'string',
-                'max:191'
-                //new IsDataExists('branches'),
+                'max:' . config('vc.max_string_limit'),
+            ],
+            // GROUP_ACCOUNT_ADMIN: array of account/branch pairs
+            'user_accounts' => [
+                'required_if:type,' . UserType::GROUP_ACCOUNT_ADMIN,
+                'nullable',
+                'array',
+                'min:1',
+            ],
+            'user_accounts.*.account_type' => [
+                'nullable',
+                'string',
+                Rule::in(AccountType::getValues()),
+            ],
+            'user_accounts.*.account_code' => [
+                'required',
+                'string',
+                'max:' . config('vc.max_string_limit'),
+            ],
+            'user_accounts.*.branch_code' => [
+                'nullable',
+                'string',
+                'max:' . config('vc.max_string_limit'),
             ],
             'agent_code' => [
                 'nullable',
                 'required_if:type,' . UserType::BROKER,
                 'string',
-                'max:191'
+                'max:' . config('vc.max_string_limit'),
                 //new IsDataExists('agents'),
             ],
             'gender_id' => [
@@ -83,49 +109,52 @@ class UpdateRequest extends FormRequest
             'employee_no' => [
                 'required_if:type,' . UserType::VC_EMPLOYEE,
                 'string',
-                'max:191'
+                'max:' . config('vc.max_string_limit'),
             ],
             'first_name' => [
                 'required',
                 'string',
-                'max:191'
+                'max:' . config('vc.max_string_limit'),
             ],
             'last_name' => [
                 'required',
                 'string',
-                'max:191'
+                'max:' . config('vc.max_string_limit'),
             ],
             'middle_name' => [
                 'nullable',
                 'string',
-                'max:191'
+                'max:' . config('vc.max_string_limit'),
             ],
             'suffix' => [
                 'nullable',
                 'string',
-                'max:191'
+                'max:' . config('vc.max_string_limit'),
             ],
             'birthdate' => [
                 'nullable',
                 'date',
-                'max:191'
-            ],
-            'employee_no' => [
-                'nullable',
-                'string',
-                'max:191'
+                'max:' . config('vc.max_string_limit'),
             ],
             'username' => [
                 'required',
                 'string',
-                'max:191',
+                'min:3',
+                // Starts with a letter
+                // Only letters, numbers, _, ., -
+                // No consecutive symbols
+                // Ends with a letter or number
+                'regex:/^(?=.{3,30}$)[A-Za-z](?!.*[._-]{2})[A-Za-z0-9._-]*[A-Za-z0-9]$/',
+                'max:' . config('vc.max_string_limit'),
                 Rule::unique(User::class)->ignore(request()->input('id')),
+                // Reserved words
+                Rule::notIn(config('vc.reserved_usernames')),
             ],
             'email' => [
                 'required',
                 'string',
                 'email',
-                'max:191',
+                'max:' . config('vc.max_string_limit'),
                 Rule::unique(User::class)->ignore(request()->input('id')),
             ],
         ];
@@ -144,9 +173,11 @@ class UpdateRequest extends FormRequest
             'citizenship_id.required_if' => 'The Citizenship field is required',
             'department_id.required_if' => 'The Department field is required',
             'position_id.required_if' => 'The Position field is required',
-            'account_type.required_if' => 'The Account Type field is required',
-            'account_code.required_if' => 'The Account field is required',
-            'agent_code.required_if' => 'The Agent Code field is required',
+            'account_type.required_if'              => 'The Account Type field is required',
+            'account_code.required_if'              => 'The Account field is required',
+            'agent_code.required_if'                => 'The Agent Code field is required',
+            'user_accounts.required_if'             => 'At least one account is required for Group Account Admin',
+            'user_accounts.*.account_code.required' => 'Account Code is required for each account entry',
         ];
     }
 }

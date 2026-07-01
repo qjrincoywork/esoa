@@ -285,9 +285,28 @@ class SqlDatabase
         }
 
         if ($authUser?->hasRole('account_branch_admin')) {
-            $query->where('c.ch_accountid', $authUser->userDetail?->account_code ?? null);
-            if (!empty($authUser->userDetail?->branch_code)) {
-                $query->where('c.ch_branch_code', $authUser->userDetail->branch_code);
+            $firstAccount = $authUser->userAccounts->first();
+            $query->where('c.ch_accountid', $firstAccount?->account_code ?? null);
+            if (!empty($firstAccount?->branch_code)) {
+                $query->where('c.ch_branch_code', $firstAccount->branch_code);
+            }
+        }
+
+        if ($authUser?->hasRole('group_account_admin')) {
+            $userAccounts = $authUser->userAccounts;
+            if ($userAccounts->isEmpty()) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->where(function ($q) use ($userAccounts) {
+                    foreach ($userAccounts as $ua) {
+                        $q->orWhere(function ($sub) use ($ua) {
+                            $sub->where('c.ch_accountid', $ua->account_code);
+                            if (!empty($ua->branch_code)) {
+                                $sub->where('c.ch_branch_code', $ua->branch_code);
+                            }
+                        });
+                    }
+                });
             }
         }
 
@@ -333,10 +352,28 @@ class SqlDatabase
         }
 
         if ($authUser?->hasRole('account_branch_admin')) {
-            $query->where('c.ch_accountid', $authUser->userDetail?->account_code ?? null);
+            $firstAccount = $authUser->userAccounts->first();
+            $query->where('c.ch_accountid', $firstAccount?->account_code ?? null);
+            if (!empty($firstAccount?->branch_code)) {
+                $query->where('c.ch_branch_code', $firstAccount->branch_code);
+            }
+        }
 
-            if (!empty($authUser->userDetail?->branch_code)) {
-                $query->where('c.ch_branch_code', $authUser->userDetail?->branch_code);
+        if ($authUser?->hasRole('group_account_admin')) {
+            $userAccounts = $authUser->userAccounts;
+            if ($userAccounts->isEmpty()) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->where(function ($q) use ($userAccounts) {
+                    foreach ($userAccounts as $ua) {
+                        $q->orWhere(function ($sub) use ($ua) {
+                            $sub->where('c.ch_accountid', $ua->account_code);
+                            if (!empty($ua->branch_code)) {
+                                $sub->where('c.ch_branch_code', $ua->branch_code);
+                            }
+                        });
+                    }
+                });
             }
         }
 
@@ -350,8 +387,34 @@ class SqlDatabase
     {
         $accountCode = $params['account_code'] ?? null;
 
-        if ($authUser?->hasRole('account_branch_admin') && !empty($authUser->userDetail?->account_code)) {
-            $accountCode = $authUser->userDetail->account_code;
+        if ($authUser?->hasRole('account_branch_admin')) {
+            $firstAccount = $authUser->userAccounts->first();
+            if (!empty($firstAccount?->account_code)) {
+                $accountCode = $firstAccount->account_code;
+            }
+        }
+
+        if ($authUser?->hasRole('group_account_admin')) {
+            $userAccounts = $authUser->userAccounts;
+            if ($userAccounts->isEmpty()) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->where(function ($q) use ($userAccounts) {
+                    foreach ($userAccounts as $ua) {
+                        if (!empty($ua->account_code)) {
+                            $q->orWhereRaw('SUBSTRING(c.cl_policynumber, 1, 11) = ?', [$ua->account_code]);
+                        }
+                    }
+                });
+                $accountCode = $userAccounts->first()?->account_code ?? '';
+            }
+            if (!empty($params['billing_date_from'])) {
+                $query->where('c.cl_processdate', '>=', Carbon::parse($params['billing_date_from'])->startOfDay());
+            }
+            if (!empty($params['billing_date_to'])) {
+                $query->where('c.cl_processdate', '<=', Carbon::parse($params['billing_date_to'])->endOfDay());
+            }
+            return $accountCode ?? '';
         }
 
         if (!empty($accountCode)) {
@@ -371,8 +434,11 @@ class SqlDatabase
 
         $branchCode = $params['branch_code'] ?? null;
 
-        if ($authUser?->hasRole('account_branch_admin') && !empty($authUser->userDetail?->branch_code)) {
-            $branchCode = $authUser->userDetail->branch_code;
+        if ($authUser?->hasRole('account_branch_admin')) {
+            $firstAccount = $authUser->userAccounts->first();
+            if (!empty($firstAccount?->branch_code)) {
+                $branchCode = $firstAccount->branch_code;
+            }
         }
 
         if (!empty($branchCode) && !empty($accountCode)) {
@@ -430,6 +496,7 @@ class SqlDatabase
             empty($accountCode)
             && !$authUser?->hasRole('broker')
             && !$authUser?->hasRole('account_branch_admin')
+            && !$authUser?->hasRole('group_account_admin')
         ) {
             return $this->db->table('Claims_Receiving')->whereRaw('1 = 0')->simplePaginate($perPage);
         }
@@ -458,15 +525,24 @@ class SqlDatabase
                     }
                 });
             })
-            ->when(!empty($selectedRefs), function ($query) use ($selectedRefs) {
-                $query->orderByRaw(
-                    'CASE WHEN cr.cr_batchnum IN (\'' . implode('\',\'', $selectedRefs) . '\') THEN 0 ELSE 1 END'
-                );
-            })
             ->orderByDesc('date_posted')
             ->orderBy('ref_id');
 
-        return $query->paginate($perPage);
+        $paginated = $query->paginate($perPage);
+
+        // Sort the current page's items so selected refs appear first.
+        // Done in PHP rather than via orderByRaw bindings to avoid SQL Server's
+        // binding-count mismatch on the paginator's COUNT sub-query.
+        if (!empty($selectedRefs)) {
+            $selectedSet = array_flip($selectedRefs);
+            $paginated->setCollection(
+                $paginated->getCollection()
+                    ->sortBy(fn($item) => isset($selectedSet[$item->ref_id]) ? 0 : 1)
+                    ->values()
+            );
+        }
+
+        return $paginated;
     }
 
     public function getClaimDetailsByParams($params)
@@ -523,8 +599,11 @@ class SqlDatabase
                 $query->where('cl.cl_claimnum', $params['claimnum']);
             })
             ->when(!empty($selectedRefs), function ($query) use ($selectedRefs) {
-                // Order selected refs first
-                $query->orderByRaw("CASE WHEN ac.act_batchnum IN ('" . implode("','", $selectedRefs) . "') THEN 0 ELSE 1 END");
+                $placeholders = implode(',', array_fill(0, count($selectedRefs), '?'));
+                $query->orderByRaw(
+                    "CASE WHEN ac.act_batchnum IN ({$placeholders}) THEN 0 ELSE 1 END",
+                    array_values($selectedRefs)
+                );
             })
             ->when(!empty($params['policynum']), function ($query) use ($params) {
                 $query->where('c.ch_policynum', $params['policynum']);
@@ -533,7 +612,11 @@ class SqlDatabase
                 $query->orderBy('cl.cl_processdate', OrderType::DESC);
             })
             ->when(!empty($params['order_by']), function ($query) use ($params) {
-                $query->orderBy($params['order_by'], $params['order_dir'] ?? 'asc');
+                $allowedColumns = ['cl.cl_processdate', 'cl.cl_claimnum', 'cl.cl_amount', 'ac.act_batchnum', 'ac.act_dateposted'];
+                $allowedDirs = ['asc', 'desc'];
+                $col = in_array($params['order_by'], $allowedColumns, true) ? $params['order_by'] : 'cl.cl_processdate';
+                $dir = in_array(strtolower($params['order_dir'] ?? 'asc'), $allowedDirs, true) ? strtolower($params['order_dir']) : 'asc';
+                $query->orderBy($col, $dir);
             })
             ->where('ac.act_batchnum', '!=', '');
 
@@ -578,9 +661,28 @@ class SqlDatabase
         }
 
         if ($authUser?->hasRole('account_branch_admin')) {
-            $query->where('c.ch_accountid', $authUser->userDetail?->account_code ?? null);
-            if (!empty($authUser->userDetail?->branch_code)) {
-                $query->where('c.ch_branch_code', $authUser->userDetail->branch_code);
+            $firstAccount = $authUser->userAccounts->first();
+            $query->where('c.ch_accountid', $firstAccount?->account_code ?? null);
+            if (!empty($firstAccount?->branch_code)) {
+                $query->where('c.ch_branch_code', $firstAccount->branch_code);
+            }
+        }
+
+        if ($authUser?->hasRole('group_account_admin')) {
+            $userAccounts = $authUser->userAccounts;
+            if ($userAccounts->isEmpty()) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->where(function ($q) use ($userAccounts) {
+                    foreach ($userAccounts as $ua) {
+                        $q->orWhere(function ($sub) use ($ua) {
+                            $sub->where('c.ch_accountid', $ua->account_code);
+                            if (!empty($ua->branch_code)) {
+                                $sub->where('c.ch_branch_code', $ua->branch_code);
+                            }
+                        });
+                    }
+                });
             }
         }
 
@@ -670,13 +772,23 @@ class SqlDatabase
             ->when(isset($params['billing_date_to']) && !empty($params['billing_date_to']), function ($query) use ($params) {
                 $query->where('a.bl_dateposted', '<=', Carbon::parse($params['billing_date_to'])->endOfDay());
             })
-            ->when(!empty($selectedRefs), function ($query) use ($selectedRefs) {
-                // Order selected refs first
-                $query->orderByRaw("CASE WHEN a.bl_refid IN ('" . implode("','", $selectedRefs) . "') THEN 0 ELSE 1 END");
-            })
             ->orderBy('a.bl_dateposted', 'desc');
 
-        return $result->paginate($perPage);
+        $paginated = $result->paginate($perPage);
+
+        // Sort the current page's items so selected refs appear first.
+        // Done in PHP rather than via orderByRaw bindings to avoid SQL Server's
+        // binding-count mismatch on the paginator's COUNT sub-query.
+        if (!empty($selectedRefs)) {
+            $selectedSet = array_flip($selectedRefs);
+            $paginated->setCollection(
+                $paginated->getCollection()
+                    ->sortBy(fn($item) => isset($selectedSet[$item->ref_id]) ? 0 : 1)
+                    ->values()
+            );
+        }
+
+        return $paginated;
     }
 
     /**

@@ -84,7 +84,7 @@ const columns = computed(() => {
 
 const breadcrumbItems: BreadcrumbItem[] = [
   {
-    title: 'Navigation list',
+    title: 'Navigations',
     href: slug.value,
   },
 ];
@@ -195,7 +195,7 @@ watch(
 
 <template>
     <AppLayout :breadcrumbs="breadcrumbItems">
-        <Head title="Navigation list" />
+        <Head title="Navigations" />
         <div class="bg-[var(--color-surface)] shadow-sm border border-[var(--color-border)] p-6">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
                 <Button v-if="canCreate" :onClick="createNavigation">Create</Button>

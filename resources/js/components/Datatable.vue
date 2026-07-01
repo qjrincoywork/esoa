@@ -471,12 +471,6 @@ watch(selectedRowsPerPage, async () => {
                         </svg>
                         Bulk Delete
                     </button>
-                    <!-- <button
-                        class="items-center gap-2 cursor-pointer"
-                        @click="showDeleteModal = true">
-                        Add Access Permission
-                    </button> -->
-                    <Button class="cursor-pointer" @click="showDeleteModal = true">Add Access Permission</Button>
 
                     <slot name="bulk-actions" :selected-rows="selectedRows" />
                 </div>

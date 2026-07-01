@@ -3,7 +3,11 @@ import { useAjax } from '@/composables/useAjax';
 import DeleteForm from '@/components/forms/users/DeleteForm.vue';
 import SavingForm from '@/components/forms/users/SavingForm.vue';
 import UserRolesForm from '@/components/forms/users/UserRolesForm.vue';
+import BulkUserRolesForm from '@/components/forms/users/BulkUserRolesForm.vue';
+import BulkToggleActiveForm from '@/components/forms/users/BulkToggleActiveForm.vue';
+import BulkDeleteForm from '@/components/forms/users/BulkDeleteForm.vue';
 import VerifyForm from '@/components/forms/users/VerifyForm.vue';
+import ToggleActiveForm from '@/components/forms/users/ToggleActiveForm.vue';
 let formApi: { getFormData: () => FormData | null } | null = null;
 import { dispatchNotification } from '@/components/notification';
 import { showLoader, hideLoader } from '@/composables/useLoader';
@@ -221,26 +225,24 @@ export function useUsers() {
   };
 
   const deleteUser = async (user: User) => {
-    const deleteOrRestore = user.deleted_at ? 'Restore' : 'Delete'
-    const color = user.deleted_at ? 'green' : 'red';
-
-    const buttonClass = `bg-${color}-600
-      hover:bg-${color}-700
-      focus:ring-${color}-500
-      dark:bg-${color}-500
-      dark:hover:bg-${color}-600`;
+    const isDeleted = Boolean(user.deleted_at);
+    const action = isDeleted ? 'Restore' : 'Delete';
+    const buttonClass = isDeleted
+      ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500 dark:bg-green-500 dark:hover:bg-green-600'
+      : 'bg-red-600 hover:bg-red-700 focus:ring-red-500 dark:bg-red-500 dark:hover:bg-red-600';
 
     try {
       openModal({
-        modalTitle: `${deleteOrRestore} ${user?.username || ' User'}`,
-        buttonText: deleteOrRestore,
-        buttonClass: buttonClass,
+        modalTitle: `${action} ${user.username ?? user.email ?? 'User'}`,
+        buttonText: action,
+        buttonClass,
         component: DeleteForm,
         componentProps: {
-          user: user,
+          user,
+          isDeleted,
           onReady: (api: { getFormData: () => FormData | null }) => {
-            formApi = api
-          }
+            formApi = api;
+          },
         },
         size: 'sm',
         onSubmit: async () => {
@@ -251,21 +253,19 @@ export function useUsers() {
           showLoader();
           try {
             const response = await post(`/${slug.value}/destroy`, formData);
-
             if (!response.ok) {
               dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
             } else {
               dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
               closeModal();
-              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+              router.get(window.location.href, {}, { preserveState: false, preserveScroll: true, replace: true });
             }
           } catch (err) {
             dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
           } finally {
-            // Refresh current page to update datatable props
             hideLoader();
           }
-        }
+        },
       });
     } catch (error) {
       dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
@@ -321,7 +321,7 @@ export function useUsers() {
                 type: 'success',
               })
               closeModal()
-              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true })
+              router.get(window.location.href, {}, { preserveState: false, preserveScroll: true, replace: true });
             }
           } catch (err) {
             dispatchNotification({
@@ -342,6 +342,61 @@ export function useUsers() {
         type: 'error',
       })
       console.error('Internal Server Error:', error)
+    }
+  }
+
+  const bulkManageUserRoles = async (users: User[]) => {
+    if (!users.length) return
+
+    try {
+      const response = await get<{ all_roles: Role[] }>(`/${slug.value}/all_roles`)
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch roles')
+      }
+
+      const payload = response.data
+      if (!payload) return
+
+      openModal({
+        modalTitle: users.length === 1
+          ? `Manage Roles: ${users[0]?.username || users[0]?.id}`
+          : `Manage Roles for ${users.length} Users`,
+        buttonText: 'Save',
+        component: BulkUserRolesForm,
+        componentProps: {
+          users,
+          all_roles: payload.all_roles ?? [],
+          onReady: (api: { getFormData: () => FormData | null }) => {
+            formApi = api
+          },
+        },
+        size: 'lg',
+        onSubmit: async () => {
+          if (!formApi) return
+          const formData = formApi.getFormData()
+          if (!formData) return
+
+          showLoader()
+          try {
+            const response = await post(`/${slug.value}/bulk_update_roles`, formData)
+
+            if (!response.ok) {
+              dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' })
+            } else {
+              dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' })
+              closeModal()
+              router.get(window.location.href, {}, { preserveState: false, preserveScroll: true, replace: true })
+            }
+          } catch (err) {
+            dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' })
+          } finally {
+            hideLoader()
+          }
+        },
+      })
+    } catch (error) {
+      dispatchNotification({ title: 'Error', content: 'Internal Server Error', type: 'error' })
     }
   }
 
@@ -376,7 +431,147 @@ export function useUsers() {
           } else {
             dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
             closeModal();
-            router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+            router.get(window.location.href, {}, { preserveState: false, preserveScroll: true, replace: true });
+          }
+        } catch (err) {
+          dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+        } finally {
+          hideLoader();
+        }
+      },
+    });
+  };
+
+  const bulkToggleActiveUsers = async (users: User[], newActiveValue: 0 | 1) => {
+    if (!users.length) return;
+
+    const action = newActiveValue ? 'Activate' : 'Deactivate';
+    const buttonClass = newActiveValue
+      ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500 dark:bg-green-500 dark:hover:bg-green-600'
+      : 'bg-orange-600 hover:bg-orange-700 focus:ring-orange-500 dark:bg-orange-500 dark:hover:bg-orange-600';
+
+    openModal({
+      modalTitle: users.length === 1
+        ? `${action} ${users[0]?.username || 'User'}`
+        : `${action} ${users.length} Users`,
+      buttonText: action,
+      buttonClass,
+      component: BulkToggleActiveForm,
+      componentProps: {
+        users,
+        newActiveValue,
+        onReady: (api: { getFormData: () => FormData | null }) => {
+          formApi = api;
+        },
+      },
+      size: users.length > 3 ? 'md' : 'sm',
+      onSubmit: async () => {
+        if (!formApi) return;
+        const formData = formApi.getFormData();
+        if (!formData) return;
+
+        showLoader();
+        try {
+          const response = await post(`/${slug.value}/bulk_toggle_active`, formData);
+          if (!response.ok) {
+            dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+          } else {
+            dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+            closeModal();
+            router.get(window.location.href, {}, { preserveState: false, preserveScroll: true, replace: true });
+          }
+        } catch (err) {
+          dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+        } finally {
+          hideLoader();
+        }
+      },
+    });
+  };
+
+  const bulkDeleteUsers = async (users: User[], action: 'delete' | 'restore') => {
+    if (!users.length) return;
+
+    const isRestore = action === 'restore';
+    const label = isRestore ? 'Restore' : 'Delete';
+    const buttonClass = isRestore
+      ? 'bg-green-600 hover:bg-green-700 focus:ring-green-500 dark:bg-green-500 dark:hover:bg-green-600'
+      : 'bg-red-600 hover:bg-red-700 focus:ring-red-500 dark:bg-red-500 dark:hover:bg-red-600';
+
+    openModal({
+      modalTitle: users.length === 1
+        ? `${label} ${users[0]?.username || 'User'}`
+        : `${label} ${users.length} Users`,
+      buttonText: label,
+      buttonClass,
+      component: BulkDeleteForm,
+      componentProps: {
+        users,
+        action,
+        onReady: (api: { getFormData: () => FormData | null }) => {
+          formApi = api;
+        },
+      },
+      size: users.length > 3 ? 'md' : 'sm',
+      onSubmit: async () => {
+        if (!formApi) return;
+        const formData = formApi.getFormData();
+        if (!formData) return;
+
+        showLoader();
+        try {
+          const response = await post(`/${slug.value}/bulk_destroy`, formData);
+          if (!response.ok) {
+            dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+          } else {
+            dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+            closeModal();
+            router.get(window.location.href, {}, { preserveState: false, preserveScroll: true, replace: true });
+          }
+        } catch (err) {
+          dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+        } finally {
+          hideLoader();
+        }
+      },
+    });
+  };
+
+  const toggleActiveUser = async (user: User) => {
+    const isCurrentlyActive = Number(user.is_active) !== 0;
+    const newActiveValue: 0 | 1 = isCurrentlyActive ? 0 : 1;
+    const action = isCurrentlyActive ? 'Deactivate' : 'Activate';
+    const buttonClass = isCurrentlyActive
+      ? 'bg-orange-600 hover:bg-orange-700 focus:ring-orange-500 dark:bg-orange-500 dark:hover:bg-orange-600'
+      : 'bg-green-600 hover:bg-green-700 focus:ring-green-500 dark:bg-green-500 dark:hover:bg-green-600';
+
+    openModal({
+      modalTitle: `${action} ${user.username ?? user.email ?? 'User'}`,
+      buttonText: action,
+      buttonClass,
+      component: ToggleActiveForm,
+      componentProps: {
+        user,
+        newActiveValue,
+        onReady: (api: { getFormData: () => FormData | null }) => {
+          formApi = api;
+        },
+      },
+      size: 'sm',
+      onSubmit: async () => {
+        if (!formApi) return;
+        const formData = formApi.getFormData();
+        if (!formData) return;
+
+        showLoader();
+        try {
+          const response = await post(`/${slug.value}/toggle_active`, formData);
+          if (!response.ok) {
+            dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+          } else {
+            dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+            closeModal();
+            router.get(window.location.href, {}, { preserveState: false, preserveScroll: true, replace: true });
           }
         } catch (err) {
           dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
@@ -394,7 +589,11 @@ export function useUsers() {
     getAccountsByParams,
     getBranchesByParams,
     manageUserRoles,
+    bulkManageUserRoles,
+    bulkToggleActiveUsers,
+    bulkDeleteUsers,
     verifyUsers,
+    toggleActiveUser,
   };
 }
 

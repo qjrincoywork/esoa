@@ -125,10 +125,9 @@ const handlePaginationUpdate = (newPagination: {
   fetchConcerns();
 };
 
-/** Store row data and navigate to the concerns index, which will auto-open the view pane. */
+/** Navigate to the concerns index with the record ID — the index page fetches the record on arrival. */
 const handleRowClick = (concern: SoaConcern) => {
   if (!concern.id) return;
-  sessionStorage.setItem(`concern_view_${concern.id}`, JSON.stringify(concern));
   router.visit('/concerns', { data: { open: concern.id } });
 };
 

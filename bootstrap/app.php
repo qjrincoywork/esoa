@@ -4,6 +4,7 @@ use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
+use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
 
@@ -14,21 +15,6 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        // $middleware->encryptCookies( ['appearance', 'sidebar_state']);
-
-        // $middleware->alias([
-        //     'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
-        //     'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
-        //     'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
-        //     // 'allow_admin_or_role' => \App\Http\Middleware\AllowAdminOrRole::class,
-        //     'check_permissions' => \App\Http\Middleware\CheckPermission::class,
-        // ]);
-        // $middleware->web( [
-        //     HandleAppearance::class,
-        //     HandleInertiaRequests::class,
-        //     AddLinkHeadersForPreloadedAssets::class,
-        //     // \App\Http\Middleware\CheckPermission::class,
-        // ]);
         $middleware->encryptCookies([
             'appearance',
             'sidebar_state',
@@ -45,6 +31,7 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleAppearance::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
+            \App\Http\Middleware\SecurityHeaders::class,
         ]);
     })
     ->withSchedule(function ($schedule) {
@@ -62,5 +49,10 @@ return Application::configure(basePath: dirname(__DIR__))
             });
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
+        $exceptions->respond(function (Response $response) {
+            if ($response->getStatusCode() === 419) {
+                return redirect()->route('login');
+            }
+            return $response;
+        });
     })->create();

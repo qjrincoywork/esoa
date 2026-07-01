@@ -63,12 +63,47 @@ class NavigationModule extends Model
      */
     public function canBeAccessedBy($user): bool
     {
-        // If no permission is required, allow access
         if (!$this->permission_id) {
             return true;
         }
 
-        // Check if user has the required permission
         return $user->hasPermissionTo($this->permission);
+    }
+
+    public function getNavigationModules(array $params)
+    {
+        $perPage = $params['per_page'] ?? config('vc.default_pages');
+
+        $query = self::with(['navigation:id,name', 'permission:id,name'])
+            ->when(isset($params['search_string']), fn ($q) =>
+                $q->where(fn ($q2) =>
+                    $q2->where('name', 'LIKE', '%' . $params['search_string'] . '%')
+                       ->orWhere('slug', 'LIKE', '%' . $params['search_string'] . '%')
+                )
+            )
+            ->when(isset($params['navigation_id']), fn ($q) =>
+                $q->where('navigation_id', $params['navigation_id'])
+            )
+            ->orderBy('navigation_id')
+            ->orderBy('order_number')
+            ->orderBy('id', 'desc');
+
+        if (auth()->user()?->hasRole('superadmin')) {
+            $query->withTrashed();
+        }
+
+        return $query->paginate($perPage);
+    }
+
+    public function saveNavigationModule(array $data): void
+    {
+        $data += ['created_by' => auth()->id()];
+
+        if (isset($data['id'])) {
+            $module = self::findOrFail($data['id']);
+            $module->update($data);
+        } else {
+            self::create($data);
+        }
     }
 }

@@ -100,7 +100,7 @@ class ConcernController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
 
-            return response()->json(['message' => 'Failed to create concern: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return CustomResponse::serverError($e, 'ConcernController::store');
         }
     }
 
@@ -133,6 +133,7 @@ class ConcernController extends Controller
      */
     public function edit($id, Request $request)
     {
+        CommonHelper::assertUserMayAccessModel($request);
         $concern = $this->concern->findOrFail($id);
         if ($concern) {
             $concern->attachment_preview_token = $concern->attachment && $request->user()
@@ -159,6 +160,7 @@ class ConcernController extends Controller
      */
     public function update(UpdateRequest $request)
     {
+        CommonHelper::assertUserMayAccessModel($request);
         DB::beginTransaction();
         try {
             $concern = Concern::findOrFail($request->id);
@@ -189,7 +191,7 @@ class ConcernController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
 
-            return response()->json(['message' => 'Failed to update concern: ' . $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+            return CustomResponse::serverError($e, 'ConcernController::update');
         }
     }
 
@@ -198,6 +200,7 @@ class ConcernController extends Controller
      */
     public function destroy(DeleteRequest $request)
     {
+        CommonHelper::assertUserMayAccessModel($request);
         $validated = $request->validated();
 
         DB::beginTransaction();
@@ -225,7 +228,7 @@ class ConcernController extends Controller
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
-                return CustomResponse::error($e->getMessage(), Response::HTTP_INTERNAL_SERVER_ERROR);
+                return CustomResponse::serverError($e, 'ConcernController::destroy');
             }
         }
     }

@@ -1,24 +1,29 @@
 import { onMounted, ref } from 'vue';
 
-type Appearance = 'light' | 'dark' | 'system';
+export type Appearance = 'light' | 'dark' | 'system' | 'light-warm' | 'dim';
 
 export function updateTheme(value: Appearance) {
     if (typeof window === 'undefined') {
         return;
     }
 
-    if (value === 'system') {
-        const mediaQueryList = window.matchMedia(
-            '(prefers-color-scheme: dark)',
-        );
-        const systemTheme = mediaQueryList.matches ? 'dark' : 'light';
+    const html = document.documentElement;
 
-        document.documentElement.classList.toggle(
-            'dark',
-            systemTheme === 'dark',
-        );
+    if (value === 'system') {
+        const systemIsDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        html.classList.toggle('dark', systemIsDark);
+        html.removeAttribute('data-theme');
+        return;
+    }
+
+    // dim piggybacks on the dark class so Tailwind dark: utilities still activate,
+    // then CSS variable overrides on html[data-theme="dim"] win by specificity.
+    html.classList.toggle('dark', value === 'dark' || value === 'dim');
+
+    if (value === 'dim' || value === 'light-warm') {
+        html.setAttribute('data-theme', value);
     } else {
-        document.documentElement.classList.toggle('dark', value === 'dark');
+        html.removeAttribute('data-theme');
     }
 }
 
@@ -46,6 +51,7 @@ const getStoredAppearance = () => {
     }
 
     return localStorage.getItem('appearance') as Appearance | null;
+
 };
 
 const handleSystemThemeChange = () => {
