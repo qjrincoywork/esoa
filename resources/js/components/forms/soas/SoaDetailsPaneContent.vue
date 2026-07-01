@@ -81,7 +81,7 @@ const existingExcel = computed(() => {
         <TabsTrigger class="cursor-pointer" value="amount_management" v-if="page.props.auth.user?.user_detail?.has_employee_no || page.props.auth.is_superadmin">
           Amount Management
         </TabsTrigger>
-        <TabsTrigger v-if="hasPermission(`${slug}.account_branch_members`) && localSoa.billing_ref" class="cursor-pointer" value="members">
+        <TabsTrigger v-if="hasPermission(`${slug}.account_branch_members`)" class="cursor-pointer" value="members">
           Account / Branch Members
         </TabsTrigger>
         <TabsTrigger v-if="hasPermission(`${slug}.concerns`)"  class="cursor-pointer" value="concerns">

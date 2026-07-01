@@ -54,7 +54,6 @@ class BillRefsRequest extends FormRequest
             'billing_refs' => [
                 'nullable',
                 'string',
-                'max:' . config('vc.max_string_limit'),
                 'regex:/^[A-Za-z0-9\-_,\s]*$/',
             ],
             'per_page' => [

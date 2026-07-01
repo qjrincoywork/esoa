@@ -27,9 +27,18 @@ class AccountBranchMembersRequest extends FormRequest
                 'max:' . $max,
             ],
             'billing_ref' => [
-                'required',
+                'nullable',
                 'string',
-                'max:' . $max,
+            ],
+            'period_date_from' => [
+                'nullable',
+                'date',
+            ],
+            'period_date_to' => [
+                'nullable',
+                'required_with:period_date_from',
+                'date',
+                'after_or_equal:period_date_from',
             ],
             'policynum'    => ['nullable', 'string', 'max:' . $max],
             'claimnum'     => ['nullable', 'string', 'max:' . $max],

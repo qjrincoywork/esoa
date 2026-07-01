@@ -259,14 +259,19 @@ class SqlDatabase
         $perPage = $params['per_page'] ?? config('vc.default_pages');
         $query = $this->db
             ->table('cholders as c')
+            ->leftJoin('Accounts as ac', function ($join) use ($params) {
+                $join->on('c.ch_accountid', '=', 'ac.ac_code');
+            })
             ->leftJoin('claims as cl', function ($join) use ($params) {
                 $join->on('c.ch_policynum', '=', 'cl.cl_policynumber');
             })
-            // ->leftJoin('billing as b', function ($join) use ($params) {
-            //     $join->on('c.ch_policynum', '=', 'b.bl_policynum');
-            // })
+            ->leftJoin('Acctg as act', function ($join) use ($params) {
+                $join->on('cl.cl_batchnumber', '=', 'act.act_batchnum');
+            })
             ->select(
                 'cl.cl_claimnum as claimnum',
+                'act.act_dateposted',
+                'act.act_batchnum',
                 'cl.cl_policynumber',
                 'c.ch_id',
                 'c.ch_policynum',
@@ -317,6 +322,15 @@ class SqlDatabase
                     : $params['billing_ref'];
                 $query->whereIn('cl.cl_batchnumber', $billRefs);
             })
+            ->when(!empty($params['account_code']), function ($query) use ($params) {
+                $query->where('ac.ac_code', $params['account_code']);
+            })
+            ->when(!empty($params['branch_code']), function ($query) use ($params) {
+                $query->where('c.ch_branch_code', $params['branch_code']);
+            })
+            ->when(!empty($params['period_date_from']) && !empty($params['period_date_to']), function ($query) use ($params) {
+                $query->whereBetween('act.act_dateposted', [$params['period_date_from'], $params['period_date_to']]);
+            })
             ->when(!empty($params['claimnum']), function ($query) use ($params) {
                 $query->where('cl.cl_claimnum', $params['claimnum']);
             })
@@ -332,15 +346,9 @@ class SqlDatabase
             ->when(!empty($params['middlename']), function ($query) use ($params) {
                 $query->where('c.ch_middlename', $params['middlename']);
             })
-            ->when(empty($params['order_by']), function ($query) {
-                $query->orderBy('c.ch_name', 'asc');
-            })
-            ->when(!empty($params['order_by']), function ($query) use ($params) {
-                $query->orderBy($params['order_by'], $params['order_dir'] ?? 'asc');
-            })
-            ->paginate($perPage);
+            ->orderBy('c.ch_name', 'asc');
 
-        return $result;
+        return $result->paginate($perPage);
     }
 
     private function applyCholderAccountFilters($query, $params, $authUser)

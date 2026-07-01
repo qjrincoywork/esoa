@@ -217,7 +217,7 @@ const openMemberFiles = async (member: Member) => {
     if (!response.ok) throw new Error('Failed to fetch files');
 
     openPane({
-      title:          `Attachments — ${member.claimnum}`,
+      title:          `Attachments — ${member.claimnum} - ${member.policynum} — ${member.lastname}, ${member.firstname}`,
       side:           'top',
       component:      SoaFileBrowser,
       componentProps: { files: response.data?.files ?? [] },
