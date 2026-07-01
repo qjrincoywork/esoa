@@ -148,7 +148,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/get_accounts', 'getAccounts')->name('get_accounts');
             Route::get('/get_billing_refs', 'getBillingRefs')->name('get_billing_refs');
             Route::get('/get_branches', 'getBranches')->name('get_branches');
-            Route::get('/{id}/show', 'show')->name('show');
             Route::get('/{id}/activities', 'activities')->name('activities');
             Route::get('/{id}/concerns', 'concerns')->name('concerns');
             Route::get('/{id}/account_payments', 'soaAccountPayments')->name('account_payments');
