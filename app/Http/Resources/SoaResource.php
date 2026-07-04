@@ -21,6 +21,13 @@ class SoaResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
+        if (!$this->contract_date_from) {
+            $startDate = $this->period_date_from;
+            $endDate = $this->period_date_to;
+        } else {
+            $startDate = $this->contract_date_from;
+            $endDate = $this->contract_date_to;
+        }
         return [
             'id' => $this->id,
             'soa_number' => $this->soa_number,
@@ -32,7 +39,8 @@ class SoaResource extends JsonResource
             'due_in' => $this->formatDaysDue($this->due_date),
             'period_date_from' => $this->period_date_from,
             'period_date_to' => $this->period_date_to,
-            'period_coverage' => Str::upper(CommonHelper::formatDate($this->period_date_from) . ' TO ' . CommonHelper::formatDate($this->period_date_to)),
+            'utilization_coverage' => Str::upper(CommonHelper::formatDate($this->period_date_from) . ' TO ' . CommonHelper::formatDate($this->period_date_to)),
+            'period_coverage' => Str::upper(CommonHelper::formatDate($startDate) . ' TO ' . CommonHelper::formatDate($endDate)),
             'contract_date_from' => $this->contract_date_from,
             'contract_date_to' => $this->contract_date_to,
             'account_code' => $this->account_code,
