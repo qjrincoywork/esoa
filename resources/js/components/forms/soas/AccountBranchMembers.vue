@@ -48,7 +48,7 @@ const pagination = ref({
   per_page: 10,
   total: 0,
 });
-const searchField = ref<MemberSearchField>('policynum');
+const searchField = ref<MemberSearchField>('lastname');
 const searchText = ref('');
 const filtersActive = computed(() => searchText.value.trim().length > 0);
 const filterDebounceMs = 1000;
@@ -118,9 +118,9 @@ const columns = computed(() => {
 });
 
 const searchOptions: { label: string; value: MemberSearchField }[] = [
-  { label: 'Policy Number', value: 'policynum' },
-  { label: 'First Name', value: 'firstname' },
   { label: 'Last Name', value: 'lastname' },
+  { label: 'First Name', value: 'firstname' },
+  { label: 'Policy Number', value: 'policynum' },
 ];
 
 const clearFilters = () => {
@@ -128,7 +128,7 @@ const clearFilters = () => {
     clearTimeout(filterWatchTimeout.value);
     filterWatchTimeout.value = null;
   }
-  searchField.value = 'policynum';
+  searchField.value = 'lastname';
   searchText.value = '';
   pagination.value.current_page = 1;
   fetchMembers();
@@ -152,6 +152,8 @@ const fetchMembers = async () => {
     billing_ref: props.soa?.billing_ref ?? [],
     period_date_from: props.soa?.period_date_from ?? [],
     period_date_to: props.soa?.period_date_to ?? [],
+    contract_date_from: props.soa?.contract_date_from ?? [],
+    contract_date_to: props.soa?.contract_date_to ?? [],
   };
   if (props.soa?.billing_ref) {
     params.billing_ref = props.soa?.billing_ref;

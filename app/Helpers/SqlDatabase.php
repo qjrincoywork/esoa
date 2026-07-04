@@ -328,8 +328,16 @@ class SqlDatabase
             ->when(!empty($params['branch_code']), function ($query) use ($params) {
                 $query->where('c.ch_branch_code', $params['branch_code']);
             })
-            ->when(!empty($params['period_date_from']) && !empty($params['period_date_to']), function ($query) use ($params) {
-                $query->whereBetween('act.act_dateposted', [$params['period_date_from'], $params['period_date_to']]);
+            ->when(!empty($params), function ($query) use ($params) {
+                if (empty($params['contract_date_from'])) {
+                    $query->when(!empty($params['period_date_from']) && !empty($params['period_date_to']), function ($query) use ($params) {
+                        $query->whereBetween('act.act_dateposted', [$params['period_date_from'], $params['period_date_to']]);
+                    });
+                } else {
+                    $query->when(!empty($params['contract_date_from']) && !empty($params['contract_date_to']), function ($query) use ($params) {
+                        $query->whereBetween('act.act_dateposted', [$params['contract_date_from'], $params['contract_date_to']]);
+                    });
+                }
             })
             ->when(!empty($params['claimnum']), function ($query) use ($params) {
                 $query->where('cl.cl_claimnum', $params['claimnum']);

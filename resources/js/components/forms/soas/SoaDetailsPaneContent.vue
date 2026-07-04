@@ -117,6 +117,7 @@ const existingExcel = computed(() => {
                 </span>
               </li>
               <li>Bill Date: <span class="font-bold">{{ localSoa.created_at }} </span></li>
+              <li>Utilization Date: <span class="font-bold">{{ localSoa.utilization_coverage }}</span></li>
               <li>Period Coverage: <span class="font-bold">{{ localSoa.period_coverage }}</span></li>
               <li>Amount: <span class="font-bold">{{ localSoa.amount }}</span></li>
               <li v-if="existingPdf">Uploaded PDF:

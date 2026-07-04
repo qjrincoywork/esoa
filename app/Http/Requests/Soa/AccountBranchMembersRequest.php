@@ -40,6 +40,16 @@ class AccountBranchMembersRequest extends FormRequest
                 'date',
                 'after_or_equal:period_date_from',
             ],
+            'contract_date_from' => [
+                'nullable',
+                'date',
+            ],
+            'contract_date_to' => [
+                'nullable',
+                'required_with:contract_date_from',
+                'date',
+                'after_or_equal:contract_date_from',
+            ],
             'policynum'    => ['nullable', 'string', 'max:' . $max],
             'claimnum'     => ['nullable', 'string', 'max:' . $max],
             'lastname'     => ['nullable', 'string', 'max:' . $max],
