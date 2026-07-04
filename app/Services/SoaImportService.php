@@ -72,6 +72,8 @@ class SoaImportService
                 'up_due_date',
                 'up_poc_start',
                 'up_poc_end',
+                'up_dp_from',
+                'up_dp_to',
                 'up_status',
                 'up_status_date',
                 'up_endorsedtoacct',

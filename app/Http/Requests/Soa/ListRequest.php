@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Soa;
 
 use App\Enums\AccountType;
+use App\Enums\BillType;
 use App\Enums\SoaAging;
 use App\Enums\SoaStatus;
 use Illuminate\Foundation\Http\FormRequest;
@@ -47,6 +48,11 @@ class ListRequest extends FormRequest
                 'nullable',
                 'integer',
                 Rule::in(SoaStatus::getValues()),
+            ],
+            'bill_type' => [
+                'nullable',
+                'integer',
+                Rule::in(BillType::getValues()),
             ],
             'due_in' => [
                 'nullable',

@@ -116,6 +116,10 @@ const accountTypeOptions = computed<SoaListOption[]>(() => {
   return (page.props as { soa_account_type_options?: SoaListOption[] }).soa_account_type_options ?? [];
 });
 
+const billTypeOptions = computed<SoaListOption[]>(() => {
+  return (page.props as { soa_bill_type_options?: SoaListOption[] }).soa_bill_type_options ?? [];
+});
+
 const columnHelper = createColumnHelper();
 const pagination = ref({
   current_page: soas.value.current_page,
@@ -164,12 +168,20 @@ const accountTypeModel = computed({
   },
 });
 
-const statusFilterModel = computed({
-  get: () => (filters.value.status === '' ? undefined : filters.value.status),
-  set: (v: string | undefined) => {
-    filters.value.status = v ?? '';
-  },
-});
+/** Sentinel for the "All …" option (reka-ui Select disallows empty-string item values). */
+const ALL_FILTER_VALUE = 'all';
+
+/** Build a Select v-model that maps the empty filter ('') to the "All" sentinel and back. */
+const createAllableFilterModel = (key: 'status' | 'bill_type') =>
+  computed<string>({
+    get: () => (filters.value[key] === '' ? ALL_FILTER_VALUE : filters.value[key]),
+    set: (v: string) => {
+      filters.value[key] = v === ALL_FILTER_VALUE ? '' : v;
+    },
+  });
+
+const statusFilterModel = createAllableFilterModel('status');
+const billTypeFilterModel = createAllableFilterModel('bill_type');
 
 const baseColumns: any[] = [
   columnHelper.accessor('soa_number', {
@@ -626,8 +638,30 @@ watch(
                                           <SelectContent class="w-full">
                                               <SelectGroup>
                                                   <SelectLabel>Status</SelectLabel>
+                                                  <SelectItem :value="ALL_FILTER_VALUE">All Statuses</SelectItem>
                                                   <SelectItem
                                                       v-for="opt in statusOptions"
+                                                      :key="String(opt.value)"
+                                                      :value="String(opt.value)">
+                                                      {{ opt.name }}
+                                                  </SelectItem>
+                                              </SelectGroup>
+                                          </SelectContent>
+                                      </Select>
+                                  </div>
+
+                                  <div class="grid gap-2 md:col-span-1">
+                                      <Label for="soa-filter-bill-type">Bill Type</Label>
+                                      <Select v-model="billTypeFilterModel">
+                                          <SelectTrigger id="soa-filter-bill-type" class="w-full">
+                                              <SelectValue placeholder="All bill types" />
+                                          </SelectTrigger>
+                                          <SelectContent class="w-full">
+                                              <SelectGroup>
+                                                  <SelectLabel>Bill Type</SelectLabel>
+                                                  <SelectItem :value="ALL_FILTER_VALUE">All Bill Types</SelectItem>
+                                                  <SelectItem
+                                                      v-for="opt in billTypeOptions"
                                                       :key="String(opt.value)"
                                                       :value="String(opt.value)">
                                                       {{ opt.name }}

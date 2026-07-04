@@ -55,6 +55,8 @@ export interface Soa {
   due_date?: string
   period_date_from?: string
   period_date_to?: string
+  contract_date_from?: string
+  contract_date_to?: string
   amount?: string | number
   /** Numeric amount from API (e.g. SoaResource); preferred for math when present */
   amount_raw?: number

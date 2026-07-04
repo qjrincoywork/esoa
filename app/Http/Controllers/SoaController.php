@@ -161,6 +161,7 @@ class SoaController extends Controller
             'soas' => new CommonResource(SoaResource::collection($soas)),
             'soa_status_options' => SoaStatus::list(),
             'soa_account_type_options' => AccountType::list(),
+            'soa_bill_type_options' => BillType::list(),
         ]);
     }
 
@@ -384,7 +385,7 @@ class SoaController extends Controller
         $validated = $request->validated();
         $soa = $this->soa->findOrFail($validated['soa_id']);
 
-        CommonHelper::assertUserMayAccessModel($request);
+        CommonHelper::assertUserMayAccessModel($request, $soa);
 
         $current = (float) $soa->amount;
         $delta = (float) $validated['amount'];
@@ -681,11 +682,11 @@ class SoaController extends Controller
 
     public function destroy(DestroyRequest $request)
     {
-        CommonHelper::assertUserMayAccessModel($request);
         $validated = $request->validated();
         DB::beginTransaction();
         try {
             $soa = Soa::withTrashed()->findOrFail($validated['id']);
+            CommonHelper::assertUserMayAccessModel($request, $soa);
             if ($soa->trashed()) {
                 $soa->restore();
                 $label = 'restored';
