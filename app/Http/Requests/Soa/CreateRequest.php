@@ -82,6 +82,15 @@ class CreateRequest extends FormRequest
                 'required',
                 'date',
             ],
+            'contract_date_from' => [
+                'nullable',
+                'date',
+            ],
+            'contract_date_to' => [
+                'nullable',
+                'date',
+                'after_or_equal:contract_date_from',
+            ],
             'payment_adjustment' => [
                 'nullable',
                 'numeric',

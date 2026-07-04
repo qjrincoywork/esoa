@@ -108,6 +108,8 @@ class ImportUploadsJob implements ShouldQueue
             'due_date' => $upload->up_due_date,
             'period_date_from' => $upload->up_poc_start,
             'period_date_to' => $upload->up_poc_end,
+            'contract_date_from' => $upload->up_dp_from,
+            'contract_date_to' => $upload->up_dp_to,
             'amount' => $upload->up_amount,
             'file_pdf' => $filePathPdf,
             'file_xls' => $filePathXls,

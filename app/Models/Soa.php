@@ -43,6 +43,8 @@ class Soa extends Model
         'due_date',
         'period_date_from',
         'period_date_to',
+        'contract_date_from',
+        'contract_date_to',
         'amount',
         'file_pdf',
         'file_xls',
@@ -278,6 +280,9 @@ class Soa extends Model
         }
         if (array_key_exists('status', $params) && $params['status'] !== null && $params['status'] !== '') {
             $query->where('status', (int) $params['status']);
+        }
+        if (array_key_exists('bill_type', $params) && $params['bill_type'] !== null && $params['bill_type'] !== '') {
+            $query->where('bill_type', (int) $params['bill_type']);
         }
     }
 

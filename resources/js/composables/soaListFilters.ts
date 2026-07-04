@@ -7,6 +7,7 @@ export const SOA_LIST_FILTER_KEYS = [
   'branch_code',
   'soanum',
   'status',
+  'bill_type',
   'due_in',
   'due_date_from',
   'due_date_to',
@@ -26,6 +27,7 @@ export function emptySoaListFilters(): SoaListFilters {
     branch_code: '',
     soanum: '',
     status: '',
+    bill_type: '',
     due_in: '',
     due_date_from: '',
     due_date_to: '',
@@ -43,6 +45,7 @@ export function soaListFiltersToParams(filters: SoaListFilters): Record<string, 
   if (t(filters.branch_code)) params.branch_code = t(filters.branch_code)
   if (t(filters.soanum)) params.soanum = t(filters.soanum)
   if (filters.status !== '') params.status = Number(filters.status)
+  if (filters.bill_type !== '') params.bill_type = Number(filters.bill_type)
   if (filters.due_in !== '') params.due_in = Number(filters.due_in)
   if (t(filters.due_date_from)) params.due_date_from = t(filters.due_date_from)
   if (t(filters.due_date_to)) params.due_date_to = t(filters.due_date_to)
@@ -72,5 +75,7 @@ export function soaListFiltersFromUrlQuery(url: string): SoaListFilters {
   f.bill_date_to = get('bill_date_to')
   const st = sp.get('status')
   if (st !== null && st !== '') f.status = st
+  const bt = sp.get('bill_type')
+  if (bt !== null && bt !== '') f.bill_type = bt
   return f
 }

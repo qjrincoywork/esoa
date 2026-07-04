@@ -134,6 +134,15 @@ class UpdateRequest extends FormRequest
                     'required_unless:status,' . SoaStatus::ENDORSED,
                     'date',
                 ],
+                'contract_date_from' => [
+                    'nullable',
+                    'date',
+                ],
+                'contract_date_to' => [
+                    'nullable',
+                    'date',
+                    'after_or_equal:contract_date_from',
+                ],
                 'payment_adjustment' => [
                     'nullable',
                     'numeric',
