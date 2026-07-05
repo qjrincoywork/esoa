@@ -198,6 +198,21 @@ const baseColumns: any[] = [
   }),
   columnHelper.accessor('due_in', {
     header: 'Due In',
+    cell: ({ row, getValue }) => {
+      const r = row.original as { due_in?: string; due_in_color?: string }
+      const label = String(getValue() ?? '')
+      if (!label) return ''
+      return h(
+        'span',
+        {
+          class: [
+            r.due_in_color ?? '',
+            'px-2 py-1 rounded-md text-xs font-medium border whitespace-nowrap',
+          ],
+        },
+        label,
+      )
+    },
   }),
   columnHelper.accessor('status', {
     header: 'Status',

@@ -111,13 +111,17 @@ const existingExcel = computed(() => {
               </li>
               <li>Due Date:
                 <span class="font-bold">{{ localSoa.due_date }}
-                  <Badge variant="secondary">
+                  <Badge
+                    variant="secondary"
+                    :class="['border', localSoa.due_in_color]"
+                    v-if="localSoa.due_in"
+                  >
                     {{ localSoa.due_in }}
                   </Badge>
                 </span>
               </li>
               <li>Bill Date: <span class="font-bold">{{ localSoa.created_at }} </span></li>
-              <li>Utilization Date: <span class="font-bold">{{ localSoa.utilization_coverage }}</span></li>
+              <!-- <li>Utilization Date: <span class="font-bold">{{ localSoa.utilization_coverage }}</span></li> -->
               <li>Period Coverage: <span class="font-bold">{{ localSoa.period_coverage }}</span></li>
               <li>Amount: <span class="font-bold">{{ localSoa.amount }}</span></li>
               <li v-if="existingPdf">Uploaded PDF:

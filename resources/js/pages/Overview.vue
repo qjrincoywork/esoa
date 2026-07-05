@@ -68,12 +68,13 @@ const resetSteps = [
 ];
 
 const statCards = [
-    { label: 'Past Due', sub: 'Exceeded due date', variant: '' },
-    { label: 'Due ≤ 30 days', sub: 'Nearest deadlines', variant: '' },
-    { label: 'Due ≤ 60 days', sub: 'Approaching', variant: '' },
-    { label: 'Due ≤ 90 days', sub: 'Mid-term', variant: '' },
-    { label: 'Due ≤ 120 days', sub: 'Longer lead', variant: '' },
-    { label: 'Due > 120 days', sub: 'Longest lead time', variant: '' },
+    { label: 'Not Yet Due', sub: 'Future remittance', variant: '' },
+    { label: 'Due (Current Month)', sub: 'Due this month', variant: '' },
+    { label: 'Past Due – 30 Days', sub: 'Overdue 1–30 days', variant: '' },
+    { label: 'Past Due – 60 Days', sub: 'Overdue 31–60 days', variant: '' },
+    { label: 'Past Due – 90 Days', sub: 'Overdue 61–90 days', variant: '' },
+    { label: 'Past Due – 120 Days', sub: 'Overdue 91–120 days', variant: '' },
+    { label: 'Past Due – Over 120 Days', sub: 'Overdue 120+ days', variant: '' },
     { label: 'Endorsed', sub: 'Endorsed for payment', variant: 'gold' },
     { label: 'Disputed', sub: 'Under dispute', variant: 'dk' },
 ];
@@ -232,13 +233,13 @@ const endingPills = ['Centralized & secure', 'Transparent', 'Actionable', 'Compl
                                 :key="s.label"
                                 class="stat reveal"
                                 :class="s.variant"
-                                :style="{ '--reveal-delay': revealDelay(2 + Math.floor(i / 2)) }"
+                                :style="{ '--reveal-delay': revealDelay(2 + Math.floor(i / 3)) }"
                             >
                                 <div class="lbl">{{ s.label }}</div>
                                 <div class="sub">{{ s.sub }}</div>
                             </div>
                         </div>
-                        <p class="lead reveal" :style="{ '--reveal-delay': revealDelay(6) }" style="margin-top: 22px; font-size: clamp(12px, 1.3vw, 16px)">
+                        <p class="lead reveal" :style="{ '--reveal-delay': revealDelay(6) }" style="margin-top: clamp(12px, 1.8%, 18px); font-size: clamp(11px, 1.2vw, 15px)">
                             <b style="color: var(--ov-red)">Reading the board:</b> aging buckets show cash-flow urgency, while
                             <b style="color: var(--ov-gold)">Endorsed</b> and <b style="color: var(--ov-ink)">Disputed</b> track where each invoice sits.
                         </p>
@@ -608,18 +609,19 @@ h2.head {
 /* dashboard status cards */
 .board {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: clamp(9px, 1.1%, 16px);
-    margin-top: clamp(14px, 2.6%, 30px);
+    grid-template-columns: repeat(3, 1fr);
+    gap: clamp(8px, 1%, 14px);
+    margin-top: clamp(10px, 1.8%, 20px);
 }
 .stat {
     border-radius: 12px;
-    padding: clamp(12px, 1.4vw, 20px);
+    padding: clamp(9px, 1.1vw, 15px) clamp(11px, 1.3vw, 18px);
     color: #fff;
-    min-height: clamp(78px, 10vw, 120px);
+    min-height: clamp(52px, 5.6vw, 76px);
     display: flex;
     flex-direction: column;
     justify-content: space-between;
+    gap: 4px;
     background: var(--ov-red);
     box-shadow: 0 8px 20px rgba(80, 10, 18, 0.18);
 }
@@ -631,25 +633,27 @@ h2.head {
     background: #3f3f3f;
 }
 .stat .lbl {
-    font-size: clamp(13px, 1.35vw, 20px);
+    font-size: clamp(12px, 1.2vw, 17px);
     font-weight: 700;
+    line-height: 1.15;
 }
 .stat .sub {
-    font-size: clamp(10px, 0.95vw, 13px);
+    font-size: clamp(10px, 0.9vw, 12.5px);
     opacity: 0.85;
+    line-height: 1.2;
 }
 
 /* two-column panels */
 .cols {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: clamp(16px, 2.4%, 34px);
-    margin-top: clamp(16px, 3%, 34px);
+    gap: clamp(14px, 2.2%, 30px);
+    margin-top: clamp(12px, 2%, 22px);
 }
 .panel {
     background: var(--ov-card);
     border-radius: 16px;
-    padding: clamp(18px, 2.2vw, 34px);
+    padding: clamp(14px, 1.9vw, 26px);
     box-shadow: 0 14px 34px rgba(80, 10, 18, 0.12);
 }
 .panel.d {
@@ -657,7 +661,7 @@ h2.head {
     color: #fff;
 }
 .panel h3 {
-    font-size: clamp(17px, 1.9vw, 26px);
+    font-size: clamp(16px, 1.7vw, 22px);
     color: var(--ov-red);
     margin-bottom: 4px;
 }
@@ -668,13 +672,13 @@ h2.head {
     font-size: clamp(11px, 1.1vw, 14px);
     color: var(--ov-gold);
     font-weight: 700;
-    margin-bottom: 16px;
+    margin-bottom: clamp(8px, 1vw, 12px);
 }
 .row {
     display: flex;
     gap: 12px;
     align-items: flex-start;
-    margin-bottom: clamp(10px, 1.5vw, 18px);
+    margin-bottom: clamp(7px, 1.1vw, 13px);
 }
 .dot {
     flex: 0 0 auto;
@@ -806,12 +810,12 @@ h2.head {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: clamp(10px, 1.6vw, 20px);
+    gap: clamp(7px, 1.1vw, 14px);
 }
 .end .logo-badge {
-    width: clamp(72px, 8vw, 110px);
+    width: clamp(56px, 6vw, 88px);
     aspect-ratio: 1;
-    border-radius: 26px;
+    border-radius: 22px;
     background: #fff;
     display: grid;
     place-items: center;
@@ -825,15 +829,15 @@ h2.head {
 .end h1 {
     font-family: 'Georgia', serif;
     font-weight: 700;
-    font-size: clamp(38px, 6.4vw, 90px);
+    font-size: clamp(32px, 5vw, 64px);
     color: #fff;
-    line-height: 1;
+    line-height: 1.05;
 }
 .end .tagline {
     font-family: 'Georgia', serif;
     font-style: italic;
     color: var(--ov-gold-lt);
-    font-size: clamp(16px, 2.3vw, 32px);
+    font-size: clamp(15px, 2vw, 26px);
 }
 .pills {
     display: flex;
@@ -852,9 +856,9 @@ h2.head {
     background: rgba(255, 255, 255, 0.04);
 }
 .end .foot {
-    margin-top: clamp(12px, 2vw, 24px);
+    margin-top: clamp(6px, 1vw, 12px);
     color: #c9aeb0;
-    font-size: clamp(11px, 1.15vw, 15px);
+    font-size: clamp(11px, 1.1vw, 14px);
 }
 .end .foot b {
     color: var(--ov-gold);

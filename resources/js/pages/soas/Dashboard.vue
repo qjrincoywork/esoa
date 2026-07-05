@@ -40,13 +40,13 @@ const redirectToSoaList = (href: string) => {
 
       <div class="grid auto-rows-min gap-4 md:grid-cols-3 p-4">
         <Card
-          v-for="soaAging in soaAgings" :key="soaAging"
+          v-for="soaAging in soaAgings" :key="`${soaAging.type}-${soaAging.value}`"
         >
           <CardContent>
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger class="w-full h-full">
-                  <div class="cursor-pointer"
+                  <div class="cursor-pointer p-3 rounded-lg border"
                     :class="soaAging.color"
                     @click="soaAging.count > 0 ? redirectToSoaList(soaAging.href) : null"
                   >

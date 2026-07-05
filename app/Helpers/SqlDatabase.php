@@ -268,8 +268,6 @@ class SqlDatabase
             ->leftJoin('Acctg as act', function ($join) use ($params) {
                 $join->on('cl.cl_batchnumber', '=', 'act.act_batchnum');
             })
-            // ->leftJoin('Claims as cl', 'c.ch_policynum', '=', 'cl.cl_policynumber')
-            // ->leftJoin('Accounts as a', 'c.ch_accountid', '=', 'a.ac_code')
             ->select(
                 'cl.cl_claimnum as claimnum',
                 'act.act_dateposted',
@@ -294,12 +292,12 @@ class SqlDatabase
                     : $params['billing_ref'];
                 $query->whereIn('cl.cl_batchnumber', $billRefs);
             })
-            ->when(!empty($params['account_code']), function ($query) use ($params) {
-                $query->where('ac.ac_code', $params['account_code']);
-            })
-            ->when(!empty($params['branch_code']), function ($query) use ($params) {
-                $query->where('c.ch_branch_code', $params['branch_code']);
-            })
+            // ->when(!empty($params['account_code']), function ($query) use ($params) {
+            //     $query->where('ac.ac_code', $params['account_code']);
+            // })
+            // ->when(!empty($params['branch_code']), function ($query) use ($params) {
+            //     $query->where('c.ch_branch_code', $params['branch_code']);
+            // })
             ->when(!empty($params), function ($query) use ($params) {
                 $query->whereBetween('act.act_dateposted', [$params['period_date_from'], $params['period_date_to']]);
                 // $params['contract_date_from'] = '';

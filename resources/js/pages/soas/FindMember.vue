@@ -122,7 +122,7 @@ const columns = computed(() => {
     createActionColumn([
       {
         slug: 'soas.member_files',
-        name: 'View Attachments',
+        name: 'View Scanned Attachments',
         icon: 'FolderOpen',
         color: 'blue',
         handler: (item: Member) => openMemberFiles(item),
