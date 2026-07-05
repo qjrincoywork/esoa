@@ -51,8 +51,13 @@ export interface Soa {
   billing_ref_from?: number | string
   bill_type?: number
   status?: number
+  status_color?: string
   bill_date?: string
   due_date?: string
+  /** Aging bucket label for the due date (e.g. "Past Due – 30 Days"). */
+  due_in?: string
+  /** Semantic color utility classes for the aging badge. */
+  due_in_color?: string
   period_date_from?: string
   period_date_to?: string
   contract_date_from?: string

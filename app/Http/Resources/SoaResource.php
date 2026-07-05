@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Enums\BillType;
 use App\Enums\Server;
+use App\Enums\SoaAging;
 use App\Enums\SoaStatus;
 use App\Helpers\CommonHelper;
 use App\Helpers\SqlDatabase;
@@ -37,6 +38,7 @@ class SoaResource extends JsonResource
             'created_at' => CommonHelper::formatDate($this->created_at),
             'due_date' => CommonHelper::formatDate($this->due_date),
             'due_in' => $this->formatDaysDue($this->due_date),
+            'due_in_color' => $this->dueInColor($this->due_date),
             'period_date_from' => $this->period_date_from,
             'period_date_to' => $this->period_date_to,
             'utilization_coverage' => Str::upper(CommonHelper::formatDate($this->period_date_from) . ' TO ' . CommonHelper::formatDate($this->period_date_to)),
@@ -72,14 +74,11 @@ class SoaResource extends JsonResource
     }
 
     /**
-     * Format a due date into a human-readable string.
+     * Aging-bucket label for a due date (single source of truth: {@see SoaAging::classify()}).
      *
-     * @param string|null $date The date to format.
-     *
-     * @return string|null If the date is null, returns null.
-     *   If the date is in the past, returns 'Past Due'.
-     *   If the date is today, returns 'Due today'.
-     *   If the date is in the future, returns 'Due in X days'.
+     * @param string|null $date The due date to classify.
+     * @return string|null Null when no due date; otherwise the aging bucket label
+     *   (e.g. "Due (Current Month)", "Past Due – 30 Days").
      */
     public function formatDaysDue($date)
     {
@@ -87,19 +86,22 @@ class SoaResource extends JsonResource
             return null;
         }
 
-        $date = Carbon::parse($date);
+        return SoaAging::label(SoaAging::classify(Carbon::parse($date)));
+    }
 
-        if ($date->isPast()) {
-            return 'Past Due';
+    /**
+     * Aging-bucket color classes for a due date, used to style the "Due In" badge.
+     *
+     * @param string|null $date The due date to classify.
+     * @return string|null Null when no due date; otherwise semantic color utility classes.
+     */
+    public function dueInColor($date)
+    {
+        if (!$date) {
+            return null;
         }
 
-        $days = (int) now()->diffInDays($date, true);
-
-        return match ($days) {
-            0 => 'Due Today',
-            1 => 'Due Tomorrow',
-            default => "Due in {$days} days",
-        };
+        return SoaAging::color(SoaAging::classify(Carbon::parse($date)));
     }
 
     public function getAccountName($accountCode) {
