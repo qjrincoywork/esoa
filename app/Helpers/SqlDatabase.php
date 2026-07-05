@@ -268,6 +268,8 @@ class SqlDatabase
             ->leftJoin('Acctg as act', function ($join) use ($params) {
                 $join->on('cl.cl_batchnumber', '=', 'act.act_batchnum');
             })
+            // ->leftJoin('Claims as cl', 'c.ch_policynum', '=', 'cl.cl_policynumber')
+            // ->leftJoin('Accounts as a', 'c.ch_accountid', '=', 'a.ac_code')
             ->select(
                 'cl.cl_claimnum as claimnum',
                 'act.act_dateposted',
@@ -283,37 +285,7 @@ class SqlDatabase
                 'c.ch_suffix'
             );
 
-        if ($authUser?->hasRole('broker')) {
-            $agentAccounts = (new SqlDatabase(Server::HMS))
-                ->getAccountsOfAgent($authUser->userDetail?->agent_code ?? null);
-            $query->whereIn('c.ch_accountid', $agentAccounts);
-        }
-
-        if ($authUser?->hasRole('account_branch_admin')) {
-            $firstAccount = $authUser->userAccounts->first();
-            $query->where('c.ch_accountid', $firstAccount?->account_code ?? null);
-            if (!empty($firstAccount?->branch_code)) {
-                $query->where('c.ch_branch_code', $firstAccount->branch_code);
-            }
-        }
-
-        if ($authUser?->hasRole('group_account_admin')) {
-            $userAccounts = $authUser->userAccounts;
-            if ($userAccounts->isEmpty()) {
-                $query->whereRaw('1 = 0');
-            } else {
-                $query->where(function ($q) use ($userAccounts) {
-                    foreach ($userAccounts as $ua) {
-                        $q->orWhere(function ($sub) use ($ua) {
-                            $sub->where('c.ch_accountid', $ua->account_code);
-                            if (!empty($ua->branch_code)) {
-                                $sub->where('c.ch_branch_code', $ua->branch_code);
-                            }
-                        });
-                    }
-                });
-            }
-        }
+        $this->applyCholderAccountFilters($query, $params, $authUser);
 
         $result = $query
             ->when(!empty($params['billing_ref']), function ($query) use ($params) {
@@ -329,15 +301,19 @@ class SqlDatabase
                 $query->where('c.ch_branch_code', $params['branch_code']);
             })
             ->when(!empty($params), function ($query) use ($params) {
-                if (empty($params['contract_date_from'])) {
-                    $query->when(!empty($params['period_date_from']) && !empty($params['period_date_to']), function ($query) use ($params) {
-                        $query->whereBetween('act.act_dateposted', [$params['period_date_from'], $params['period_date_to']]);
-                    });
-                } else {
-                    $query->when(!empty($params['contract_date_from']) && !empty($params['contract_date_to']), function ($query) use ($params) {
-                        $query->whereBetween('act.act_dateposted', [$params['contract_date_from'], $params['contract_date_to']]);
-                    });
-                }
+                $query->whereBetween('act.act_dateposted', [$params['period_date_from'], $params['period_date_to']]);
+                // $params['contract_date_from'] = '';
+                // $query->whereBetween('cl.cl_processdate', [$params['period_date_from'], $params['period_date_to']]);
+                // $query->whereBetween('act.act_dateposted', ['2025-10-18', '2025-10-18']);
+                // if (empty($params['contract_date_from'])) {
+                //     $query->when(!empty($params['period_date_from']) && !empty($params['period_date_to']), function ($query) use ($params) {
+                //         $query->whereBetween('act.act_dateposted', [$params['period_date_from'], $params['period_date_to']]);
+                //     });
+                // } else {
+                //     $query->when(!empty($params['contract_date_from']) && !empty($params['contract_date_to']), function ($query) use ($params) {
+                //         $query->whereBetween('act.act_dateposted', [$params['contract_date_from'], $params['contract_date_to']]);
+                //     });
+                // }
             })
             ->when(!empty($params['claimnum']), function ($query) use ($params) {
                 $query->where('cl.cl_claimnum', $params['claimnum']);
@@ -359,6 +335,22 @@ class SqlDatabase
         return $result->paginate($perPage);
     }
 
+    /**
+     * Applies the row-level authorization boundary for cardholder ("c") queries.
+     *
+     * Single source of truth for restricting which cardholders a user may see
+     * based on their role and associated userAccounts:
+     *  - broker              -> only cardholders under the agent's accounts
+     *  - account_branch_admin -> only the user's first account (+ branch if set)
+     *  - group_account_admin -> only the union of the user's accounts (+ branch
+     *    per account), grouped so the account set is AND-ed against the query;
+     *    an empty account set resolves to no rows (1 = 0).
+     *
+     * @param  \Illuminate\Database\Query\Builder  $query
+     * @param  array  $params
+     * @param  \App\Models\User|null  $authUser
+     * @return \Illuminate\Database\Query\Builder
+     */
     private function applyCholderAccountFilters($query, $params, $authUser)
     {
         if ($authUser?->hasRole('broker')) {
@@ -670,37 +662,7 @@ class SqlDatabase
                 'cl.cl_processdate as process_date',
             ]);
 
-        if ($authUser?->hasRole('broker')) {
-            $agentAccounts = (new SqlDatabase(Server::HMS))
-                ->getAccountsOfAgent($authUser->userDetail?->agent_code ?? null);
-            $query->whereIn('c.ch_accountid', $agentAccounts);
-        }
-
-        if ($authUser?->hasRole('account_branch_admin')) {
-            $firstAccount = $authUser->userAccounts->first();
-            $query->where('c.ch_accountid', $firstAccount?->account_code ?? null);
-            if (!empty($firstAccount?->branch_code)) {
-                $query->where('c.ch_branch_code', $firstAccount->branch_code);
-            }
-        }
-
-        if ($authUser?->hasRole('group_account_admin')) {
-            $userAccounts = $authUser->userAccounts;
-            if ($userAccounts->isEmpty()) {
-                $query->whereRaw('1 = 0');
-            } else {
-                $query->where(function ($q) use ($userAccounts) {
-                    foreach ($userAccounts as $ua) {
-                        $q->orWhere(function ($sub) use ($ua) {
-                            $sub->where('c.ch_accountid', $ua->account_code);
-                            if (!empty($ua->branch_code)) {
-                                $sub->where('c.ch_branch_code', $ua->branch_code);
-                            }
-                        });
-                    }
-                });
-            }
-        }
+        $this->applyCholderAccountFilters($query, $params, $authUser);
 
         $query
             ->when(!empty($params['policynum']), function ($q) use ($params) {

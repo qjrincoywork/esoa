@@ -166,10 +166,6 @@ const endingPills = ['Centralized & secure', 'Transparent', 'Actionable', 'Compl
                                 A web-based portal for corporate clients to monitor billing invoices, track SOA statuses, raise concerns,
                                 upload remittance advices, and look up member records — all in one place.
                             </p>
-                            <div class="meta reveal" :style="{ '--reveal-delay': revealDelay(5) }" style="margin-top: 34px">
-                                <div><div class="k">Version</div><div class="v">v2.0</div></div>
-                                <div><div class="k">Date</div><div class="v">July 2026</div></div>
-                            </div>
                         </div>
                     </section>
 
@@ -337,7 +333,7 @@ const endingPills = ['Centralized & secure', 'Transparent', 'Actionable', 'Compl
                                 Find Member
                             </h2>
                             <p class="lead reveal" :style="{ '--reveal-delay': revealDelay(2) }" style="margin-top: 10px">
-                                Look up any member under your corporate account to verify enrollment, policy, and claim details.
+                                Look up any member under your corporate account to verify attachments, policy, and claim details.
                             </p>
                             <p class="eyebrow reveal" :style="{ '--reveal-delay': revealDelay(2) }" style="margin-top: 20px">Search by any one field</p>
                             <div class="fields">
