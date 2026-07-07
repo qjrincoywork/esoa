@@ -6,10 +6,11 @@ use App\Enums\{ AccountType, Gender, Server, UserType };
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\User\{BulkDestroyRequest, BulkToggleActiveRequest, BulkUpdateRoleRequest, BulkUserVerificationRequest, CreateRequest, DeleteRequest, ListRequest, ToggleActiveRequest, UpdateRequest, UpdateRoleRequest, VerifyRequest};
+use App\Http\Requests\User\{AccountAccessUsersRequest, BulkDestroyRequest, BulkToggleActiveRequest, BulkUpdateRoleRequest, BulkUserVerificationRequest, CreateRequest, DeleteRequest, ListRequest, ToggleActiveRequest, UpdateRequest, UpdateRoleRequest, VerifyRequest};
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
+use App\Http\Resources\UserAccessResource;
 use App\Http\Resources\UserListResource;
 use App\Mail\UserWelcome;
 use Illuminate\Support\Facades\Log;
@@ -146,6 +147,38 @@ class UserController extends Controller
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'branches' => new CommonResource(BranchResource::collection($branches))
+            ]);
+        }
+    }
+
+    /**
+     * Return users that already have account/branch access, so their access
+     * can be copied onto another user. Supports search (by username/email)
+     * and pagination, and can exclude the user currently being edited.
+     */
+    public function accountAccessUsers(AccountAccessUsersRequest $request)
+    {
+        $validated = $request->validated();
+        $search    = $validated['name'] ?? null;
+        $excludeId = $validated['exclude_id'] ?? null;
+        $perPage   = $validated['per_page'] ?? config('vc.default_pages');
+
+        $users = $this->user
+            ->whereHas('userAccounts')
+            ->when($excludeId, fn ($query) => $query->where('id', '!=', $excludeId))
+            ->when($search, function ($query) use ($search) {
+                $query->where(fn ($q) => $q
+                    ->where('username', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%"));
+            })
+            ->with('userAccounts')
+            ->orderBy('username')
+            ->paginate($perPage);
+
+        // Return JSON for AJAX requests (no URL change)
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'users' => new CommonResource(UserAccessResource::collection($users)),
             ]);
         }
     }

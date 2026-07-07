@@ -130,11 +130,6 @@ class CreateRequest extends FormRequest
                 'string',
                 'max:' . config('vc.max_string_limit'),
                 'min:' . config('vc.min_username_string_limit'),
-                // Starts with a letter
-                // Only letters, numbers, _, ., -
-                // No consecutive symbols
-                // Ends with a letter or number
-                'regex:/^(?=.{3,30}$)[A-Za-z](?!.*[._-]{2})[A-Za-z0-9._-]*[A-Za-z0-9]$/',
                 // Reserved words
                 Rule::notIn(config('vc.reserved_usernames')),
                 'unique:users,username',

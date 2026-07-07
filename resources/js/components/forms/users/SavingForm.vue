@@ -129,7 +129,7 @@ const filteredRoles = computed<Role[]>(() => {
 const isRoleChecked = (id: string | number) => selectedRoleIds.value.includes(String(id))
 
 const userType = ref(detail.value?.type != null ? Number(detail.value.type) : 1)
-const userId   = ref(user?.value?.id ?? undefined)
+const userId   = ref(user?.value?.id ?? null)
 
 // Sync from props when user/detail loads (e.g. edit mode with async data)
 watch(
@@ -196,7 +196,21 @@ const newSelectedAccount   = computed(() =>
   newAccounts.value.find((a: Account) => String(a.value) === newAccountCode.value)
 )
 
-const { getAccountsByParams, getBranchesByParams } = useUsers();
+const { getAccountsByParams, getBranchesByParams, getUsersWithAccounts } = useUsers();
+
+// ─── Copy access from another user (GROUP_ACCOUNT_ADMIN) ──────────────────
+type CopyableUser = { value: string | number; name: string; accounts?: Array<{ account_type?: string | null; account_code?: string | null; branch_code?: string | null }> }
+const copyUsers            = ref<CopyableUser[]>([])
+const copySourceUserId     = ref<string>('')
+const searchedCopyUser     = ref('')
+const copyUserPage         = ref(1)
+const copyUserLastPage     = ref(1)
+const copyUsersLoadingMore = ref(false)
+const hasMoreCopyUsers     = computed(() => copyUserPage.value < copyUserLastPage.value)
+const copyMessage          = ref('')
+const copySelectedUser     = computed(() =>
+  copyUsers.value.find((u: CopyableUser) => String(u.value) === copySourceUserId.value)
+)
 
 // ─── Form ref ─────────────────────────────────────────────────────────────
 const userEditForm = ref<HTMLFormElement | null>(null)
@@ -305,25 +319,58 @@ const debouncedGetNewBranches: (...args: any[]) => void = debounce((evOrName?: a
   void searchNewBranchesByParams(name, 1, false);
 });
 
+// ─── Copy-access "pick user" fetch helpers ─────────────────────────────────
+const searchCopyUsers = async (name = '', page = 1, append = false) => {
+  if (append) copyUsersLoadingMore.value = true;
+  const result = await getUsersWithAccounts({
+    name, page,
+    exclude_id: userId.value || '',
+  });
+  copyUsers.value = append ? [...copyUsers.value, ...(result?.data ?? [])] : (result?.data ?? []);
+  copyUserPage.value     = result?.current_page ?? 1;
+  copyUserLastPage.value = result?.last_page ?? 1;
+  copyUsersLoadingMore.value = false;
+}
+
+function loadMoreCopyUsers() {
+  if (!hasMoreCopyUsers.value || copyUsersLoadingMore.value) return;
+  void searchCopyUsers(searchedCopyUser.value, copyUserPage.value + 1, true);
+}
+
+const debouncedGetCopyUsers: (...args: any[]) => void = debounce((evOrName?: any) => {
+  const name = typeof evOrName === 'string' ? evOrName : (evOrName?.target?.value ?? '');
+  void searchCopyUsers(name, 1, false);
+});
+
+/**
+ * Add a single account/branch entry, skipping exact account+branch duplicates.
+ * Returns true when the entry was added, false when it already existed.
+ */
+function tryAddUserAccount(entry: SelectedUserAccount): boolean {
+  const isDuplicate = selectedUserAccounts.value.some(
+    (ua: SelectedUserAccount) => ua.account_code === entry.account_code && ua.branch_code === entry.branch_code
+  );
+  if (isDuplicate) return false;
+  selectedUserAccounts.value.push(entry);
+  return true;
+}
+
 function addUserAccount() {
   if (!newAccountCode.value) return;
-  const isDuplicate = selectedUserAccounts.value.some(
-    (ua: SelectedUserAccount) => ua.account_code === newAccountCode.value && ua.branch_code === newBranchCode.value
-  );
-  if (isDuplicate) {
-    duplicateError.value = 'This account / branch combination has already been added.';
-    return;
-  }
-  duplicateError.value = '';
   const account = newAccounts.value.find((a: Account) => String(a.value) === newAccountCode.value);
   const branch  = newBranches.value.find((b: Branch)  => String(b.value) === newBranchCode.value);
-  selectedUserAccounts.value.push({
+  const added = tryAddUserAccount({
     account_type: newAccountType.value,
     account_code: newAccountCode.value,
     account_name: account?.name ?? newAccountCode.value,
     branch_code:  newBranchCode.value,
     branch_name:  branch?.name  ?? newBranchCode.value,
   });
+  if (!added) {
+    duplicateError.value = 'This account / branch combination has already been added.';
+    return;
+  }
+  duplicateError.value = '';
   // Reset picker
   newAccountType.value   = '';
   newAccountCode.value   = '';
@@ -332,6 +379,38 @@ function addUserAccount() {
   newBranches.value      = [];
   searchedNewAccount.value = '';
   searchedNewBranch.value  = '';
+}
+
+/**
+ * Copy every account/branch entry from the selected source user into the
+ * current list, skipping duplicates. Source rows only carry codes, so the
+ * code doubles as the display name (matching how edit-mode initialises).
+ */
+function copyUserAccounts() {
+  const source = copySelectedUser.value;
+  if (!source) return;
+
+  let added = 0;
+  let skipped = 0;
+  for (const ua of source.accounts ?? []) {
+    if (!ua.account_code) continue;
+    const ok = tryAddUserAccount({
+      account_type: ua.account_type ?? '',
+      account_code: String(ua.account_code),
+      account_name: String(ua.account_code),
+      branch_code:  String(ua.branch_code ?? ''),
+      branch_name:  String(ua.branch_code ?? ''),
+    });
+    ok ? added++ : skipped++;
+  }
+
+  copyMessage.value = added > 0
+    ? `Copied ${added} account${added !== 1 ? 's' : ''}${skipped ? `, ${skipped} already present` : ''}.`
+    : 'All of that user’s accounts are already added.';
+
+  // Reset picker
+  copySourceUserId.value = '';
+  searchedCopyUser.value = '';
 }
 
 function removeUserAccount(index: number) {
@@ -400,6 +479,14 @@ watch([newSelectedAccount, searchedNewBranch], async () => {
       ? debouncedGetNewBranches(searchedNewBranch.value)
       : await searchNewBranchesByParams();
   }
+}, { immediate: true })
+
+// Load / search copyable users only while the GROUP_ACCOUNT_ADMIN panel is shown
+watch([userType, searchedCopyUser], async () => {
+  if (userType.value !== 4) return;
+  searchedCopyUser.value.length > 0
+    ? debouncedGetCopyUsers(searchedCopyUser.value)
+    : await searchCopyUsers();
 }, { immediate: true })
 </script>
 
@@ -530,6 +617,30 @@ watch([newSelectedAccount, searchedNewBranch], async () => {
           </Button>
         </div>
         <p v-if="duplicateError" class="text-sm text-red-500">{{ duplicateError }}</p>
+      </div>
+
+      <!-- Copy access from an existing user -->
+      <div class="rounded-lg border p-4 flex flex-col gap-3">
+        <div class="flex flex-col gap-1">
+          <p class="text-sm font-medium">Copy Access From Another User</p>
+          <p class="text-xs text-muted-foreground">
+            Pull an existing user's account/branch access into the list below. Duplicates are skipped.
+          </p>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3 md:items-end">
+          <SearchableCombobox
+            id="copy_user" label="User" :required="false"
+            v-model="copySourceUserId" v-model:search="searchedCopyUser"
+            :items="copyUsers" placeholder="Select a user..."
+            search-placeholder="Search by username or email..." empty-text="No users with access found."
+            :has-more="hasMoreCopyUsers" :loading-more="copyUsersLoadingMore"
+            @load-more="loadMoreCopyUsers"
+          />
+          <Button type="button" :disabled="!copySelectedUser" @click="copyUserAccounts">
+            Copy Accounts
+          </Button>
+        </div>
+        <p v-if="copyMessage" class="text-sm text-emerald-600 dark:text-emerald-400">{{ copyMessage }}</p>
       </div>
 
       <!-- Selected list -->
