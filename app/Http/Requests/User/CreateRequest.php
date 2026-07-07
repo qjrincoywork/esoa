@@ -135,7 +135,6 @@ class CreateRequest extends FormRequest
                 // No consecutive symbols
                 // Ends with a letter or number
                 'regex:/^(?=.{3,30}$)[A-Za-z](?!.*[._-]{2})[A-Za-z0-9._-]*[A-Za-z0-9]$/',
-                'max:' . config('vc.max_string_limit'),
                 // Reserved words
                 Rule::notIn(config('vc.reserved_usernames')),
                 'unique:users,username',
@@ -145,6 +144,14 @@ class CreateRequest extends FormRequest
                 'string',
                 'max:' . config('vc.max_string_limit'),
                 'unique:users,email'
+            ],
+            'roles' => [
+                'nullable',
+                'array',
+            ],
+            'roles.*' => [
+                'integer',
+                'exists:roles,id',
             ],
         ];
     }

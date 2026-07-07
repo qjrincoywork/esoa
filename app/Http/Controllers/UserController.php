@@ -6,7 +6,7 @@ use App\Enums\{ AccountType, Gender, Server, UserType };
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\User\{BulkDestroyRequest, BulkToggleActiveRequest, BulkUpdateRoleRequest, CreateRequest, DeleteRequest, ListRequest, ToggleActiveRequest, UpdateRequest, UpdateRoleRequest, VerifyRequest};
+use App\Http\Requests\User\{BulkDestroyRequest, BulkToggleActiveRequest, BulkUpdateRoleRequest, BulkUserVerificationRequest, CreateRequest, DeleteRequest, ListRequest, ToggleActiveRequest, UpdateRequest, UpdateRoleRequest, VerifyRequest};
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
@@ -88,6 +88,7 @@ class UserController extends Controller
                 'citizenships' => $citizenships,
                 'departments' => $departments,
                 'positions' => $positions,
+                'all_roles' => Role::query()->get(['id', 'name', 'guard_name']),
             ]);
         }
     }
@@ -98,35 +99,20 @@ class UserController extends Controller
     public function store(CreateRequest $request)
     {
         $validated = $request->validated();
-        $creation = null;
 
         DB::beginTransaction();
 
         try {
-            $creation = $this->user->saveUser($validated);
+            $user = $this->user->saveUser($validated);
+            $this->syncRoles($user, $validated['roles'] ?? []);
+
             DB::commit();
         } catch (\Exception $e) {
             DB::rollBack();
             return CustomResponse::serverError($e, 'UserController');
         }
 
-        // Send welcome email after the DB commits so a mail failure never rolls back user creation
-        if ($creation) {
-            try {
-                $creation['user']->load('userDetail');
-                $expiresAt = $creation['user']->temporary_password_expires_at
-                    ?->format('F j, Y \a\t h:i A');
-
-                Mail::to($creation['user']->email)->send(new UserWelcome(
-                    $creation['user'],
-                    $creation['plain_password'],
-                    $expiresAt ?? '',
-                ));
-            } catch (\Throwable $e) {
-                Log::error('UserWelcome mail failed', ['user_id' => $creation['user']->id ?? null]);
-            }
-        }
-
+        // Credentials are emailed on verification, not here — see verify().
         if ($request->wantsJson() || $request->ajax()) {
             return CustomResponse::created('User Created successfully', Response::HTTP_CREATED);
         }
@@ -169,7 +155,7 @@ class UserController extends Controller
      */
     public function edit(int $id, Request $request)
     {
-        $user = $this->user->with(['userDetail', 'userAccounts'])->findOrFail($id)->toArray();
+        $user = $this->user->with(['userDetail', 'userAccounts', 'roles:id,name,guard_name'])->findOrFail($id)->toArray();
         $suffixes = Suffix::select(['id', 'name'])->get()->toArray();
         $civil_statuses = CivilStatus::select(['id', 'name'])->get()->toArray();
         $citizenships = Citizenship::select(['id', 'name'])->get()->toArray();
@@ -188,6 +174,7 @@ class UserController extends Controller
                 'citizenships' => $citizenships,
                 'departments' => $departments,
                 'positions' => $positions,
+                'all_roles' => Role::query()->get(['id', 'name', 'guard_name']),
             ]);
         }
     }
@@ -203,6 +190,7 @@ class UserController extends Controller
             $validated = $request->validated();
             $target = User::findOrFail($validated['id']);
             $this->user->saveUser($validated, $target);
+            $this->syncRoles($target, $validated['roles'] ?? []);
 
             DB::commit();
 
@@ -286,37 +274,139 @@ class UserController extends Controller
     }
 
     /**
-     * Verify one or more users: sets email_verified_at and is_approved.
+     * Verify one or more users: marks them verified/approved, issues a fresh
+     * temporary password for each, and emails their login credentials.
      * Restricted to superadmin via VerifyRequest::authorize() and route middleware.
      */
     public function verify(VerifyRequest $request)
     {
         $ids = $request->validated()['ids'];
 
-        DB::beginTransaction();
-
         try {
-            $this->user->whereIn('id', $ids)->update([
-                'email_verified_at' => now(),
-                'is_approved'       => 1,
-            ]);
+            $users = $this->user->whereIn('id', $ids)->get();
+            $count = $this->issueCredentialsAndNotify($users, markVerified: true);
 
-            DB::commit();
-
-            $count   = count($ids);
             $message = $count === 1
-                ? 'User verified successfully'
-                : "{$count} users verified successfully";
+                ? 'User verified and credentials emailed successfully'
+                : "{$count} users verified and credentials emailed successfully";
 
             if ($request->wantsJson() || $request->ajax()) {
                 return CustomResponse::ok($message, Response::HTTP_OK);
             }
         } catch (\Exception $e) {
-            DB::rollBack();
-
             if ($request->wantsJson() || $request->ajax()) {
-                return CustomResponse::serverError($e, 'UserController');
+                return CustomResponse::serverError($e, 'UserController::verify');
             }
+        }
+    }
+
+    /**
+     * Bulk-send login credentials (and a fresh temporary password) to the
+     * selected users, marking them verified/approved in the process.
+     *
+     * Useful for (re)issuing credentials to a batch of users at once — e.g.
+     * when a temporary password has expired or the welcome email was missed.
+     */
+    public function bulkUserVerification(BulkUserVerificationRequest $request)
+    {
+        $ids = $request->validated()['user_ids'];
+
+        try {
+            $users = $this->user->whereIn('id', $ids)->get();
+            $count = $this->issueCredentialsAndNotify($users, markVerified: true);
+
+            $message = $count === 1
+                ? 'Credentials emailed to 1 user successfully'
+                : "Credentials emailed to {$count} users successfully";
+
+            return CustomResponse::ok($message, Response::HTTP_OK);
+        } catch (\Exception $e) {
+            return CustomResponse::serverError($e, 'UserController::bulkUserVerification');
+        }
+    }
+
+    /**
+     * Sync a user's roles by ID and refresh the permission cache.
+     *
+     * No-op when no role IDs are supplied, so callers that don't manage roles
+     * (e.g. a profile edit) leave existing assignments untouched.
+     *
+     * @param array<int, int|string> $roleIds
+     */
+    private function syncRoles(User $user, array $roleIds): void
+    {
+        if (empty($roleIds)) {
+            return;
+        }
+
+        $user->roles()->sync($roleIds);
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+    }
+
+    /**
+     * (Re)issue a temporary password for each user, optionally flag them as
+     * verified/approved, and email their credentials.
+     *
+     * Passwords are reset inside a single transaction; emails are dispatched
+     * only after it commits so a delivery failure never rolls back the reset.
+     *
+     * @param \Illuminate\Support\Collection<int, User> $users
+     * @return int Number of users notified.
+     */
+    private function issueCredentialsAndNotify($users, bool $markVerified = false): int
+    {
+        $deliveries = [];
+
+        DB::beginTransaction();
+
+        try {
+            foreach ($users as $user) {
+                $plainPassword = $user->withTemporaryPassword();
+
+                if ($markVerified) {
+                    $user->email_verified_at = now();
+                    $user->is_approved       = true;
+                }
+
+                $user->save();
+                $deliveries[] = ['user' => $user, 'password' => $plainPassword];
+            }
+
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            throw $e;
+        }
+
+        foreach ($deliveries as $delivery) {
+            $this->sendWelcomeMail($delivery['user'], $delivery['password']);
+        }
+
+        return count($deliveries);
+    }
+
+    /**
+     * Send the welcome email carrying a user's login credentials.
+     * Failures are logged and swallowed so one bad address never aborts a batch.
+     */
+    private function sendWelcomeMail(User $user, string $plainPassword): void
+    {
+        try {
+            $user->loadMissing('userDetail');
+
+            $expiresAt = $user->temporary_password_expires_at
+                ?->format('F j, Y \a\t h:i A');
+
+            Mail::to($user->email)->send(new UserWelcome(
+                $user,
+                $plainPassword,
+                $expiresAt ?? '',
+            ));
+        } catch (\Throwable $e) {
+            Log::error('UserWelcome mail failed', [
+                'user_id' => $user->id ?? null,
+                'error'   => $e->getMessage(),
+            ]);
         }
     }
 

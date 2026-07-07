@@ -7,6 +7,7 @@ import { useUsers } from '@/composables/users';
 import { debounce } from '@/composables/utilities/helper';
 import { Select, SelectTrigger, SelectContent, SelectGroup, SelectLabel, SelectItem, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import Switch from '@/components/ui/switch/Switch.vue';
 import UserAccountsList from '@/components/forms/users/UserAccountsList.vue';
 
 type Type = { value: string | number; name: string }
@@ -18,6 +19,7 @@ type CivilStatus = { id: string | number; name: string }
 type Citizenship = { id: string | number; name: string }
 type Department = { id: string | number; name: string }
 type Position = { id: string | number; name: string }
+type Role = { id: string | number; name?: string; guard_name?: string }
 
 type SelectedUserAccount = {
   account_type: string
@@ -48,6 +50,7 @@ type UserBasic = {
   email?: string | number
   user_detail?: UserDetail
   user_accounts?: Array<{ account_type?: string; account_code?: string; branch_code?: string }>
+  roles?: Array<{ id?: string | number }>
 }
 
 const props = defineProps({
@@ -90,6 +93,11 @@ const props = defineProps({
     required: true,
     default: () => [],
   },
+  all_roles: {
+    type: Array as unknown as () => Role[],
+    required: false,
+    default: () => [],
+  },
   onReady: {
     type: Function as unknown as () => ((api: { getFormData: () => FormData | null; formRef: HTMLFormElement | null }) => void) | undefined,
     required: false,
@@ -106,6 +114,19 @@ const departments   = computed<Department[]>(() => props.departments as Departme
 const positions     = computed<Position[]>(() => props.positions as Position[]);
 const account_types = computed<AccountType[]>(() => props.account_types as AccountType[]);
 const types         = computed<Type[]>(() => props.types as Type[]);
+const all_roles     = computed<Role[]>(() => props.all_roles as Role[]);
+
+// Roles selected on load (edit mode preselects the user's current roles).
+const roleSearch      = ref('')
+const selectedRoleIds = ref<string[]>(
+  (user.value?.roles ?? []).map((r: { id?: string | number }) => String(r.id))
+)
+const filteredRoles = computed<Role[]>(() => {
+  const term = roleSearch.value.toLowerCase().trim()
+  if (!term) return all_roles.value
+  return all_roles.value.filter((r: Role) => String(r.name ?? '').toLowerCase().includes(term))
+})
+const isRoleChecked = (id: string | number) => selectedRoleIds.value.includes(String(id))
 
 const userType = ref(detail.value?.type != null ? Number(detail.value.type) : 1)
 const userId   = ref(user?.value?.id ?? undefined)
@@ -654,6 +675,34 @@ watch([newSelectedAccount, searchedNewBranch], async () => {
       <Label for="email">Email<span class="text-red-400">*</span></Label>
       <Input id="email" class="mt-1 block w-full" name="email"
         :default-value="user?.email" autocomplete="email" placeholder="Email" />
+    </div>
+
+    <!-- ── Roles ─────────────────────────────────────────────────────────── -->
+    <div v-if="all_roles.length" class="grid gap-2 md:col-span-2">
+      <Label for="role-search">Roles</Label>
+      <Input id="role-search" v-model="roleSearch" class="mt-1 block w-full"
+        placeholder="Search by role name..." />
+      <div class="border rounded-md max-h-56 overflow-auto">
+        <table class="min-w-full text-sm">
+          <thead class="bg-muted sticky top-0 z-10">
+            <tr>
+              <th class="px-3 py-2 text-left w-10">#</th>
+              <th class="px-3 py-2 text-left">Role</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="role in filteredRoles" :key="role.id" class="border-t">
+              <td class="px-3 py-2">
+                <Switch name="roles[]" :value="role.id" :default-value="isRoleChecked(role.id)" />
+              </td>
+              <td class="px-3 py-2">{{ role.name }}</td>
+            </tr>
+            <tr v-if="!filteredRoles.length">
+              <td colspan="2" class="px-3 py-4 text-center text-muted-foreground">No roles found.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </form>
 </template>
