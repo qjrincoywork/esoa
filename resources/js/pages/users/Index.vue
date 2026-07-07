@@ -10,7 +10,7 @@ import { Select, SelectTrigger, SelectContent, SelectGroup, SelectItem, SelectVa
 import { createActionColumn } from '@/composables/datatable/datatableColumns';
 import { useUsers } from '@/composables/users';
 import { useModulePermissions } from '@/composables/useModulePermissions';
-import { UserRoundCog, ToggleLeft, ToggleRight, Trash2, RotateCcw, SlidersHorizontal, X } from 'lucide-vue-next';
+import { UserRoundCog, ToggleLeft, ToggleRight, Trash2, RotateCcw, SlidersHorizontal, X, MailCheck } from 'lucide-vue-next';
 
 type UsersPagination = {
     current_page: number
@@ -33,7 +33,7 @@ const users = computed(() => {
     }
     return propsUsers;
 });
-const { createUser, editUser, deleteUser, manageUserRoles, bulkManageUserRoles, bulkToggleActiveUsers, bulkDeleteUsers, verifyUsers, toggleActiveUser } = useUsers();
+const { createUser, editUser, deleteUser, manageUserRoles, bulkManageUserRoles, bulkToggleActiveUsers, bulkDeleteUsers, verifyUsers, bulkVerifyCredentials, toggleActiveUser } = useUsers();
 const columnHelper = createColumnHelper();
 const pagination = ref({
 	current_page: users.value.current_page,
@@ -423,6 +423,13 @@ watch(
                         size="sm"
                         @click="bulkManageUserRoles(selectedRows.map((r: any) => r.original))">
                         Manage Roles <UserRoundCog class="w-4 h-4 ml-1" />
+                    </Button>
+                    <Button
+                        class="cursor-pointer bg-green-600 hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600"
+                        v-if="hasPermission(`${slug}.verify`)"
+                        size="sm"
+                        @click="bulkVerifyCredentials(selectedRows.map(r => r.original))">
+                        Verify &amp; Send Credentials <MailCheck class="w-4 h-4 ml-1" />
                     </Button>
                     <template v-if="hasPermission(`${slug}.toggle_active`)">
                         <Button

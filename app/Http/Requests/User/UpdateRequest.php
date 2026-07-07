@@ -157,6 +157,14 @@ class UpdateRequest extends FormRequest
                 'max:' . config('vc.max_string_limit'),
                 Rule::unique(User::class)->ignore(request()->input('id')),
             ],
+            'roles' => [
+                'nullable',
+                'array',
+            ],
+            'roles.*' => [
+                'integer',
+                'exists:roles,id',
+            ],
         ];
     }
 

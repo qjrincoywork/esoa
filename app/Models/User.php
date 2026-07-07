@@ -141,32 +141,59 @@ class User extends Authenticatable implements AuthorizableContract, MustVerifyEm
     /**
      * Create or update a user and their detail record.
      *
-     * Returns ['user' => User, 'plain_password' => string] on creation so the
-     * caller can send the welcome email. Returns null on update.
+     * Credentials are no longer emailed here — a fresh temporary password is
+     * issued and delivered when the account is verified (see UserController).
+     *
+     * @return self The created or updated user.
      */
-    public function saveUser(array $data, ?self $target = null): ?array
+    public function saveUser(array $data, ?self $target = null): self
     {
         if ($target !== null) {
             $target->update($data);
             $target->userDetail()->updateOrCreate(['user_id' => $target->id], $data);
             $this->syncUserAccounts($target, $data);
-            return null;
+
+            return $target;
         }
 
-        $plainPassword = Str::password(16, letters: true, numbers: true, symbols: false, spaces: false);
-
-        $data['password'] = Hash::make($plainPassword);
-        $data['temporary_password_expires_at'] = now()->addHours(
-            config('vc.temp_password_expires_hours', 72)
-        );
-
-        $user = self::create($data);
+        $user = new self();
+        $user->fill($data);
+        $user->withTemporaryPassword();
+        $user->save();
 
         $data['user_id'] = $user->id;
         $user->userDetail()->create($data);
         $this->syncUserAccounts($user, $data);
 
-        return ['user' => $user, 'plain_password' => $plainPassword];
+        return $user;
+    }
+
+    /**
+     * Generate a strong, random temporary password.
+     */
+    public static function generateTemporaryPassword(): string
+    {
+        return Str::password(16, letters: true, numbers: true, symbols: false, spaces: false);
+    }
+
+    /**
+     * Assign a freshly generated temporary password (and reset its expiry
+     * window) to this instance, returning the plain text so the caller can
+     * deliver it by email. The value is hashed by the model's 'password' cast
+     * on save; the plain text is never persisted.
+     *
+     * The caller is responsible for persisting via save()/update().
+     */
+    public function withTemporaryPassword(): string
+    {
+        $plainPassword = self::generateTemporaryPassword();
+
+        $this->password = $plainPassword;
+        $this->temporary_password_expires_at = now()->addHours(
+            config('vc.temp_password_expires_hours', 72)
+        );
+
+        return $plainPassword;
     }
 
     /**

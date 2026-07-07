@@ -53,6 +53,7 @@ export function useUsers() {
         citizenships: Array<{ id: number | string; name: string }>;
         departments: Array<{ id: number | string; name: string }>;
         positions: Array<{ id: number | string; name: string }>;
+        all_roles: Role[];
       }>(
         `/${slug.value}/${user.id}/edit`
       );
@@ -79,6 +80,7 @@ export function useUsers() {
           citizenships: payload.citizenships,
           departments: payload.departments,
           positions: payload.positions,
+          all_roles: payload.all_roles ?? [],
           onReady: (api: { getFormData: () => FormData | null }) => {
             formApi = api
           }
@@ -127,6 +129,7 @@ export function useUsers() {
         citizenships: Array<{ id: number | string; name: string }>;
         departments: Array<{ id: number | string; name: string }>;
         positions: Array<{ id: number | string; name: string }>;
+        all_roles: Role[];
       }>(
         `/${slug.value}/create`
       );
@@ -152,6 +155,7 @@ export function useUsers() {
           citizenships: payload.citizenships,
           departments: payload.departments,
           positions: payload.positions,
+          all_roles: payload.all_roles ?? [],
           onReady: (api: { getFormData: () => FormData | null }) => {
             formApi = api
           }
@@ -442,6 +446,48 @@ export function useUsers() {
     });
   };
 
+  const bulkVerifyCredentials = async (users: User[]) => {
+    if (!users.length) return;
+
+    openModal({
+      modalTitle: users.length === 1
+        ? `Send Credentials to ${users[0]?.username || 'User'}`
+        : `Send Credentials to ${users.length} Users`,
+      buttonText: 'Send Credentials',
+      buttonClass: `bg-green-600 hover:bg-green-700 focus:ring-green-500
+        dark:bg-green-500 dark:hover:bg-green-600`,
+      component: VerifyForm,
+      componentProps: {
+        users,
+        onReady: (api: { getFormData: () => FormData | null }) => {
+          formApi = api;
+        },
+      },
+      size: users.length > 3 ? 'md' : 'sm',
+      onSubmit: async () => {
+        // Build the payload directly so it matches the bulk endpoint contract (user_ids[]).
+        const formData = new FormData();
+        users.forEach((u) => formData.append('user_ids[]', String(u.id)));
+
+        showLoader();
+        try {
+          const response = await post(`/${slug.value}/bulk_verify`, formData);
+          if (!response.ok) {
+            dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+          } else {
+            dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+            closeModal();
+            router.get(window.location.href, {}, { preserveState: false, preserveScroll: true, replace: true });
+          }
+        } catch (err) {
+          dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+        } finally {
+          hideLoader();
+        }
+      },
+    });
+  };
+
   const bulkToggleActiveUsers = async (users: User[], newActiveValue: 0 | 1) => {
     if (!users.length) return;
 
@@ -593,6 +639,7 @@ export function useUsers() {
     bulkToggleActiveUsers,
     bulkDeleteUsers,
     verifyUsers,
+    bulkVerifyCredentials,
     toggleActiveUser,
   };
 }
