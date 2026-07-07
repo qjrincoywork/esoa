@@ -166,20 +166,6 @@ class SqlDatabase
                     }
                 });
             })
-            ->where(function ($q) {
-                $q->where('ac_code', 'not like', 'IN%')
-                    ->where('ac_code', 'not like', 'FM%')
-                    ->where('ac_code', 'not like', 'GR%');
-            })
-            ->where('ac_status', 'A') // Active accounts only
-            ->groupBy('ac_name', 'ac_code', 'ac_ma_code')
-            ->when(!empty($selectedCode), function ($query) use ($selectedCode) {
-                $query->orderByRaw("CASE WHEN ac_code = ? THEN 0 ELSE 1 END", [$selectedCode]);
-            })
-            ->where(function ($query) {
-                $query->where('ac_candate', '>', now())
-                    ->orWhereNull('ac_candate');
-            })
             ->orderBy('ac_name');
 
         return $result->paginate($perPage);
