@@ -228,6 +228,24 @@ export function useUsers() {
     }
   };
 
+  const getUsersWithAccounts = async (params: Record<string, string | number | undefined>) => {
+    try {
+      const response = await get(`/${slug.value}/account_access_users`, params);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch data');
+      }
+
+      const payload = response.data;
+
+      if (!payload) return;
+      // Paginated response: { data: [{ value, name, accounts }], current_page, last_page, ... }
+      return payload.users;
+    } catch (error) {
+      dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
+    }
+  };
+
   const deleteUser = async (user: User) => {
     const isDeleted = Boolean(user.deleted_at);
     const action = isDeleted ? 'Restore' : 'Delete';
@@ -634,6 +652,7 @@ export function useUsers() {
     deleteUser,
     getAccountsByParams,
     getBranchesByParams,
+    getUsersWithAccounts,
     manageUserRoles,
     bulkManageUserRoles,
     bulkToggleActiveUsers,

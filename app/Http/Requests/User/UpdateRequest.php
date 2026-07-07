@@ -140,11 +140,6 @@ class UpdateRequest extends FormRequest
                 'required',
                 'string',
                 'min:3',
-                // Starts with a letter
-                // Only letters, numbers, _, ., -
-                // No consecutive symbols
-                // Ends with a letter or number
-                'regex:/^(?=.{3,30}$)[A-Za-z](?!.*[._-]{2})[A-Za-z0-9._-]*[A-Za-z0-9]$/',
                 'max:' . config('vc.max_string_limit'),
                 Rule::unique(User::class)->ignore(request()->input('id')),
                 // Reserved words
