@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\AccountPayment;
 
+use App\Rules\IsUserAdmin;
 use Illuminate\Foundation\Http\FormRequest;
 
 class DeleteRequest extends FormRequest
@@ -14,7 +15,12 @@ class DeleteRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'id' => 'required|integer|exists:account_payments,id',
+            'id' => [
+                'required',
+                'integer',
+                'exists:account_payments,id',
+                new IsUserAdmin()
+            ]
         ];
     }
 }

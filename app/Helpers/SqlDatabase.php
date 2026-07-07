@@ -52,11 +52,68 @@ class SqlDatabase
             // ])
             ->orderBy('up_id', 'desc');
 
-        if (auth()->user() && !auth()->user()->hasRole('superadmin')) {
+        $authUser = auth()->user();
+        if ($authUser && !$authUser->hasRole('superadmin')) {
             $result->whereNull('up_delete_date');
+
+            // F-03: scope the legacy SOA listing to the caller's own accounts so
+            // tenant roles can no longer read every account's statements.
+            if ($authUser->hasAnyRole(['broker', 'account_branch_admin', 'group_account_admin'])) {
+                $this->applyUploadAccountRestriction($result, $authUser);
+            }
         }
 
         return $result->paginate($perPage);
+    }
+
+    /**
+     * Restrict a legacy `Upload` (SOA) query to the accounts/branches the given
+     * user is allowed to see. Mirrors {@see \App\Models\Soa::applyUserAccountRestriction()}
+     * but against the legacy column names (up_accode / up_branch).
+     *
+     * @param  \Illuminate\Database\Query\Builder  $query
+     * @param  \App\Models\User  $authUser
+     * @return void
+     */
+    private function applyUploadAccountRestriction($query, $authUser): void
+    {
+        if ($authUser->hasRole('broker')) {
+            $agentAccounts = (new self(Server::HMS))
+                ->getAccountsOfAgent($authUser->userDetail?->agent_code ?? null);
+            if ($agentAccounts->isEmpty()) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereIn('up_accode', $agentAccounts);
+            }
+            return;
+        }
+
+        if ($authUser->hasRole('account_branch_admin')) {
+            $firstAccount = $authUser->userAccounts->first();
+            $query->where('up_accode', $firstAccount?->account_code ?? null);
+            if (!empty($firstAccount?->branch_code)) {
+                $query->where('up_branch', $firstAccount->branch_code);
+            }
+            return;
+        }
+
+        if ($authUser->hasRole('group_account_admin')) {
+            $userAccounts = $authUser->userAccounts;
+            if ($userAccounts->isEmpty()) {
+                $query->whereRaw('1 = 0');
+                return;
+            }
+            $query->where(function ($q) use ($userAccounts) {
+                foreach ($userAccounts as $ua) {
+                    $q->orWhere(function ($sub) use ($ua) {
+                        $sub->where('up_accode', $ua->account_code);
+                        if (!empty($ua->branch_code)) {
+                            $sub->where('up_branch', $ua->branch_code);
+                        }
+                    });
+                }
+            });
+        }
     }
 
     /**
@@ -370,6 +427,40 @@ class SqlDatabase
         }
 
         return $query;
+    }
+
+    /**
+     * Determine whether the authenticated user may access the documents that
+     * belong to a given claim number (F-04).
+     *
+     * The claim is resolved to its cardholder/account and passed through the
+     * same role-based row-level filter used for listings
+     * ({@see applyCholderAccountFilters()}). Restricted roles therefore only
+     * pass when the claim belongs to an account they are assigned to; trusted
+     * staff have no filter applied and pass when the claim simply exists.
+     *
+     * Must be called on an HMS connection instance.
+     *
+     * @param  string|null  $claimnum
+     * @return bool
+     */
+    public function userCanAccessClaim(?string $claimnum): bool
+    {
+        $claimnum = trim((string) $claimnum);
+        if ($claimnum === '') {
+            return false;
+        }
+
+        $authUser = auth()->user();
+
+        $query = $this->db
+            ->table('cholders as c')
+            ->leftJoin('claims as cl', 'c.ch_policynum', '=', 'cl.cl_policynumber')
+            ->where('cl.cl_claimnum', $claimnum);
+
+        $this->applyCholderAccountFilters($query, [], $authUser);
+
+        return $query->exists();
     }
 
     /**
