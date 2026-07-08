@@ -14,8 +14,10 @@ class IsUserAdmin implements ValidationRule
      */
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
-        $role = auth()->user()->getRoleNames()->first();
-        if ($role !== config('vc.superadmin')) {
+        // Align with the request-level authorize() checks, which treat both
+        // superadmin and admin as privileged (see e.g. Soa\DestroyRequest).
+        $authUser = auth()->user();
+        if (!$authUser || !$authUser->hasAnyRole([config('vc.superadmin'), 'admin'])) {
             $fail('User is restricted.');
         }
     }

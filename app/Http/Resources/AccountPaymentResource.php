@@ -30,21 +30,21 @@ class AccountPaymentResource extends JsonResource
             'created_at' => CommonHelper::formatDate($this->created_at),
             'image_preview_token' => $this->image && $request->user()
                 ? CommonHelper::createFilePreviewToken(
-                    env('ACCOUNT_PAYMENTS_DISK', 'public'),
+                    config('vc.disks.account_payments'),
                     $this->image,
                     (int) $request->user()->id
                 )
                 : null,
             'pdf_preview_token' => $this->pdf && $request->user()
                 ? CommonHelper::createFilePreviewToken(
-                    env('ACCOUNT_PAYMENTS_DISK', 'public'),
+                    config('vc.disks.account_payments'),
                     $this->pdf,
                     (int) $request->user()->id
                 )
                 : null,
             'excel_preview_token' => $this->excel && $request->user()
                 ? CommonHelper::createFilePreviewToken(
-                    env('ACCOUNT_PAYMENTS_DISK', 'public'),
+                    config('vc.disks.account_payments'),
                     $this->excel,
                     (int) $request->user()->id
                 )

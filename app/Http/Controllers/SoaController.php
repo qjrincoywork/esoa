@@ -66,8 +66,24 @@ class SoaController extends Controller
         CommonHelper::assertUserMayAccessModel($request);
         $path = $request->get('url', '');
 
-        // Block absolute URLs and path traversal — only relative paths allowed
-        if (preg_match('#^https?://#i', $path) || str_contains($path, '..') || str_contains($path, "\0")) {
+        // Fully decode first so that single- and double-encoded traversal
+        // (e.g. %2e%2e, %252e%252e) cannot slip past the literal ".." check.
+        $decodedPath = $path;
+        for ($i = 0; $i < 3; $i++) {
+            $decodedPath = rawurldecode($decodedPath);
+        }
+
+        // Only relative paths allowed: block absolute URLs, traversal, encoded
+        // dots/percent, and null bytes on both the raw and fully-decoded value.
+        if (
+            preg_match('#^https?://#i', $path)
+            || str_contains($path, '..')
+            || str_contains($decodedPath, '..')
+            || stripos($path, '%2e') !== false
+            || stripos($path, '%25') !== false
+            || str_contains($path, "\0")
+            || str_contains($decodedPath, "\0")
+        ) {
             return CustomResponse::error('Invalid URL', Response::HTTP_BAD_REQUEST);
         }
 
@@ -79,15 +95,31 @@ class SoaController extends Controller
 
         $fileUrl = $allowedBase . '/' . ltrim($path, '/');
 
+        // Only render known-safe document/image types; never trust the upstream
+        // content-type verbatim, and never render inline (prevents HTML/SVG XSS
+        // being served from this application's origin).
+        $allowedTypes = [
+            'application/pdf',
+            'image/png',
+            'image/jpeg',
+            'image/gif',
+            'image/webp',
+        ];
+
         try {
             // TLS verification enabled — withoutVerifying() removed
             $response = Http::timeout(15)->get($fileUrl);
-            $contentType = $response->header('Content-Type') ?? 'application/octet-stream';
 
             if ($response->successful()) {
+                $upstreamType = strtolower(trim(explode(';', (string) ($response->header('Content-Type') ?? ''))[0]));
+                $contentType = in_array($upstreamType, $allowedTypes, true)
+                    ? $upstreamType
+                    : 'application/octet-stream';
+
                 return response($response->body(), Response::HTTP_OK, [
                     'Content-Type' => $contentType,
-                    'Content-Disposition' => 'inline',
+                    'Content-Disposition' => 'attachment',
+                    'X-Content-Type-Options' => 'nosniff',
                 ]);
             }
 
@@ -188,13 +220,13 @@ class SoaController extends Controller
         $validated = $request->validated();
         $files = [];
         if (isset($validated['claimnum']) && !empty($validated['claimnum'])) {
-            $paths = Storage::disk(env('RM_DISK', 'public'))->files($validated['claimnum']);
+            $paths = Storage::disk(config('vc.disks.rm'))->files($validated['claimnum']);
             $userId = (int) auth()->id();
             $files = array_map(function (string $path) use ($userId) {
                 return [
                     'name' => basename($path),
                     'preview_token' => CommonHelper::createFilePreviewToken(
-                        env('RM_DISK', 'public'),
+                        config('vc.disks.rm'),
                         $path,
                         $userId
                     ),
@@ -226,7 +258,7 @@ class SoaController extends Controller
     {
         return CommonHelper::previewStoredFileFromToken(
             (string) $request->query('token', ''),
-            env('RM_DISK', 'public'),
+            config('vc.disks.rm'),
             $request->user()?->id
         );
     }
@@ -250,7 +282,7 @@ class SoaController extends Controller
             abort(Response::HTTP_NOT_FOUND);
         }
 
-        $disk = Storage::disk(env('BILLING_DISK', 'public'));
+        $disk = Storage::disk(config('vc.disks.billing'));
 
         if (! $disk->exists($path)) {
             abort(Response::HTTP_NOT_FOUND);
@@ -729,13 +761,13 @@ class SoaController extends Controller
         $claimnum = $request->validated('claimnum');
         $userId = (int) auth()->id();
 
-        $paths = Storage::disk(env('RM_DISK', 'public'))->files($claimnum);
+        $paths = Storage::disk(config('vc.disks.rm'))->files($claimnum);
 
         $files = array_map(function (string $path) use ($userId) {
             return [
                 'name' => basename($path),
                 'preview_token' => CommonHelper::createFilePreviewToken(
-                    env('RM_DISK', 'public'),
+                    config('vc.disks.rm'),
                     $path,
                     $userId
                 ),

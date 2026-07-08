@@ -150,6 +150,7 @@ class ConcernController extends Controller
      */
     public function show(Concern $concern)
     {
+        CommonHelper::assertUserMayAccessModel(request(), $concern);
         $concern->load(['user', 'soa']);
 
         return Inertia::render('concerns/Show', [
@@ -174,7 +175,7 @@ class ConcernController extends Controller
     {
         return CommonHelper::previewStoredFileFromToken(
             (string) $request->query('token', ''),
-            env('CONCERNS_DISK', 'public'),
+            config('vc.disks.concerns'),
             $request->user()?->id
         );
     }
@@ -197,12 +198,12 @@ class ConcernController extends Controller
      */
     public function edit($id, Request $request)
     {
-        CommonHelper::assertUserMayAccessModel($request);
         $concern = $this->concern->findOrFail($id);
+        CommonHelper::assertUserMayAccessModel($request, $concern);
         if ($concern) {
             $concern->attachment_preview_token = $concern->attachment && $request->user()
                 ? CommonHelper::createFilePreviewToken(
-                    env('CONCERNS_DISK', 'public'),
+                    config('vc.disks.concerns'),
                     $concern->attachment,
                     (int) $request->user()->id
                 )
@@ -236,10 +237,10 @@ class ConcernController extends Controller
      */
     public function update(UpdateRequest $request)
     {
-        CommonHelper::assertUserMayAccessModel($request);
+        $concern = Concern::findOrFail($request->id);
+        CommonHelper::assertUserMayAccessModel($request, $concern);
         DB::beginTransaction();
         try {
-            $concern = Concern::findOrFail($request->id);
             $validated = $request->validated();
             if (!empty($validated['soa_ids'])) {
                 // Attach ids
@@ -289,13 +290,12 @@ class ConcernController extends Controller
      */
     public function destroy(DeleteRequest $request)
     {
-        CommonHelper::assertUserMayAccessModel($request);
         $validated = $request->validated();
+        $concern = Concern::withTrashed()->findOrFail($validated['id']);
+        CommonHelper::assertUserMayAccessModel($request, $concern);
 
         DB::beginTransaction();
         try {
-            $concern = Concern::withTrashed()->findOrFail($validated['id']);
-
             if ($concern->trashed()) {
                 $concern->restore();
                 $message = 'Restored';
