@@ -20,7 +20,12 @@ class PasswordController extends Controller
     }
 
     /**
-     * Update the user's password.
+     * Update the authenticated user's password after confirming the current one.
+     *
+     * Validates the current password and the new password (Laravel default rules,
+     * confirmed), then persists the new hash and clears
+     * temporary_password_expires_at so a forced-reset flag no longer applies.
+     * Redirects back on success.
      */
     public function update(Request $request): RedirectResponse
     {

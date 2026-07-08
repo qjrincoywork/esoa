@@ -19,7 +19,9 @@ class ImportBranchesJob implements ShouldQueue
     public $chunk;
 
     /**
-     * Create a new job instance.
+     * Create the job with the chunk of legacy branch rows to import.
+     *
+     * @param  iterable  $chunk  Legacy branch records (objects exposing br_* fields).
      */
     public function __construct($chunk)
     {
@@ -27,7 +29,11 @@ class ImportBranchesJob implements ShouldQueue
     }
 
     /**
-     * Execute the job.
+     * Import the chunked legacy branches into the branches table.
+     *
+     * Each row is mapped from its br_* columns and inserted via Branch::create
+     * (integration defaults to 0 when missing). The chunk runs in one
+     * transaction that rolls back and rethrows on any failure.
      */
     public function handle(): void
     {

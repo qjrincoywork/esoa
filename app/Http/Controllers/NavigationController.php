@@ -34,7 +34,13 @@ class NavigationController extends Controller
     }
 
     /**
-     * Display a listing of the resource.
+     * Render the Inertia "navigations/Index" page with the filtered navigation list.
+     *
+     * Filters are validated by {@see ListRequest}; access is gated by route-level
+     * Spatie role/permission middleware.
+     *
+     * @param ListRequest $request
+     * @return \Inertia\Response
      */
     public function index(ListRequest $request)
     {
@@ -46,7 +52,12 @@ class NavigationController extends Controller
     }
 
     /**
-     * Show the form for creating a new resource.
+     * Return the status option list for the "Create Navigation" form (AJAX only).
+     *
+     * Non-AJAX requests fall through and receive no content.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse|void
      */
     public function create(Request $request)
     {
@@ -59,7 +70,14 @@ class NavigationController extends Controller
     }
 
     /**
-     * Store a newly created resource in storage.
+     * Persist a new navigation inside a DB transaction.
+     *
+     * Delegates to Navigation::saveNavigation(), commits, and returns an HTTP 201
+     * envelope for AJAX requests. Rolls back and returns a server-error envelope
+     * on failure. Input is validated by {@see CreateRequest}.
+     *
+     * @param CreateRequest $request
+     * @return \Illuminate\Http\JsonResponse|void
      */
     public function store(CreateRequest $request)
     {
@@ -86,7 +104,10 @@ class NavigationController extends Controller
     }
 
     /**
-     * Display the specified resource.
+     * Unused resource stub; navigations are not shown individually.
+     *
+     * @param Navigation $navigation
+     * @return void
      */
     public function show(Navigation $navigation)
     {
@@ -94,7 +115,14 @@ class NavigationController extends Controller
     }
 
     /**
-     * Show the form for editing the specified resource.
+     * Return the navigation and status option list for the edit form (AJAX only).
+     *
+     * Resolves the navigation via findOrFail(); non-AJAX requests fall through
+     * and receive no content.
+     *
+     * @param int $id
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse|void
      */
     public function edit(int $id, Request $request)
     {
@@ -110,7 +138,15 @@ class NavigationController extends Controller
     }
 
     /**
-     * Update the specified resource in storage.
+     * Update a navigation inside a DB transaction.
+     *
+     * Delegates to Navigation::saveNavigation(), commits, and returns an HTTP 200
+     * envelope for AJAX requests. Rolls back and returns a server-error envelope
+     * on failure. Input is validated by {@see UpdateRequest}.
+     *
+     * @param UpdateRequest $request
+     * @param Navigation $navigation
+     * @return \Illuminate\Http\JsonResponse|void
      */
     public function update(UpdateRequest $request, Navigation $navigation)
     {
@@ -141,7 +177,16 @@ class NavigationController extends Controller
     }
 
     /**
-     * Remove the specified resource from storage.
+     * Toggle soft-delete state for the specified navigation (delete or restore).
+     *
+     * Runs inside a DB transaction: resolves the navigation including trashed
+     * rows, restores it if already trashed or soft-deletes it otherwise, then
+     * commits and returns an HTTP 200 envelope for AJAX requests. Rolls back and
+     * returns a server-error envelope on failure. Input is validated by
+     * {@see DeleteRequest}.
+     *
+     * @param DeleteRequest $request
+     * @return \Illuminate\Http\JsonResponse|void
      */
     public function destroy(DeleteRequest $request)
     {

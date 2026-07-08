@@ -20,6 +20,9 @@ class Gender extends Model
         'description',
     ];
 
+    /**
+     * Get the user details that reference this gender (has-many UserDetail via gender_id).
+     */
     public function userDetails()
     {
         return $this->hasMany(UserDetail::class, 'gender_id', 'id');

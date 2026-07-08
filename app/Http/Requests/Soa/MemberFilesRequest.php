@@ -7,6 +7,9 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class MemberFilesRequest extends FormRequest
 {
+    /**
+     * Authorize superadmin/admin roles or users holding the "soas.member_files" permission.
+     */
     public function authorize(): bool
     {
         $user = $this->user();
@@ -17,7 +20,7 @@ class MemberFilesRequest extends FormRequest
     }
 
     /**
-     * Get the validation rules that apply to the request.
+     * Validate a required, valid claim number string of at most the configured length.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
@@ -34,7 +37,7 @@ class MemberFilesRequest extends FormRequest
     }
 
     /**
-     * Get the error messages for the defined validation rules.
+     * Custom validation messages for the claim number rules.
      *
      * @return array<string, string>
      */

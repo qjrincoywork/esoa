@@ -10,7 +10,10 @@ use Illuminate\Contracts\Validation\ValidationRule;
 class IsClaimnumValid implements ValidationRule
 {
     /**
-     * Run the validation rule.
+     * Pass only when the value matches a card holder on the HMS server.
+     *
+     * Looks the value up as a claimnum via SqlDatabase on Server::HMS and fails
+     * with "The claimnum is invalid." when no matching record is found.
      *
      * @param  \Closure(string, ?string=): \Illuminate\Translation\PotentiallyTranslatedString  $fail
      */

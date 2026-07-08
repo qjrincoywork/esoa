@@ -11,7 +11,9 @@ use Illuminate\Foundation\Http\FormRequest;
 class UpdateTagRequest extends FormRequest
 {
     /**
-     * Get the validation rules that apply to the request.
+     * Validate that the id and soanum exist in the SOA server Upload table, that
+     * untag_type is a valid UntagType, and that a reason is provided when the untag
+     * type is OTHERS.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
@@ -43,7 +45,7 @@ class UpdateTagRequest extends FormRequest
     }
 
     /**
-     * Get the error messages for the defined validation rules.
+     * Custom validation messages for the untag_type and conditional reason rules.
      *
      * @return array<string, string>
      */

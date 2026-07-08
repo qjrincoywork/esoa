@@ -9,6 +9,9 @@ use Illuminate\Validation\Rule;
 
 class CreateRequest extends FormRequest
 {
+    /**
+     * Authorize superadmin/admin roles or users holding the "soas.store" permission.
+     */
     public function authorize(): bool
     {
         $user = $this->user();
@@ -19,7 +22,9 @@ class CreateRequest extends FormRequest
     }
 
     /**
-     * Get the validation rules that apply to the request.
+     * Validation rules for creating an SOA: account/branch codes must exist on the HMS
+     * server, the SOA number must be unique and alphanumeric, and a PDF file (plus an
+     * XLS file unless the bill type is ECU) is required alongside the billing details.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
@@ -125,7 +130,7 @@ class CreateRequest extends FormRequest
     }
 
     /**
-     * Get the error messages for the defined validation rules.
+     * Custom validation messages for the user_id requirement and SOA number format.
      *
      * @return array<string, string>
      */
@@ -137,6 +142,10 @@ class CreateRequest extends FormRequest
         ];
     }
 
+    /**
+     * Decode the JSON-encoded billing_ref input into an array and set user_id to the
+     * currently authenticated user before validation runs.
+     */
     protected function prepareForValidation(): void
     {
         $this->merge([
@@ -145,6 +154,10 @@ class CreateRequest extends FormRequest
         ]);
     }
 
+    /**
+     * Derive the account_type from the account code prefix (TPA when it starts with "TP",
+     * otherwise HMO) after validation passes.
+     */
     protected function passedValidation(): void
     {
         $this->merge([

@@ -7,7 +7,7 @@ use Illuminate\Foundation\Http\FormRequest;
 class ListRequest extends FormRequest
 {
     /**
-     * Get the validation rules that apply to the request.
+     * Validation rules for filtering, sorting and paginating the permission listing.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */

@@ -20,6 +20,9 @@ class CivilStatus extends Model
         'description',
     ];
 
+    /**
+     * Get the user details that reference this civil status (has-many UserDetail via civil_status_id).
+     */
     public function userDetails()
     {
         return $this->hasMany(UserDetail::class, 'civil_status_id', 'id');

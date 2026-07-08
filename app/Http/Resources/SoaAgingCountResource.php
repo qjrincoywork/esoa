@@ -16,7 +16,8 @@ use Illuminate\Support\Str;
 class SoaAgingCountResource extends JsonResource
 {
     /**
-     * Transform the resource into an array.
+     * Transform an aggregated count bucket into an array, resolving the label, color and
+     * list-page link from either the status or aging enum depending on the bucket type.
      *
      * @return array<string, mixed>
      */

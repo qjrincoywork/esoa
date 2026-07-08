@@ -9,7 +9,8 @@ use Illuminate\Validation\Rule;
 class ListRequest extends FormRequest
 {
     /**
-     * Get the validation rules that apply to the request.
+     * Validate the optional user listing filters: a search string, page size, a
+     * user type, a department ID, and an active-status flag.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */

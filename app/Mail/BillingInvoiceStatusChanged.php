@@ -23,7 +23,7 @@ class BillingInvoiceStatusChanged extends Mailable
     public $soa;
 
     /**
-     * Create a new message instance.
+     * Create the mailable for the SOA whose status changed.
      */
     public function __construct(Soa $soa)
     {
@@ -31,7 +31,8 @@ class BillingInvoiceStatusChanged extends Mailable
     }
 
     /**
-     * Get the message envelope.
+     * Build the envelope with a translated subject (labels.billing_invoice_status_changed.subject)
+     * embedding the SOA number and its new human-readable status label.
      */
     public function envelope(): Envelope
     {
@@ -44,7 +45,7 @@ class BillingInvoiceStatusChanged extends Mailable
     }
 
     /**
-     * Get the message content definition.
+     * Render the email using the emails.esoa.billing-invoice-status-changed view.
      */
     public function content(): Content
     {

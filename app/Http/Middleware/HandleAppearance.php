@@ -10,7 +10,8 @@ use Symfony\Component\HttpFoundation\Response;
 class HandleAppearance
 {
     /**
-     * Handle an incoming request.
+     * Share the user's appearance preference (from the "appearance" cookie,
+     * defaulting to "system") with all views before handling the request.
      *
      * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
      */

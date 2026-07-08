@@ -6,13 +6,16 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class BulkUserVerificationRequest extends FormRequest
 {
+    /**
+     * Authorize only users holding the "superadmin" role.
+     */
     public function authorize(): bool
     {
         return $this->user()?->hasRole('superadmin') ?? false;
     }
 
     /**
-     * Get the validation rules that apply to the request.
+     * Validate a non-empty list of existing user IDs to mark as verified.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
@@ -25,7 +28,7 @@ class BulkUserVerificationRequest extends FormRequest
     }
 
     /**
-     * Get the error messages for the defined validation rules.
+     * Custom validation messages for the bulk user-verification fields.
      *
      * @return array<string, string>
      */

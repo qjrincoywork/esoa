@@ -18,7 +18,9 @@ use Illuminate\Support\Str;
 class ConcernResource extends JsonResource
 {
     /**
-     * Transform the resource into an array.
+     * Transform the concern into an array, mapping the type and ticket status to their
+     * labels/colors, joining related SOA numbers, and issuing a preview token for the
+     * attachment when present and a user is authenticated.
      *
      * @return array<string, mixed>
      */

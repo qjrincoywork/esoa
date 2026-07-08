@@ -11,7 +11,10 @@ use Illuminate\Validation\Rule;
 class UpdateRequest extends FormRequest
 {
     /**
-     * Get the validation rules that apply to the request.
+     * Validation rules for updating an SOA. Account/group admins may only change the id
+     * and status; other users validate the full SOA payload, where the PDF and (unless
+     * the bill type is ECU) XLS files are required only when no file is already stored,
+     * and most fields are skipped when the status is ENDORSED.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
@@ -160,7 +163,7 @@ class UpdateRequest extends FormRequest
     }
 
     /**
-     * Get the error messages for the defined validation rules.
+     * Custom validation messages for the user_id requirement and the PDF/XLS file rules.
      *
      * @return array<string, string>
      */
@@ -174,6 +177,10 @@ class UpdateRequest extends FormRequest
         ];
     }
 
+    /**
+     * Decode the JSON-encoded billing_ref input into an array and set user_id to the
+     * currently authenticated user before validation runs.
+     */
     protected function prepareForValidation(): void
     {
         $this->merge([
@@ -182,6 +189,10 @@ class UpdateRequest extends FormRequest
         ]);
     }
 
+    /**
+     * Derive the account_type from the account code prefix (TPA when it starts with "TP",
+     * otherwise HMO) after validation passes.
+     */
     protected function passedValidation(): void
     {
         $this->merge([

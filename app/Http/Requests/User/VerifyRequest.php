@@ -6,11 +6,19 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class VerifyRequest extends FormRequest
 {
+    /**
+     * Authorize only users holding the "superadmin" role.
+     */
     public function authorize(): bool
     {
         return $this->user()?->hasRole('superadmin') ?? false;
     }
 
+    /**
+     * Validate a non-empty list of existing user IDs to verify.
+     *
+     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     */
     public function rules(): array
     {
         return [
@@ -19,6 +27,11 @@ class VerifyRequest extends FormRequest
         ];
     }
 
+    /**
+     * Custom validation messages for the user-verification fields.
+     *
+     * @return array<string, string>
+     */
     public function messages(): array
     {
         return [

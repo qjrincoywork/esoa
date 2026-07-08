@@ -31,16 +31,20 @@ class AccountPayment extends Model
     ];
 
     /**
-     * Method: user
-     * This method defines the relationship between the User model and the UserDetail model.
+     * Get the user who recorded this account payment (belongs-to User via user_id).
      *
-     * @return BelongsTo The relationship between User and UserDetail models.
+     * @return BelongsTo
      */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
     }
 
+    /**
+     * Get the SOAs this payment is applied to, through the soa_account_payments pivot (many-to-many).
+     *
+     * @return BelongsToMany
+     */
     public function soas(): BelongsToMany
     {
         return $this->belongsToMany(
@@ -51,6 +55,15 @@ class AccountPayment extends Model
         );
     }
 
+    /**
+     * Get a paginated list of account payments with the recording user eager-loaded.
+     *
+     * Brokers and account/group admins are scoped to their own payments; superadmins
+     * also see soft-deleted rows. Optionally filters by deposit date, mode of payment,
+     * creator username, and remarks, ordered by newest id first.
+     *
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     */
     public function getAccountPayments(array $params)
     {
         $authUser = auth()->user();

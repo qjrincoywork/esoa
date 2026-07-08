@@ -9,7 +9,12 @@ use Illuminate\Contracts\Validation\ValidationRule;
 class SoaStatusIsValid implements ValidationRule
 {
     /**
-     * Run the validation rule.
+     * Pass only when the status value is one the current user may set.
+     *
+     * Account/branch and group-account admins are limited to the statuses in
+     * vc.allowed_soa_status_for_account_branch_admin; all other roles are
+     * limited to the complement of that set. A value outside the permitted set
+     * fails with "The status is invalid."
      *
      * @param  \Closure(string, ?string=): \Illuminate\Translation\PotentiallyTranslatedString  $fail
      */

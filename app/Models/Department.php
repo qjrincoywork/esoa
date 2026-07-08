@@ -20,6 +20,9 @@ class Department extends Model
         'description',
     ];
 
+    /**
+     * Get the user details that belong to this department (has-many UserDetail via department_id).
+     */
     public function userDetails()
     {
         return $this->hasMany(UserDetail::class, 'department_id', 'id');

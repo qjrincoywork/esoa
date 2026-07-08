@@ -103,9 +103,12 @@ class NavigationService
     }
 
     /**
-     * Get referenced-modules based on the current request path.
+     * Get the sub-modules of the active navigation module for the current route.
      *
-     * @return void
+     * Matches the active NavigationModule by the current route name (status 1)
+     * and returns its sub-modules, or null when no module matches.
+     *
+     * @return \Illuminate\Support\Collection|null
      */
     public function getReferencedModules()
     {

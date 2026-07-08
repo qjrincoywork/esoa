@@ -7,7 +7,8 @@ use Illuminate\Foundation\Http\FormRequest;
 class UpdatePermissionsRequest extends FormRequest
 {
     /**
-     * Get the validation rules that apply to the request.
+     * Validate that the target role ID exists and that the supplied permissions
+     * are a required array of existing permission names.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */

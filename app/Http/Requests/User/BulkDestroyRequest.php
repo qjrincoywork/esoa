@@ -7,11 +7,20 @@ use Illuminate\Validation\Rule;
 
 class BulkDestroyRequest extends FormRequest
 {
+    /**
+     * Authorize only users holding the "superadmin" or "admin" role.
+     */
     public function authorize(): bool
     {
         return $this->user()?->hasAnyRole(['superadmin', 'admin']) ?? false;
     }
 
+    /**
+     * Validate a non-empty list of existing (non-soft-deleted) user IDs and an
+     * action of either "delete" or "restore".
+     *
+     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     */
     public function rules(): array
     {
         return [
@@ -21,6 +30,11 @@ class BulkDestroyRequest extends FormRequest
         ];
     }
 
+    /**
+     * Custom validation messages for the bulk delete/restore fields.
+     *
+     * @return array<string, string>
+     */
     public function messages(): array
     {
         return [

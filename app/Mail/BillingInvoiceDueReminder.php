@@ -19,6 +19,13 @@ class BillingInvoiceDueReminder extends Mailable
 
     public string $listUrl;
 
+    /**
+     * Create the reminder for an aging bucket, resolving the human aging label
+     * and the SOA-list URL for that bucket from the given aging value.
+     *
+     * @param  int  $agingValue  The SoaAging bucket value.
+     * @param  int  $soaCount    Number of due SOAs in that bucket for the recipient.
+     */
     public function __construct(
         public int $agingValue,
         int $soaCount,
@@ -28,6 +35,11 @@ class BillingInvoiceDueReminder extends Mailable
         $this->listUrl = SoaAging::listUrl($agingValue);
     }
 
+    /**
+     * Build the envelope with a translated subject that includes the SOA count
+     * and aging label, falling back to an English "Billing Invoice Due
+     * Reminder - {label} ({count} items)" string.
+     */
     public function envelope(): Envelope
     {
         return new Envelope(
@@ -38,6 +50,10 @@ class BillingInvoiceDueReminder extends Mailable
         );
     }
 
+    /**
+     * Render the emails.esoa.billing-invoice-due-reminder view, passing the
+     * aging label, SOA count, and list URL for the bucket.
+     */
     public function content(): Content
     {
         return new Content(
@@ -50,6 +66,9 @@ class BillingInvoiceDueReminder extends Mailable
         );
     }
 
+    /**
+     * No attachments are sent with this reminder.
+     */
     public function attachments(): array
     {
         return [];

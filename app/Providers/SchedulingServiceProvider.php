@@ -40,7 +40,11 @@ use Illuminate\Support\Facades\Log;
 class SchedulingServiceProvider extends ServiceProvider
 {
     /**
-     * Define the application's command schedule.
+     * Schedule the daily "billing:send-due-reminders" command.
+     *
+     * Runs once per day at the configured vc.billing_reminder_time, on a single
+     * server, without overlapping (guarded by vc.overlapping_timeout), logging
+     * failure and success outcomes.
      *
      * @param Schedule $schedule
      * @return void

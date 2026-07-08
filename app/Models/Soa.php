@@ -55,10 +55,9 @@ class Soa extends Model
     ];
 
     /**
-     * Method: user
-     * This method defines the relationship between the User model and the UserDetail model.
+     * Get the user who owns/created this SOA (belongs-to User via user_id).
      *
-     * @return BelongsTo The relationship between User and UserDetail models.
+     * @return BelongsTo
      */
     public function user(): BelongsTo
     {
@@ -75,6 +74,11 @@ class Soa extends Model
         return $this->hasMany(SoaActivity::class, 'soa_id');
     }
 
+    /**
+     * Get the concerns linked to this SOA, through the soa_concerns pivot (many-to-many).
+     *
+     * @return BelongsToMany
+     */
     public function concerns(): BelongsToMany
     {
         return $this->belongsToMany(
@@ -85,6 +89,11 @@ class Soa extends Model
         );
     }
 
+    /**
+     * Get the account payments applied to this SOA, through the soa_account_payments pivot (many-to-many).
+     *
+     * @return BelongsToMany
+     */
     public function accountPayments(): BelongsToMany
     {
         return $this->belongsToMany(
@@ -357,6 +366,13 @@ class Soa extends Model
         }
     }
 
+    /**
+     * Create or update an SOA, normalizing a JSON billing_ref array into a comma-separated string.
+     *
+     * Updates the existing record when the data contains an 'id', otherwise creates a new one.
+     *
+     * @return self The created or updated SOA.
+     */
     public function saveSoa(array $data) {
         // Handle multiple billing_refs (JSON array from form)
         if (isset($data['billing_ref']) && is_string($data['billing_ref'])) {

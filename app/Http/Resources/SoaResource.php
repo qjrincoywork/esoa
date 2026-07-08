@@ -16,7 +16,9 @@ use Illuminate\Support\Str;
 class SoaResource extends JsonResource
 {
     /**
-     * Transform the resource into an array.
+     * Transform the SOA into an array, selecting contract- or period-based coverage dates,
+     * mapping bill type and status to labels/colors, resolving account/branch names, and
+     * embedding the related SOA activities only when the relation is eager loaded.
      *
      * @return array<string, mixed>
      */
@@ -62,6 +64,12 @@ class SoaResource extends JsonResource
         ];
     }
 
+    /**
+     * Flatten the billing reference values into a comma-separated string.
+     *
+     * @param mixed $billingRef Iterable of billing reference values, or empty.
+     * @return string
+     */
     public function getBillingRefNames($billingRef) {
         $billingRefNames = [];
         if (!empty($billingRef)) {
@@ -104,18 +112,36 @@ class SoaResource extends JsonResource
         return SoaAging::color(SoaAging::classify(Carbon::parse($date)));
     }
 
+    /**
+     * Resolve the account name for the given account code from the HMS database.
+     *
+     * @param string $accountCode
+     * @return string
+     */
     public function getAccountName($accountCode) {
         $account = (new SqlDatabase(Server::HMS))->getAccount($accountCode);
 
         return $account->ac_name;
     }
 
+    /**
+     * Resolve and format the account expiry date for the given account code from the HMS database.
+     *
+     * @param string $accountCode
+     * @return string|null
+     */
     public function getAccountExpiryDate($accountCode) {
         $account = (new SqlDatabase(Server::HMS))->getAccount($accountCode);
 
         return CommonHelper::formatDate($account->expiry_date);
     }
 
+    /**
+     * Resolve the branch name for the given branch code from the HMS database.
+     *
+     * @param string $branchCode
+     * @return string
+     */
     public function getBranchName($branchCode) {
         $branch = (new SqlDatabase(Server::HMS))->getBranch($branchCode);
 

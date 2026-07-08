@@ -19,6 +19,11 @@ class SqlDatabase
      */
     protected $db;
 
+    /**
+     * Bind this helper to a specific database connection.
+     *
+     * @param  string  $servername  The configured connection name (e.g. an App\Enums\Server value).
+     */
     public function __construct($servername)
     {
         $this->db = DB::connection($servername);
@@ -189,9 +194,11 @@ class SqlDatabase
     }
 
     /**
-     * Retrieves accounts based on the specified type.
+     * Retrieves a paginated list of accounts, optionally filtered by account type
+     * (TPA = codes starting with "TP", HMO = codes not starting with "TP") and by
+     * a name substring, keeping any explicitly selected code in the results.
      *
-     * @param string $type The type of accounts to retrieve
+     * @param array $params Supports per_page, selected_code, type, and name.
      * @return \Illuminate\Pagination\Paginator
      */
     public function getAccountsByParams($params)
@@ -254,6 +261,14 @@ class SqlDatabase
         return $accounts;
     }
 
+    /**
+     * Dispatches a billing-reference lookup to the correct source based on
+     * $params['billing_ref_from']: claims-receiving details for CLAIMS, otherwise
+     * MDA (billing) details.
+     *
+     * @param array $params
+     * @return \Illuminate\Pagination\Paginator
+     */
     public function getBillingRefsByParams($params)
     {
         if ($params['billing_ref_from'] == BillRefFrom::CLAIMS) {
@@ -265,6 +280,13 @@ class SqlDatabase
         return $result;
     }
 
+    /**
+     * Retrieves a paginated list of billing records, optionally filtered by one or
+     * more billing reference IDs and/or a policy number, ordered by posting date.
+     *
+     * @param array $params Supports per_page, billing_ref (CSV string or array), and policynum.
+     * @return \Illuminate\Pagination\Paginator
+     */
     public function getBillingByParams($params)
     {
         $perPage = $params['per_page'] ?? config('vc.default_pages');
@@ -295,6 +317,15 @@ class SqlDatabase
         return $result;
     }
 
+    /**
+     * Retrieves a paginated list of cardholders joined to their claims and posting
+     * details, filtered by billing reference (batch number), posting-date range,
+     * claim number, policy number, and name fields. Results are constrained to the
+     * authenticated user's accounts via {@see applyCholderAccountFilters()}.
+     *
+     * @param array $params
+     * @return \Illuminate\Pagination\Paginator
+     */
     public function getCardHolderDetailsByParams($params)
     {
         $authUser = auth()->user();
@@ -552,6 +583,16 @@ class SqlDatabase
         return $accountCode ?? '';
     }
 
+    /**
+     * Retrieves a paginated list of Claims_Receiving batches (ref id, amount,
+     * latest posting date, and a representative claim number), scoped to the user's
+     * accounts via {@see applyClaimsPolicyFilters()} and optionally filtered by a
+     * batch-number search. Restricted roles with no resolvable account get no rows.
+     * Any explicitly selected refs are floated to the top of the current page.
+     *
+     * @param array $params Supports per_page, billing_refs (CSV string or array), and name.
+     * @return \Illuminate\Pagination\Paginator
+     */
     public function getClaimsReceivingDetailsByParams($params)
     {
         $perPage = $params['per_page'] ?? config('vc.default_pages');
@@ -628,6 +669,16 @@ class SqlDatabase
         return $paginated;
     }
 
+    /**
+     * Retrieves a paginated list of individual claim/availment detail rows
+     * (account, cardholder, claim, batch, dates, and amount), scoped to the user's
+     * accounts via {@see applyCholderAccountFilters()}. Filters by batch-number
+     * search, posting-date range, claim number, and policy number, with an
+     * allow-listed sort column/direction and selected refs floated to the top.
+     *
+     * @param array $params Supports per_page, billing_refs, name, billing_date_from/to, claimnum, policynum, order_by, order_dir.
+     * @return \Illuminate\Pagination\Paginator
+     */
     public function getClaimDetailsByParams($params)
     {
         $authUser = auth()->user();
@@ -767,6 +818,16 @@ class SqlDatabase
         return $query->paginate($perPage);
     }
 
+    /**
+     * Retrieves a paginated list of MDA billing rows for a specific account
+     * (required $params['account_code']), joined to billing-process and account
+     * data. Filters by ref-id search, and for non-HMO account types excludes
+     * medical-collection refs still to be billed by BILLING; also supports a
+     * posting-date range. Selected refs are floated to the top of the page.
+     *
+     * @param array $params Supports account_code, per_page, billing_refs, name, account_type, billing_date_from/to.
+     * @return \Illuminate\Pagination\Paginator
+     */
     public function getMdaDetailsByParams($params)
     {
         // Pagination
@@ -845,8 +906,11 @@ class SqlDatabase
     }
 
     /**
-     * Retrieves branches based on the specified type.
+     * Retrieves a paginated list of branches, optionally filtered by parent account
+     * code and a name substring, keeping and prioritizing any explicitly selected
+     * branch code, ordered by branch name.
      *
+     * @param array $params Supports per_page, selected_code, account_code, and name.
      * @return \Illuminate\Pagination\Paginator
      */
     public function getBranchesByParams($params)

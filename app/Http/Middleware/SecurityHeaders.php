@@ -9,6 +9,16 @@ use Symfony\Component\HttpFoundation\Response;
 
 class SecurityHeaders
 {
+    /**
+     * Attach security headers to the response.
+     *
+     * Generates a per-request CSP nonce (consumed by the Vite helper) before the
+     * view renders, then sets X-Content-Type-Options, X-Frame-Options,
+     * Referrer-Policy, and Permissions-Policy on every response. Adds HSTS on
+     * secure requests, and a nonce-based Content-Security-Policy only in production.
+     *
+     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
+     */
     public function handle(Request $request, Closure $next): Response
     {
         // Generate a per-request CSP nonce before the view renders. Laravel's
@@ -42,6 +52,11 @@ class SecurityHeaders
         return $response;
     }
 
+    /**
+     * Build the production Content-Security-Policy header string, allow-listing
+     * scripts by the given per-request nonce (with 'strict-dynamic') and permitting
+     * the fonts.bunny.net font CDN and inline styles required by Vue/Tailwind.
+     */
     private function productionCsp(string $nonce): string
     {
         $directives = [

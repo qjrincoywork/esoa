@@ -21,7 +21,7 @@ class BillingInvoiceFinalReminder extends Mailable
     public $billingInvoice;
 
     /**
-     * Create a new message instance.
+     * Create the final-reminder mailable for the given billing invoice (SOA).
      */
     public function __construct($billingInvoice)
     {
@@ -29,7 +29,8 @@ class BillingInvoiceFinalReminder extends Mailable
     }
 
     /**
-     * Get the message envelope.
+     * Build the envelope with a translated subject (labels.new_billing_invoice_uploaded.subject)
+     * that embeds the billing invoice's soa_number.
      */
     public function envelope(): Envelope
     {
@@ -41,7 +42,7 @@ class BillingInvoiceFinalReminder extends Mailable
     }
 
     /**
-     * Get the message content definition.
+     * Render the email using the emails.esoa.billing-invoice-final-reminder view.
      */
     public function content(): Content
     {

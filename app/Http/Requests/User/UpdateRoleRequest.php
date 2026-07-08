@@ -7,7 +7,8 @@ use Illuminate\Foundation\Http\FormRequest;
 class UpdateRoleRequest extends FormRequest
 {
     /**
-     * Get the validation rules that apply to the request.
+     * Validate the target user ID and an optional array of existing role IDs to
+     * assign to that user.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
@@ -30,7 +31,7 @@ class UpdateRoleRequest extends FormRequest
     }
 
     /**
-     * Get the error messages for the defined validation rules.
+     * Custom validation messages for the single-user role-assignment fields.
      *
      * @return array<string, string>
      */

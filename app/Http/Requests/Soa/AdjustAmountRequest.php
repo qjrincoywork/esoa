@@ -13,6 +13,9 @@ use Symfony\Component\HttpFoundation\Response;
 
 class AdjustAmountRequest extends FormRequest
 {
+    /**
+     * Authorize superadmin/admin roles or users holding the "soas.adjust_amount" permission.
+     */
     public function authorize(): bool
     {
         $user = $this->user();
@@ -22,6 +25,10 @@ class AdjustAmountRequest extends FormRequest
         );
     }
 
+    /**
+     * Validate the target SOA id, the adjustment operation (a valid SoaAmountOperation),
+     * and a positive amount whose resulting balance stays non-negative.
+     */
     public function rules(): array
     {
         return [

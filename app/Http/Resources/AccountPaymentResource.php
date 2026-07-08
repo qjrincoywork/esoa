@@ -10,7 +10,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class AccountPaymentResource extends JsonResource
 {
     /**
-     * Transform the resource into an array.
+     * Transform the account payment into an array, mapping the mode of payment to its
+     * label, joining related SOA numbers, formatting dates, and issuing short-lived
+     * preview tokens for any attached image/PDF/Excel files when a user is authenticated.
      *
      * @return array<string, mixed>
      */

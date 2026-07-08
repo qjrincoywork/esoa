@@ -11,7 +11,14 @@ use Illuminate\Support\Facades\Log;
 class SoaImportService
 {
     /**
-     * Queue SOA upload records for migration.
+     * Chunk the eligible legacy Upload rows and queue them for migration.
+     *
+     * Streams the upload query in configured chunk sizes, dispatching an
+     * ImportUploadsJob per chunk and stopping once the optional limit (or the
+     * configured default limit) is reached, trimming the final chunk as needed.
+     *
+     * @param  int|null  $limit  Max records to dispatch; null uses vc.soa_import.limit.
+     * @return int  The total number of records dispatched.
      */
     public function dispatchImport(?int $limit = null): int
     {
@@ -54,6 +61,14 @@ class SoaImportService
         return $dispatched;
     }
 
+    /**
+     * Build the base query for eligible legacy Upload rows on the "soa" connection.
+     *
+     * Selects the columns needed by ImportUploadsJob and restricts to
+     * non-deleted rows with a non-blank up_macode whose up_date falls within the
+     * configured date range and whose up_poc_start is on/after the configured
+     * poc_start_from.
+     */
     protected function buildUploadQuery(array $config): Builder
     {
         return DB::connection('soa')

@@ -9,7 +9,9 @@ use Illuminate\Validation\Rule;
 class BillRefsRequest extends FormRequest
 {
     /**
-     * Get the validation rules that apply to the request.
+     * Validation rules for the billing-reference lookup: requires an account code and a
+     * billing_ref_from source, and accepts optional account type, branch, name, billing
+     * date range, comma/space-delimited billing refs, and per-page count.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */

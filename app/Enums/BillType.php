@@ -77,6 +77,15 @@ final class BillType extends Enum
         };
     }
 
+    /**
+     * Resolve a legacy free-text bill type description to its enum value.
+     *
+     * Normalizes whitespace/casing before matching; unrecognized descriptions
+     * fall back to {@see self::MIGRATED}.
+     *
+     * @param string $value
+     * @return int
+     */
     public static function oldValue($value)
     {
         $value = strtoupper(trim(preg_replace('/\s+/', ' ', $value)));

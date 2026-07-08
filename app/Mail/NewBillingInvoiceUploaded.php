@@ -22,7 +22,7 @@ class NewBillingInvoiceUploaded extends Mailable
     public $soa;
 
     /**
-     * Create a new message instance.
+     * Create the mailable announcing the newly uploaded billing invoice (SOA).
      */
     public function __construct(Soa $soa)
     {
@@ -30,7 +30,8 @@ class NewBillingInvoiceUploaded extends Mailable
     }
 
     /**
-     * Get the message envelope.
+     * Build the envelope with a translated subject (labels.new_billing_invoice_uploaded.subject)
+     * that embeds the SOA's soa_number.
      */
     public function envelope(): Envelope
     {
@@ -42,7 +43,7 @@ class NewBillingInvoiceUploaded extends Mailable
     }
 
     /**
-     * Get the message content definition.
+     * Render the email using the emails.esoa.new-bi-uploaded view.
      */
     public function content(): Content
     {

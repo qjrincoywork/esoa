@@ -42,8 +42,10 @@ class UserController extends Controller
     /**
      * UserController constructor.
      *
+     * Injects the User model and stores the SqlDatabase class name for
+     * on-demand HMS lookups.
+     *
      * @param User $user
-     * @param SqlDatabase $sqlDatabase
      *
      * @return void
      */
@@ -54,7 +56,13 @@ class UserController extends Controller
     }
 
     /**
-     * Display a listing of the resource.
+     * Render the Inertia "users/Index" page with a filtered user list and filter options.
+     *
+     * Also passes the user-type and department option lists used by the filter UI.
+     * Filters are validated by {@see ListRequest}.
+     *
+     * @param ListRequest $request
+     * @return \Inertia\Response
      */
     public function index(ListRequest $request)
     {
@@ -70,7 +78,15 @@ class UserController extends Controller
     }
 
     /**
-     * Show the form for creating a new resource.
+     * Return the lookup lists required to build the "Create User" form (AJAX only).
+     *
+     * Responds with account-type/user-type/gender option lists plus civil
+     * statuses, citizenships, departments, positions and all roles, so the form
+     * can be populated without a full page navigation. Non-AJAX requests fall
+     * through and receive no content.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse|void
      */
     public function create(Request $request)
     {
@@ -95,7 +111,16 @@ class UserController extends Controller
     }
 
     /**
-     * Store a newly created resource in storage.
+     * Persist a new user and sync their roles inside a DB transaction.
+     *
+     * Delegates creation to User::saveUser(), assigns any supplied roles, and
+     * commits. Login credentials are intentionally NOT emailed here — they are
+     * issued when the user is verified (see verify()). Returns an HTTP 201
+     * envelope for AJAX requests; rolls back and returns a server-error envelope
+     * on failure. Input is validated by {@see CreateRequest}.
+     *
+     * @param CreateRequest $request
+     * @return \Illuminate\Http\JsonResponse|void
      */
     public function store(CreateRequest $request)
     {
@@ -120,13 +145,26 @@ class UserController extends Controller
     }
 
     /**
-     * Display the specified resource.
+     * Unused resource stub; users are not shown individually via this action.
+     *
+     * @param string $id
+     * @return void
      */
     public function show(string $id)
     {
         //
     }
 
+    /**
+     * Return HMS accounts matching the request params as JSON (AJAX only).
+     *
+     * Queries the HMS server via {@see SqlDatabase} to feed account-picker
+     * comboboxes on the user forms. Non-AJAX requests fall through and receive
+     * no content.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse|void
+     */
     public function getAccounts(Request $request)
     {
         $accounts = (new $this->sqlDatabase(Server::HMS))->getAccountsByParams($request->all());
@@ -139,6 +177,16 @@ class UserController extends Controller
         }
     }
 
+    /**
+     * Return HMS branches matching the request params as JSON (AJAX only).
+     *
+     * Queries the HMS server via {@see SqlDatabase} to feed branch-picker
+     * comboboxes on the user forms. Non-AJAX requests fall through and receive
+     * no content.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse|void
+     */
     public function getBranches(Request $request)
     {
         $branches = (new $this->sqlDatabase(Server::HMS))->getBranchesByParams($request->all());
@@ -184,7 +232,16 @@ class UserController extends Controller
     }
 
     /**
-     * Show the form for editing the specified resource.
+     * Return the specified user and lookup lists for the edit form (AJAX only).
+     *
+     * Resolves the user with their detail, account access and roles, and includes
+     * suffix/gender/user-type/account-type options plus civil statuses,
+     * citizenships, departments, positions and all roles. Non-AJAX requests fall
+     * through and receive no content.
+     *
+     * @param int $id
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse|void
      */
     public function edit(int $id, Request $request)
     {
@@ -213,7 +270,15 @@ class UserController extends Controller
     }
 
     /**
-     * Update the specified resource in storage.
+     * Update the specified user and re-sync their roles inside a DB transaction.
+     *
+     * Resolves the target user by id, delegates the update to User::saveUser(),
+     * re-syncs any supplied roles, and commits. Returns an HTTP 200 envelope for
+     * AJAX requests; rolls back and returns a server-error envelope on failure.
+     * Input is validated by {@see UpdateRequest}.
+     *
+     * @param UpdateRequest $request
+     * @return \Illuminate\Http\JsonResponse|void
      */
     public function update(UpdateRequest $request)
     {
@@ -240,7 +305,16 @@ class UserController extends Controller
     }
 
     /**
-     * Remove the specified resource from storage.
+     * Toggle soft-delete state for the specified user (delete or restore).
+     *
+     * Runs inside a DB transaction: resolves the user including trashed rows,
+     * restores them if already trashed or soft-deletes them otherwise, then
+     * commits and returns an HTTP 200 envelope for AJAX requests. Rolls back and
+     * returns a server-error envelope on failure. Input is validated by
+     * {@see DeleteRequest}.
+     *
+     * @param DeleteRequest $request
+     * @return \Illuminate\Http\JsonResponse|void
      */
     public function destroy(DeleteRequest $request)
     {
@@ -597,7 +671,16 @@ class UserController extends Controller
     }
 
     /**
-     * Save role assignment changes for a user.
+     * Re-sync a single user's roles (by id) and flush the permission cache.
+     *
+     * Runs inside a DB transaction: resolves the user, syncs to the given role
+     * ids (clearing all when none supplied) to avoid name/guard resolution
+     * issues, forgets Spatie's cached permissions, commits, and returns an
+     * HTTP 200 envelope. Rolls back and returns a server-error envelope on
+     * failure. Input is validated by {@see UpdateRoleRequest}.
+     *
+     * @param UpdateRoleRequest $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function updateRoles(UpdateRoleRequest $request)
     {
