@@ -23,11 +23,24 @@ class ImportUploadsJob implements ShouldQueue
 
     public $timeout = 120;
 
+    /**
+     * Create the job with the legacy Upload rows to import.
+     *
+     * @param  mixed  $chunk   A Collection, array, or single legacy Upload row (up_* fields).
+     * @param  int    $authId  User id recorded as the owner of the imported SOAs.
+     */
     public function __construct(
         public mixed $chunk,
         public int $authId = 1,
     ) {}
 
+    /**
+     * Import each legacy Upload row into a Soa within a single transaction.
+     *
+     * Iterates the normalized records and delegates to importUpload(), then
+     * commits. Any failure rolls back the transaction, logs the error, and
+     * rethrows so the job can be retried.
+     */
     public function handle(): void
     {
         DB::beginTransaction();
@@ -53,6 +66,10 @@ class ImportUploadsJob implements ShouldQueue
     }
 
     /**
+     * Normalize the constructor payload into an iterable of Upload rows.
+     *
+     * A Collection or array is returned as-is; a single row is wrapped in an array.
+     *
      * @return iterable<object>
      */
     protected function records(): iterable
@@ -68,6 +85,16 @@ class ImportUploadsJob implements ShouldQueue
         return [$this->chunk];
     }
 
+    /**
+     * Create a single Soa from a legacy Upload row.
+     *
+     * Skips the row when the account code or SOA number is empty, or when a Soa
+     * with the same soa_number already exists. Copies any PDF/XLS source files
+     * to the billing disk, derives the account type (TPA when the code starts
+     * with "TP", otherwise HMO) and the status from up_status/up_endorsedtoacct
+     * (UNPAID, ENDORSED, or PAID), then persists the Soa keeping the legacy
+     * upload date as created_at.
+     */
     protected function importUpload(object $upload, string $uploadsFolder, $billingDisk): void
     {
         if (empty($upload->up_accode) || empty($upload->up_soanum)) {
@@ -120,12 +147,26 @@ class ImportUploadsJob implements ShouldQueue
         $soa->save();
     }
 
+    /**
+     * Build the billing-disk directory for an upload: the account code, with
+     * "/branchCode" appended when a branch code is present.
+     */
     protected function storageDirectory(object $upload): string
     {
         return $upload->up_accode
             . (! empty($upload->up_branchcode) ? '/'.$upload->up_branchcode : '');
     }
 
+    /**
+     * Copy one source file from the legacy uploads folder to the billing disk.
+     *
+     * The source path is built from the uploads folder plus the macode/accode
+     * subfolders and filename. If the source file does not exist a warning is
+     * logged and null is returned; otherwise the target directory is created,
+     * the file is written, and the destination path is returned.
+     *
+     * @return string|null  The destination path on the billing disk, or null when the source is missing.
+     */
     protected function copySourceFile(
         object $upload,
         string $filename,

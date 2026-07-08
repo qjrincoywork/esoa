@@ -24,6 +24,10 @@ class LoginResponse implements LoginResponseContract
     /** Fallback for users without access to the preferred route. */
     private const FALLBACK_ROUTE = 'dashboard';
 
+    /**
+     * Build the post-login response: a 204 No Content for JSON callers, otherwise
+     * a redirect to the user's intended URL or the resolved landing page.
+     */
     public function toResponse($request): RedirectResponse|JsonResponse
     {
         if ($request->wantsJson()) {

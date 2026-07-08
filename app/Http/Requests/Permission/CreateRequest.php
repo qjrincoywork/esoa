@@ -8,7 +8,7 @@ use Illuminate\Validation\Rule;
 class CreateRequest extends FormRequest
 {
     /**
-     * Get the validation rules that apply to the request.
+     * Validation rules for creating a permission with a unique name and a guard name.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */

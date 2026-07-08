@@ -23,7 +23,7 @@ class SendBillingInvoiceDueReminders implements ShouldQueue
     private const EXCLUDE_STATUSES = [SoaStatus::PAID];
 
     /**
-     * Create a new job instance.
+     * Create the job and configure its queue, retry count, and timeout.
      */
     public function __construct()
     {
@@ -33,7 +33,11 @@ class SendBillingInvoiceDueReminders implements ShouldQueue
     }
 
     /**
-     * Execute the job.
+     * Group all non-paid SOAs by user and aging bucket and fan out reminders.
+     *
+     * Fetches the aged SOA counts per user (see fetchSOAsGroupedByUser), and
+     * when any exist dispatches chunked SendBillingInvoiceDueReminderJob jobs.
+     * Errors are logged and rethrown.
      */
     public function handle(): void
     {

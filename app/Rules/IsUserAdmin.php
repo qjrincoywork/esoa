@@ -8,7 +8,10 @@ use Illuminate\Contracts\Validation\ValidationRule;
 class IsUserAdmin implements ValidationRule
 {
     /**
-     * Run the validation rule.
+     * Pass only when the authenticated user is privileged.
+     *
+     * The value itself is ignored; the rule fails with "User is restricted."
+     * unless the current user holds the configured superadmin role or "admin".
      *
      * @param  \Closure(string, ?string=): \Illuminate\Translation\PotentiallyTranslatedString  $fail
      */

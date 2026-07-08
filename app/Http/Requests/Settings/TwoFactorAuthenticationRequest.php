@@ -11,7 +11,8 @@ class TwoFactorAuthenticationRequest extends FormRequest
     use InteractsWithTwoFactorState;
 
     /**
-     * Determine if the user is authorized to make this request.
+     * Authorize the request only when the two-factor authentication feature is
+     * enabled in Fortify.
      */
     public function authorize(): bool
     {
@@ -19,7 +20,7 @@ class TwoFactorAuthenticationRequest extends FormRequest
     }
 
     /**
-     * Get the validation rules that apply to the request.
+     * No fields are validated; this request carries no input.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */

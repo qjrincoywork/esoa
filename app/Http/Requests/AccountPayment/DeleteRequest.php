@@ -7,6 +7,9 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class DeleteRequest extends FormRequest
 {
+    /**
+     * Authorize superadmin/admin roles or users holding the 'account_payments.destroy' permission.
+     */
     public function authorize(): bool
     {
         $user = $this->user();
@@ -17,7 +20,7 @@ class DeleteRequest extends FormRequest
     }
 
     /**
-     * Get the validation rules that apply to the request.
+     * Validation rules for deleting an account payment, ensuring the record exists and the user is an admin.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */

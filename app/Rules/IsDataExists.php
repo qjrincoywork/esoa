@@ -16,7 +16,7 @@ class IsDataExists implements ValidationRule
     protected $table;
 
     /**
-     * Create a new rule instance.
+     * Create the rule for the local table the value's id must exist in.
      *
      * @param string $table
      */
@@ -26,7 +26,12 @@ class IsDataExists implements ValidationRule
     }
 
     /**
-     * Run the validation rule.
+     * Pass only when a row with id equal to the value exists in the configured table.
+     *
+     * The list of real tables is resolved from the current connection (SHOW
+     * TABLES on MySQL, INFORMATION_SCHEMA otherwise); the rule fails closed with
+     * "The {attribute} is invalid." both when the table is not a known base
+     * table and when no matching id is found.
      *
      * @param  \Closure(string, ?string=): \Illuminate\Translation\PotentiallyTranslatedString  $fail
      */

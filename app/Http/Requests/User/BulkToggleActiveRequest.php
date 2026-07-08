@@ -6,11 +6,20 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class BulkToggleActiveRequest extends FormRequest
 {
+    /**
+     * Authorize only users holding the "superadmin" or "admin" role.
+     */
     public function authorize(): bool
     {
         return $this->user()?->hasAnyRole(['superadmin', 'admin']) ?? false;
     }
 
+    /**
+     * Validate a non-empty list of existing user IDs and the target boolean
+     * active status to apply to them.
+     *
+     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     */
     public function rules(): array
     {
         return [
@@ -20,6 +29,11 @@ class BulkToggleActiveRequest extends FormRequest
         ];
     }
 
+    /**
+     * Custom validation messages for the bulk active-status toggle fields.
+     *
+     * @return array<string, string>
+     */
     public function messages(): array
     {
         return [

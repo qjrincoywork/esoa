@@ -9,6 +9,9 @@ use Illuminate\Validation\Rule;
 
 class UpdateRequest extends FormRequest
 {
+    /**
+     * Authorize superadmin/admin roles or users holding the 'concerns.update' permission.
+     */
     public function authorize(): bool
     {
         $user = $this->user();
@@ -19,7 +22,7 @@ class UpdateRequest extends FormRequest
     }
 
     /**
-     * Get the validation rules that apply to the request.
+     * Validation rules for updating a concern; billing_admin users may only change id and status, while other users update the full concern payload.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */

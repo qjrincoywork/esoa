@@ -11,13 +11,30 @@ use Inertia\Inertia;
 
 class AdminController extends Controller
 {
+    /**
+     * User model instance.
+     *
+     * @var User
+     */
     protected $user;
 
+    /**
+     * Inject the User model instance.
+     */
     public function __construct(User $user)
     {
         $this->user = $user;
     }
 
+    /**
+     * Run the full HMS reference-data import: main accounts then accounts.
+     *
+     * Invoked as the entry point for the import pipeline; logs and re-throws
+     * any exception so the caller (console command / queue) sees the failure.
+     *
+     * @return void
+     * @throws \Exception
+     */
     public function startImport()
     {
         try {
@@ -30,6 +47,15 @@ class AdminController extends Controller
         }
     }
 
+    /**
+     * Import HMS accounts (joined with agent data) in chunks of 2,000.
+     *
+     * Streams the HMS `Accounts`/`agent_table` join and dispatches an
+     * {@see ImportAccountsJob} per chunk. Logs and re-throws on failure.
+     *
+     * @return void
+     * @throws \Exception
+     */
     public function importAccounts()
     {
         try {
@@ -51,6 +77,15 @@ class AdminController extends Controller
         }
     }
 
+    /**
+     * Import HMS branches in chunks of 2,000.
+     *
+     * Streams the HMS `Branches` table and dispatches an
+     * {@see ImportBranchesJob} per chunk. Logs and re-throws on failure.
+     *
+     * @return void
+     * @throws \Exception
+     */
     public function importBranches()
     {
         try {
@@ -71,6 +106,15 @@ class AdminController extends Controller
         }
     }
 
+    /**
+     * Import HMS main accounts in chunks of 2,000.
+     *
+     * Streams the HMS `MainAcct` table and dispatches an
+     * {@see ImportMainAccountsJob} per chunk. Logs and re-throws on failure.
+     *
+     * @return void
+     * @throws \Exception
+     */
     public function importMainAccounts()
     {
         try {
@@ -90,6 +134,18 @@ class AdminController extends Controller
         }
     }
 
+    /**
+     * Dispatch SOA import jobs via {@see SoaImportService}, optionally capped.
+     *
+     * Reads an optional `limit` query param to bound how many SOAs are queued,
+     * delegates dispatching to the service, and returns a JSON summary with the
+     * dispatched count. Logs and re-throws on failure.
+     *
+     * @param Request $request
+     * @param SoaImportService $soaImportService
+     * @return \Illuminate\Http\JsonResponse
+     * @throws \Exception
+     */
     public function importSoa(Request $request, SoaImportService $soaImportService)
     {
         try {
@@ -109,20 +165,44 @@ class AdminController extends Controller
         }
     }
 
+    /**
+     * Redirect the admin landing route to the dashboard.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\RedirectResponse
+     */
     public function index(Request $request)
     {
         return redirect()->route('dashboard');
     }
 
+    /**
+     * Unused resource stub; no create form is served by this controller.
+     */
     public function create() {}
 
+    /**
+     * Unused resource stub; this controller does not persist records directly.
+     */
     public function store(Request $request) {}
 
+    /**
+     * Unused resource stub; no single-record view is served by this controller.
+     */
     public function show(string $id) {}
 
+    /**
+     * Unused resource stub; no edit form is served by this controller.
+     */
     public function edit(string $id) {}
 
+    /**
+     * Unused resource stub; this controller does not update records directly.
+     */
     public function update(Request $request, string $id) {}
 
+    /**
+     * Unused resource stub; this controller does not delete records directly.
+     */
     public function destroy(string $id) {}
 }

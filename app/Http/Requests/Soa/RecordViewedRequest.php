@@ -7,7 +7,7 @@ use Illuminate\Foundation\Http\FormRequest;
 class RecordViewedRequest extends FormRequest
 {
     /**
-     * Determine if the user is authorized to make this request.
+     * Allow all authenticated users.
      */
     public function authorize(): bool
     {
@@ -15,7 +15,7 @@ class RecordViewedRequest extends FormRequest
     }
 
     /**
-     * Prepare data for validation.
+     * Merge the route "id" parameter into the request payload so it can be validated.
      */
     protected function prepareForValidation(): void
     {
@@ -25,7 +25,7 @@ class RecordViewedRequest extends FormRequest
     }
 
     /**
-     * Get the validation rules that apply to the request.
+     * Validate that id is a required integer referencing an existing SOA.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */

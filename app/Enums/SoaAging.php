@@ -25,6 +25,12 @@ final class SoaAging extends Enum
     public const PAST_DUE_120 = 120;
     public const PAST_DUE_OVER_120 = 121;
 
+    /**
+     * Map an aging bucket value to its display label (e.g. "Past Due – 30 Days").
+     *
+     * @param int $value
+     * @return string
+     */
     public static function label($value): string
     {
         return match ($value) {

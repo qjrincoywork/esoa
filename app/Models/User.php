@@ -74,26 +74,51 @@ class User extends Authenticatable implements AuthorizableContract, MustVerifyEm
         return $this->hasOne(UserDetail::class, 'user_id');
     }
 
+    /**
+     * Get the concerns raised by this user (has-many Concern via user_id).
+     *
+     * @return HasMany
+     */
     public function concerns(): HasMany
     {
         return $this->hasMany(Concern::class, 'user_id');
     }
 
+    /**
+     * Get the account payments recorded by this user (has-many AccountPayment via user_id).
+     *
+     * @return HasMany
+     */
     public function accountPayments(): HasMany
     {
         return $this->hasMany(AccountPayment::class, 'user_id');
     }
 
+    /**
+     * Get the SOAs (billing invoices) owned by this user (has-many Soa via user_id).
+     *
+     * @return HasMany
+     */
     public function billingInvoices(): HasMany
     {
         return $this->hasMany(Soa::class, 'user_id');
     }
 
+    /**
+     * Get the SOA activity entries performed by this user (has-many SoaActivity via user_id).
+     *
+     * @return HasMany
+     */
     public function soaActivities(): HasMany
     {
         return $this->hasMany(SoaActivity::class, 'user_id');
     }
 
+    /**
+     * Get the account/branch assignments for this user (has-many UserAccount via user_id).
+     *
+     * @return HasMany
+     */
     public function userAccounts(): HasMany
     {
         return $this->hasMany(UserAccount::class, 'user_id');

@@ -28,7 +28,8 @@ class FortifyServiceProvider extends ServiceProvider
     private const DUMMY_PASSWORD_HASH = '$2y$12$7mx7x8LRedVRhDbZMdxEw.R3Qn64wNvwCtEkB3.P4VPksi1hnXEWK';
 
     /**
-     * Register any application services.
+     * Bind the custom Fortify login response so users are redirected to the SOA
+     * dashboard after authenticating (see App\Http\Responses\LoginResponse).
      */
     public function register(): void
     {
@@ -37,7 +38,8 @@ class FortifyServiceProvider extends ServiceProvider
     }
 
     /**
-     * Bootstrap any application services.
+     * Wire up Fortify: its actions, Inertia views, login/2FA rate limiters, and
+     * the custom credential/eligibility authentication callback.
      */
     public function boot(): void
     {

@@ -13,7 +13,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class UserAccessResource extends JsonResource
 {
     /**
-     * Transform the resource into an array.
+     * Transform the user into a combobox option, composing a "username (email)" display
+     * name and embedding the user's account/branch access so it can be copied without a
+     * second request.
      *
      * @return array<string, mixed>
      */

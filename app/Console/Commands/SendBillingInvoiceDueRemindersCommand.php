@@ -24,7 +24,10 @@ class SendBillingInvoiceDueRemindersCommand extends Command
     protected $description = 'Send billing invoice due date reminders to users for SOAs that are past due or coming due. Runs at 2:00 AM daily via scheduler, or manually with this command.';
 
     /**
-     * Execute the console command.
+     * Dispatch (or, with --sync, immediately run) the SendBillingInvoiceDueReminders job,
+     * honoring the --queue and --delay options, and report progress to the console.
+     *
+     * @return int Command exit code (self::SUCCESS on dispatch/run, self::FAILURE on exception).
      */
     public function handle(): int
     {

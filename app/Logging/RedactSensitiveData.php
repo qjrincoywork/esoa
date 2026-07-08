@@ -34,6 +34,10 @@ class RedactSensitiveData implements ProcessorInterface
         'authorization',
     ];
 
+    /**
+     * Return a copy of the log record with its message, context, and extra data
+     * scrubbed of sensitive keys and inline credential patterns.
+     */
     public function __invoke(LogRecord $record): LogRecord
     {
         return $record->with(

@@ -11,6 +11,10 @@ use Illuminate\Log\Logger;
  */
 class RedactSensitiveTap
 {
+    /**
+     * Push the {@see RedactSensitiveData} processor onto the channel's Monolog
+     * instance so its records are scrubbed before being written.
+     */
     public function __invoke(Logger $logger): void
     {
         $logger->getLogger()->pushProcessor(new RedactSensitiveData());

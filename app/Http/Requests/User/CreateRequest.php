@@ -12,7 +12,10 @@ use Illuminate\Foundation\Http\FormRequest;
 class CreateRequest extends FormRequest
 {
     /**
-     * Get the validation rules that apply to the request.
+     * Validate a new user, including the account type-specific fields conditionally
+     * required by the user type (account/branch, group accounts, broker agent code,
+     * or VC employee department/position/number), personal details, and a unique,
+     * non-reserved username and unique email plus optional role IDs.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
@@ -152,7 +155,8 @@ class CreateRequest extends FormRequest
     }
 
     /**
-     * Get the error messages for the defined validation rules.
+     * Custom validation messages for the user-creation fields, mainly the
+     * required and conditionally required demographic and account fields.
      *
      * @return array<string, string>
      */

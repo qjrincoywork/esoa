@@ -16,11 +16,18 @@ class AccountPaymentNotification extends Mailable
 
     public AccountPayment $accountPayment;
 
+    /**
+     * Create the mailable for the given account payment record.
+     */
     public function __construct(AccountPayment $accountPayment)
     {
         $this->accountPayment = $accountPayment;
     }
 
+    /**
+     * Build the envelope with subject "Account payment notification for {deposit date}"
+     * (falling back to "record" when the deposit date is empty).
+     */
     public function envelope(): Envelope
     {
         return new Envelope(
@@ -28,6 +35,9 @@ class AccountPaymentNotification extends Mailable
         );
     }
 
+    /**
+     * Render the email using the emails.esoa.account-payment-notification view.
+     */
     public function content(): Content
     {
         return new Content(
@@ -35,6 +45,9 @@ class AccountPaymentNotification extends Mailable
         );
     }
 
+    /**
+     * No attachments are sent with this notification.
+     */
     public function attachments(): array
     {
         return [];

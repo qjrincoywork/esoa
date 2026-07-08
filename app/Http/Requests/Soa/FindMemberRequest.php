@@ -7,7 +7,9 @@ use Illuminate\Foundation\Http\FormRequest;
 class FindMemberRequest extends FormRequest
 {
     /**
-     * Get the validation rules that apply to the request.
+     * Validation rules for the member search: all identity filters (policy/batch/claim
+     * number, first/last name, account code, company name) are optional strings and
+     * per_page is an optional integer between 1 and 100.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
@@ -28,7 +30,7 @@ class FindMemberRequest extends FormRequest
     }
 
     /**
-     * Get the error messages for the defined validation rules.
+     * Custom validation messages for the member search string and per-page rules.
      *
      * @return array<string, string>
      */

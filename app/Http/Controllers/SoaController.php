@@ -130,7 +130,13 @@ class SoaController extends Controller
     }
 
     /**
-     * Display the dashboard.
+     * Render the SOA dashboard with past-due aging counts.
+     *
+     * Loads the past-due aging bucket counts and passes them to the Inertia
+     * "soas/Dashboard" page as an {@see SoaAgingCountResource} collection.
+     *
+     * @param Request $request
+     * @return \Inertia\Response
      */
     public function dashboard(Request $request)
     {
@@ -142,7 +148,17 @@ class SoaController extends Controller
     }
 
     /**
-     * Display a listing of the account / branch members.
+     * Return HMS card-holder members for an account/branch as JSON (AJAX only).
+     *
+     * Queries the HMS server via {@see SqlDatabase} using the validated params
+     * and responds with an {@see AccountBranchMemberResource} collection. Non-AJAX
+     * requests fall through and receive no content. Input is validated by
+     * {@see AccountBranchMembersRequest}.
+     *
+     * @param AccountBranchMembersRequest $request
+     * @param string $account_code
+     * @param string $branch_code
+     * @return \Illuminate\Http\JsonResponse|void
      */
     public function accountBranchMembers(AccountBranchMembersRequest $request, string $account_code, string $branch_code)
     {
@@ -157,7 +173,16 @@ class SoaController extends Controller
     }
 
     /**
-     * Display a listing of the resource.
+     * List SOAs (billing invoices), returning JSON for fetch calls or an Inertia page.
+     *
+     * For AJAX/fetch requests (e.g. the SearchableCombobox) it returns a paginated
+     * JSON payload of {@see SoaResource} data with pagination metadata; otherwise
+     * it renders the Inertia "soas/List" page with the collection plus status,
+     * account-type and bill-type option lists. Filters are validated by
+     * {@see ListRequest}.
+     *
+     * @param ListRequest $request
+     * @return \Illuminate\Http\JsonResponse|\Inertia\Response
      */
     public function list(ListRequest $request)
     {
@@ -212,7 +237,19 @@ class SoaController extends Controller
     }
 
     /**
-     * Display a file listing of the resource.
+     * List RM-disk attachment files for a claim number as JSON (AJAX only).
+     *
+     * When a `claimnum` is provided, enumerates files on the RM disk under that
+     * claim and returns each file's name together with a signed preview token
+     * (issued by {@see CommonHelper::createFilePreviewToken()}) for later inline
+     * streaming via previewFile(). Non-AJAX requests fall through and receive no
+     * content. Input is validated by {@see FileListRequest}.
+     *
+     * Access control (RBAC): {@see CommonHelper::assertUserMayAccessModel()} is
+     * enforced before any files are listed.
+     *
+     * @param FileListRequest $request
+     * @return \Illuminate\Http\JsonResponse|void
      */
     public function fileList(FileListRequest $request)
     {
@@ -524,7 +561,18 @@ class SoaController extends Controller
     }
 
     /**
-     * Display SOA activities for the given SOA id.
+     * Return a paginated audit trail of activities for the given SOA as JSON.
+     *
+     * Resolves the SOA, paginates its activity rows (newest first) and returns
+     * them as {@see SoaActivityListResource} data with pagination metadata. Always
+     * responds with JSON regardless of request type.
+     *
+     * Access control (RBAC): {@see CommonHelper::assertUserMayAccessModel()} is
+     * enforced before the activities are loaded.
+     *
+     * @param Request $request
+     * @param int $id
+     * @return \Illuminate\Http\JsonResponse
      */
     public function activities(Request $request, int $id)
     {
@@ -639,7 +687,17 @@ class SoaController extends Controller
     }
 
     /**
-     * Edit the specified resource.
+     * Return the specified SOA and lookup lists for the edit form (AJAX only).
+     *
+     * Resolves the SOA and includes account-type/bill-type/status/billing-ref
+     * option lists. Non-AJAX requests fall through and receive no content.
+     *
+     * Access control (RBAC): beyond route-level middleware,
+     * {@see CommonHelper::assertUserMayAccessModel()} enforces per-model ownership.
+     *
+     * @param Request $request
+     * @param int $id
+     * @return \Illuminate\Http\JsonResponse|void
      */
     public function edit(Request $request, int $id)
     {
@@ -659,7 +717,23 @@ class SoaController extends Controller
     }
 
     /**
-     * Update the specified resource in storage.
+     * Update the specified SOA, recording an audit activity and firing emails.
+     *
+     * Runs inside a DB transaction: resolves the SOA, rejects updates to a PAID
+     * SOA, and (for non account/group admins only) stores any uploaded files.
+     * After applying validated changes it diffs the filtered original vs. changed
+     * attributes and, when anything changed, records an "update" activity. It then
+     * emails a {@see NewBillingInvoiceUploaded} notice when a new PDF is uploaded
+     * on an UNPAID SOA, and a {@see BillingInvoiceStatusChanged} notice when an
+     * account/group admin moves the status into an allowed value. Returns an
+     * HTTP 200 envelope for AJAX requests; rolls back and returns a server-error
+     * envelope on failure. Input is validated by {@see UpdateRequest}.
+     *
+     * Access control (RBAC): {@see CommonHelper::assertUserMayAccessModel()} is
+     * enforced before the transaction begins.
+     *
+     * @param UpdateRequest $request
+     * @return \Illuminate\Http\JsonResponse|void
      */
     public function update(UpdateRequest $request)
     {

@@ -307,6 +307,21 @@ class CommonHelper
         }
     }
 
+    /**
+     * Authorize the authenticated user against the current route and, when given,
+     * a specific model instance.
+     *
+     * Full-access roles (superadmin/admin/billing_admin) and any user holding the
+     * current route's named permission pass unconditionally. Account/branch and
+     * group-account admins must additionally own the model's account (and branch,
+     * when set) via their userAccounts. All other cases abort: 401 when
+     * unauthenticated, otherwise 403.
+     *
+     * @param  object  $request
+     * @param  \Illuminate\Database\Eloquent\Model|null  $model
+     * @throws \Symfony\Component\HttpKernel\Exception\HttpException
+     * @return void
+     */
     public static function assertUserMayAccessModel($request, $model = null): void
     {
         $authUser = $request->user();

@@ -11,6 +11,10 @@ use Illuminate\Validation\Rule;
 
 class ListRequest extends FormRequest
 {
+    /**
+     * Authorize superadmin/admin roles or users holding the "soas.export" or
+     * "soas.list" permission.
+     */
     public function authorize(): bool
     {
         $user = $this->user();
@@ -21,7 +25,9 @@ class ListRequest extends FormRequest
     }
 
     /**
-     * Get the validation rules that apply to the request.
+     * Validation rules for listing SOAs: all filters are optional (account type/code,
+     * branch, billing reference, SOA number, status, bill type, aging, due-date and
+     * bill-date ranges, and per-page count).
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */

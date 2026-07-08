@@ -9,7 +9,13 @@ use Symfony\Component\HttpFoundation\Response;
 class CheckPermission
 {
     /**
-     * Handle an incoming request.
+     * Authorize the request against the permission named after the current route.
+     *
+     * Unauthenticated users are redirected to login; a nameless route is rejected
+     * with 403; superadmins bypass the check. Otherwise the user must hold the
+     * permission matching the route name, else the request is rejected with a 403
+     * JSON response (for API/JSON callers) or redirected to the dashboard with an
+     * error flash message.
      *
      * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
      */

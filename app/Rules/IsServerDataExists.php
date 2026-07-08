@@ -31,9 +31,11 @@ class IsServerDataExists implements ValidationRule
     protected $column;
 
     /**
-     * Create a new rule instance.
+     * Create the rule for a table/column lookup on a specific DB connection.
      *
-     * @param string $server, string $table, string $column
+     * @param string $server  The database connection name to query.
+     * @param string $table   The table to look the value up in.
+     * @param string $column  The column to match; defaults to the attribute name when null.
      */
     public function __construct(string $server, string $table, string $column = null)
     {
@@ -43,7 +45,10 @@ class IsServerDataExists implements ValidationRule
     }
 
     /**
-     * Run the validation rule.
+     * Pass only when the value exists in the configured table/column on the
+     * given connection; fails with "The {column} is invalid." otherwise.
+     *
+     * When no column was supplied, the validated attribute name is used.
      *
      * @param  \Closure(string, ?string=): \Illuminate\Translation\PotentiallyTranslatedString  $fail
      */

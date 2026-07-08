@@ -7,6 +7,9 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class FileListRequest extends FormRequest
 {
+    /**
+     * Authorize superadmin/admin roles or users holding the "soas.file_list" permission.
+     */
     public function authorize(): bool
     {
         $user = $this->user();
@@ -17,7 +20,9 @@ class FileListRequest extends FormRequest
     }
 
     /**
-     * Get the validation rules that apply to the request.
+     * Validate the SOA id (must exist), a required policy number, and an optional
+     * billing reference and claim number; billing_ref_from is required when a
+     * billing_ref is supplied.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
@@ -52,7 +57,8 @@ class FileListRequest extends FormRequest
     }
 
     /**
-     * Get the error messages for the defined validation rules.
+     * Custom validation messages for the SOA id, billing reference, claim number, and
+     * policy number rules.
      *
      * @return array<string, string>
      */

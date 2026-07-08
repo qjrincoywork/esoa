@@ -20,7 +20,9 @@ class ImportAccountsJob implements ShouldQueue
     public $chunk;
 
     /**
-     * Create a new job instance.
+     * Create the job with the chunk of legacy account rows to import.
+     *
+     * @param  iterable  $chunk  Legacy account records (objects exposing ac_* / agent_id fields).
      */
     public function __construct($chunk)
     {
@@ -28,7 +30,12 @@ class ImportAccountsJob implements ShouldQueue
     }
 
     /**
-     * Execute the job.
+     * Import the chunked legacy accounts into the accounts table.
+     *
+     * For each row a Contact is created first when a contact person or phone
+     * is present, then the Account is created (mapping every ac_* column). The
+     * whole chunk runs in one transaction that rolls back and rethrows on any
+     * failure so the batch can be retried.
      */
     public function handle(): void
     {

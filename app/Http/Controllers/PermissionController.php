@@ -33,7 +33,15 @@ class PermissionController extends Controller
     }
 
     /**
-     * Display a listing of the resource.
+     * Render the Inertia "permissions/Index" page with a paginated permission list.
+     *
+     * Supports optional name/guard_name LIKE filters and configurable sort column
+     * and direction (defaults: name asc), maps each row to id/name/guard_name plus
+     * a human-readable created_at, and preserves the query string across pages.
+     * Filters are validated by {@see ListRequest}.
+     *
+     * @param ListRequest $request
+     * @return \Inertia\Response
      */
     public function index(ListRequest $request)
     {
@@ -67,7 +75,9 @@ class PermissionController extends Controller
     }
 
     /**
-     * Show the form for creating a new resource.
+     * Unused resource stub; the create form is rendered client-side.
+     *
+     * @return void
      */
     public function create()
     {
@@ -75,7 +85,14 @@ class PermissionController extends Controller
     }
 
     /**
-     * Store a newly created resource in storage.
+     * Persist a new permission inside a DB transaction.
+     *
+     * Creates the permission from validated input, commits, and returns an
+     * HTTP 201 envelope. Rolls back and returns a server-error envelope on
+     * failure. Input is validated by {@see CreateRequest}.
+     *
+     * @param CreateRequest $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function store(CreateRequest $request)
     {
@@ -99,7 +116,10 @@ class PermissionController extends Controller
     }
 
     /**
-     * Display the specified resource.
+     * Unused resource stub; permissions are not shown individually.
+     *
+     * @param string $id
+     * @return void
      */
     public function show(string $id)
     {
@@ -107,7 +127,13 @@ class PermissionController extends Controller
     }
 
     /**
-     * Show the form for editing the specified resource.
+     * Return the specified permission as JSON for the edit form (AJAX only).
+     *
+     * Non-AJAX requests fall through and receive no content.
+     *
+     * @param string $id
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse|void
      */
     public function edit(string $id, Request $request)
     {
@@ -122,7 +148,14 @@ class PermissionController extends Controller
     }
 
     /**
-     * Update the specified resource in storage.
+     * Update the specified permission inside a DB transaction.
+     *
+     * Resolves the permission by id, applies validated changes, commits, and
+     * returns an HTTP 200 envelope for AJAX requests. Rolls back and returns a
+     * server-error envelope on failure. Input is validated by {@see UpdateRequest}.
+     *
+     * @param UpdateRequest $request
+     * @return \Illuminate\Http\JsonResponse|void
      */
     public function update(UpdateRequest $request)
     {
@@ -153,7 +186,15 @@ class PermissionController extends Controller
     }
 
     /**
-     * Remove the specified resource from storage.
+     * Permanently delete the specified permission inside a DB transaction.
+     *
+     * Resolves the permission by id and hard-deletes it (the Spatie permission
+     * model is not soft-deletable), commits, and returns an HTTP 200 JSON message
+     * for AJAX requests. Rolls back and returns a server-error envelope on
+     * failure. Input is validated by {@see DeleteRequest}.
+     *
+     * @param DeleteRequest $request
+     * @return \Illuminate\Http\JsonResponse|void
      */
     public function destroy(DeleteRequest $request)
     {

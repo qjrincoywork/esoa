@@ -6,13 +6,17 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class AccountAccessUsersRequest extends FormRequest
 {
+    /**
+     * Authorize only users holding the "superadmin" role.
+     */
     public function authorize(): bool
     {
         return $this->user()?->hasRole('superadmin') ?? false;
     }
 
     /**
-     * Get the validation rules that apply to the request.
+     * Validate the optional account-access user lookup filters: a name string,
+     * a user ID to exclude, and pagination (page and per_page).
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
@@ -43,7 +47,7 @@ class AccountAccessUsersRequest extends FormRequest
     }
 
     /**
-     * Get the error messages for the defined validation rules.
+     * Custom validation messages for the excluded user ID lookup.
      *
      * @return array<string, string>
      */

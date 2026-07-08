@@ -8,6 +8,9 @@ use Illuminate\Validation\Rule;
 
 class CreateRequest extends FormRequest
 {
+    /**
+     * Authorize superadmin/admin roles or users holding the 'account_payments.create' permission.
+     */
     public function authorize(): bool
     {
         $user = $this->user();
@@ -18,7 +21,7 @@ class CreateRequest extends FormRequest
     }
 
     /**
-     * Get the validation rules that apply to the request.
+     * Validation rules for creating an account payment (deposit date, mode of payment, image/PDF/Excel uploads, optional SOA IDs and remarks).
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
@@ -74,7 +77,7 @@ class CreateRequest extends FormRequest
     }
 
     /**
-     * Prepare the data for validation.
+     * Decode a JSON-encoded soa_ids string into an array and set user_id to the authenticated user's ID.
      */
     protected function prepareForValidation(): void
     {

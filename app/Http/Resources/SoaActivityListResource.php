@@ -20,6 +20,9 @@ use Illuminate\Support\Str;
 class SoaActivityListResource extends JsonResource
 {
     /**
+     * Transform the SOA activity into a list row with a human-readable event label and
+     * narrative descriptions of the before ("from") and after ("to") snapshots.
+     *
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array
@@ -35,6 +38,10 @@ class SoaActivityListResource extends JsonResource
         ];
     }
 
+    /**
+     * Map the raw event key to a human-readable label, falling back to a headlined
+     * version of the key for unknown events.
+     */
     protected function resolveEventLabel(): string
     {
         $event = (string) $this->event;
@@ -50,6 +57,10 @@ class SoaActivityListResource extends JsonResource
         };
     }
 
+    /**
+     * Build a narrative description of the "from" (before) snapshot, choosing a strategy
+     * based on the event type. Returns an em dash when there is nothing to describe.
+     */
     protected function describeFrom(): string
     {
         $from = $this->from;
@@ -64,6 +75,10 @@ class SoaActivityListResource extends JsonResource
         };
     }
 
+    /**
+     * Build a narrative description of the "to" (after) snapshot, choosing a strategy
+     * based on the event type. Returns an em dash when there is nothing to describe.
+     */
     protected function describeTo(): string
     {
         $to = $this->to;
@@ -79,6 +94,8 @@ class SoaActivityListResource extends JsonResource
     }
 
     /**
+     * Return the "from" snapshot as an array, or an empty array when it is not one.
+     *
      * @return array<string, mixed>
      */
     protected function fromArraySafe(): array
@@ -89,6 +106,8 @@ class SoaActivityListResource extends JsonResource
     }
 
     /**
+     * Return the "to" snapshot as an array, or an empty array when it is not one.
+     *
      * @return array<string, mixed>
      */
     protected function toArraySafeTo(): array
@@ -99,6 +118,8 @@ class SoaActivityListResource extends JsonResource
     }
 
     /**
+     * Describe the previous values of the SOA fields that changed during an update event.
+     *
      * @param  array<string, mixed>  $from
      * @param  array<string, mixed>  $to
      */
@@ -123,6 +144,8 @@ class SoaActivityListResource extends JsonResource
     }
 
     /**
+     * Describe the new values of the SOA fields that changed during an update event.
+     *
      * @param  array<string, mixed>  $from
      * @param  array<string, mixed>  $to
      */
@@ -169,16 +192,27 @@ class SoaActivityListResource extends JsonResource
         return $changed;
     }
 
+    /**
+     * Determine whether a field key should be excluded from diffing, per the
+     * vc.ignored_diff_keys config list.
+     */
     protected function isIgnoredDiffKey(string $key): bool
     {
         return in_array($key, config('vc.ignored_diff_keys'), true);
     }
 
+    /**
+     * Determine whether two values differ once canonicalized for the given key.
+     */
     protected function valuesMeaningfullyDiffer(string $key, mixed $old, mixed $new): bool
     {
         return $this->canonicalizeForCompare($key, $old) !== $this->canonicalizeForCompare($key, $new);
     }
 
+    /**
+     * Normalize a value for comparison so cosmetic differences (date formats, numeric
+     * precision, file paths, numeric-string casts) are not treated as meaningful changes.
+     */
     protected function canonicalizeForCompare(string $key, mixed $value): string
     {
         if ($value === null || $value === '') {
@@ -211,6 +245,9 @@ class SoaActivityListResource extends JsonResource
         return trim((string) $value);
     }
 
+    /**
+     * Map a SOA field key to its human-readable label, falling back to a headlined key.
+     */
     protected function attributeLabel(string $key): string
     {
         return match ($key) {
@@ -300,6 +337,9 @@ class SoaActivityListResource extends JsonResource
     }
 
     /**
+     * Describe the balance prior to an amount added/deducted event, falling back to a
+     * generic snapshot when no amount is present.
+     *
      * @param  array<string, mixed>  $from
      */
     protected function describeAmountBefore(array $from): string
@@ -314,6 +354,9 @@ class SoaActivityListResource extends JsonResource
     }
 
     /**
+     * Describe the new balance and applied delta after an amount added/deducted event,
+     * falling back to a generic snapshot when neither is present.
+     *
      * @param  array<string, mixed>  $to
      */
     protected function describeAmountAfter(array $to): string
@@ -338,6 +381,9 @@ class SoaActivityListResource extends JsonResource
     }
 
     /**
+     * Build a generic "label: value" description of an arbitrary snapshot, skipping
+     * ignored diff keys.
+     *
      * @param  array<string, mixed>  $data
      */
     protected function describeGenericSnapshot(array $data): string

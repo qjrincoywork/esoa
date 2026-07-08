@@ -40,7 +40,8 @@ class NavigationModule extends Model
     }
 
     /**
-     * Get sub modules.
+     * Get the active (status = 1) child modules of this module, ordered by order_number
+     * (has-many NavigationModule via ref_id).
      */
     public function subModules(): HasMany
     {
@@ -70,6 +71,14 @@ class NavigationModule extends Model
         return $user->hasPermissionTo($this->permission);
     }
 
+    /**
+     * Get a paginated list of navigation modules with their navigation and permission eager-loaded.
+     *
+     * Optionally filters by name/slug (search_string) and navigation_id, ordered by
+     * navigation_id, order_number, then newest id. Superadmins also see soft-deleted rows.
+     *
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     */
     public function getNavigationModules(array $params)
     {
         $perPage = $params['per_page'] ?? config('vc.default_pages');
@@ -95,6 +104,11 @@ class NavigationModule extends Model
         return $query->paginate($perPage);
     }
 
+    /**
+     * Create or update a navigation module, stamping the authenticated user as created_by.
+     *
+     * Updates the existing record when the data contains an 'id' (findOrFail), otherwise creates a new one.
+     */
     public function saveNavigationModule(array $data): void
     {
         $data += ['created_by' => auth()->id()];

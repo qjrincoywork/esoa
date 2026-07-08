@@ -9,7 +9,8 @@ use Illuminate\Foundation\Http\FormRequest;
 class DeleteRequest extends FormRequest
 {
     /**
-     * Get the validation rules that apply to the request.
+     * Validate that the target user ID exists (via the IsDataExists rule) and that
+     * the current user is an admin (via the IsUserAdmin rule) before deletion.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */

@@ -18,6 +18,17 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class EnsureTwoFactorEnabled
 {
+    /**
+     * Block users whose role requires 2FA but who have not yet confirmed it,
+     * redirecting them to the 2FA setup page unless they are already on an
+     * allow-listed enrolment/logout route.
+     *
+     * Responds appropriately per request type: an Inertia location redirect for
+     * Inertia requests, a flash-messaged redirect for standard requests, and a
+     * 403 abort for JSON requests. Requests that pass are forwarded unchanged.
+     *
+     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
+     */
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
