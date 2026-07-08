@@ -16,7 +16,7 @@ class ListRequest extends FormRequest
         $user = $this->user();
         return $user !== null && (
             $user->hasAnyRole(['superadmin', 'admin']) ||
-            $user->hasAnyPermission(['soas.export'])
+            $user->hasAnyPermission(['soas.export', 'soas.list'])
         );
     }
 
