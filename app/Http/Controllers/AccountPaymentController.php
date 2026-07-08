@@ -122,7 +122,7 @@ class AccountPaymentController extends Controller
                 ['image', 'pdf', 'excel'],
                 null,
                 $accountPayment,
-                env('ACCOUNT_PAYMENTS_DISK', 'public')
+                config('vc.disks.account_payments')
             );
 
             // Persist any stored file paths onto the model before committing.
@@ -155,6 +155,7 @@ class AccountPaymentController extends Controller
      */
     public function show(AccountPayment $accountPayment)
     {
+        CommonHelper::assertUserMayAccessModel(request(), $accountPayment);
         $accountPayment->load(['user', 'soas']);
         $accountPayment = AccountPaymentResource::make($accountPayment);
 
@@ -180,7 +181,7 @@ class AccountPaymentController extends Controller
     {
         return CommonHelper::previewStoredFileFromToken(
             (string) $request->query('token', ''),
-            env('ACCOUNT_PAYMENTS_DISK', 'public'),
+            config('vc.disks.account_payments'),
             $request->user()?->id
         );
     }
@@ -204,12 +205,12 @@ class AccountPaymentController extends Controller
      */
     public function edit($id, Request $request)
     {
-        CommonHelper::assertUserMayAccessModel($request);
         $accountPayment = $this->accountPayment->with('soas')->findOrFail($id);
+        CommonHelper::assertUserMayAccessModel($request, $accountPayment);
         if ($accountPayment) {
             $accountPayment->remittance_advice_preview_token = $accountPayment->remittance_advice && $request->user()
                 ? CommonHelper::createFilePreviewToken(
-                    env('ACCOUNT_PAYMENTS_DISK', 'public'),
+                    config('vc.disks.account_payments'),
                     $accountPayment->remittance_advice,
                     (int) $request->user()->id
                 )
@@ -242,11 +243,11 @@ class AccountPaymentController extends Controller
      */
     public function update(UpdateRequest $request)
     {
-        CommonHelper::assertUserMayAccessModel($request);
         $validated = $request->validated();
+        $accountPayment = AccountPayment::findOrFail($validated['id']);
+        CommonHelper::assertUserMayAccessModel($request, $accountPayment);
         DB::beginTransaction();
         try {
-            $accountPayment = AccountPayment::findOrFail($validated['id']);
             if (!empty($validated['soa_ids'])) {
                 // Attach ids
                 $accountPayment->soas()->sync(
@@ -261,7 +262,7 @@ class AccountPaymentController extends Controller
                 ['image', 'pdf', 'excel'],
                 null,
                 $accountPayment,
-                env('ACCOUNT_PAYMENTS_DISK', 'public')
+                config('vc.disks.account_payments')
             );
             // Persist any stored file paths onto the model before committing.
             $accountPayment->update($validated);
@@ -296,11 +297,11 @@ class AccountPaymentController extends Controller
      */
     public function destroy(DeleteRequest $request)
     {
-        CommonHelper::assertUserMayAccessModel($request);
         $validated = $request->validated();
+        $accountPayment = AccountPayment::withTrashed()->findOrFail($validated['id']);
+        CommonHelper::assertUserMayAccessModel($request, $accountPayment);
         DB::beginTransaction();
         try {
-            $accountPayment = AccountPayment::withTrashed()->findOrFail($validated['id']);
             if ($accountPayment->trashed()) {
                 $accountPayment->restore();
                 $message = 'Restored';

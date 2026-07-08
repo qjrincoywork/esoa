@@ -37,7 +37,7 @@ class PermissionController extends Controller
      */
     public function index(ListRequest $request)
     {
-        $perPage = $params['per_page'] ?? config('vc.default_pages');
+        $perPage = $request->validated()['per_page'] ?? config('vc.default_pages');
 
         $permissions = $this->permission->query()
             ->with('permissions')

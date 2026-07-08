@@ -21,6 +21,13 @@ use Laravel\Fortify\Fortify;
 class FortifyServiceProvider extends ServiceProvider
 {
     /**
+     * Pre-computed bcrypt hash (cost 12) used only to spend the same amount of
+     * time hashing when the submitted username does not exist, so login response
+     * timing cannot be used to enumerate valid usernames.
+     */
+    private const DUMMY_PASSWORD_HASH = '$2y$12$7mx7x8LRedVRhDbZMdxEw.R3Qn64wNvwCtEkB3.P4VPksi1hnXEWK';
+
+    /**
      * Register any application services.
      */
     public function register(): void
@@ -50,7 +57,15 @@ class FortifyServiceProvider extends ServiceProvider
         Fortify::authenticateUsing(function (Request $request) {
             $user = User::where(Fortify::username(), $request->input(Fortify::username()))->first();
 
-            if (! $user || ! Hash::check($request->password, $user->password)) {
+            if (! $user) {
+                // Perform a dummy hash comparison so the response time matches the
+                // "user exists but wrong password" path (username-enumeration defense).
+                Hash::check($request->password, self::DUMMY_PASSWORD_HASH);
+
+                return null;
+            }
+
+            if (! Hash::check($request->password, $user->password)) {
                 return null;
             }
 

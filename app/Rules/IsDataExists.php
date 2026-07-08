@@ -46,13 +46,17 @@ class IsDataExists implements ValidationRule
             ->toArray();
         }
 
-        if (in_array($this->table, $tables)) {
-            // Check if the value exists in the specified table
-            $exists = DB::table($this->table)->where('id', $value)->exists();
+        // Fail closed: an unknown table must never let the value through.
+        if (!in_array($this->table, $tables)) {
+            $fail("The {$attribute} is invalid.");
+            return;
+        }
 
-            if (!$exists) {
-                $fail("The {$attribute} is invalid.");
-            }
+        // Check if the value exists in the specified table
+        $exists = DB::table($this->table)->where('id', $value)->exists();
+
+        if (!$exists) {
+            $fail("The {$attribute} is invalid.");
         }
     }
 }

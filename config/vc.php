@@ -34,8 +34,37 @@ return [
     'contact_number' => '+639123456789',
     'ignored_diff_keys' => ['created_at', 'updated_at', 'deleted_at'],
     'allowed_soa_status_for_account_branch_admin' => [2, 4],
+
+    /*
+    | Roles that must have confirmed two-factor authentication before they can
+    | use the app (enforced by App\Http\Middleware\EnsureTwoFactorEnabled).
+    | Set ENFORCE_2FA_ROLES to a comma-separated list, or empty to disable.
+    */
+    'enforce_2fa_roles' => array_values(array_filter(array_map(
+        'trim',
+        explode(',', env('ENFORCE_2FA_ROLES', 'superadmin,billing_admin'))
+    ))),
+
     'uploads_folder' => env('UPLOADS_FOLDER'),
     'billing_disk' => env('BILLING_DISK', 'billing'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Storage disks (private, off web root)
+    |--------------------------------------------------------------------------
+    |
+    | Disk selection MUST be resolved through config(), never env(), so that it
+    | survives `php artisan config:cache` (env() returns null once config is
+    | cached, which previously collapsed these to the world-readable 'public'
+    | disk). Defaults point at the private disks defined in config/filesystems.php.
+    |
+    */
+    'disks' => [
+        'rm' => env('RM_DISK', 'rm'),
+        'billing' => env('BILLING_DISK', 'billing'),
+        'concerns' => env('CONCERNS_DISK', 'concerns'),
+        'account_payments' => env('ACCOUNT_PAYMENTS_DISK', 'payments'),
+    ],
     'soa_import' => [
         'chunk_size' => (int) env('SOA_IMPORT_CHUNK_SIZE', 2000),
         'limit' => ($limit = env('SOA_IMPORT_LIMIT')) !== null && $limit !== ''

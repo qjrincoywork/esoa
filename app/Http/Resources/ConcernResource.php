@@ -35,7 +35,7 @@ class ConcernResource extends JsonResource
             'attachment' => $this->attachment,
             'attachment_preview_token' => $this->attachment && $request->user()
                 ? CommonHelper::createFilePreviewToken(
-                    env('CONCERNS_DISK', 'public'),
+                    config('vc.disks.concerns'),
                     $this->attachment,
                     (int) $request->user()->id
                 )

@@ -150,7 +150,7 @@ class CommonHelper
             if ($request->hasFile($fileType)) {
                 $file = $request->file($fileType);
                 $filename = $soaNumber . '_' . now()->format('Ymd_His') . '.' . $file->getClientOriginalExtension();
-                $validated[$fileType] = $file->storeAs($directory, $filename, env('BILLING_DISK', 'public'));
+                $validated[$fileType] = $file->storeAs($directory, $filename, config('vc.disks.billing'));
             }
         }
     }
@@ -180,7 +180,7 @@ class CommonHelper
             $finalDir = $username;
         }
 
-        $disk = $disk ?? env('CONCERNS_DISK', 'public');
+        $disk = $disk ?? config('vc.disks.concerns');
 
         $fields = is_array($fileField) ? $fileField : [$fileField];
 
@@ -313,6 +313,18 @@ class CommonHelper
         if (!$authUser) {
             abort(Response::HTTP_UNAUTHORIZED);
         }
+
+        // Full-access roles: the list queries apply no user filter for these.
+        if ($authUser->hasAnyRole([config('vc.superadmin'), 'admin', 'billing_admin'])) {
+            return;
+        }
+
+        // Any other role must at least hold the current route's permission.
+        if ($authUser->hasAnyPermission([$request->route()->getName()])) {
+            return;
+        }
+
+        // If a model was provided, check if the user has access to it.
         if ($model && $model instanceof Model) {
             switch ($authUser->getRoleNames()->first()) {
                 case 'account_branch_admin':
@@ -332,15 +344,8 @@ class CommonHelper
                     return;
             }
         }
-        if (
-            $authUser->hasRole('superadmin')
-            || $authUser->hasRole('billing_admin')
-            || $authUser->hasAnyPermission([$request->route()->getName()])
-        ) {
-            return;
-        } else {
-            abort(Response::HTTP_FORBIDDEN);
-        }
+
+        abort(Response::HTTP_FORBIDDEN);
     }
 
     /**
