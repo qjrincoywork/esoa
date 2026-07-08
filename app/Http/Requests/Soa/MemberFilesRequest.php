@@ -2,10 +2,20 @@
 
 namespace App\Http\Requests\Soa;
 
+use App\Rules\IsClaimnumValid;
 use Illuminate\Foundation\Http\FormRequest;
 
 class MemberFilesRequest extends FormRequest
 {
+    public function authorize(): bool
+    {
+        $user = $this->user();
+        return $user !== null && (
+            $user->hasAnyRole(['superadmin', 'admin']) ||
+            $user->hasAnyPermission(['soas.member_files'])
+        );
+    }
+
     /**
      * Get the validation rules that apply to the request.
      *
@@ -15,6 +25,7 @@ class MemberFilesRequest extends FormRequest
     {
         return [
             'claimnum' => [
+                new IsClaimnumValid(),
                 'required',
                 'string',
                 'max:' . config('vc.max_string_limit'),

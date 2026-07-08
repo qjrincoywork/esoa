@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Soa;
 
-use App\Rules\IsDataExists;
+use App\Rules\IsUserAdmin;
 use Illuminate\Foundation\Http\FormRequest;
 
 class DestroyRequest extends FormRequest
@@ -19,7 +19,12 @@ class DestroyRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'id' => ['required', 'integer', new IsDataExists('soas')],
+            'id' => [
+                'required',
+                'integer',
+                'exists:soas,id',
+                new IsUserAdmin()
+            ],
         ];
     }
 

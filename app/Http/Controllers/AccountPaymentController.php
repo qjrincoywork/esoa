@@ -23,12 +23,16 @@ use Symfony\Component\HttpFoundation\Response;
 class AccountPaymentController extends Controller
 {
     /**
-     * Display a listing of the resource.
+     * AccountPayment model instance.
+     *
+     * @var AccountPayment
      */
     protected $accountPayment;
 
     /**
      * Constructor
+     *
+     * @return void
      */
     public function __construct()
     {
@@ -36,7 +40,16 @@ class AccountPaymentController extends Controller
     }
 
     /**
-     * Display a listing of the resource.
+     * Display a paginated, filterable listing of account payments.
+     *
+     * Renders the Inertia "account_payments/Index" page with the account-payment
+     * collection plus the mode-of-payment option list used by the filter UI.
+     *
+     * Access control (RBAC): route-level Spatie role/permission middleware gates
+     * the endpoint; filters are validated by {@see ListRequest}.
+     *
+     * @param ListRequest $request
+     * @return \Inertia\Response
      */
     public function index(ListRequest $request)
     {
@@ -50,7 +63,18 @@ class AccountPaymentController extends Controller
     }
 
     /**
-     * Show the form for creating a new resource.
+     * Return the lookup lists required to build the "Create Account Payment" form.
+     *
+     * Responds only to AJAX/JSON requests with the mode-of-payment option list,
+     * so the form can be populated without a full page navigation. Non-AJAX
+     * requests fall through and receive no content.
+     *
+     * Access control (RBAC): route-level Spatie role/permission middleware
+     * restricts this endpoint to users authorized to create an account payment;
+     * the response contains reference data only.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse|void
      */
     public function create(Request $request)
     {
@@ -62,7 +86,20 @@ class AccountPaymentController extends Controller
     }
 
     /**
-     * Store a newly created resource in storage.
+     * Persist a newly created account payment with its linked SOAs and attachment.
+     *
+     * Runs inside a DB transaction: creates the account payment, syncs any
+     * related SOA ids, stores an uploaded remittance-advice file (image/pdf/excel
+     * on the account-payments disk, persisting the resulting path back onto the
+     * model), then commits and sends an {@see AccountPaymentNotification} email.
+     * Rolls back and returns a server-error envelope on failure.
+     *
+     * Access control (RBAC): route-level Spatie role/permission middleware
+     * restricts this endpoint to users authorized to create an account payment;
+     * input is validated by {@see CreateRequest}.
+     *
+     * @param CreateRequest $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function store(CreateRequest $request)
     {
@@ -104,7 +141,17 @@ class AccountPaymentController extends Controller
     }
 
     /**
-     * Display the specified resource.
+     * Display a single account payment.
+     *
+     * Eager-loads the account payment's user and SOA relations, wraps it in an
+     * {@see AccountPaymentResource}, and renders the Inertia
+     * "account_payments/Show" page. Resolved via route-model binding.
+     *
+     * Access control (RBAC): route-level Spatie role/permission middleware gates
+     * the endpoint.
+     *
+     * @param AccountPayment $accountPayment
+     * @return \Inertia\Response
      */
     public function show(AccountPayment $accountPayment)
     {
@@ -117,7 +164,17 @@ class AccountPaymentController extends Controller
     }
 
     /**
-     * Show the form for editing the specified resource.
+     * Stream a stored remittance-advice attachment inline from a signed token.
+     *
+     * The token — issued by {@see CommonHelper::createFilePreviewToken()} in
+     * edit() — carries the disk, path and issuing user id, so authorization is
+     * enforced by the token itself rather than a role check here.
+     *
+     * Access control (RBAC): route-level Spatie role/permission middleware guards
+     * the endpoint; the token binds the file to the user it was issued for.
+     *
+     * @param Request $request
+     * @return \Symfony\Component\HttpFoundation\Response
      */
     public function previewFile(Request $request)
     {
@@ -129,7 +186,21 @@ class AccountPaymentController extends Controller
     }
 
     /**
-     * Show the form for editing the specified resource.
+     * Return the specified account payment and lookup lists for the edit form (AJAX only).
+     *
+     * Resolves the account payment with its SOAs, attaches a signed
+     * remittance-advice preview token when one exists and the request is
+     * authenticated, then responds with the account payment plus the
+     * mode-of-payment option list for AJAX requests. Non-AJAX requests fall
+     * through and receive no content.
+     *
+     * Access control (RBAC): beyond the route-level Spatie role/permission
+     * middleware, {@see CommonHelper::assertUserMayAccessModel()} enforces
+     * per-model ownership before the account payment is loaded.
+     *
+     * @param int|string $id
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse|void
      */
     public function edit($id, Request $request)
     {
@@ -154,7 +225,20 @@ class AccountPaymentController extends Controller
     }
 
     /**
-     * Update the specified resource in storage.
+     * Update the specified account payment, its linked SOAs and attachment.
+     *
+     * Runs inside a DB transaction: resolves the account payment, syncs any
+     * related SOA ids, stores a replacement remittance-advice file (image/pdf/
+     * excel on the account-payments disk, persisting the resulting path back onto
+     * the model), then commits and sends an {@see AccountPaymentNotification}
+     * email. Rolls back and returns a server-error envelope on failure.
+     *
+     * Access control (RBAC): beyond the route-level Spatie role/permission
+     * middleware, {@see CommonHelper::assertUserMayAccessModel()} enforces
+     * per-model ownership; input is validated by {@see UpdateRequest}.
+     *
+     * @param UpdateRequest $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function update(UpdateRequest $request)
     {
@@ -195,7 +279,20 @@ class AccountPaymentController extends Controller
     }
 
     /**
-     * Remove the specified resource from storage.
+     * Toggle soft-delete state for the specified account payment (delete or restore).
+     *
+     * Runs inside a DB transaction: resolves the account payment including
+     * trashed rows, then restores it if already trashed or soft-deletes it
+     * otherwise, and reports which action was taken. Responds with a JSON
+     * envelope for AJAX requests, or a server-error envelope on failure.
+     *
+     * Access control (RBAC): beyond the route-level Spatie role/permission
+     * middleware, {@see CommonHelper::assertUserMayAccessModel()} enforces
+     * per-model ownership before the destructive action; input is validated by
+     * {@see DeleteRequest}.
+     *
+     * @param DeleteRequest $request
+     * @return \Illuminate\Http\JsonResponse|void
      */
     public function destroy(DeleteRequest $request)
     {

@@ -36,7 +36,16 @@ class ConcernController extends Controller
     }
 
     /**
-     * Display a listing of the resource.
+     * Display a paginated, filterable listing of concerns.
+     *
+     * Renders the Inertia "concerns/Index" page with the concern collection plus
+     * the concern-type and ticket-status option lists used by the filter UI.
+     *
+     * Access control (RBAC): route-level Spatie role/permission middleware gates
+     * the endpoint; filters are validated by {@see ListRequest}.
+     *
+     * @param ListRequest $request
+     * @return \Inertia\Response
      */
     public function index(ListRequest $request)
     {
@@ -51,7 +60,18 @@ class ConcernController extends Controller
     }
 
     /**
-     * Show the form for creating a new resource.
+     * Return the lookup lists required to build the "Create Concern" form.
+     *
+     * Responds only to AJAX/JSON requests with the concern-type and
+     * ticket-status option lists, so the form can be populated without a full
+     * page navigation. Non-AJAX requests fall through and receive no content.
+     *
+     * Access control (RBAC): route-level Spatie role/permission middleware
+     * restricts this endpoint to users authorized to create a concern; the
+     * response contains reference data only.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse|void
      */
     public function create(Request $request)
     {
@@ -65,7 +85,19 @@ class ConcernController extends Controller
     }
 
     /**
-     * Store a newly created resource in storage.
+     * Persist a newly created concern together with its linked SOAs and attachment.
+     *
+     * Runs inside a DB transaction: creates the concern, syncs any related SOA
+     * ids, stores an uploaded attachment (persisting the resulting path back onto
+     * the model), then commits and sends a {@see ConcernNotification} email.
+     * Rolls back and returns a server-error envelope on failure.
+     *
+     * Access control (RBAC): route-level Spatie role/permission middleware
+     * restricts this endpoint to users authorized to create a concern; input is
+     * validated by {@see CreateRequest}.
+     *
+     * @param CreateRequest $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function store(CreateRequest $request)
     {
@@ -105,7 +137,16 @@ class ConcernController extends Controller
     }
 
     /**
-     * Display the specified resource.
+     * Display a single concern.
+     *
+     * Eager-loads the concern's user and SOA relations and renders the Inertia
+     * "concerns/Show" page. The concern is resolved via route-model binding.
+     *
+     * Access control (RBAC): route-level Spatie role/permission middleware gates
+     * the endpoint.
+     *
+     * @param Concern $concern
+     * @return \Inertia\Response
      */
     public function show(Concern $concern)
     {
@@ -117,7 +158,17 @@ class ConcernController extends Controller
     }
 
     /**
-     * Preview a stored concern attachment.
+     * Stream a stored concern attachment inline from a signed preview token.
+     *
+     * The token — issued by {@see CommonHelper::createFilePreviewToken()} in
+     * edit() — carries the disk, path and issuing user id, so authorization is
+     * enforced by the token itself rather than a role check here.
+     *
+     * Access control (RBAC): route-level Spatie role/permission middleware guards
+     * the endpoint; the token binds the file to the user it was issued for.
+     *
+     * @param Request $request
+     * @return \Symfony\Component\HttpFoundation\Response
      */
     public function previewFile(Request $request)
     {
@@ -129,7 +180,20 @@ class ConcernController extends Controller
     }
 
     /**
-     * Show the form for editing the specified resource.
+     * Return the specified concern and lookup lists for the edit form (AJAX only).
+     *
+     * Resolves the concern, attaches a signed attachment preview token when the
+     * concern has an attachment and the request is authenticated, then responds
+     * with the concern plus concern-type/ticket-status option lists for AJAX
+     * requests. Non-AJAX requests fall through and receive no content.
+     *
+     * Access control (RBAC): beyond the route-level Spatie role/permission
+     * middleware, {@see CommonHelper::assertUserMayAccessModel()} enforces
+     * per-model ownership before the concern is loaded.
+     *
+     * @param int|string $id
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse|void
      */
     public function edit($id, Request $request)
     {
@@ -156,7 +220,19 @@ class ConcernController extends Controller
     }
 
     /**
-     * Update the specified resource in storage.
+     * Update the specified concern, its linked SOAs and attachment.
+     *
+     * Runs inside a DB transaction: resolves the concern, syncs any related SOA
+     * ids, stores a replacement attachment (persisting the resulting path back
+     * onto the model), then commits and sends a {@see ConcernNotification} email.
+     * Rolls back and returns a server-error envelope on failure.
+     *
+     * Access control (RBAC): beyond the route-level Spatie role/permission
+     * middleware, {@see CommonHelper::assertUserMayAccessModel()} enforces
+     * per-model ownership; input is validated by {@see UpdateRequest}.
+     *
+     * @param UpdateRequest $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function update(UpdateRequest $request)
     {
@@ -196,7 +272,20 @@ class ConcernController extends Controller
     }
 
     /**
-     * Remove the specified resource from storage.
+     * Toggle soft-delete state for the specified concern (delete or restore).
+     *
+     * Runs inside a DB transaction: resolves the concern including trashed rows,
+     * then restores it if already trashed or soft-deletes it otherwise, and
+     * reports which action was taken. Responds with a JSON envelope for AJAX
+     * requests, or a server-error envelope on failure.
+     *
+     * Access control (RBAC): beyond the route-level Spatie role/permission
+     * middleware, {@see CommonHelper::assertUserMayAccessModel()} enforces
+     * per-model ownership before the destructive action; input is validated by
+     * {@see DeleteRequest}.
+     *
+     * @param DeleteRequest $request
+     * @return \Illuminate\Http\JsonResponse|void
      */
     public function destroy(DeleteRequest $request)
     {

@@ -342,10 +342,10 @@ class SqlDatabase
             //     $query->where('c.ch_branch_code', $params['branch_code']);
             // })
             ->when(!empty($params), function ($query) use ($params) {
-                $query->whereBetween('act.act_dateposted', [$params['period_date_from'], $params['period_date_to']]);
-                // $params['contract_date_from'] = '';
+                $query->when(!empty($params['period_date_from']) && !empty($params['period_date_to']), function ($query) use ($params) {
+                    $query->whereBetween('act.act_dateposted', [$params['period_date_from'], $params['period_date_to']]);
+                });
                 // $query->whereBetween('cl.cl_processdate', [$params['period_date_from'], $params['period_date_to']]);
-                // $query->whereBetween('act.act_dateposted', ['2025-10-18', '2025-10-18']);
                 // if (empty($params['contract_date_from'])) {
                 //     $query->when(!empty($params['period_date_from']) && !empty($params['period_date_to']), function ($query) use ($params) {
                 //         $query->whereBetween('act.act_dateposted', [$params['period_date_from'], $params['period_date_to']]);
