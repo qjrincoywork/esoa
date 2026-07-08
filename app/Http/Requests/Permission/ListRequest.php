@@ -28,6 +28,16 @@ class ListRequest extends FormRequest
                 'nullable',
                 'integer'
             ],
+            'sort_by' => [
+                'nullable',
+                'string',
+                'in:name,guard_name,created_at'
+            ],
+            'sort_direction' => [
+                'nullable',
+                'string',
+                'in:asc,desc'
+            ],
         ];
     }
 }

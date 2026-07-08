@@ -37,11 +37,19 @@ class PermissionController extends Controller
      */
     public function index(ListRequest $request)
     {
-        $perPage = $request->validated()['per_page'] ?? config('vc.default_pages');
+        $validated = $request->validated();
+        $perPage = $validated['per_page'] ?? config('vc.default_pages');
+        $sortBy = $validated['sort_by'] ?? 'name';
+        $sortDirection = $validated['sort_direction'] ?? 'asc';
 
         $permissions = $this->permission->query()
-            ->with('permissions')
-            ->latest()
+            ->when(!empty($validated['name']), fn ($q) =>
+                $q->where('name', 'LIKE', '%' . $validated['name'] . '%')
+            )
+            ->when(!empty($validated['guard_name']), fn ($q) =>
+                $q->where('guard_name', 'LIKE', '%' . $validated['guard_name'] . '%')
+            )
+            ->orderBy($sortBy, $sortDirection)
             ->paginate($perPage)
             ->withQueryString()
             ->through(function ($permission) {
