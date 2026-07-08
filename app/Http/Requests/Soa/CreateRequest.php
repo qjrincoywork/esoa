@@ -9,6 +9,15 @@ use Illuminate\Validation\Rule;
 
 class CreateRequest extends FormRequest
 {
+    public function authorize(): bool
+    {
+        $user = $this->user();
+        return $user !== null && (
+            $user->hasAnyRole(['superadmin', 'admin']) ||
+            $user->hasAnyPermission(['soas.store'])
+        );
+    }
+
     /**
      * Get the validation rules that apply to the request.
      *

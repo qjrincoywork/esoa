@@ -13,6 +13,15 @@ use Symfony\Component\HttpFoundation\Response;
 
 class AdjustAmountRequest extends FormRequest
 {
+    public function authorize(): bool
+    {
+        $user = $this->user();
+        return $user !== null && (
+            $user->hasAnyRole(['superadmin', 'admin']) ||
+            $user->hasAnyPermission(['soas.adjust_amount'])
+        );
+    }
+
     public function rules(): array
     {
         return [
@@ -33,11 +42,6 @@ class AdjustAmountRequest extends FormRequest
                 new SoaAdjustAmountResultNotNegative(),
             ],
         ];
-    }
-
-    public function authorize(): bool
-    {
-        return auth()->check();
     }
 
     /**

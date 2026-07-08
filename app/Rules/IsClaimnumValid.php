@@ -2,10 +2,12 @@
 
 namespace App\Rules;
 
+use App\Enums\Server;
+use App\Helpers\SqlDatabase;
 use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 
-class IsUserAdmin implements ValidationRule
+class IsClaimnumValid implements ValidationRule
 {
     /**
      * Run the validation rule.
@@ -14,9 +16,11 @@ class IsUserAdmin implements ValidationRule
      */
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
-        $role = auth()->user()->getRoleNames()->first();
-        if ($role !== config('vc.superadmin')) {
-            $fail('User is restricted.');
+        // Check if the value is valid
+        $exists = (new SqlDatabase(Server::HMS))->getCardHolderDetailsByParams(['claimnum' => $value]);
+
+        if (!$exists) {
+            $fail("The claimnum is invalid.");
         }
     }
 }

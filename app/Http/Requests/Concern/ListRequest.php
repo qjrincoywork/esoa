@@ -9,6 +9,15 @@ use Illuminate\Validation\Rule;
 
 class ListRequest extends FormRequest
 {
+    public function authorize(): bool
+    {
+        $user = $this->user();
+        return $user !== null && (
+            $user->hasAnyRole(['superadmin', 'admin']) ||
+            $user->hasAnyPermission(['concerns.index'])
+        );
+    }
+
     /**
      * Get the validation rules that apply to the request.
      *

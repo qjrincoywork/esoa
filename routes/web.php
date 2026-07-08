@@ -144,7 +144,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::prefix('soas')->name('soas.')->controller(SoaController::class)->group(function () {
             Route::get('/dashboard', 'dashboard')->name('dashboard');
             Route::get('/file_proxy', 'fileProxy')->name('file_proxy');
-            Route::get('/', 'index')->name('index');
             Route::get('/list', 'list')->name('list');
             Route::get('/export', 'exportList')->name('export');
             Route::get('/file_list', 'fileList')->name('file_list');

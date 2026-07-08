@@ -2,10 +2,20 @@
 
 namespace App\Http\Requests\Soa;
 
+use App\Rules\IsClaimnumValid;
 use Illuminate\Foundation\Http\FormRequest;
 
 class FileListRequest extends FormRequest
 {
+    public function authorize(): bool
+    {
+        $user = $this->user();
+        return $user !== null && (
+            $user->hasAnyRole(['superadmin', 'admin']) ||
+            $user->hasAnyPermission(['soas.file_list'])
+        );
+    }
+
     /**
      * Get the validation rules that apply to the request.
      *
@@ -24,6 +34,7 @@ class FileListRequest extends FormRequest
                 'string',
             ],
             'claimnum' => [
+                new IsClaimnumValid(),
                 'nullable',
                 'string',
                 'max:' . config('vc.max_string_limit'),
