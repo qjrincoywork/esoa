@@ -209,6 +209,7 @@ class SqlDatabase
         $result = $this->db
             ->table('Accounts')
             ->select('ac_name', 'ac_code', 'ac_ma_code')
+            ->tap(fn ($query) => $this->applyAccountDirectoryFilter($query, auth()->user(), 'ac_code'))
             ->when(isset($params['type']), function ($query) use ($params) {
                 switch ($params['type']) {
                     case AccountType::TPA:
@@ -259,6 +260,58 @@ class SqlDatabase
             ->pluck('ac_code');
 
         return $accounts;
+    }
+
+    /**
+     * Restrict an account/branch directory query to the accounts a tenant-scoped
+     * user is assigned to, so pickers cannot enumerate the whole client directory
+     * (F-06).
+     *
+     * Full-access staff (superadmin/admin/billing_admin) get the complete
+     * directory — this is what the user-administration pickers rely on. Every
+     * other role is confined to their own accounts (broker: the agent's accounts;
+     * account/group admins: their userAccounts) via the given account-code column;
+     * a user with no resolvable accounts, or any unrecognised non-staff role,
+     * resolves to no rows.
+     *
+     * @param  \Illuminate\Database\Query\Builder  $query
+     * @param  \App\Models\User|null  $authUser
+     * @param  string  $accountColumn  The account-code column on the queried table.
+     * @return void
+     */
+    private function applyAccountDirectoryFilter($query, $authUser, string $accountColumn): void
+    {
+        if (!$authUser || $authUser->hasAnyRole([config('vc.superadmin'), 'admin', 'billing_admin'])) {
+            return;
+        }
+
+        if ($authUser->hasRole('broker')) {
+            $agentAccounts = (new self(Server::HMS))
+                ->getAccountsOfAgent($authUser->userDetail?->agent_code ?? null);
+            if ($agentAccounts->isEmpty()) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereIn($accountColumn, $agentAccounts);
+            }
+            return;
+        }
+
+        if ($authUser->hasAnyRole(['account_branch_admin', 'group_account_admin'])) {
+            $accountCodes = $authUser->userAccounts
+                ->pluck('account_code')
+                ->filter()
+                ->unique()
+                ->values();
+            if ($accountCodes->isEmpty()) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereIn($accountColumn, $accountCodes->all());
+            }
+            return;
+        }
+
+        // Any other non-staff role has no directory access.
+        $query->whereRaw('1 = 0');
     }
 
     /**
@@ -366,9 +419,9 @@ class SqlDatabase
                     : $params['billing_ref'];
                 $query->whereIn('cl.cl_batchnumber', $billRefs);
             })
-            // ->when(!empty($params['account_code']), function ($query) use ($params) {
-            //     $query->where('ac.ac_code', $params['account_code']);
-            // })
+            ->when(!empty($params['account_code']), function ($query) use ($params) {
+                $query->where('c.ch_accountid', $params['account_code']);
+            })
             // ->when(!empty($params['branch_code']), function ($query) use ($params) {
             //     $query->where('c.ch_branch_code', $params['branch_code']);
             // })
@@ -861,6 +914,8 @@ class SqlDatabase
                 $join->on(DB::raw('SUBSTRING(a.bl_policynum,1,11)'), '=', 'e.ac_code');
             })
             ->where('e.ac_code', $params['account_code'])
+            // Confine the caller-supplied account_code to accounts the user owns (F-06).
+            ->tap(fn ($query) => $this->applyAccountDirectoryFilter($query, $authUser, 'e.ac_code'))
             ->when(isset($params['name']) && !empty($params['name']), function ($query) use ($params, $selectedRefs) {
                 $query->where(function ($nameQuery) use ($params, $selectedRefs) {
                     $nameQuery->where('a.bl_refid', 'like', '%' . $params['name'] . '%');
@@ -921,6 +976,7 @@ class SqlDatabase
         $result = $this->db
             ->table('Branches')
             ->select('br_branch_name', 'br_ac_code', 'br_code')
+            ->tap(fn ($query) => $this->applyAccountDirectoryFilter($query, auth()->user(), 'br_ac_code'))
             ->when(isset($params['account_code']), function ($query) use ($params) {
                 $query->where('br_ac_code', $params['account_code']);
             })
