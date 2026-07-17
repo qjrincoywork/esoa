@@ -20,6 +20,10 @@ resources/js/helper/lang.json
 *.back
 *.bak
 
+# Windows artifacts and stray archives in the webroot (F-09)
+Thumbs.db
+public/**/*.zip
+
 # IDE files
 .vscode/
 .claude/

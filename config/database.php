@@ -110,8 +110,10 @@ return [
             'prefix' => '',
             'prefix_indexes' => true,
             'encrypt' => env('DB_ENCRYPT', 'yes'),
-            // Set DB_TRUST_SERVER_CERTIFICATE=false with a trusted CA for validated TLS.
-            'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', true),
+            // Fail closed: validate the server certificate by default (F-05).
+            // Provision the SQL Server CA in the host/container trust store, or set
+            // DB_TRUST_SERVER_CERTIFICATE=true only for a genuinely trusted segment.
+            'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', false),
         ],
         'hms' => [
             'driver' => 'sqlsrv',
@@ -138,7 +140,8 @@ return [
             'prefix' => '',
             'prefix_indexes' => true,
             'encrypt' => env('OI_DB_ENCRYPT', 'yes'),
-            'trust_server_certificate' => env('OI_DB_TRUST_SERVER_CERTIFICATE', true),
+            // Fail closed: validate the server certificate by default (F-05).
+            'trust_server_certificate' => env('OI_DB_TRUST_SERVER_CERTIFICATE', false),
         ],
         'soa' => [
             'driver' => 'sqlsrv',
@@ -166,7 +169,8 @@ return [
             'prefix' => '',
             'prefix_indexes' => true,
             'encrypt' => env('CENUSER_DB_ENCRYPT', 'yes'),
-            'trust_server_certificate' => env('CENUSER_DB_TRUST_SERVER_CERTIFICATE', true),
+            // Fail closed: validate the server certificate by default (F-05).
+            'trust_server_certificate' => env('CENUSER_DB_TRUST_SERVER_CERTIFICATE', false),
         ],
 
     ],

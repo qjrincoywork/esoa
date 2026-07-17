@@ -253,10 +253,13 @@ class SoaController extends Controller
      */
     public function fileList(FileListRequest $request)
     {
-        CommonHelper::assertUserMayAccessModel($request);
         $validated = $request->validated();
         $files = [];
         if (isset($validated['claimnum']) && !empty($validated['claimnum'])) {
+            // Confine RM document access to claims the caller's account owns (F-02).
+            if (!(new $this->sqlDatabase(Server::HMS))->userCanAccessClaim($validated['claimnum'])) {
+                abort(Response::HTTP_FORBIDDEN);
+            }
             $paths = Storage::disk(config('vc.disks.rm'))->files($validated['claimnum']);
             $userId = (int) auth()->id();
             $files = array_map(function (string $path) use ($userId) {
@@ -576,8 +579,8 @@ class SoaController extends Controller
      */
     public function activities(Request $request, int $id)
     {
-        CommonHelper::assertUserMayAccessModel($request);
         $soa = $this->soa->findOrFail($id);
+        CommonHelper::assertUserMayAccessModel($request, $soa);
 
         $perPage = (int) $request->get('per_page', config('vc.default_pages'));
         $paginator = $soa->soaActivity()
@@ -606,7 +609,7 @@ class SoaController extends Controller
     public function concerns(Request $request, int $id)
     {
         $soa = $this->soa->findOrFail($id);
-        CommonHelper::assertUserMayAccessModel($request);
+        CommonHelper::assertUserMayAccessModel($request, $soa);
 
         $perPage = (int) $request->get('per_page', config('vc.default_pages'));
         $concerns = $soa->concerns()
@@ -623,7 +626,7 @@ class SoaController extends Controller
     public function soaAccountPayments(Request $request, int $id)
     {
         $soa = $this->soa->findOrFail($id);
-        CommonHelper::assertUserMayAccessModel($request);
+        CommonHelper::assertUserMayAccessModel($request, $soa);
 
         $perPage = (int) $request->get('per_page', config('vc.default_pages'));
         $accountPayments = $soa->accountPayments()
@@ -737,14 +740,13 @@ class SoaController extends Controller
      */
     public function update(UpdateRequest $request)
     {
-        CommonHelper::assertUserMayAccessModel($request);
         $validated = $request->validated();
+        $soa = $this->soa->findOrFail($validated['id']);
+        CommonHelper::assertUserMayAccessModel($request, $soa);
         DB::beginTransaction();
 
         try {
-            $soa = DB::transaction(function () use ($validated, $request) {
-                $soa = $this->soa->findOrFail($validated['id']);
-
+            $soa = DB::transaction(function () use ($validated, $request, $soa) {
                 CommonHelper::validateNotPaid($soa, SoaStatus::PAID);
 
                 $soaNumber = $validated['soa_number'] ?? $soa->soa_number;
@@ -831,8 +833,13 @@ class SoaController extends Controller
      */
     public function memberFiles(MemberFilesRequest $request)
     {
-        CommonHelper::assertUserMayAccessModel($request);
         $claimnum = $request->validated('claimnum');
+
+        // Confine RM document access to claims the caller's account owns (F-02).
+        if (!(new $this->sqlDatabase(Server::HMS))->userCanAccessClaim($claimnum)) {
+            abort(Response::HTTP_FORBIDDEN);
+        }
+
         $userId = (int) auth()->id();
 
         $paths = Storage::disk(config('vc.disks.rm'))->files($claimnum);
