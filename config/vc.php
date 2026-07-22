@@ -21,6 +21,7 @@ return [
     'peso_sign' => '₱',
     'default_pages' => 10,
     'max_per_pages' => 100,
+    'bulk_import_max_rows' => (int) env('BULK_IMPORT_MAX_ROWS', 1000),
     'soa_export_max_rows' => 7000,
     'file_preview_token_ttl_minutes' => 10,//FILE_PREVIEW_TOKEN_TTL_MINUTES
     'min_username_string_limit' => 3,

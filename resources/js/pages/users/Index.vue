@@ -10,7 +10,7 @@ import { Select, SelectTrigger, SelectContent, SelectGroup, SelectItem, SelectVa
 import { createActionColumn } from '@/composables/datatable/datatableColumns';
 import { useUsers } from '@/composables/users';
 import { useModulePermissions } from '@/composables/useModulePermissions';
-import { UserRoundCog, ToggleLeft, ToggleRight, Trash2, RotateCcw, SlidersHorizontal, X, MailCheck } from 'lucide-vue-next';
+import { UserRoundCog, ToggleLeft, ToggleRight, Trash2, RotateCcw, SlidersHorizontal, X, MailCheck, Upload } from 'lucide-vue-next';
 
 type UsersPagination = {
     current_page: number
@@ -33,7 +33,7 @@ const users = computed(() => {
     }
     return propsUsers;
 });
-const { createUser, editUser, deleteUser, manageUserRoles, bulkManageUserRoles, bulkToggleActiveUsers, bulkDeleteUsers, verifyUsers, bulkVerifyCredentials, toggleActiveUser } = useUsers();
+const { createUser, bulkImportUsers, editUser, deleteUser, manageUserRoles, bulkManageUserRoles, bulkToggleActiveUsers, bulkDeleteUsers, verifyUsers, bulkVerifyCredentials, toggleActiveUser } = useUsers();
 const columnHelper = createColumnHelper();
 const pagination = ref({
 	current_page: users.value.current_page,
@@ -300,7 +300,12 @@ watch(
             <div class="flex flex-col gap-3 mb-4">
                 <!-- Top row: create + search -->
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <Button class="cursor-pointer" v-if="canCreate" :onClick="createUser">Create</Button>
+                    <div class="flex items-center gap-2">
+                        <Button class="cursor-pointer" v-if="canCreate" :onClick="createUser">Create</Button>
+                        <Button class="cursor-pointer" v-if="canCreate" variant="outline" :onClick="bulkImportUsers">
+                            <Upload class="w-4 h-4 mr-1" /> Bulk Import
+                        </Button>
+                    </div>
                     <div class="relative w-full sm:w-64">
                         <label class="sr-only" for="user-search">Search users</label>
                         <input
