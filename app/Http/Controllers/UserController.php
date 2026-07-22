@@ -2,26 +2,52 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\{ AccountType, Gender, Server, UserType };
+use App\Enums\{
+    AccountStatus,
+    AccountType,
+    Gender,
+    Server,
+    UserImportColumn,
+    UserType
+};
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
-use App\Http\Controllers\Controller;
-use App\Http\Requests\User\{AccountAccessUsersRequest, BulkDestroyRequest, BulkToggleActiveRequest, BulkUpdateRoleRequest, BulkUserVerificationRequest, CreateRequest, DeleteRequest, ListRequest, ToggleActiveRequest, UpdateRequest, UpdateRoleRequest, VerifyRequest};
+use App\Http\Requests\User\AccountAccessUsersRequest;
+use App\Http\Requests\User\BulkDestroyRequest;
+use App\Http\Requests\User\BulkStoreRequest;
+use App\Http\Requests\User\BulkToggleActiveRequest;
+use App\Http\Requests\User\BulkUpdateRoleRequest;
+use App\Http\Requests\User\BulkUserVerificationRequest;
+use App\Http\Requests\User\CreateRequest;
+use App\Http\Requests\User\DeleteRequest;
+use App\Http\Requests\User\ListRequest;
+use App\Http\Requests\User\ToggleActiveRequest;
+use App\Http\Requests\User\UpdateRequest;
+use App\Http\Requests\User\UpdateRoleRequest;
+use App\Http\Requests\User\VerifyRequest;
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
 use App\Http\Resources\UserAccessResource;
+use App\Http\Resources\UserBulkImportResultResource;
 use App\Http\Resources\UserListResource;
 use App\Mail\UserWelcome;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
-use App\Models\{Account, Citizenship, CivilStatus, Department, Position, Suffix, User };
+use App\Models\Account;
+use App\Models\Citizenship;
+use App\Models\CivilStatus;
+use App\Models\Department;
+use App\Models\Position;
+use App\Models\Suffix;
+use App\Models\User;
+use App\Services\UserBulkImportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
-use Symfony\Component\HttpFoundation\Response;
-use Spatie\Permission\PermissionRegistrar;
 use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
+use Symfony\Component\HttpFoundation\Response;
 
 class UserController extends Controller
 {
@@ -45,7 +71,6 @@ class UserController extends Controller
      * Injects the User model and stores the SqlDatabase class name for
      * on-demand HMS lookups.
      *
-     * @param User $user
      *
      * @return void
      */
@@ -61,7 +86,6 @@ class UserController extends Controller
      * Also passes the user-type and department option lists used by the filter UI.
      * Filters are validated by {@see ListRequest}.
      *
-     * @param ListRequest $request
      * @return \Inertia\Response
      */
     public function index(ListRequest $request)
@@ -69,9 +93,9 @@ class UserController extends Controller
         $users = $this->user->getUsers($request->validated());
 
         return Inertia::render('users/Index', [
-            'users'          => new CommonResource(UserListResource::collection($users)),
+            'users' => new CommonResource(UserListResource::collection($users)),
             'filter_options' => [
-                'user_types'  => UserType::list(),
+                'user_types' => UserType::list(),
                 'departments' => Department::select(['id', 'name'])->get()->toArray(),
             ],
         ]);
@@ -85,7 +109,6 @@ class UserController extends Controller
      * can be populated without a full page navigation. Non-AJAX requests fall
      * through and receive no content.
      *
-     * @param Request $request
      * @return \Illuminate\Http\JsonResponse|void
      */
     public function create(Request $request)
@@ -111,6 +134,64 @@ class UserController extends Controller
     }
 
     /**
+     * Return the metadata needed to drive the bulk-import modal (AJAX only).
+     *
+     * Surfaces the canonical template columns plus the accepted values for the
+     * name-based columns (user types, genders, civil statuses, citizenships and
+     * roles) so the client can build a template, guide the user, and validate
+     * headers before uploading. Non-AJAX requests fall through with no content.
+     *
+     * @return \Illuminate\Http\JsonResponse|void
+     */
+    public function bulkCreate(Request $request)
+    {
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'columns' => UserImportColumn::ordered(),
+                'required_columns' => UserImportColumn::required(),
+                'types' => UserType::list(),
+                'genders' => \App\Models\Gender::orderBy('name')->pluck('name'),
+                'civil_statuses' => CivilStatus::orderBy('name')->pluck('name'),
+                'citizenships' => Citizenship::orderBy('name')->pluck('name'),
+                'roles' => Role::query()->orderBy('name')->pluck('name'),
+            ]);
+        }
+    }
+
+    /**
+     * Import many users at once from parsed spreadsheet rows.
+     *
+     * Delegates per-row validation, name/branch resolution and persistence to
+     * {@see UserBulkImportService}, which creates each valid row in its own
+     * transaction and reports failures individually. Returns a summary envelope
+     * (counts plus per-row errors) so partial successes are surfaced to the user.
+     * Credentials are emailed on verification, not here — mirroring store().
+     * Input is validated by {@see BulkStoreRequest}.
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function bulkStore(BulkStoreRequest $request, UserBulkImportService $service)
+    {
+        try {
+            $result = $service->import($request->validated()['users']);
+
+            $created = $result['created'];
+            $failed = $result['failed'];
+            $message = $failed === 0
+                ? ($created === 1 ? '1 user imported successfully' : "{$created} users imported successfully")
+                : "Imported {$created} of {$result['total']} rows; {$failed} could not be imported.";
+
+            return response()->json([
+                'status' => 'success',
+                'message' => $message,
+                'result' => new UserBulkImportResultResource($result),
+            ], Response::HTTP_OK);
+        } catch (\Exception $e) {
+            return CustomResponse::serverError($e, 'UserController::bulkStore');
+        }
+    }
+
+    /**
      * Persist a new user and sync their roles inside a DB transaction.
      *
      * Delegates creation to User::saveUser(), assigns any supplied roles, and
@@ -119,7 +200,6 @@ class UserController extends Controller
      * envelope for AJAX requests; rolls back and returns a server-error envelope
      * on failure. Input is validated by {@see CreateRequest}.
      *
-     * @param CreateRequest $request
      * @return \Illuminate\Http\JsonResponse|void
      */
     public function store(CreateRequest $request)
@@ -135,6 +215,7 @@ class UserController extends Controller
             DB::commit();
         } catch (\Exception $e) {
             DB::rollBack();
+
             return CustomResponse::serverError($e, 'UserController');
         }
 
@@ -147,7 +228,6 @@ class UserController extends Controller
     /**
      * Unused resource stub; users are not shown individually via this action.
      *
-     * @param string $id
      * @return void
      */
     public function show(string $id)
@@ -162,7 +242,6 @@ class UserController extends Controller
      * comboboxes on the user forms. Non-AJAX requests fall through and receive
      * no content.
      *
-     * @param Request $request
      * @return \Illuminate\Http\JsonResponse|void
      */
     public function getAccounts(Request $request)
@@ -172,7 +251,7 @@ class UserController extends Controller
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
-                'accounts' => new CommonResource(AccountResource::collection($accounts))
+                'accounts' => new CommonResource(AccountResource::collection($accounts)),
             ]);
         }
     }
@@ -184,7 +263,6 @@ class UserController extends Controller
      * comboboxes on the user forms. Non-AJAX requests fall through and receive
      * no content.
      *
-     * @param Request $request
      * @return \Illuminate\Http\JsonResponse|void
      */
     public function getBranches(Request $request)
@@ -194,7 +272,7 @@ class UserController extends Controller
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
-                'branches' => new CommonResource(BranchResource::collection($branches))
+                'branches' => new CommonResource(BranchResource::collection($branches)),
             ]);
         }
     }
@@ -207,9 +285,9 @@ class UserController extends Controller
     public function accountAccessUsers(AccountAccessUsersRequest $request)
     {
         $validated = $request->validated();
-        $search    = $validated['name'] ?? null;
+        $search = $validated['name'] ?? null;
         $excludeId = $validated['exclude_id'] ?? null;
-        $perPage   = $validated['per_page'] ?? config('vc.default_pages');
+        $perPage = $validated['per_page'] ?? config('vc.default_pages');
 
         $users = $this->user
             ->whereHas('userAccounts')
@@ -239,8 +317,6 @@ class UserController extends Controller
      * citizenships, departments, positions and all roles. Non-AJAX requests fall
      * through and receive no content.
      *
-     * @param int $id
-     * @param Request $request
      * @return \Illuminate\Http\JsonResponse|void
      */
     public function edit(int $id, Request $request)
@@ -277,7 +353,6 @@ class UserController extends Controller
      * AJAX requests; rolls back and returns a server-error envelope on failure.
      * Input is validated by {@see UpdateRequest}.
      *
-     * @param UpdateRequest $request
      * @return \Illuminate\Http\JsonResponse|void
      */
     public function update(UpdateRequest $request)
@@ -313,7 +388,6 @@ class UserController extends Controller
      * returns a server-error envelope on failure. Input is validated by
      * {@see DeleteRequest}.
      *
-     * @param DeleteRequest $request
      * @return \Illuminate\Http\JsonResponse|void
      */
     public function destroy(DeleteRequest $request)
@@ -340,7 +414,7 @@ class UserController extends Controller
 
             // Return JSON for AJAX requests (no URL change)
             if ($request->wantsJson() || $request->ajax()) {
-                return CustomResponse::ok('User ' . $message . ' successfully', Response::HTTP_OK);
+                return CustomResponse::ok('User '.$message.' successfully', Response::HTTP_OK);
             }
         } catch (\Exception $e) {
             // Catch and handle any unexpected errors
@@ -438,7 +512,7 @@ class UserController extends Controller
      * No-op when no role IDs are supplied, so callers that don't manage roles
      * (e.g. a profile edit) leave existing assignments untouched.
      *
-     * @param array<int, int|string> $roleIds
+     * @param  array<int, int|string>  $roleIds
      */
     private function syncRoles(User $user, array $roleIds): void
     {
@@ -457,7 +531,7 @@ class UserController extends Controller
      * Passwords are reset inside a single transaction; emails are dispatched
      * only after it commits so a delivery failure never rolls back the reset.
      *
-     * @param \Illuminate\Support\Collection<int, User> $users
+     * @param  \Illuminate\Support\Collection<int, User>  $users
      * @return int Number of users notified.
      */
     private function issueCredentialsAndNotify($users, bool $markVerified = false): int
@@ -472,7 +546,7 @@ class UserController extends Controller
 
                 if ($markVerified) {
                     $user->email_verified_at = now();
-                    $user->is_approved       = true;
+                    $user->is_approved = true;
                 }
 
                 $user->save();
@@ -512,7 +586,7 @@ class UserController extends Controller
         } catch (\Throwable $e) {
             Log::error('UserWelcome mail failed', [
                 'user_id' => $user->id ?? null,
-                'error'   => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
         }
     }
@@ -566,8 +640,8 @@ class UserController extends Controller
     public function bulkUpdateRoles(BulkUpdateRoleRequest $request)
     {
         $validated = $request->validated();
-        $userIds   = $validated['user_ids'];
-        $roleIds   = $validated['roles'] ?? [];
+        $userIds = $validated['user_ids'];
+        $roleIds = $validated['roles'] ?? [];
 
         DB::beginTransaction();
 
@@ -582,7 +656,7 @@ class UserController extends Controller
 
             app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-            $count   = count($userIds);
+            $count = count($userIds);
             $message = $count === 1
                 ? 'Roles updated for 1 user successfully'
                 : "Roles updated for {$count} users successfully";
@@ -610,8 +684,8 @@ class UserController extends Controller
 
             DB::commit();
 
-            $count   = count($validated['user_ids']);
-            $label   = $validated['is_active'] ? 'activated' : 'deactivated';
+            $count = count($validated['user_ids']);
+            $label = $validated['is_active'] ? 'activated' : 'deactivated';
             $message = $count === 1
                 ? "User {$label} successfully"
                 : "{$count} users {$label} successfully";
@@ -652,8 +726,8 @@ class UserController extends Controller
 
             DB::commit();
 
-            $count   = count($validated['user_ids']);
-            $label   = $isRestore ? 'restored' : 'deleted';
+            $count = count($validated['user_ids']);
+            $label = $isRestore ? 'restored' : 'deleted';
             $message = $count === 1
                 ? "User {$label} successfully"
                 : "{$count} users {$label} successfully";
@@ -679,7 +753,6 @@ class UserController extends Controller
      * HTTP 200 envelope. Rolls back and returns a server-error envelope on
      * failure. Input is validated by {@see UpdateRoleRequest}.
      *
-     * @param UpdateRoleRequest $request
      * @return \Illuminate\Http\JsonResponse
      */
     public function updateRoles(UpdateRoleRequest $request)

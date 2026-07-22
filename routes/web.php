@@ -69,6 +69,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::get('/', 'index')->name('index');
                 Route::get('/{id}/edit', 'edit')->name('edit');
                 Route::get('/create', 'create')->name('create');
+                Route::get('/bulk_create', 'bulkCreate')->name('bulk_create');
+                Route::post('/bulk_store', 'bulkStore')->name('bulk_store');
                 Route::get('/get_accounts', 'getAccounts')->name('get_accounts');
                 Route::get('/get_branches', 'getBranches')->name('get_branches');
                 Route::get('/account_access_users', 'accountAccessUsers')->name('account_access_users');

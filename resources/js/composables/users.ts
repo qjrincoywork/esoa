@@ -2,6 +2,7 @@ import { useModal } from '@/composables/useModal';
 import { useAjax } from '@/composables/useAjax';
 import DeleteForm from '@/components/forms/users/DeleteForm.vue';
 import SavingForm from '@/components/forms/users/SavingForm.vue';
+import BulkImportForm from '@/components/forms/users/BulkImportForm.vue';
 import UserRolesForm from '@/components/forms/users/UserRolesForm.vue';
 import BulkUserRolesForm from '@/components/forms/users/BulkUserRolesForm.vue';
 import BulkToggleActiveForm from '@/components/forms/users/BulkToggleActiveForm.vue';
@@ -646,9 +647,102 @@ export function useUsers() {
     });
   };
 
+  const bulkImportUsers = async () => {
+    try {
+      const response = await get<{
+        columns: string[];
+        required_columns: string[];
+        types: { value: number | string; name: string }[];
+        genders: string[];
+        civil_statuses: string[];
+        citizenships: string[];
+        roles: string[];
+      }>(`/${slug.value}/bulk_create`);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch import metadata');
+      }
+
+      const meta = response.data;
+      if (!meta) return;
+
+      type ImportApi = {
+        getPayload: () => Record<string, string>[] | null;
+        setResult: (result: any) => void;
+      };
+      let importApi: ImportApi | null = null;
+
+      openModal({
+        modalTitle: 'Bulk Import Users',
+        buttonText: 'Import',
+        component: BulkImportForm,
+        componentProps: {
+          columns: meta.columns,
+          requiredColumns: meta.required_columns,
+          types: meta.types,
+          genders: meta.genders,
+          civilStatuses: meta.civil_statuses,
+          citizenships: meta.citizenships,
+          roles: meta.roles,
+          onReady: (api: ImportApi) => {
+            importApi = api;
+          },
+        },
+        size: 'xl4',
+        onSubmit: async () => {
+          const api = importApi;
+          if (!api) return;
+
+          const users = api.getPayload();
+          if (!users || users.length === 0) {
+            dispatchNotification({ title: 'Error', content: 'Upload a file with at least one row before importing.', type: 'error' });
+            return;
+          }
+
+          showLoader();
+          try {
+            const res = await post(`/${slug.value}/bulk_store`, { users });
+
+            if (!res.ok) {
+              dispatchNotification({ title: 'Error', content: res.data?.message ?? 'Import failed', type: 'error' });
+              return;
+            }
+
+            const result = res.data.result;
+            api.setResult(result);
+
+            if (result.failed > 0) {
+              dispatchNotification({
+                title: result.created > 0 ? 'Import completed with errors' : 'Import failed',
+                content: res.data.message,
+                type: result.created > 0 ? 'success' : 'error',
+              });
+              // Keep the modal open so the user can review the failed rows;
+              // refresh the list underneath if any users were created.
+              if (result.created > 0) {
+                router.get(window.location.href, {}, { preserveState: true, preserveScroll: true, replace: true, only: [slug.value] });
+              }
+            } else {
+              dispatchNotification({ title: 'Success', content: res.data.message, type: 'success' });
+              closeModal();
+              router.get(window.location.href, {}, { preserveState: false, preserveScroll: true, replace: true });
+            }
+          } catch (err) {
+            dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+          } finally {
+            hideLoader();
+          }
+        },
+      });
+    } catch (error) {
+      dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
+    }
+  };
+
   return {
     editUser,
     createUser,
+    bulkImportUsers,
     deleteUser,
     getAccountsByParams,
     getBranchesByParams,
