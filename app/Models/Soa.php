@@ -216,6 +216,8 @@ class Soa extends Model
         $buckets = array_merge($buckets, [
             ['type' => 'status', 'value' => SoaStatus::ENDORSED],
             ['type' => 'status', 'value' => SoaStatus::DISPUTED],
+            ['type' => 'status', 'value' => SoaStatus::PAID],
+            ['type' => 'status', 'value' => SoaStatus::UNPAID],
         ]);
 
         $authUser = auth()->user();
@@ -232,7 +234,6 @@ class Soa extends Model
                 'count' => self::query()
                     ->tap(fn (Builder $q) => $this->applyUserAccountRestriction($q, $authUser))
                     ->tap(fn (Builder $q) => $this->applyListSearchFiltersDueIn($q, $filter))
-                    ->where('status', '!=', SoaStatus::PAID)
                     ->count(),
             ];
         }, $buckets);
@@ -362,6 +363,12 @@ class Soa extends Model
             })
             ->when($params['status'] == SoaStatus::DISPUTED, function ($query) use ($params) {
                 $query->where('status', SoaStatus::DISPUTED);
+            })
+            ->when($params['status'] == SoaStatus::UNPAID, function ($query) use ($params) {
+                $query->where('status', SoaStatus::UNPAID);
+            })
+            ->when($params['status'] == SoaStatus::PAID, function ($query) use ($params) {
+                $query->where('status', SoaStatus::PAID);
             });
         }
     }
