@@ -5,6 +5,7 @@ use App\Http\Controllers\{
     AccountPaymentController,
     AdminController,
     ConcernController,
+    DashboardController,
     NavigationController,
     NavigationModuleController,
     PermissionController,
@@ -49,9 +50,13 @@ Route::get('/', function () {
 })->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::get('dashboard', function () {
+    // Analytics dashboard: open to every authenticated user, the data is scoped to what
+    // the viewer may see (and, for staff roles, sliceable per user).
+    Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    Route::get('home', function () {
         return Inertia::render('Home');
-    })->name('dashboard');
+    })->name('home.index');
 
     Route::get('overview', function () {
         return Inertia::render('Overview');

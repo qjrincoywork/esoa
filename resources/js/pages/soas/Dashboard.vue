@@ -28,7 +28,17 @@ const breadcrumbItems: BreadcrumbItem[] = [
     href: slug.value,
   },
 ];
-const soaAgings = computed(() => (page.props as any).soa_agings?.data as SoaAgingCountResource[]);
+/** Shape of App\Http\Resources\SoaAgingCountResource. */
+interface SoaAgingCount {
+  type: 'aging' | 'status';
+  value: number;
+  count: number;
+  label: string;
+  color: string;
+  href: string;
+}
+
+const soaAgings = computed(() => ((page.props as any).soa_agings?.data ?? []) as SoaAgingCount[]);
 const redirectToSoaList = (href: string) => {
   router.get(href);
 }
