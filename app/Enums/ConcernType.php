@@ -11,6 +11,12 @@ final class ConcernType extends Enum
     public const BILLING = 3;
     public const OTHERS = 4;
 
+    /**
+     * Map a concern type value to its human-readable label.
+     *
+     * @param int $value
+     * @return string
+     */
     public static function label($value): string
     {
         return match ($value) {
@@ -21,6 +27,12 @@ final class ConcernType extends Enum
         };
     }
 
+    /**
+     * Return the Tailwind CSS badge classes (background/text/border) for the given concern type.
+     *
+     * @param int $value
+     * @return string
+     */
     public static function color($value): string
     {
         return match ($value) {
@@ -31,6 +43,11 @@ final class ConcernType extends Enum
         };
     }
 
+    /**
+     * Return all concern types as {value, name} option arrays for select inputs.
+     *
+     * @return array<array{value:int,name:string}>
+     */
     public static function list(): array
     {
         return [

@@ -10,7 +10,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class BillingRefResource extends JsonResource
 {
     /**
-     * Transform the resource into an array.
+     * Transform the billing reference into a combobox option, building a composite display
+     * name (ref id, optional claim number, peso amount and posting date) and conditionally
+     * including the balance when an amount is present.
      *
      * @return array<string, mixed>
      */

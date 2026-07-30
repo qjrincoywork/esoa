@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Enums\BillType;
 use App\Enums\Server;
+use App\Enums\SoaAging;
 use App\Enums\SoaStatus;
 use App\Helpers\CommonHelper;
 use App\Helpers\SqlDatabase;
@@ -15,12 +16,21 @@ use Illuminate\Support\Str;
 class SoaResource extends JsonResource
 {
     /**
-     * Transform the resource into an array.
+     * Transform the SOA into an array, selecting contract- or period-based coverage dates,
+     * mapping bill type and status to labels/colors, resolving account/branch names, and
+     * embedding the related SOA activities only when the relation is eager loaded.
      *
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array
     {
+        if (!$this->contract_date_from) {
+            $startDate = $this->period_date_from;
+            $endDate = $this->period_date_to;
+        } else {
+            $startDate = $this->contract_date_from;
+            $endDate = $this->contract_date_to;
+        }
         return [
             'id' => $this->id,
             'soa_number' => $this->soa_number,
@@ -30,9 +40,13 @@ class SoaResource extends JsonResource
             'created_at' => CommonHelper::formatDate($this->created_at),
             'due_date' => CommonHelper::formatDate($this->due_date),
             'due_in' => $this->formatDaysDue($this->due_date),
+            'due_in_color' => $this->dueInColor($this->due_date),
             'period_date_from' => $this->period_date_from,
             'period_date_to' => $this->period_date_to,
-            'period_coverage' => Str::upper(CommonHelper::formatDate($this->period_date_from) . ' TO ' . CommonHelper::formatDate($this->period_date_to)),
+            'utilization_coverage' => Str::upper(CommonHelper::formatDate($this->period_date_from) . ' TO ' . CommonHelper::formatDate($this->period_date_to)),
+            'period_coverage' => Str::upper(CommonHelper::formatDate($startDate) . ' TO ' . CommonHelper::formatDate($endDate)),
+            'contract_date_from' => $this->contract_date_from,
+            'contract_date_to' => $this->contract_date_to,
             'account_code' => $this->account_code,
             'branch_code' => $this->branch_code,
             'account_name' => CommonHelper::convertStringEncoding($this->getAccountName($this->account_code)),
@@ -50,6 +64,12 @@ class SoaResource extends JsonResource
         ];
     }
 
+    /**
+     * Flatten the billing reference values into a comma-separated string.
+     *
+     * @param mixed $billingRef Iterable of billing reference values, or empty.
+     * @return string
+     */
     public function getBillingRefNames($billingRef) {
         $billingRefNames = [];
         if (!empty($billingRef)) {
@@ -62,14 +82,11 @@ class SoaResource extends JsonResource
     }
 
     /**
-     * Format a due date into a human-readable string.
+     * Aging-bucket label for a due date (single source of truth: {@see SoaAging::classify()}).
      *
-     * @param string|null $date The date to format.
-     *
-     * @return string|null If the date is null, returns null.
-     *   If the date is in the past, returns 'Past Due'.
-     *   If the date is today, returns 'Due today'.
-     *   If the date is in the future, returns 'Due in X days'.
+     * @param string|null $date The due date to classify.
+     * @return string|null Null when no due date; otherwise the aging bucket label
+     *   (e.g. "Due (Current Month)", "Past Due – 30 Days").
      */
     public function formatDaysDue($date)
     {
@@ -77,33 +94,54 @@ class SoaResource extends JsonResource
             return null;
         }
 
-        $date = Carbon::parse($date);
-
-        if ($date->isPast()) {
-            return 'Past Due';
-        }
-
-        $days = (int) now()->diffInDays($date, true);
-
-        return match ($days) {
-            0 => 'Due Today',
-            1 => 'Due Tomorrow',
-            default => "Due in {$days} days",
-        };
+        return SoaAging::label(SoaAging::classify(Carbon::parse($date)));
     }
 
+    /**
+     * Aging-bucket color classes for a due date, used to style the "Due In" badge.
+     *
+     * @param string|null $date The due date to classify.
+     * @return string|null Null when no due date; otherwise semantic color utility classes.
+     */
+    public function dueInColor($date)
+    {
+        if (!$date) {
+            return null;
+        }
+
+        return SoaAging::color(SoaAging::classify(Carbon::parse($date)));
+    }
+
+    /**
+     * Resolve the account name for the given account code from the HMS database.
+     *
+     * @param string $accountCode
+     * @return string
+     */
     public function getAccountName($accountCode) {
         $account = (new SqlDatabase(Server::HMS))->getAccount($accountCode);
 
         return $account->ac_name;
     }
 
+    /**
+     * Resolve and format the account expiry date for the given account code from the HMS database.
+     *
+     * @param string $accountCode
+     * @return string|null
+     */
     public function getAccountExpiryDate($accountCode) {
         $account = (new SqlDatabase(Server::HMS))->getAccount($accountCode);
 
         return CommonHelper::formatDate($account->expiry_date);
     }
 
+    /**
+     * Resolve the branch name for the given branch code from the HMS database.
+     *
+     * @param string $branchCode
+     * @return string
+     */
     public function getBranchName($branchCode) {
         $branch = (new SqlDatabase(Server::HMS))->getBranch($branchCode);
 

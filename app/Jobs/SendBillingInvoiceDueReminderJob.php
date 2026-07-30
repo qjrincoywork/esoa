@@ -24,9 +24,11 @@ class SendBillingInvoiceDueReminderJob implements ShouldQueue
     private array $userGroups;
 
     /**
-     * Create a new job instance.
+     * Create the job with the batch of user SOA groups to remind.
      *
-     * @param array $userGroups
+     * Also configures the queue, retry count, timeout, and exponential backoff.
+     *
+     * @param array<int, array{user_id: int, aging_value: int, soa_count: int}> $userGroups
      */
     public function __construct(array $userGroups)
     {
@@ -38,7 +40,11 @@ class SendBillingInvoiceDueReminderJob implements ShouldQueue
     }
 
     /**
-     * Execute the job.
+     * Send a due-reminder email for every user group in this batch.
+     *
+     * Iterates the batched user groups and delegates each to
+     * sendReminderForUser(). A failure here (after per-user errors are already
+     * swallowed) is logged and rethrown so the job is retried per its backoff.
      */
     public function handle(): void
     {

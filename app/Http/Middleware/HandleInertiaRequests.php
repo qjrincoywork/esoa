@@ -6,7 +6,6 @@ use App\Enums\UserType;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
-use Spatie\Permission\Models\Permission;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -41,11 +40,7 @@ class HandleInertiaRequests extends Middleware
         [$message, $author] = str(Inspiring::quotes()->random())->explode('-');
         $authUser = $request->user();
         $userPermissions = $authUser
-            ? (
-                $authUser?->hasRole('superadmin')
-                    ? Permission::all()->pluck('name')->toArray()
-                    : $authUser->getAllPermissions()->pluck('name')->toArray()
-              )
+            ? $authUser->getAllPermissions()->pluck('name')->toArray()
             : [];
         $navigationService = app(\App\Services\NavigationService::class);
 

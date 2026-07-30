@@ -37,9 +37,14 @@ const bootstrap = async (): Promise<void> => {
                 syncCsrfTokenFromPage(event.detail.page);
             });
 
-            router.on('invalid-token', (event) => {
-                event.preventDefault();
-                window.location.href = '/login';
+            // Safety net: if an expired session slips through as a raw 401/419
+            // (unauthenticated / CSRF mismatch), send the user to login with a full reload.
+            router.on('invalid', (event) => {
+                const status = event.detail.response?.status;
+                if (status === 401 || status === 419) {
+                    event.preventDefault();
+                    window.location.href = '/login';
+                }
             });
 
             createApp({ render: () => h(App, props) })

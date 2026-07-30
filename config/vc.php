@@ -14,12 +14,14 @@ return [
     'api_key' => env('VC_API_KEY'),
     'api_auth_token' => 'API_AUTH_TOKEN',
 
+    'superadmin' => 'superadmin',
     'chunk_size' => 2000,
     'billing_reminder_time' => env('BILLING_REMINDER_TIME', '07:00'), // Default to 7:00 AM if not set
     'overlapping_timeout' => env('BILLING_REMINDER_TIMEOUT', 3600), // Default to 1 hour if not set
     'peso_sign' => '₱',
     'default_pages' => 10,
     'max_per_pages' => 100,
+    'bulk_import_max_rows' => (int) env('BULK_IMPORT_MAX_ROWS', 1000),
     'soa_export_max_rows' => 7000,
     'file_preview_token_ttl_minutes' => 10,//FILE_PREVIEW_TOKEN_TTL_MINUTES
     'min_username_string_limit' => 3,
@@ -33,8 +35,37 @@ return [
     'contact_number' => '+639123456789',
     'ignored_diff_keys' => ['created_at', 'updated_at', 'deleted_at'],
     'allowed_soa_status_for_account_branch_admin' => [2, 4],
+
+    /*
+    | Roles that must have confirmed two-factor authentication before they can
+    | use the app (enforced by App\Http\Middleware\EnsureTwoFactorEnabled).
+    | Set ENFORCE_2FA_ROLES to a comma-separated list, or empty to disable.
+    */
+    'enforce_2fa_roles' => array_values(array_filter(array_map(
+        'trim',
+        explode(',', env('ENFORCE_2FA_ROLES', 'superadmin,billing_admin'))
+    ))),
+
     'uploads_folder' => env('UPLOADS_FOLDER'),
     'billing_disk' => env('BILLING_DISK', 'billing'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Storage disks (private, off web root)
+    |--------------------------------------------------------------------------
+    |
+    | Disk selection MUST be resolved through config(), never env(), so that it
+    | survives `php artisan config:cache` (env() returns null once config is
+    | cached, which previously collapsed these to the world-readable 'public'
+    | disk). Defaults point at the private disks defined in config/filesystems.php.
+    |
+    */
+    'disks' => [
+        'rm' => env('RM_DISK', 'rm'),
+        'billing' => env('BILLING_DISK', 'billing'),
+        'concerns' => env('CONCERNS_DISK', 'concerns'),
+        'account_payments' => env('ACCOUNT_PAYMENTS_DISK', 'payments'),
+    ],
     'soa_import' => [
         'chunk_size' => (int) env('SOA_IMPORT_CHUNK_SIZE', 2000),
         'limit' => ($limit = env('SOA_IMPORT_LIMIT')) !== null && $limit !== ''

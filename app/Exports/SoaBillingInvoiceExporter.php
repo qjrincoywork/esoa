@@ -21,6 +21,15 @@ class SoaBillingInvoiceExporter
     /** @var array<string, string> */
     protected array $branchNameCache = [];
 
+    /**
+     * Stream the given SOA query as a downloadable Excel-compatible (HTML table) spreadsheet.
+     *
+     * Rows are emitted lazily via a cursor so large result sets are exported without
+     * loading every SOA into memory at once.
+     *
+     * @param  Builder  $query  The SOA query whose results become spreadsheet rows.
+     * @param  string  $filename  Download filename sent to the browser.
+     */
     public function download(Builder $query, string $filename): StreamedResponse
     {
         return response()->streamDownload(function () use ($query) {
@@ -36,6 +45,10 @@ class SoaBillingInvoiceExporter
         ]);
     }
 
+    /**
+     * Build the opening HTML/Excel markup, including the header row derived from
+     * the config('vc.billing_invoice_export_headers') column labels.
+     */
     protected function spreadsheetOpen(): string
     {
         $headers = config('vc.billing_invoice_export_headers');
@@ -55,6 +68,14 @@ class SoaBillingInvoiceExporter
             . '</tr></thead><tbody>';
     }
 
+    /**
+     * Render a single SOA as one HTML table row.
+     *
+     * Maps the SOA to the exporter's fixed column order: SOA number, account code
+     * and name, branch code and name, account type label, billing reference(s),
+     * created/due dates, days-due status, formatted amount, status label,
+     * period from/to dates, and contract start/end dates.
+     */
     protected function rowHtml(Soa $soa): string
     {
         $billingRef = is_array($soa->billing_ref)
@@ -88,6 +109,12 @@ class SoaBillingInvoiceExporter
         return $row . '</tr>';
     }
 
+    /**
+     * Resolve the account's contract start date, preferring effectivity date over
+     * renewal date, looked up from the HMS account record.
+     *
+     * @throws \Symfony\Component\HttpKernel\Exception\HttpException  Aborts 404 when the account code is empty or the account is not found.
+     */
     protected function contractStartDate(?string $accountCode): string
     {
         if (empty($accountCode)) {
@@ -104,6 +131,12 @@ class SoaBillingInvoiceExporter
         return $startDate;
     }
 
+    /**
+     * Resolve the account's contract end date, preferring cancellation date over
+     * expiry date, looked up from the HMS account record.
+     *
+     * @throws \Symfony\Component\HttpKernel\Exception\HttpException  Aborts 404 when the account code is empty or the account is not found.
+     */
     protected function contractEndDate(?string $accountCode): string
     {
         if (empty($accountCode)) {
@@ -120,6 +153,10 @@ class SoaBillingInvoiceExporter
         return $endDate;
     }
 
+    /**
+     * Resolve and encoding-clean the HMS account name for the given code,
+     * memoizing the lookup in a per-instance cache. Returns '' for an empty code.
+     */
     protected function accountName(?string $accountCode): string
     {
         if (empty($accountCode)) {
@@ -136,6 +173,10 @@ class SoaBillingInvoiceExporter
         return $this->accountNameCache[$accountCode];
     }
 
+    /**
+     * Resolve and encoding-clean the HMS branch name for the given code,
+     * memoizing the lookup in a per-instance cache. Returns '' for an empty code.
+     */
     protected function branchName(?string $branchCode): string
     {
         if (empty($branchCode)) {
@@ -152,6 +193,10 @@ class SoaBillingInvoiceExporter
         return $this->branchNameCache[$branchCode];
     }
 
+    /**
+     * Produce a human-readable due-status label for a due date: 'Past Due',
+     * 'Due Today', 'Due Tomorrow', or 'Due in N days'. Returns '' when no date.
+     */
     protected function formatDaysDue(mixed $date): string
     {
         if (!$date) {
@@ -173,6 +218,10 @@ class SoaBillingInvoiceExporter
         };
     }
 
+    /**
+     * HTML-escape a cell value, first neutralizing CSV/Excel formula-injection
+     * prefixes (=, +, -, @, tab, CR, LF) by prepending a single quote.
+     */
     protected function escape(string $value): string
     {
         // Neutralize formula-injection prefixes before HTML-escaping

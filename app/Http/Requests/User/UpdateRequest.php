@@ -12,13 +12,19 @@ use Illuminate\Validation\Rule;
 
 class UpdateRequest extends FormRequest
 {
+    /**
+     * Authorize only users holding the "superadmin" or "admin" role.
+     */
     public function authorize(): bool
     {
         return $this->user()?->hasAnyRole(['superadmin', 'admin']) ?? false;
     }
 
     /**
-     * Get the validation rules that apply to the request.
+     * Validate a user update: the target user ID plus the account type-specific
+     * fields conditionally required by the user type, personal details, and a
+     * unique, non-reserved username and unique email (both ignoring this user)
+     * along with optional role IDs.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
@@ -140,11 +146,6 @@ class UpdateRequest extends FormRequest
                 'required',
                 'string',
                 'min:3',
-                // Starts with a letter
-                // Only letters, numbers, _, ., -
-                // No consecutive symbols
-                // Ends with a letter or number
-                'regex:/^(?=.{3,30}$)[A-Za-z](?!.*[._-]{2})[A-Za-z0-9._-]*[A-Za-z0-9]$/',
                 'max:' . config('vc.max_string_limit'),
                 Rule::unique(User::class)->ignore(request()->input('id')),
                 // Reserved words
@@ -157,11 +158,20 @@ class UpdateRequest extends FormRequest
                 'max:' . config('vc.max_string_limit'),
                 Rule::unique(User::class)->ignore(request()->input('id')),
             ],
+            'roles' => [
+                'nullable',
+                'array',
+            ],
+            'roles.*' => [
+                'integer',
+                'exists:roles,id',
+            ],
         ];
     }
 
     /**
-     * Get the error messages for the defined validation rules.
+     * Custom validation messages for the user-update fields, mainly the required
+     * and conditionally required demographic and account fields.
      *
      * @return array<string, string>
      */

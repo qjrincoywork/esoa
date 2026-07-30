@@ -20,6 +20,9 @@ class Position extends Model
         'description',
     ];
 
+    /**
+     * Get the user details that hold this position (has-many UserDetail via position_id).
+     */
     public function userDetails()
     {
         return $this->hasMany(UserDetail::class, 'position_id', 'id');

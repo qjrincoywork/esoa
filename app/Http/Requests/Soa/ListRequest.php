@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Soa;
 
 use App\Enums\AccountType;
+use App\Enums\BillType;
 use App\Enums\SoaAging;
 use App\Enums\SoaStatus;
 use Illuminate\Foundation\Http\FormRequest;
@@ -11,7 +12,22 @@ use Illuminate\Validation\Rule;
 class ListRequest extends FormRequest
 {
     /**
-     * Get the validation rules that apply to the request.
+     * Authorize superadmin/admin roles or users holding the "soas.export" or
+     * "soas.list" permission.
+     */
+    public function authorize(): bool
+    {
+        $user = $this->user();
+        return $user !== null && (
+            $user->hasAnyRole(['superadmin', 'admin']) ||
+            $user->hasAnyPermission(['soas.export', 'soas.list'])
+        );
+    }
+
+    /**
+     * Validation rules for listing SOAs: all filters are optional (account type/code,
+     * branch, billing reference, SOA number, status, bill type, aging, due-date and
+     * bill-date ranges, and per-page count).
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
@@ -47,6 +63,11 @@ class ListRequest extends FormRequest
                 'nullable',
                 'integer',
                 Rule::in(SoaStatus::getValues()),
+            ],
+            'bill_type' => [
+                'nullable',
+                'integer',
+                Rule::in(BillType::getValues()),
             ],
             'due_in' => [
                 'nullable',

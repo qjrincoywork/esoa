@@ -8,7 +8,8 @@ use Illuminate\Validation\Rule;
 class CreateRequest extends FormRequest
 {
     /**
-     * Get the validation rules that apply to the request.
+     * Validate a new role: a unique name that starts with a letter (3-191 chars),
+     * a required guard name, and an optional array of existing permission IDs.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */

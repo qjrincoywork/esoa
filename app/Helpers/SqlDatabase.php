@@ -19,6 +19,11 @@ class SqlDatabase
      */
     protected $db;
 
+    /**
+     * Bind this helper to a specific database connection.
+     *
+     * @param  string  $servername  The configured connection name (e.g. an App\Enums\Server value).
+     */
     public function __construct($servername)
     {
         $this->db = DB::connection($servername);
@@ -52,11 +57,68 @@ class SqlDatabase
             // ])
             ->orderBy('up_id', 'desc');
 
-        if (auth()->user() && !auth()->user()->hasRole('superadmin')) {
+        $authUser = auth()->user();
+        if ($authUser && !$authUser->hasRole('superadmin')) {
             $result->whereNull('up_delete_date');
+
+            // F-03: scope the legacy SOA listing to the caller's own accounts so
+            // tenant roles can no longer read every account's statements.
+            if ($authUser->hasAnyRole(['broker', 'account_branch_admin', 'group_account_admin'])) {
+                $this->applyUploadAccountRestriction($result, $authUser);
+            }
         }
 
         return $result->paginate($perPage);
+    }
+
+    /**
+     * Restrict a legacy `Upload` (SOA) query to the accounts/branches the given
+     * user is allowed to see. Mirrors {@see \App\Models\Soa::applyUserAccountRestriction()}
+     * but against the legacy column names (up_accode / up_branch).
+     *
+     * @param  \Illuminate\Database\Query\Builder  $query
+     * @param  \App\Models\User  $authUser
+     * @return void
+     */
+    private function applyUploadAccountRestriction($query, $authUser): void
+    {
+        if ($authUser->hasRole('broker')) {
+            $agentAccounts = (new self(Server::HMS))
+                ->getAccountsOfAgent($authUser->userDetail?->agent_code ?? null);
+            if ($agentAccounts->isEmpty()) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereIn('up_accode', $agentAccounts);
+            }
+            return;
+        }
+
+        if ($authUser->hasRole('account_branch_admin')) {
+            $firstAccount = $authUser->userAccounts->first();
+            $query->where('up_accode', $firstAccount?->account_code ?? null);
+            if (!empty($firstAccount?->branch_code)) {
+                $query->where('up_branch', $firstAccount->branch_code);
+            }
+            return;
+        }
+
+        if ($authUser->hasRole('group_account_admin')) {
+            $userAccounts = $authUser->userAccounts;
+            if ($userAccounts->isEmpty()) {
+                $query->whereRaw('1 = 0');
+                return;
+            }
+            $query->where(function ($q) use ($userAccounts) {
+                foreach ($userAccounts as $ua) {
+                    $q->orWhere(function ($sub) use ($ua) {
+                        $sub->where('up_accode', $ua->account_code);
+                        if (!empty($ua->branch_code)) {
+                            $sub->where('up_branch', $ua->branch_code);
+                        }
+                    });
+                }
+            });
+        }
     }
 
     /**
@@ -132,9 +194,11 @@ class SqlDatabase
     }
 
     /**
-     * Retrieves accounts based on the specified type.
+     * Retrieves a paginated list of accounts, optionally filtered by account type
+     * (TPA = codes starting with "TP", HMO = codes not starting with "TP") and by
+     * a name substring, keeping any explicitly selected code in the results.
      *
-     * @param string $type The type of accounts to retrieve
+     * @param array $params Supports per_page, selected_code, type, and name.
      * @return \Illuminate\Pagination\Paginator
      */
     public function getAccountsByParams($params)
@@ -145,6 +209,7 @@ class SqlDatabase
         $result = $this->db
             ->table('Accounts')
             ->select('ac_name', 'ac_code', 'ac_ma_code')
+            ->tap(fn ($query) => $this->applyAccountDirectoryFilter($query, auth()->user(), 'ac_code'))
             ->when(isset($params['type']), function ($query) use ($params) {
                 switch ($params['type']) {
                     case AccountType::TPA:
@@ -165,20 +230,6 @@ class SqlDatabase
                         $nameQuery->orWhere('ac_code', $selectedCode);
                     }
                 });
-            })
-            ->where(function ($q) {
-                $q->where('ac_code', 'not like', 'IN%')
-                    ->where('ac_code', 'not like', 'FM%')
-                    ->where('ac_code', 'not like', 'GR%');
-            })
-            ->where('ac_status', 'A') // Active accounts only
-            ->groupBy('ac_name', 'ac_code', 'ac_ma_code')
-            ->when(!empty($selectedCode), function ($query) use ($selectedCode) {
-                $query->orderByRaw("CASE WHEN ac_code = ? THEN 0 ELSE 1 END", [$selectedCode]);
-            })
-            ->where(function ($query) {
-                $query->where('ac_candate', '>', now())
-                    ->orWhereNull('ac_candate');
             })
             ->orderBy('ac_name');
 
@@ -211,6 +262,66 @@ class SqlDatabase
         return $accounts;
     }
 
+    /**
+     * Restrict an account/branch directory query to the accounts a tenant-scoped
+     * user is assigned to, so pickers cannot enumerate the whole client directory
+     * (F-06).
+     *
+     * Full-access staff (superadmin/admin/billing_admin) get the complete
+     * directory — this is what the user-administration pickers rely on. Every
+     * other role is confined to their own accounts (broker: the agent's accounts;
+     * account/group admins: their userAccounts) via the given account-code column;
+     * a user with no resolvable accounts, or any unrecognised non-staff role,
+     * resolves to no rows.
+     *
+     * @param  \Illuminate\Database\Query\Builder  $query
+     * @param  \App\Models\User|null  $authUser
+     * @param  string  $accountColumn  The account-code column on the queried table.
+     * @return void
+     */
+    private function applyAccountDirectoryFilter($query, $authUser, string $accountColumn): void
+    {
+        if (!$authUser || $authUser->hasAnyRole([config('vc.superadmin'), 'admin', 'billing_admin'])) {
+            return;
+        }
+
+        if ($authUser->hasRole('broker')) {
+            $agentAccounts = (new self(Server::HMS))
+                ->getAccountsOfAgent($authUser->userDetail?->agent_code ?? null);
+            if ($agentAccounts->isEmpty()) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereIn($accountColumn, $agentAccounts);
+            }
+            return;
+        }
+
+        if ($authUser->hasAnyRole(['account_branch_admin', 'group_account_admin'])) {
+            $accountCodes = $authUser->userAccounts
+                ->pluck('account_code')
+                ->filter()
+                ->unique()
+                ->values();
+            if ($accountCodes->isEmpty()) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereIn($accountColumn, $accountCodes->all());
+            }
+            return;
+        }
+
+        // Any other non-staff role has no directory access.
+        $query->whereRaw('1 = 0');
+    }
+
+    /**
+     * Dispatches a billing-reference lookup to the correct source based on
+     * $params['billing_ref_from']: claims-receiving details for CLAIMS, otherwise
+     * MDA (billing) details.
+     *
+     * @param array $params
+     * @return \Illuminate\Pagination\Paginator
+     */
     public function getBillingRefsByParams($params)
     {
         if ($params['billing_ref_from'] == BillRefFrom::CLAIMS) {
@@ -222,6 +333,13 @@ class SqlDatabase
         return $result;
     }
 
+    /**
+     * Retrieves a paginated list of billing records, optionally filtered by one or
+     * more billing reference IDs and/or a policy number, ordered by posting date.
+     *
+     * @param array $params Supports per_page, billing_ref (CSV string or array), and policynum.
+     * @return \Illuminate\Pagination\Paginator
+     */
     public function getBillingByParams($params)
     {
         $perPage = $params['per_page'] ?? config('vc.default_pages');
@@ -252,6 +370,15 @@ class SqlDatabase
         return $result;
     }
 
+    /**
+     * Retrieves a paginated list of cardholders joined to their claims and posting
+     * details, filtered by billing reference (batch number), posting-date range,
+     * claim number, policy number, and name fields. Results are constrained to the
+     * authenticated user's accounts via {@see applyCholderAccountFilters()}.
+     *
+     * @param array $params
+     * @return \Illuminate\Pagination\Paginator
+     */
     public function getCardHolderDetailsByParams($params)
     {
         $authUser = auth()->user();
@@ -259,14 +386,19 @@ class SqlDatabase
         $perPage = $params['per_page'] ?? config('vc.default_pages');
         $query = $this->db
             ->table('cholders as c')
+            ->leftJoin('Accounts as ac', function ($join) use ($params) {
+                $join->on('c.ch_accountid', '=', 'ac.ac_code');
+            })
             ->leftJoin('claims as cl', function ($join) use ($params) {
                 $join->on('c.ch_policynum', '=', 'cl.cl_policynumber');
             })
-            // ->leftJoin('billing as b', function ($join) use ($params) {
-            //     $join->on('c.ch_policynum', '=', 'b.bl_policynum');
-            // })
+            ->leftJoin('Acctg as act', function ($join) use ($params) {
+                $join->on('cl.cl_batchnumber', '=', 'act.act_batchnum');
+            })
             ->select(
                 'cl.cl_claimnum as claimnum',
+                'act.act_dateposted',
+                'act.act_batchnum',
                 'cl.cl_policynumber',
                 'c.ch_id',
                 'c.ch_policynum',
@@ -278,37 +410,7 @@ class SqlDatabase
                 'c.ch_suffix'
             );
 
-        if ($authUser?->hasRole('broker')) {
-            $agentAccounts = (new SqlDatabase(Server::HMS))
-                ->getAccountsOfAgent($authUser->userDetail?->agent_code ?? null);
-            $query->whereIn('c.ch_accountid', $agentAccounts);
-        }
-
-        if ($authUser?->hasRole('account_branch_admin')) {
-            $firstAccount = $authUser->userAccounts->first();
-            $query->where('c.ch_accountid', $firstAccount?->account_code ?? null);
-            if (!empty($firstAccount?->branch_code)) {
-                $query->where('c.ch_branch_code', $firstAccount->branch_code);
-            }
-        }
-
-        if ($authUser?->hasRole('group_account_admin')) {
-            $userAccounts = $authUser->userAccounts;
-            if ($userAccounts->isEmpty()) {
-                $query->whereRaw('1 = 0');
-            } else {
-                $query->where(function ($q) use ($userAccounts) {
-                    foreach ($userAccounts as $ua) {
-                        $q->orWhere(function ($sub) use ($ua) {
-                            $sub->where('c.ch_accountid', $ua->account_code);
-                            if (!empty($ua->branch_code)) {
-                                $sub->where('c.ch_branch_code', $ua->branch_code);
-                            }
-                        });
-                    }
-                });
-            }
-        }
+        $this->applyCholderAccountFilters($query, $params, $authUser);
 
         $result = $query
             ->when(!empty($params['billing_ref']), function ($query) use ($params) {
@@ -316,6 +418,27 @@ class SqlDatabase
                     ? explode(',', $params['billing_ref'])
                     : $params['billing_ref'];
                 $query->whereIn('cl.cl_batchnumber', $billRefs);
+            })
+            ->when(!empty($params['account_code']), function ($query) use ($params) {
+                $query->where('c.ch_accountid', $params['account_code']);
+            })
+            // ->when(!empty($params['branch_code']), function ($query) use ($params) {
+            //     $query->where('c.ch_branch_code', $params['branch_code']);
+            // })
+            ->when(!empty($params), function ($query) use ($params) {
+                $query->when(!empty($params['period_date_from']) && !empty($params['period_date_to']), function ($query) use ($params) {
+                    $query->whereBetween('act.act_dateposted', [$params['period_date_from'], $params['period_date_to']]);
+                });
+                // $query->whereBetween('cl.cl_processdate', [$params['period_date_from'], $params['period_date_to']]);
+                // if (empty($params['contract_date_from'])) {
+                //     $query->when(!empty($params['period_date_from']) && !empty($params['period_date_to']), function ($query) use ($params) {
+                //         $query->whereBetween('act.act_dateposted', [$params['period_date_from'], $params['period_date_to']]);
+                //     });
+                // } else {
+                //     $query->when(!empty($params['contract_date_from']) && !empty($params['contract_date_to']), function ($query) use ($params) {
+                //         $query->whereBetween('act.act_dateposted', [$params['contract_date_from'], $params['contract_date_to']]);
+                //     });
+                // }
             })
             ->when(!empty($params['claimnum']), function ($query) use ($params) {
                 $query->where('cl.cl_claimnum', $params['claimnum']);
@@ -332,17 +455,27 @@ class SqlDatabase
             ->when(!empty($params['middlename']), function ($query) use ($params) {
                 $query->where('c.ch_middlename', $params['middlename']);
             })
-            ->when(empty($params['order_by']), function ($query) {
-                $query->orderBy('c.ch_name', 'asc');
-            })
-            ->when(!empty($params['order_by']), function ($query) use ($params) {
-                $query->orderBy($params['order_by'], $params['order_dir'] ?? 'asc');
-            })
-            ->paginate($perPage);
+            ->orderBy('c.ch_name', 'asc');
 
-        return $result;
+        return $result->paginate($perPage);
     }
 
+    /**
+     * Applies the row-level authorization boundary for cardholder ("c") queries.
+     *
+     * Single source of truth for restricting which cardholders a user may see
+     * based on their role and associated userAccounts:
+     *  - broker              -> only cardholders under the agent's accounts
+     *  - account_branch_admin -> only the user's first account (+ branch if set)
+     *  - group_account_admin -> only the union of the user's accounts (+ branch
+     *    per account), grouped so the account set is AND-ed against the query;
+     *    an empty account set resolves to no rows (1 = 0).
+     *
+     * @param  \Illuminate\Database\Query\Builder  $query
+     * @param  array  $params
+     * @param  \App\Models\User|null  $authUser
+     * @return \Illuminate\Database\Query\Builder
+     */
     private function applyCholderAccountFilters($query, $params, $authUser)
     {
         if ($authUser?->hasRole('broker')) {
@@ -378,6 +511,40 @@ class SqlDatabase
         }
 
         return $query;
+    }
+
+    /**
+     * Determine whether the authenticated user may access the documents that
+     * belong to a given claim number (F-04).
+     *
+     * The claim is resolved to its cardholder/account and passed through the
+     * same role-based row-level filter used for listings
+     * ({@see applyCholderAccountFilters()}). Restricted roles therefore only
+     * pass when the claim belongs to an account they are assigned to; trusted
+     * staff have no filter applied and pass when the claim simply exists.
+     *
+     * Must be called on an HMS connection instance.
+     *
+     * @param  string|null  $claimnum
+     * @return bool
+     */
+    public function userCanAccessClaim(?string $claimnum): bool
+    {
+        $claimnum = trim((string) $claimnum);
+        if ($claimnum === '') {
+            return false;
+        }
+
+        $authUser = auth()->user();
+
+        $query = $this->db
+            ->table('cholders as c')
+            ->leftJoin('claims as cl', 'c.ch_policynum', '=', 'cl.cl_policynumber')
+            ->where('cl.cl_claimnum', $claimnum);
+
+        $this->applyCholderAccountFilters($query, [], $authUser);
+
+        return $query->exists();
     }
 
     /**
@@ -469,6 +636,16 @@ class SqlDatabase
         return $accountCode ?? '';
     }
 
+    /**
+     * Retrieves a paginated list of Claims_Receiving batches (ref id, amount,
+     * latest posting date, and a representative claim number), scoped to the user's
+     * accounts via {@see applyClaimsPolicyFilters()} and optionally filtered by a
+     * batch-number search. Restricted roles with no resolvable account get no rows.
+     * Any explicitly selected refs are floated to the top of the current page.
+     *
+     * @param array $params Supports per_page, billing_refs (CSV string or array), and name.
+     * @return \Illuminate\Pagination\Paginator
+     */
     public function getClaimsReceivingDetailsByParams($params)
     {
         $perPage = $params['per_page'] ?? config('vc.default_pages');
@@ -545,6 +722,16 @@ class SqlDatabase
         return $paginated;
     }
 
+    /**
+     * Retrieves a paginated list of individual claim/availment detail rows
+     * (account, cardholder, claim, batch, dates, and amount), scoped to the user's
+     * accounts via {@see applyCholderAccountFilters()}. Filters by batch-number
+     * search, posting-date range, claim number, and policy number, with an
+     * allow-listed sort column/direction and selected refs floated to the top.
+     *
+     * @param array $params Supports per_page, billing_refs, name, billing_date_from/to, claimnum, policynum, order_by, order_dir.
+     * @return \Illuminate\Pagination\Paginator
+     */
     public function getClaimDetailsByParams($params)
     {
         $authUser = auth()->user();
@@ -654,37 +841,7 @@ class SqlDatabase
                 'cl.cl_processdate as process_date',
             ]);
 
-        if ($authUser?->hasRole('broker')) {
-            $agentAccounts = (new SqlDatabase(Server::HMS))
-                ->getAccountsOfAgent($authUser->userDetail?->agent_code ?? null);
-            $query->whereIn('c.ch_accountid', $agentAccounts);
-        }
-
-        if ($authUser?->hasRole('account_branch_admin')) {
-            $firstAccount = $authUser->userAccounts->first();
-            $query->where('c.ch_accountid', $firstAccount?->account_code ?? null);
-            if (!empty($firstAccount?->branch_code)) {
-                $query->where('c.ch_branch_code', $firstAccount->branch_code);
-            }
-        }
-
-        if ($authUser?->hasRole('group_account_admin')) {
-            $userAccounts = $authUser->userAccounts;
-            if ($userAccounts->isEmpty()) {
-                $query->whereRaw('1 = 0');
-            } else {
-                $query->where(function ($q) use ($userAccounts) {
-                    foreach ($userAccounts as $ua) {
-                        $q->orWhere(function ($sub) use ($ua) {
-                            $sub->where('c.ch_accountid', $ua->account_code);
-                            if (!empty($ua->branch_code)) {
-                                $sub->where('c.ch_branch_code', $ua->branch_code);
-                            }
-                        });
-                    }
-                });
-            }
-        }
+        $this->applyCholderAccountFilters($query, $params, $authUser);
 
         $query
             ->when(!empty($params['policynum']), function ($q) use ($params) {
@@ -714,6 +871,16 @@ class SqlDatabase
         return $query->paginate($perPage);
     }
 
+    /**
+     * Retrieves a paginated list of MDA billing rows for a specific account
+     * (required $params['account_code']), joined to billing-process and account
+     * data. Filters by ref-id search, and for non-HMO account types excludes
+     * medical-collection refs still to be billed by BILLING; also supports a
+     * posting-date range. Selected refs are floated to the top of the page.
+     *
+     * @param array $params Supports account_code, per_page, billing_refs, name, account_type, billing_date_from/to.
+     * @return \Illuminate\Pagination\Paginator
+     */
     public function getMdaDetailsByParams($params)
     {
         // Pagination
@@ -747,6 +914,8 @@ class SqlDatabase
                 $join->on(DB::raw('SUBSTRING(a.bl_policynum,1,11)'), '=', 'e.ac_code');
             })
             ->where('e.ac_code', $params['account_code'])
+            // Confine the caller-supplied account_code to accounts the user owns (F-06).
+            ->tap(fn ($query) => $this->applyAccountDirectoryFilter($query, $authUser, 'e.ac_code'))
             ->when(isset($params['name']) && !empty($params['name']), function ($query) use ($params, $selectedRefs) {
                 $query->where(function ($nameQuery) use ($params, $selectedRefs) {
                     $nameQuery->where('a.bl_refid', 'like', '%' . $params['name'] . '%');
@@ -792,8 +961,11 @@ class SqlDatabase
     }
 
     /**
-     * Retrieves branches based on the specified type.
+     * Retrieves a paginated list of branches, optionally filtered by parent account
+     * code and a name substring, keeping and prioritizing any explicitly selected
+     * branch code, ordered by branch name.
      *
+     * @param array $params Supports per_page, selected_code, account_code, and name.
      * @return \Illuminate\Pagination\Paginator
      */
     public function getBranchesByParams($params)
@@ -804,6 +976,7 @@ class SqlDatabase
         $result = $this->db
             ->table('Branches')
             ->select('br_branch_name', 'br_ac_code', 'br_code')
+            ->tap(fn ($query) => $this->applyAccountDirectoryFilter($query, auth()->user(), 'br_ac_code'))
             ->when(isset($params['account_code']), function ($query) use ($params) {
                 $query->where('br_ac_code', $params['account_code']);
             })

@@ -23,7 +23,7 @@ class SendBillingInvoiceDueReminders implements ShouldQueue
     private const EXCLUDE_STATUSES = [SoaStatus::PAID];
 
     /**
-     * Create a new job instance.
+     * Create the job and configure its queue, retry count, and timeout.
      */
     public function __construct()
     {
@@ -33,7 +33,11 @@ class SendBillingInvoiceDueReminders implements ShouldQueue
     }
 
     /**
-     * Execute the job.
+     * Group all non-paid SOAs by user and aging bucket and fan out reminders.
+     *
+     * Fetches the aged SOA counts per user (see fetchSOAsGroupedByUser), and
+     * when any exist dispatches chunked SendBillingInvoiceDueReminderJob jobs.
+     * Errors are logged and rethrown.
      */
     public function handle(): void
     {
@@ -104,30 +108,8 @@ class SendBillingInvoiceDueReminders implements ShouldQueue
      */
     private function applyAgingFilter(&$query, int $agingValue): void
     {
-        $query->when($agingValue == SoaAging::PAST_DUE, function ($q) {
-            $range = SoaAging::pastDueDayBucketsRange(SoaAging::PAST_DUE);
-            $q->whereRaw('DATEDIFF(day, GETDATE(), due_date) < ?', [end($range) ?? 0]);
-        })
-        ->when($agingValue == SoaAging::DUE_WITHIN_30_DAYS, function ($q) {
-            $range = SoaAging::pastDueDayBucketsRange(SoaAging::DUE_WITHIN_30_DAYS);
-            $q->whereRaw('DATEDIFF(day, GETDATE(), due_date) BETWEEN ? AND ?', $range);
-        })
-        ->when($agingValue == SoaAging::DUE_WITHIN_60_DAYS, function ($q) {
-            $range = SoaAging::pastDueDayBucketsRange(SoaAging::DUE_WITHIN_60_DAYS);
-            $q->whereRaw('DATEDIFF(day, GETDATE(), due_date) BETWEEN ? AND ?', $range);
-        })
-        ->when($agingValue == SoaAging::DUE_WITHIN_90_DAYS, function ($q) {
-            $range = SoaAging::pastDueDayBucketsRange(SoaAging::DUE_WITHIN_90_DAYS);
-            $q->whereRaw('DATEDIFF(day, GETDATE(), due_date) BETWEEN ? AND ?', $range);
-        })
-        ->when($agingValue == SoaAging::DUE_WITHIN_120_DAYS, function ($q) {
-            $range = SoaAging::pastDueDayBucketsRange(SoaAging::DUE_WITHIN_120_DAYS);
-            $q->whereRaw('DATEDIFF(day, GETDATE(), due_date) BETWEEN ? AND ?', $range);
-        })
-        ->when($agingValue == SoaAging::DUE_WITHIN_MORE_THAN_120_DAYS, function ($q) {
-            $range = SoaAging::pastDueDayBucketsRange(SoaAging::DUE_WITHIN_MORE_THAN_120_DAYS);
-            $q->whereRaw('DATEDIFF(day, GETDATE(), due_date) > ?', [reset($range) ?? 0]);
-        });
+        [$expression, $bindings] = SoaAging::sqlPredicate($agingValue);
+        $query->whereRaw($expression, $bindings);
     }
 
     /**

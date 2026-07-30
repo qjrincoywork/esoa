@@ -8,6 +8,11 @@ use Illuminate\Validation\Rule;
 
 class CreateRequest extends FormRequest
 {
+    /**
+     * Validation rules for creating a navigation module (name, unique slug, url, icon, parent navigation, optional permission, colour, parent module, order and status).
+     *
+     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     */
     public function rules(): array
     {
         return [
@@ -24,6 +29,11 @@ class CreateRequest extends FormRequest
         ];
     }
 
+    /**
+     * Custom validation messages for navigation module creation.
+     *
+     * @return array<string, string>
+     */
     public function messages(): array
     {
         return [

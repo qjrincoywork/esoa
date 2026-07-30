@@ -8,7 +8,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class NavigationResource extends JsonResource
 {
     /**
-     * Transform the resource into an array.
+     * Transform the nested 'data' paginator into a paginated response envelope
+     * (items plus page metadata and navigation links).
      *
      * @return array<string, mixed>
      */

@@ -10,7 +10,19 @@ use Illuminate\Validation\Rule;
 class CreateRequest extends FormRequest
 {
     /**
-     * Get the validation rules that apply to the request.
+     * Authorize superadmin/admin roles or users holding the 'concerns.store' permission.
+     */
+    public function authorize(): bool
+    {
+        $user = $this->user();
+        return $user !== null && (
+            $user->hasAnyRole(['superadmin', 'admin']) ||
+            $user->hasAnyPermission(['concerns.store'])
+        );
+    }
+
+    /**
+     * Validation rules for creating a concern (linked SOAs, type, title, description, status and optional attachment).
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
@@ -60,7 +72,7 @@ class CreateRequest extends FormRequest
     }
 
     /**
-     * Prepare the data for validation.
+     * Normalize a JSON-encoded soa_ids string to an array, set user_id to the authenticated user, and force status to OPEN.
      */
     protected function prepareForValidation(): void
     {

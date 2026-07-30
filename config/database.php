@@ -109,8 +109,11 @@ return [
             'charset' => env('DB_CHARSET', 'utf8'),
             'prefix' => '',
             'prefix_indexes' => true,
-            // 'encrypt' => env('DB_ENCRYPT', 'yes'),
-            // 'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', 'false'),
+            'encrypt' => env('DB_ENCRYPT', 'yes'),
+            // Fail closed: validate the server certificate by default (F-05).
+            // Provision the SQL Server CA in the host/container trust store, or set
+            // DB_TRUST_SERVER_CERTIFICATE=true only for a genuinely trusted segment.
+            'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', false),
         ],
         'hms' => [
             'driver' => 'sqlsrv',
@@ -121,6 +124,7 @@ return [
             'charset' => env('DB_CHARSET', 'utf8'),
             'prefix' => '',
             'prefix_indexes' => true,
+            'encrypt' => env('HMS_DB_ENCRYPT', 'yes'),
             'trust_server_certificate' => env('HMS_DB_TRUST_SERVER_CERTIFICATE', false),
             'odbc_driver' => 'ODBC Driver 18 for SQL Server',
         ],
@@ -135,8 +139,9 @@ return [
             'charset' => env('DB_CHARSET', 'utf8'),
             'prefix' => '',
             'prefix_indexes' => true,
-            // 'encrypt' => env('DB_ENCRYPT', 'yes'),
-            // 'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', 'false'),
+            'encrypt' => env('OI_DB_ENCRYPT', 'yes'),
+            // Fail closed: validate the server certificate by default (F-05).
+            'trust_server_certificate' => env('OI_DB_TRUST_SERVER_CERTIFICATE', false),
         ],
         'soa' => [
             'driver' => 'sqlsrv',
@@ -148,6 +153,7 @@ return [
             'charset' => env('DB_CHARSET', 'utf8'),
             'prefix' => '',
             'prefix_indexes' => true,
+            'encrypt' => env('SOA_DB_ENCRYPT', 'yes'),
             'trust_server_certificate' => env('SOA_DB_TRUST_SERVER_CERTIFICATE', false),
             'odbc_driver' => 'ODBC Driver 18 for SQL Server',
         ],
@@ -162,8 +168,9 @@ return [
             'charset' => env('DB_CHARSET', 'utf8'),
             'prefix' => '',
             'prefix_indexes' => true,
-            // 'encrypt' => env('DB_ENCRYPT', 'yes'),
-            // 'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', 'false'),
+            'encrypt' => env('CENUSER_DB_ENCRYPT', 'yes'),
+            // Fail closed: validate the server certificate by default (F-05).
+            'trust_server_certificate' => env('CENUSER_DB_TRUST_SERVER_CERTIFICATE', false),
         ],
 
     ],

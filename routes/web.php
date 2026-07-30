@@ -52,6 +52,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', function () {
         return Inertia::render('Home');
     })->name('dashboard');
+
+    Route::get('overview', function () {
+        return Inertia::render('Overview');
+    })->name('overview');
     // Superadmin-only routes - only admins can access these
     Route::middleware(['role:superadmin'])->group(function () {
         // Route::resource('admin', AdminController::class)->middleware('check_permissions');
@@ -65,8 +69,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::get('/', 'index')->name('index');
                 Route::get('/{id}/edit', 'edit')->name('edit');
                 Route::get('/create', 'create')->name('create');
+                Route::get('/bulk_create', 'bulkCreate')->name('bulk_create');
+                Route::post('/bulk_store', 'bulkStore')->name('bulk_store');
                 Route::get('/get_accounts', 'getAccounts')->name('get_accounts');
                 Route::get('/get_branches', 'getBranches')->name('get_branches');
+                Route::get('/account_access_users', 'accountAccessUsers')->name('account_access_users');
                 Route::get('/{id}/edit_roles', 'editRoles')->name('edit_roles');
                 Route::get('/all_roles', 'allRoles')->name('all_roles');
                 Route::post('/update_roles', 'updateRoles')->name('update_roles');
@@ -75,6 +82,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::post('/store', 'store')->name('store');
                 Route::post('/destroy', 'destroy')->name('destroy');
                 Route::post('/verify', 'verify')->name('verify');
+                Route::post('/bulk_verify', 'bulkUserVerification')->name('bulk_verify');
                 Route::post('/toggle_active', 'toggleActive')->name('toggle_active');
                 Route::post('/bulk_toggle_active', 'bulkToggleActive')->name('bulk_toggle_active');
                 Route::post('/bulk_destroy', 'bulkDestroy')->name('bulk_destroy');
@@ -138,7 +146,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::prefix('soas')->name('soas.')->controller(SoaController::class)->group(function () {
             Route::get('/dashboard', 'dashboard')->name('dashboard');
             Route::get('/file_proxy', 'fileProxy')->name('file_proxy');
-            Route::get('/', 'index')->name('index');
             Route::get('/list', 'list')->name('list');
             Route::get('/export', 'exportList')->name('export');
             Route::get('/file_list', 'fileList')->name('file_list');
@@ -148,7 +155,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/get_accounts', 'getAccounts')->name('get_accounts');
             Route::get('/get_billing_refs', 'getBillingRefs')->name('get_billing_refs');
             Route::get('/get_branches', 'getBranches')->name('get_branches');
-            Route::get('/{id}/show', 'show')->name('show');
             Route::get('/{id}/activities', 'activities')->name('activities');
             Route::get('/{id}/concerns', 'concerns')->name('concerns');
             Route::get('/{id}/account_payments', 'soaAccountPayments')->name('account_payments');

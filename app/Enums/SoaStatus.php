@@ -11,6 +11,12 @@ final class SoaStatus extends Enum
     public const PAID = 3;
     public const DISPUTED = 4;
 
+    /**
+     * Map an SOA status value to its human-readable label.
+     *
+     * @param int $value
+     * @return string
+     */
     public static function label($value): string
     {
         return match ($value) {
@@ -21,6 +27,12 @@ final class SoaStatus extends Enum
         };
     }
 
+    /**
+     * Return the Tailwind CSS badge classes (padding/rounding/background/text/border) for the given SOA status.
+     *
+     * @param int $value
+     * @return string
+     */
     public static function color($value): string
     {
         return match ($value) {
@@ -31,6 +43,11 @@ final class SoaStatus extends Enum
         };
     }
 
+    /**
+     * Return all SOA statuses as {value, name} option arrays for select inputs.
+     *
+     * @return array<array{value:int,name:string}>
+     */
     public static function list(): array
     {
         return [

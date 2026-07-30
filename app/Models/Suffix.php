@@ -20,6 +20,9 @@ class Suffix extends Model
         'description',
     ];
 
+    /**
+     * Get the user details that reference this suffix (has-many UserDetail via suffix_id).
+     */
     public function userDetails()
     {
         return $this->hasMany(UserDetail::class, 'suffix_id', 'id');

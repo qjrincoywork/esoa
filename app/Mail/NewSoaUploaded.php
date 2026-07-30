@@ -21,7 +21,9 @@ class NewSoaUploaded extends Mailable
     public $soa;
 
     /**
-     * Create a new message instance.
+     * Create the mailable for a newly uploaded legacy SOA record.
+     *
+     * @param  $soa  A legacy upload row exposing the up_soanum field.
      */
     public function __construct($soa)
     {
@@ -29,7 +31,8 @@ class NewSoaUploaded extends Mailable
     }
 
     /**
-     * Get the message envelope.
+     * Build the envelope with a translated subject (labels.new_soa_uploaded_subject)
+     * that embeds the upload's up_soanum.
      */
     public function envelope(): Envelope
     {
@@ -41,7 +44,7 @@ class NewSoaUploaded extends Mailable
     }
 
     /**
-     * Get the message content definition.
+     * Render the email using the emails.esoa.new-soa-uploaded view.
      */
     public function content(): Content
     {

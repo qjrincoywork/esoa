@@ -17,7 +17,10 @@ class AppServiceProvider extends ServiceProvider
     }
 
     /**
-     * Bootstrap any application services.
+     * Set the default string column length to 191 (MySQL utf8mb4 index limit)
+     * and register the application-wide strong password defaults: minimum 12
+     * characters with mixed case, letters, numbers, symbols, and an
+     * uncompromised (breach-check) requirement.
      */
     public function boot(): void
     {

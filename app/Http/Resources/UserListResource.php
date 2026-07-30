@@ -9,7 +9,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class UserListResource extends JsonResource
 {
     /**
-     * Transform the resource into an array.
+     * Transform the user into a list row, pulling type and department from the related
+     * user detail and mapping the user type to its label when set.
      *
      * @return array<string, mixed>
      */

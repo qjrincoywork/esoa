@@ -22,10 +22,9 @@ class FileUpload extends Model
     ];
 
     /**
-     * Method: user
-     * This method defines the relationship between the User model and the UserDetail model.
+     * Get the user who uploaded this file (belongs-to User via user_id).
      *
-     * @return BelongsTo The relationship between User and UserDetail models.
+     * @return BelongsTo
      */
     public function user(): BelongsTo
     {
@@ -33,10 +32,9 @@ class FileUpload extends Model
     }
 
     /**
-     * Method: soa
-     * This method defines the relationship between the User model and SoaActivity Model.
+     * Get the SOA this file is attached to (belongs-to Soa via soa_id).
      *
-     * @return BelongsTo The relationship between User and SoaActivity Model.
+     * @return BelongsTo
      */
     public function soa(): BelongsTo
     {

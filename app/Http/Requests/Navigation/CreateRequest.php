@@ -9,7 +9,7 @@ use Illuminate\Foundation\Http\FormRequest;
 class CreateRequest extends FormRequest
 {
     /**
-     * Get the validation rules that apply to the request.
+     * Validation rules for creating a navigation item (name, optional label, icon and status).
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */

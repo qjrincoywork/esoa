@@ -8,7 +8,8 @@ use Illuminate\Foundation\Http\FormRequest;
 class UpdateRequest extends FormRequest
 {
     /**
-     * Get the validation rules that apply to the request.
+     * Validate that the target role ID exists (via the IsDataExists rule) and that
+     * a name and guard name are provided.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */

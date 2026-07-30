@@ -60,6 +60,14 @@ RUN { \
     echo 'memory_limit=256M'; \
     } > /usr/local/etc/php/conf.d/uploads.ini
 
+# Security hardening: never record function arguments in exception stack traces
+# so sensitive values (e.g. plaintext passwords passed to the HIBP validator)
+# can never leak into the application logs (F-05).
+RUN { \
+    echo 'zend.exception_ignore_args=On'; \
+    echo 'zend.exception_string_param_max_len=0'; \
+    } > /usr/local/etc/php/conf.d/security.ini
+
 # Apache modules
 RUN a2enmod rewrite headers expires
 
@@ -67,7 +75,7 @@ RUN a2enmod rewrite headers expires
 RUN echo '<VirtualHost *:80>\n\
     DocumentRoot /var/www/html/public\n\
     <Directory /var/www/html/public>\n\
-        Options Indexes FollowSymLinks\n\
+        Options -Indexes +FollowSymLinks\n\
         AllowOverride All\n\
         Require all granted\n\
     </Directory>\n\

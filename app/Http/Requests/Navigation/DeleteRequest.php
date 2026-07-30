@@ -8,7 +8,7 @@ use Illuminate\Foundation\Http\FormRequest;
 class DeleteRequest extends FormRequest
 {
     /**
-     * Get the validation rules that apply to the request.
+     * Validation rules for deleting a navigation item, ensuring it exists and the user is an admin.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */

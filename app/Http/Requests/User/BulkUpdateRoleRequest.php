@@ -6,13 +6,17 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class BulkUpdateRoleRequest extends FormRequest
 {
+    /**
+     * Authorize only users holding the "superadmin" or "admin" role.
+     */
     public function authorize(): bool
     {
         return $this->user()?->hasAnyRole(['superadmin', 'admin']) ?? false;
     }
 
     /**
-     * Get the validation rules that apply to the request.
+     * Validate a non-empty list of existing user IDs and an optional array of
+     * existing role IDs to assign to them.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
@@ -27,7 +31,7 @@ class BulkUpdateRoleRequest extends FormRequest
     }
 
     /**
-     * Get the error messages for the defined validation rules.
+     * Custom validation messages for the bulk role-assignment fields.
      *
      * @return array<string, string>
      */

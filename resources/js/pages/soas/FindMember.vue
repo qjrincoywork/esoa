@@ -122,7 +122,7 @@ const columns = computed(() => {
     createActionColumn([
       {
         slug: 'soas.member_files',
-        name: 'View Attachments',
+        name: 'View Scanned Attachments',
         icon: 'FolderOpen',
         color: 'blue',
         handler: (item: Member) => openMemberFiles(item),
@@ -217,7 +217,7 @@ const openMemberFiles = async (member: Member) => {
     if (!response.ok) throw new Error('Failed to fetch files');
 
     openPane({
-      title:          `Attachments — ${member.claimnum}`,
+      title:          `Attachments — ${member.claimnum} - ${member.policynum} — ${member.lastname}, ${member.firstname}`,
       side:           'top',
       component:      SoaFileBrowser,
       componentProps: { files: response.data?.files ?? [] },

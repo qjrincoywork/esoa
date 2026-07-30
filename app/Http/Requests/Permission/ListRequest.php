@@ -7,7 +7,7 @@ use Illuminate\Foundation\Http\FormRequest;
 class ListRequest extends FormRequest
 {
     /**
-     * Get the validation rules that apply to the request.
+     * Validation rules for filtering, sorting and paginating the permission listing.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
@@ -27,6 +27,16 @@ class ListRequest extends FormRequest
             'per_page' => [
                 'nullable',
                 'integer'
+            ],
+            'sort_by' => [
+                'nullable',
+                'string',
+                'in:name,guard_name,created_at'
+            ],
+            'sort_direction' => [
+                'nullable',
+                'string',
+                'in:asc,desc'
             ],
         ];
     }

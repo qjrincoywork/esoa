@@ -35,7 +35,15 @@ class RoleController extends Controller
     }
 
     /**
-     * Display a listing of the resource.
+     * Render the Inertia "roles/Index" page with paginated roles and all permissions.
+     *
+     * Supports an optional name LIKE filter via `search_string`, eager-loads each
+     * role's permissions, orders by newest id first, and also passes the full
+     * permission list for the assignment UI. Filters are validated by
+     * {@see ListRequest}.
+     *
+     * @param ListRequest $request
+     * @return \Inertia\Response
      */
     public function index(ListRequest $request)
     {
@@ -56,7 +64,9 @@ class RoleController extends Controller
     }
 
     /**
-     * Show the form for creating a new resource.
+     * Unused resource stub; the create form is rendered client-side.
+     *
+     * @return void
      */
     public function create()
     {
@@ -64,7 +74,15 @@ class RoleController extends Controller
     }
 
     /**
-     * Store a newly created resource in storage.
+     * Persist a new role (and optionally sync its permissions) in a DB transaction.
+     *
+     * Creates the role from validated input, syncs the given permissions when a
+     * `permissions` array is supplied, commits, and returns an HTTP 201 envelope.
+     * Rolls back and returns a server-error envelope on failure. Input is
+     * validated by {@see CreateRequest}.
+     *
+     * @param CreateRequest $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function store(CreateRequest $request)
     {
@@ -91,7 +109,10 @@ class RoleController extends Controller
     }
 
     /**
-     * Display the specified resource.
+     * Unused resource stub; roles are not shown individually.
+     *
+     * @param string $id
+     * @return void
      */
     public function show(string $id)
     {
@@ -99,7 +120,13 @@ class RoleController extends Controller
     }
 
     /**
-     * Show the form for editing the specified resource.
+     * Return the specified role as JSON for the edit form (AJAX only).
+     *
+     * Non-AJAX requests fall through and receive no content.
+     *
+     * @param string $id
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse|void
      */
     public function edit(string $id, Request $request)
     {
@@ -137,7 +164,15 @@ class RoleController extends Controller
     }
 
     /**
-     * Update the specified resource in storage.
+     * Update the specified role inside a DB transaction.
+     *
+     * Resolves the role by id, applies validated changes (name/attributes only;
+     * permissions are handled by updatePermissions()), commits, and returns an
+     * HTTP 200 envelope for AJAX requests. Rolls back and returns a server-error
+     * envelope on failure. Input is validated by {@see UpdateRequest}.
+     *
+     * @param UpdateRequest $request
+     * @return \Illuminate\Http\JsonResponse|void
      */
     public function update(UpdateRequest $request)
     {
@@ -165,7 +200,14 @@ class RoleController extends Controller
     }
 
     /**
-     * Remove the specified resource from storage.
+     * Delete the specified role inside a DB transaction.
+     *
+     * Resolves the role by id and deletes it, commits, and returns an HTTP 200
+     * envelope for AJAX requests. Rolls back and returns a server-error envelope
+     * on failure. Input is validated by {@see DeleteRequest}.
+     *
+     * @param DeleteRequest $request
+     * @return \Illuminate\Http\JsonResponse|void
      */
     public function destroy(DeleteRequest $request)
     {
@@ -196,7 +238,16 @@ class RoleController extends Controller
     }
 
     /**
-     * Update the permissions assigned to a role.
+     * Sync the permissions assigned to a role and flush the permission cache.
+     *
+     * Runs inside a DB transaction: resolves the role by id, syncs it to the
+     * given permission set (clearing all when none supplied), forgets Spatie's
+     * cached permissions, commits, and returns an HTTP 200 envelope. Rolls back
+     * and returns a server-error envelope on failure. Input is validated by
+     * {@see UpdatePermissionsRequest}.
+     *
+     * @param UpdatePermissionsRequest $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function updatePermissions(UpdatePermissionsRequest $request)
     {

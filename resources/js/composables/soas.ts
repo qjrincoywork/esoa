@@ -333,11 +333,15 @@ export function useSoas() {
     try {
       const params = {
         soa_id: soa.id,
-        billing_ref: soa.billing_ref,
         claimnum: item.claimnum,
         policynum: item.policynum,
-        billing_ref_from: soa.billing_ref_from,
       };
+      if (soa?.billing_ref) {
+        params.billing_ref = soa?.billing_ref;
+      }
+      if (soa?.billing_ref_from) {
+        params.billing_ref_from = soa.billing_ref_from;
+      }
       const response = await get(`/${slug.value}/file_list`, params);
 
       if (!response.ok) {
@@ -346,7 +350,7 @@ export function useSoas() {
 
       const payload = response.data;
       openPane({
-        title: `Records Management Attachments`,
+        title: `Records Management Attachments - ${item.claimnum}, - ${item.policynum}, - ${item.lastname}, ${item.firstname}`,
         side: 'top',
         component: SoaFileBrowser,
         componentProps: { soa: soa, files: payload.files ?? [] },

@@ -16,7 +16,7 @@ class IsDataExists implements ValidationRule
     protected $table;
 
     /**
-     * Create a new rule instance.
+     * Create the rule for the local table the value's id must exist in.
      *
      * @param string $table
      */
@@ -26,7 +26,12 @@ class IsDataExists implements ValidationRule
     }
 
     /**
-     * Run the validation rule.
+     * Pass only when a row with id equal to the value exists in the configured table.
+     *
+     * The list of real tables is resolved from the current connection (SHOW
+     * TABLES on MySQL, INFORMATION_SCHEMA otherwise); the rule fails closed with
+     * "The {attribute} is invalid." both when the table is not a known base
+     * table and when no matching id is found.
      *
      * @param  \Closure(string, ?string=): \Illuminate\Translation\PotentiallyTranslatedString  $fail
      */
@@ -46,13 +51,17 @@ class IsDataExists implements ValidationRule
             ->toArray();
         }
 
-        if (in_array($this->table, $tables)) {
-            // Check if the value exists in the specified table
-            $exists = DB::table($this->table)->where('id', $value)->exists();
+        // Fail closed: an unknown table must never let the value through.
+        if (!in_array($this->table, $tables)) {
+            $fail("The {$attribute} is invalid.");
+            return;
+        }
 
-            if (!$exists) {
-                $fail("The {$attribute} is invalid.");
-            }
+        // Check if the value exists in the specified table
+        $exists = DB::table($this->table)->where('id', $value)->exists();
+
+        if (!$exists) {
+            $fail("The {$attribute} is invalid.");
         }
     }
 }

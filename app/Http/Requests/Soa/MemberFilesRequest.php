@@ -2,12 +2,25 @@
 
 namespace App\Http\Requests\Soa;
 
+use App\Rules\IsClaimnumValid;
 use Illuminate\Foundation\Http\FormRequest;
 
 class MemberFilesRequest extends FormRequest
 {
     /**
-     * Get the validation rules that apply to the request.
+     * Authorize superadmin/admin roles or users holding the "soas.member_files" permission.
+     */
+    public function authorize(): bool
+    {
+        $user = $this->user();
+        return $user !== null && (
+            $user->hasAnyRole(['superadmin', 'admin']) ||
+            $user->hasAnyPermission(['soas.member_files'])
+        );
+    }
+
+    /**
+     * Validate a required, valid claim number string of at most the configured length.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
@@ -15,6 +28,7 @@ class MemberFilesRequest extends FormRequest
     {
         return [
             'claimnum' => [
+                new IsClaimnumValid(),
                 'required',
                 'string',
                 'max:' . config('vc.max_string_limit'),
@@ -23,7 +37,7 @@ class MemberFilesRequest extends FormRequest
     }
 
     /**
-     * Get the error messages for the defined validation rules.
+     * Custom validation messages for the claim number rules.
      *
      * @return array<string, string>
      */

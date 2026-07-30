@@ -9,6 +9,12 @@ final class Status extends Enum
     public const ACTIVE = 1;
     public const INACTIVE = 0;
 
+    /**
+     * Map a status value to its human-readable label.
+     *
+     * @param int $value
+     * @return string
+     */
     public static function label($value): string
     {
         return match ($value) {
@@ -17,6 +23,12 @@ final class Status extends Enum
         };
     }
 
+    /**
+     * Return the Tailwind CSS badge classes (background/text/border) for the given status.
+     *
+     * @param int $value
+     * @return string
+     */
     public static function color($value): string
     {
         return match ($value) {
@@ -25,6 +37,11 @@ final class Status extends Enum
         };
     }
 
+    /**
+     * Return both active/inactive states as {value, name} arrays for select inputs.
+     *
+     * @return array<array{value:int,name:string}>
+     */
     public static function list(): array
     {
         return [

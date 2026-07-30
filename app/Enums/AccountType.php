@@ -10,6 +10,12 @@ final class AccountType extends Enum
     public const TPA = 'T';
     public const HMO = 'H';
 
+    /**
+     * Map an account type code to its human-readable label.
+     *
+     * @param string $value
+     * @return string
+     */
     public static function label($value): string
     {
         return match ($value) {
@@ -19,6 +25,11 @@ final class AccountType extends Enum
         };
     }
 
+    /**
+     * Return all account types as {value, name} option arrays for select inputs.
+     *
+     * @return array<array{value:string,name:string}>
+     */
     public static function list(): array
     {
         return [

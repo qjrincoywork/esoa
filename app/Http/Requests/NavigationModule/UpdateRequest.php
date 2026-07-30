@@ -8,6 +8,11 @@ use Illuminate\Validation\Rule;
 
 class UpdateRequest extends FormRequest
 {
+    /**
+     * Validation rules for updating a navigation module, with slug uniqueness ignoring the current record.
+     *
+     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     */
     public function rules(): array
     {
         $id = (int) $this->input('id');
@@ -27,6 +32,11 @@ class UpdateRequest extends FormRequest
         ];
     }
 
+    /**
+     * Custom validation messages for navigation module updates.
+     *
+     * @return array<string, string>
+     */
     public function messages(): array
     {
         return [

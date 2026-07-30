@@ -9,7 +9,8 @@ use Illuminate\Foundation\Http\FormRequest;
 class DeleteRequest extends FormRequest
 {
     /**
-     * Get the validation rules that apply to the request.
+     * Validate that the id references an existing users record and that the acting user
+     * is an admin.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */

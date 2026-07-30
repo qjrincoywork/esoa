@@ -15,11 +15,18 @@ class ConcernNotification extends Mailable
 
     public Concern $concern;
 
+    /**
+     * Create the mailable for the given concern record.
+     */
     public function __construct(Concern $concern)
     {
         $this->concern = $concern;
     }
 
+    /**
+     * Build the envelope with subject "Concern notification: {title}"
+     * (falling back to "new request" when the concern has no title).
+     */
     public function envelope(): Envelope
     {
         return new Envelope(
@@ -27,6 +34,9 @@ class ConcernNotification extends Mailable
         );
     }
 
+    /**
+     * Render the email using the emails.esoa.concern-notification view.
+     */
     public function content(): Content
     {
         return new Content(
@@ -34,6 +44,9 @@ class ConcernNotification extends Mailable
         );
     }
 
+    /**
+     * No attachments are sent with this notification.
+     */
     public function attachments(): array
     {
         return [];

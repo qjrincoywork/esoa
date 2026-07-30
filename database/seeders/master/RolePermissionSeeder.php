@@ -29,6 +29,8 @@ class RolePermissionSeeder extends Seeder
             // users
             'users.index',
             'users.create',
+            'users.bulk_create',
+            'users.bulk_store',
             'users.edit',
             'users.destroy',
             'users.verify',

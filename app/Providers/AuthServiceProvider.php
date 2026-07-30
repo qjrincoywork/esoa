@@ -18,7 +18,9 @@ class AuthServiceProvider extends ServiceProvider
     ];
 
     /**
-     * Register any authentication / authorization services.
+     * Register a Gate::before hook that grants users with the "superadmin" role
+     * every ability, bypassing all permission checks. Individual permissions are
+     * registered as Gates automatically by Spatie's PermissionServiceProvider.
      */
     public function boot(): void
     {

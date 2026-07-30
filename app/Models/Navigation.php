@@ -28,7 +28,7 @@ class Navigation extends Model
     ];
 
     /**
-     * Get the modules for this navigation.
+     * Get the active (status = 1) modules for this navigation (has-many NavigationModule).
      */
     public function modules(): HasMany
     {
@@ -79,6 +79,14 @@ class Navigation extends Model
         return $query->whereNull('permission_id')->get();
     }
 
+    /**
+     * Get a paginated list of navigations with their active modules eager-loaded.
+     *
+     * Optionally filters by name (search_string) and status, ordered by newest id first.
+     * Superadmins also see soft-deleted rows.
+     *
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     */
     public function getNavigations(array $params)
     {
         // Pagination
@@ -99,6 +107,11 @@ class Navigation extends Model
         return $result->paginate($perPage);
     }
 
+    /**
+     * Create or update a navigation, stamping the authenticated user as created_by.
+     *
+     * Updates the existing record when the data contains an 'id', otherwise creates a new one.
+     */
     public function saveNavigation(array $data) {
         $data += ['created_by' => auth()->user()->id];
         if (isset($data['id'])) {

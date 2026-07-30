@@ -16,13 +16,21 @@ class NavigationModuleController extends Controller
 {
     protected NavigationModule $navigationModule;
 
+    /**
+     * Inject the NavigationModule model instance.
+     */
     public function __construct(NavigationModule $navigationModule)
     {
         $this->navigationModule = $navigationModule;
     }
 
     /**
-     * Display a listing of the resource.
+     * Render the Inertia "navigation_modules/Index" page with the filtered module list.
+     *
+     * Filters are validated by {@see ListRequest}.
+     *
+     * @param ListRequest $request
+     * @return \Inertia\Response
      */
     public function index(ListRequest $request)
     {
@@ -44,7 +52,14 @@ class NavigationModuleController extends Controller
     }
 
     /**
-     * Store a newly created resource in storage.
+     * Persist a new navigation module inside a DB transaction.
+     *
+     * Delegates to NavigationModule::saveNavigationModule(), commits, and returns
+     * an HTTP 201 envelope for AJAX requests. Rolls back and returns a
+     * server-error envelope on failure. Input is validated by {@see CreateRequest}.
+     *
+     * @param CreateRequest $request
+     * @return \Illuminate\Http\JsonResponse|void
      */
     public function store(CreateRequest $request)
     {
@@ -81,7 +96,14 @@ class NavigationModuleController extends Controller
     }
 
     /**
-     * Update the specified resource in storage.
+     * Update a navigation module inside a DB transaction.
+     *
+     * Delegates to NavigationModule::saveNavigationModule(), commits, and returns
+     * an HTTP 200 envelope for AJAX requests. Rolls back and returns a
+     * server-error envelope on failure. Input is validated by {@see UpdateRequest}.
+     *
+     * @param UpdateRequest $request
+     * @return \Illuminate\Http\JsonResponse|void
      */
     public function update(UpdateRequest $request)
     {

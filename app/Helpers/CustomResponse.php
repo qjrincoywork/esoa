@@ -5,7 +5,7 @@ namespace App\Helpers;
 class CustomResponse
 {
     /**
-     * Success response.
+     * Build a JSON success envelope (default HTTP 200) carrying the message and operation label.
      *
      * @param  string  $message
      * @param  string  $operation
@@ -25,7 +25,7 @@ class CustomResponse
     }
 
     /**
-     * Success response.
+     * Build a JSON success envelope for a created resource (default HTTP 201 Created).
      *
      * @param  string  $message
      * @param  string  $operation
@@ -44,7 +44,7 @@ class CustomResponse
         ], $statusCode);
     }
     /**
-     * Success response.
+     * Build a minimal JSON success envelope (default HTTP 200) with only status and message.
      *
      * @param  string  $message
      * @param  int  $statusCode
@@ -61,7 +61,7 @@ class CustomResponse
     }
 
     /**
-     * Error response.
+     * Build a JSON error envelope (default HTTP 500) with an error status, message, and optional error details.
      *
      * @param  mixed $message
      * @param  int  $statusCode

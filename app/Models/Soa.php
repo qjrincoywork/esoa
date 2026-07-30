@@ -43,6 +43,8 @@ class Soa extends Model
         'due_date',
         'period_date_from',
         'period_date_to',
+        'contract_date_from',
+        'contract_date_to',
         'amount',
         'file_pdf',
         'file_xls',
@@ -53,10 +55,9 @@ class Soa extends Model
     ];
 
     /**
-     * Method: user
-     * This method defines the relationship between the User model and the UserDetail model.
+     * Get the user who owns/created this SOA (belongs-to User via user_id).
      *
-     * @return BelongsTo The relationship between User and UserDetail models.
+     * @return BelongsTo
      */
     public function user(): BelongsTo
     {
@@ -73,6 +74,11 @@ class Soa extends Model
         return $this->hasMany(SoaActivity::class, 'soa_id');
     }
 
+    /**
+     * Get the concerns linked to this SOA, through the soa_concerns pivot (many-to-many).
+     *
+     * @return BelongsToMany
+     */
     public function concerns(): BelongsToMany
     {
         return $this->belongsToMany(
@@ -83,6 +89,11 @@ class Soa extends Model
         );
     }
 
+    /**
+     * Get the account payments applied to this SOA, through the soa_account_payments pivot (many-to-many).
+     *
+     * @return BelongsToMany
+     */
     public function accountPayments(): BelongsToMany
     {
         return $this->belongsToMany(
@@ -188,32 +199,44 @@ class Soa extends Model
     }
 
     /**
-     * Past-due aging counts keyed by {@see SoaAging} values. Single aggregate query (no per-bucket counts).
+     * Dashboard bucket counts: one entry per aging bucket plus the Endorsed/Disputed status buckets.
      *
-     * @return array<int, int>
+     * Each entry carries an explicit {@code type} ('aging' | 'status') so downstream consumers never
+     * have to infer the bucket kind from its numeric value (aging and status values may overlap,
+     * e.g. DUE_CURRENT_MONTH == ENDORSED == 2).
+     *
+     * @return array<int, array{type: string, value: int, count: int}>
      */
     public function agingCountsPastDue(): array
     {
-        $values = SoaAging::getValues();
-        $statusValues = [SoaStatus::ENDORSED, SoaStatus::DISPUTED];
-        $values = array_merge($values, $statusValues); // Include endorsed/disputed buckets in aging counts
+        $buckets = array_map(
+            static fn (int $value): array => ['type' => 'aging', 'value' => $value],
+            SoaAging::getValues(),
+        );
+        $buckets = array_merge($buckets, [
+            ['type' => 'status', 'value' => SoaStatus::ENDORSED],
+            ['type' => 'status', 'value' => SoaStatus::DISPUTED],
+            ['type' => 'status', 'value' => SoaStatus::PAID],
+            ['type' => 'status', 'value' => SoaStatus::UNPAID],
+        ]);
+
         $authUser = auth()->user();
         if (!$authUser) {
-            return array_fill_keys($values, 0);
-        }
-        $result = [];
-        foreach ($values as $soaAging) {
-            $result[] = [
-                'value' => $soaAging,
-                'count' => self::query()
-                    ->tap(fn (Builder $q) => $this->applyUserAccountRestriction($q, $authUser))
-                    ->tap(fn (Builder $q) => $this->applyListSearchFiltersDueIn($q, in_array($soaAging, $statusValues) ? ['status' => $soaAging] : ['due_in' => $soaAging]))
-                    ->where('status', '!=', SoaStatus::PAID)
-                    ->count(),
-            ];
+            return array_map(static fn (array $bucket): array => $bucket + ['count' => 0], $buckets);
         }
 
-        return $result;
+        return array_map(function (array $bucket) use ($authUser): array {
+            $filter = $bucket['type'] === 'status'
+                ? ['status' => $bucket['value']]
+                : ['due_in' => $bucket['value']];
+
+            return $bucket + [
+                'count' => self::query()
+                    ->tap(fn (Builder $q) => $this->applyUserAccountRestriction($q, $authUser))
+                    ->tap(fn (Builder $q) => $this->applyListSearchFiltersDueIn($q, $filter))
+                    ->count(),
+            ];
+        }, $buckets);
     }
 
     /**
@@ -279,6 +302,9 @@ class Soa extends Model
         if (array_key_exists('status', $params) && $params['status'] !== null && $params['status'] !== '') {
             $query->where('status', (int) $params['status']);
         }
+        if (array_key_exists('bill_type', $params) && $params['bill_type'] !== null && $params['bill_type'] !== '') {
+            $query->where('bill_type', (int) $params['bill_type']);
+        }
     }
 
     /**
@@ -324,45 +350,11 @@ class Soa extends Model
      */
     protected function applyListSearchFiltersDueIn(Builder $query, array $params): void
     {
-        if (array_key_exists('due_in', $params) && $params['due_in'] !== null && $params['due_in'] !== '') {
-            $query->when($params['due_in'] == SoaAging::PAST_DUE, function ($query) use ($params) {
-                $range = SoaAging::pastDueDayBucketsRange($params['due_in']);
-                $query->whereRaw(
-                    'DATEDIFF(day, GETDATE(), due_date) < ?',
-                    [end($range) ?? 0]
-                );
-            })
-            ->when($params['due_in'] == SoaAging::DUE_WITHIN_30_DAYS, function ($query) use ($params) {
-                $query->whereRaw(
-                    'DATEDIFF(day, GETDATE(), due_date) BETWEEN ? AND ?',
-                    SoaAging::pastDueDayBucketsRange($params['due_in'])
-                );
-            })
-            ->when($params['due_in'] == SoaAging::DUE_WITHIN_60_DAYS, function ($query) use ($params) {
-                $query->whereRaw(
-                    'DATEDIFF(day, GETDATE(), due_date) BETWEEN ? AND ?',
-                    SoaAging::pastDueDayBucketsRange($params['due_in'])
-                );
-            })
-            ->when($params['due_in'] == SoaAging::DUE_WITHIN_90_DAYS, function ($query) use ($params) {
-                $query->whereRaw(
-                    'DATEDIFF(day, GETDATE(), due_date) BETWEEN ? AND ?',
-                    SoaAging::pastDueDayBucketsRange($params['due_in'])
-                );
-            })
-            ->when($params['due_in'] == SoaAging::DUE_WITHIN_120_DAYS, function ($query) use ($params) {
-                $query->whereRaw(
-                    'DATEDIFF(day, GETDATE(), due_date) BETWEEN ? AND ?',
-                    SoaAging::pastDueDayBucketsRange($params['due_in'])
-                );
-            })
-            ->when($params['due_in'] == SoaAging::DUE_WITHIN_MORE_THAN_120_DAYS, function ($query) use ($params) {
-                $range = SoaAging::pastDueDayBucketsRange($params['due_in']);
-                $query->whereRaw(
-                    'DATEDIFF(day, GETDATE(), due_date) > ?',
-                    [reset($range) ?? 0]
-                );
-            });
+        if (array_key_exists('due_in', $params) && $params['due_in'] !== null && $params['due_in'] !== ''
+            && in_array((int) $params['due_in'], SoaAging::getValues(), true)
+        ) {
+            [$expression, $bindings] = SoaAging::sqlPredicate((int) $params['due_in']);
+            $query->whereRaw($expression, $bindings);
         }
 
         if (array_key_exists('status', $params) && $params['status'] !== null && $params['status'] !== '') {
@@ -371,10 +363,23 @@ class Soa extends Model
             })
             ->when($params['status'] == SoaStatus::DISPUTED, function ($query) use ($params) {
                 $query->where('status', SoaStatus::DISPUTED);
+            })
+            ->when($params['status'] == SoaStatus::UNPAID, function ($query) use ($params) {
+                $query->where('status', SoaStatus::UNPAID);
+            })
+            ->when($params['status'] == SoaStatus::PAID, function ($query) use ($params) {
+                $query->where('status', SoaStatus::PAID);
             });
         }
     }
 
+    /**
+     * Create or update an SOA, normalizing a JSON billing_ref array into a comma-separated string.
+     *
+     * Updates the existing record when the data contains an 'id', otherwise creates a new one.
+     *
+     * @return self The created or updated SOA.
+     */
     public function saveSoa(array $data) {
         // Handle multiple billing_refs (JSON array from form)
         if (isset($data['billing_ref']) && is_string($data['billing_ref'])) {

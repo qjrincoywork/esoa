@@ -9,7 +9,8 @@ use Illuminate\Validation\Rule;
 class ProfileUpdateRequest extends FormRequest
 {
     /**
-     * Get the validation rules that apply to the request.
+     * Validate the profile fields: a required username and a required lowercase
+     * email that is unique across users, ignoring the currently authenticated user.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */

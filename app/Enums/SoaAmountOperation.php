@@ -17,6 +17,12 @@ final class SoaAmountOperation extends Enum
 
     public const DEDUCT = 'deduct';
 
+    /**
+     * Map an amount operation to its human-readable label; unknown values pass through unchanged.
+     *
+     * @param string $value
+     * @return string
+     */
     public static function label(string $value): string
     {
         return match ($value) {

@@ -21,6 +21,9 @@ class Citizenship extends Model
     ];
 
 
+    /**
+     * Get the user details that reference this citizenship (has-many UserDetail via citizenship_id).
+     */
     public function userDetails()
     {
         return $this->hasMany(UserDetail::class, 'citizenship_id', 'id');

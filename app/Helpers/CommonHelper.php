@@ -150,7 +150,7 @@ class CommonHelper
             if ($request->hasFile($fileType)) {
                 $file = $request->file($fileType);
                 $filename = $soaNumber . '_' . now()->format('Ymd_His') . '.' . $file->getClientOriginalExtension();
-                $validated[$fileType] = $file->storeAs($directory, $filename, env('BILLING_DISK', 'public'));
+                $validated[$fileType] = $file->storeAs($directory, $filename, config('vc.disks.billing'));
             }
         }
     }
@@ -180,7 +180,7 @@ class CommonHelper
             $finalDir = $username;
         }
 
-        $disk = $disk ?? env('CONCERNS_DISK', 'public');
+        $disk = $disk ?? config('vc.disks.concerns');
 
         $fields = is_array($fileField) ? $fileField : [$fileField];
 
@@ -307,40 +307,121 @@ class CommonHelper
         }
     }
 
+    /**
+     * Authorize the authenticated user against a specific model instance.
+     *
+     * Full-access staff roles (superadmin/admin/billing_admin) pass
+     * unconditionally. Every other (tenant-scoped) role must OWN the supplied
+     * model, so object routes must pass a model — the check fails closed (403)
+     * when none is given. Ownership is resolved by the model's shape: records
+     * that carry an account_code (e.g. SOA) are matched against the
+     * account(s)/branch(es) the user is assigned to (see {@see userOwnsAccount()});
+     * records that carry a user_id (e.g. concerns, account payments) are matched
+     * against the owner id. All other cases abort: 401 when unauthenticated,
+     * otherwise 403.
+     *
+     * Authorization keys on model ownership, NOT on the route-name permission
+     * (the route middleware already enforces that). This removes the former
+     * early return that made the per-tenant ownership branch dead code, so the
+     * boundary can no longer be short-circuited by iterating IDs (F-01).
+     *
+     * @param  object  $request
+     * @param  \Illuminate\Database\Eloquent\Model|null  $model
+     * @throws \Symfony\Component\HttpKernel\Exception\HttpException
+     * @return void
+     */
     public static function assertUserMayAccessModel($request, $model = null): void
     {
         $authUser = $request->user();
         if (!$authUser) {
             abort(Response::HTTP_UNAUTHORIZED);
         }
-        if ($model && $model instanceof Model) {
-            switch ($authUser->getRoleNames()->first()) {
-                case 'account_branch_admin':
-                case 'group_account_admin':
-                    $userAccounts = $authUser->userAccounts;
-                    if ($userAccounts->isEmpty()) {
-                        abort(Response::HTTP_FORBIDDEN);
-                    }
-                    $exists = $userAccounts->where('account_code', $model->account_code)
-                        ->when(!empty($model->branch_code), function ($q) use ($model) {
-                            $q->where('branch_code', $model->branch_code);
-                        })
-                        ->first();
-                    if (!$exists) {
-                        abort(Response::HTTP_FORBIDDEN);
-                    }
-                    return;
-            }
-        }
-        if (
-            $authUser->hasRole('superadmin')
-            || $authUser->hasRole('billing_admin')
-            || $authUser->hasAnyPermission([$request->route()->getName()])
-        ) {
+
+        // Full-access roles are never tenant-restricted.
+        if ($authUser->hasAnyRole([config('vc.superadmin'), 'admin', 'billing_admin'])) {
             return;
-        } else {
+        }
+
+        // Tenant-scoped roles must own the model. Object routes must supply one;
+        // fail closed when they do not.
+        if (!($model instanceof Model)) {
             abort(Response::HTTP_FORBIDDEN);
         }
+
+        $attributes = $model->getAttributes();
+
+        // Per-account/branch records (e.g. SOA): match against assigned accounts.
+        if (array_key_exists('account_code', $attributes)) {
+            if (self::userOwnsAccount($authUser, $model->account_code, $model->branch_code ?? null)) {
+                return;
+            }
+            abort(Response::HTTP_FORBIDDEN);
+        }
+
+        // Per-user records (e.g. concerns, account payments): match owner id.
+        if (array_key_exists('user_id', $attributes)) {
+            if ((int) $model->user_id === (int) $authUser->id) {
+                return;
+            }
+            abort(Response::HTTP_FORBIDDEN);
+        }
+
+        abort(Response::HTTP_FORBIDDEN);
+    }
+
+    /**
+     * Determine whether a tenant-scoped user is assigned to the given account
+     * (and branch, when the assignment is branch-specific).
+     *
+     * Mirrors the row-level boundary used by the list queries
+     * ({@see \App\Models\Soa::applyUserAccountRestriction()} and
+     * {@see \App\Helpers\SqlDatabase::applyCholderAccountFilters()}):
+     *  - broker               -> any account belonging to the agent
+     *  - account_branch_admin -> the user's first account (+ branch if set)
+     *  - group_account_admin  -> any of the user's accounts (+ branch per account)
+     *
+     * @param  \App\Models\User  $authUser
+     * @param  string|null  $accountCode
+     * @param  string|null  $branchCode
+     * @return bool
+     */
+    private static function userOwnsAccount($authUser, ?string $accountCode, ?string $branchCode): bool
+    {
+        if ($accountCode === null || $accountCode === '') {
+            return false;
+        }
+
+        if ($authUser->hasRole('broker')) {
+            $agentAccounts = (new SqlDatabase(Server::HMS))
+                ->getAccountsOfAgent($authUser->userDetail?->agent_code ?? null);
+
+            return $agentAccounts->contains(fn ($code) => (string) $code === (string) $accountCode);
+        }
+
+        if ($authUser->hasRole('account_branch_admin')) {
+            $firstAccount = $authUser->userAccounts->first();
+            if (!$firstAccount || (string) $firstAccount->account_code !== (string) $accountCode) {
+                return false;
+            }
+            if (!empty($firstAccount->branch_code)) {
+                return (string) $firstAccount->branch_code === (string) $branchCode;
+            }
+            return true;
+        }
+
+        if ($authUser->hasRole('group_account_admin')) {
+            return $authUser->userAccounts->contains(function ($ua) use ($accountCode, $branchCode) {
+                if ((string) $ua->account_code !== (string) $accountCode) {
+                    return false;
+                }
+                if (!empty($ua->branch_code)) {
+                    return (string) $ua->branch_code === (string) $branchCode;
+                }
+                return true;
+            });
+        }
+
+        return false;
     }
 
     /**

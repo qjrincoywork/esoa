@@ -7,7 +7,7 @@ use Illuminate\Foundation\Http\FormRequest;
 class FileProxyRequest extends FormRequest
 {
     /**
-     * Get the validation rules that apply to the request.
+     * Validate that a required url string of at most 191 characters is supplied.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */

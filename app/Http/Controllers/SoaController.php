@@ -6,10 +6,8 @@ use App\Enums\AccountType;
 use App\Enums\BillRefFrom;
 use App\Enums\BillType;
 use App\Enums\Server;
-use App\Enums\SoaAging;
 use App\Enums\SoaAmountOperation;
 use App\Enums\SoaStatus;
-use App\Enums\UntagType;
 use App\Exports\SoaBillingInvoiceExporter;
 use App\Helpers\CommonHelper;
 use App\Helpers\CustomResponse;
@@ -20,11 +18,10 @@ use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
 use App\Http\Resources\{AccountBranchMemberResource, AccountPaymentResource, BillingRefResource, ConcernResource, MemberResource, OldSoaResource, SoaActivityListResource, SoaAgingCountResource, SoaResource };
-use App\Mail\{ BillingInvoiceStatusChanged, NewBillingInvoiceUploaded, NewSoaUploaded };
-use App\Models\{Account, Citizenship, CivilStatus, Contact, Department, Gender, MainAccount, Position, Soa, Suffix, UserDetail};
-use Carbon\Carbon;
+use App\Mail\{ BillingInvoiceStatusChanged, NewBillingInvoiceUploaded };
+use App\Models\Soa;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\{ DB, Http, Mail, Storage };
+use Illuminate\Support\Facades\{ DB, Http, Storage };
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -69,8 +66,24 @@ class SoaController extends Controller
         CommonHelper::assertUserMayAccessModel($request);
         $path = $request->get('url', '');
 
-        // Block absolute URLs and path traversal — only relative paths allowed
-        if (preg_match('#^https?://#i', $path) || str_contains($path, '..') || str_contains($path, "\0")) {
+        // Fully decode first so that single- and double-encoded traversal
+        // (e.g. %2e%2e, %252e%252e) cannot slip past the literal ".." check.
+        $decodedPath = $path;
+        for ($i = 0; $i < 3; $i++) {
+            $decodedPath = rawurldecode($decodedPath);
+        }
+
+        // Only relative paths allowed: block absolute URLs, traversal, encoded
+        // dots/percent, and null bytes on both the raw and fully-decoded value.
+        if (
+            preg_match('#^https?://#i', $path)
+            || str_contains($path, '..')
+            || str_contains($decodedPath, '..')
+            || stripos($path, '%2e') !== false
+            || stripos($path, '%25') !== false
+            || str_contains($path, "\0")
+            || str_contains($decodedPath, "\0")
+        ) {
             return CustomResponse::error('Invalid URL', Response::HTTP_BAD_REQUEST);
         }
 
@@ -82,15 +95,31 @@ class SoaController extends Controller
 
         $fileUrl = $allowedBase . '/' . ltrim($path, '/');
 
+        // Only render known-safe document/image types; never trust the upstream
+        // content-type verbatim, and never render inline (prevents HTML/SVG XSS
+        // being served from this application's origin).
+        $allowedTypes = [
+            'application/pdf',
+            'image/png',
+            'image/jpeg',
+            'image/gif',
+            'image/webp',
+        ];
+
         try {
             // TLS verification enabled — withoutVerifying() removed
             $response = Http::timeout(15)->get($fileUrl);
-            $contentType = $response->header('Content-Type') ?? 'application/octet-stream';
 
             if ($response->successful()) {
+                $upstreamType = strtolower(trim(explode(';', (string) ($response->header('Content-Type') ?? ''))[0]));
+                $contentType = in_array($upstreamType, $allowedTypes, true)
+                    ? $upstreamType
+                    : 'application/octet-stream';
+
                 return response($response->body(), Response::HTTP_OK, [
                     'Content-Type' => $contentType,
-                    'Content-Disposition' => 'inline',
+                    'Content-Disposition' => 'attachment',
+                    'X-Content-Type-Options' => 'nosniff',
                 ]);
             }
 
@@ -101,19 +130,13 @@ class SoaController extends Controller
     }
 
     /**
-     * Display a listing of the resource.
-     */
-    public function index(ListRequest $request)
-    {
-        $soas = (new $this->sqlDatabase(Server::SOA))->getSoas($request->validated());
-
-        return Inertia::render('soas/Index', [
-            'soas' => new CommonResource(OldSoaResource::collection($soas))
-        ]);
-    }
-
-    /**
-     * Display the dashboard.
+     * Render the SOA dashboard with past-due aging counts.
+     *
+     * Loads the past-due aging bucket counts and passes them to the Inertia
+     * "soas/Dashboard" page as an {@see SoaAgingCountResource} collection.
+     *
+     * @param Request $request
+     * @return \Inertia\Response
      */
     public function dashboard(Request $request)
     {
@@ -125,7 +148,17 @@ class SoaController extends Controller
     }
 
     /**
-     * Display a listing of the account / branch members.
+     * Return HMS card-holder members for an account/branch as JSON (AJAX only).
+     *
+     * Queries the HMS server via {@see SqlDatabase} using the validated params
+     * and responds with an {@see AccountBranchMemberResource} collection. Non-AJAX
+     * requests fall through and receive no content. Input is validated by
+     * {@see AccountBranchMembersRequest}.
+     *
+     * @param AccountBranchMembersRequest $request
+     * @param string $account_code
+     * @param string $branch_code
+     * @return \Illuminate\Http\JsonResponse|void
      */
     public function accountBranchMembers(AccountBranchMembersRequest $request, string $account_code, string $branch_code)
     {
@@ -140,7 +173,16 @@ class SoaController extends Controller
     }
 
     /**
-     * Display a listing of the resource.
+     * List SOAs (billing invoices), returning JSON for fetch calls or an Inertia page.
+     *
+     * For AJAX/fetch requests (e.g. the SearchableCombobox) it returns a paginated
+     * JSON payload of {@see SoaResource} data with pagination metadata; otherwise
+     * it renders the Inertia "soas/List" page with the collection plus status,
+     * account-type and bill-type option lists. Filters are validated by
+     * {@see ListRequest}.
+     *
+     * @param ListRequest $request
+     * @return \Illuminate\Http\JsonResponse|\Inertia\Response
      */
     public function list(ListRequest $request)
     {
@@ -161,6 +203,7 @@ class SoaController extends Controller
             'soas' => new CommonResource(SoaResource::collection($soas)),
             'soa_status_options' => SoaStatus::list(),
             'soa_account_type_options' => AccountType::list(),
+            'soa_bill_type_options' => BillType::list(),
         ]);
     }
 
@@ -194,31 +237,42 @@ class SoaController extends Controller
     }
 
     /**
-     * Display a file listing of the resource.
+     * List RM-disk attachment files for a claim number as JSON (AJAX only).
+     *
+     * When a `claimnum` is provided, enumerates files on the RM disk under that
+     * claim and returns each file's name together with a signed preview token
+     * (issued by {@see CommonHelper::createFilePreviewToken()}) for later inline
+     * streaming via previewFile(). Non-AJAX requests fall through and receive no
+     * content. Input is validated by {@see FileListRequest}.
+     *
+     * Access control (RBAC): {@see CommonHelper::assertUserMayAccessModel()} is
+     * enforced before any files are listed.
+     *
+     * @param FileListRequest $request
+     * @return \Illuminate\Http\JsonResponse|void
      */
     public function fileList(FileListRequest $request)
     {
-        CommonHelper::assertUserMayAccessModel($request);
         $validated = $request->validated();
-        //http://192.170.11.185/dmis_finance/file/rm/ //EO-2832655-003, EO-3085829-004
         $files = [];
         if (isset($validated['claimnum']) && !empty($validated['claimnum'])) {
-            $paths = Storage::disk(env('RM_DISK', 'public'))->files($validated['claimnum']);
+            // Confine RM document access to claims the caller's account owns (F-02).
+            if (!(new $this->sqlDatabase(Server::HMS))->userCanAccessClaim($validated['claimnum'])) {
+                abort(Response::HTTP_FORBIDDEN);
+            }
+            $paths = Storage::disk(config('vc.disks.rm'))->files($validated['claimnum']);
             $userId = (int) auth()->id();
             $files = array_map(function (string $path) use ($userId) {
                 return [
                     'name' => basename($path),
                     'preview_token' => CommonHelper::createFilePreviewToken(
-                        env('RM_DISK', 'public'),
+                        config('vc.disks.rm'),
                         $path,
                         $userId
                     ),
                 ];
             }, $paths);
         }
-        // $files = Storage::disk(env('RM_DISK', 'public'))->files('EO-3024023-001'); // 'files' is the sub-directory name
-        // $files = Storage::disk(env('RM_DISK', 'public'))->files('EO-2832655-003');
-        // $files = Storage::disk(env('RM_DISK', 'public'))->files('EO-3082257-029');
 
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
@@ -227,11 +281,24 @@ class SoaController extends Controller
         }
     }
 
+    /**
+     * Stream a previously tokenized stored file inline (RM disk).
+     *
+     * The signed preview token — issued by {@see CommonHelper::createFilePreviewToken()}
+     * in fileList()/memberFiles() — carries the disk, path and issuing user id, so
+     * authorization is enforced by the token itself rather than a role check here.
+     *
+     * Access control (RBAC): route-level Spatie role/permission middleware guards
+     * the endpoint; the token binds the file to the user it was issued for.
+     *
+     * @param Request $request
+     * @return \Symfony\Component\HttpFoundation\Response
+     */
     public function previewFile(Request $request)
     {
         return CommonHelper::previewStoredFileFromToken(
             (string) $request->query('token', ''),
-            env('RM_DISK', 'public'),
+            config('vc.disks.rm'),
             $request->user()?->id
         );
     }
@@ -255,7 +322,7 @@ class SoaController extends Controller
             abort(Response::HTTP_NOT_FOUND);
         }
 
-        $disk = Storage::disk(env('BILLING_DISK', 'public'));
+        $disk = Storage::disk(config('vc.disks.billing'));
 
         if (! $disk->exists($path)) {
             abort(Response::HTTP_NOT_FOUND);
@@ -292,6 +359,22 @@ class SoaController extends Controller
         ]));
     }
 
+    /**
+     * Return the lookup lists required to build the "Create SOA" form.
+     *
+     * Responds only to AJAX/JSON requests so the form's select options
+     * (account types, bill types, status types and billing-reference sources)
+     * can be fetched without a full page navigation. Non-AJAX requests fall
+     * through and receive no content.
+     *
+     * Access control (RBAC): this endpoint is gated by Spatie role/permission
+     * middleware registered on the route, so only users authorized to create
+     * an SOA can reach it; no per-model ownership check is needed here because
+     * the response contains reference data only.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse|void JSON of lookup lists for AJAX requests; void otherwise.
+     */
     public function create(Request $request)
     {
         // Return JSON for AJAX requests (no URL change)
@@ -305,6 +388,21 @@ class SoaController extends Controller
         }
     }
 
+    /**
+     * Persist a new SOA together with its uploaded attachments.
+     *
+     * Runs inside a DB transaction: stores any uploaded files, saves the SOA,
+     * and — when the SOA has an attachment and an associated account — emails a
+     * {@see NewBillingInvoiceUploaded} notification. Responds with a JSON success
+     * envelope for AJAX requests, or a server-error envelope on failure.
+     *
+     * Access control (RBAC): route-level Spatie role/permission middleware
+     * restricts this endpoint to users authorized to create an SOA; input is
+     * validated and authorized by {@see CreateRequest}.
+     *
+     * @param CreateRequest $request
+     * @return \Illuminate\Http\JsonResponse|void
+     */
     public function store(CreateRequest $request)
     {
         $validated = $request->validated();
@@ -339,6 +437,19 @@ class SoaController extends Controller
         }
     }
 
+    /**
+     * Return accounts from HMS matching the given search params (AJAX only).
+     *
+     * Feeds account-picker comboboxes on the SOA forms. Queries the HMS server
+     * via {@see SqlDatabase} and responds with a JSON collection; non-AJAX
+     * requests fall through and receive no content.
+     *
+     * Access control (RBAC): route-level Spatie role/permission middleware gates
+     * the endpoint.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse|void
+     */
     public function getAccounts(Request $request)
     {
         // Return JSON for AJAX requests (no URL change)
@@ -351,6 +462,19 @@ class SoaController extends Controller
         }
     }
 
+    /**
+     * Return billing references from HMS matching the given params (AJAX only).
+     *
+     * Feeds the billing-reference picker on the SOA forms. Queries the HMS server
+     * via {@see SqlDatabase} using validated params and responds with a JSON
+     * collection; non-AJAX requests fall through and receive no content.
+     *
+     * Access control (RBAC): route-level Spatie role/permission middleware gates
+     * the endpoint; input is validated by {@see BillRefsRequest}.
+     *
+     * @param BillRefsRequest $request
+     * @return \Illuminate\Http\JsonResponse|void
+     */
     public function getBillingRefs(BillRefsRequest $request)
     {
         // Return JSON for AJAX requests (no URL change)
@@ -363,6 +487,20 @@ class SoaController extends Controller
         }
     }
 
+    /**
+     * Return branches from HMS matching the given search params (AJAX only).
+     *
+     * Feeds branch-picker comboboxes on the SOA forms (typically scoped to a
+     * selected account). Queries the HMS server via {@see SqlDatabase} and
+     * responds with a JSON collection; non-AJAX requests fall through and
+     * receive no content.
+     *
+     * Access control (RBAC): route-level Spatie role/permission middleware gates
+     * the endpoint.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse|void
+     */
     public function getBranches(Request $request)
     {
         // Return JSON for AJAX requests (no URL change)
@@ -384,7 +522,7 @@ class SoaController extends Controller
         $validated = $request->validated();
         $soa = $this->soa->findOrFail($validated['soa_id']);
 
-        CommonHelper::assertUserMayAccessModel($request);
+        CommonHelper::assertUserMayAccessModel($request, $soa);
 
         $current = (float) $soa->amount;
         $delta = (float) $validated['amount'];
@@ -426,12 +564,23 @@ class SoaController extends Controller
     }
 
     /**
-     * Display SOA activities for the given SOA id.
+     * Return a paginated audit trail of activities for the given SOA as JSON.
+     *
+     * Resolves the SOA, paginates its activity rows (newest first) and returns
+     * them as {@see SoaActivityListResource} data with pagination metadata. Always
+     * responds with JSON regardless of request type.
+     *
+     * Access control (RBAC): {@see CommonHelper::assertUserMayAccessModel()} is
+     * enforced before the activities are loaded.
+     *
+     * @param Request $request
+     * @param int $id
+     * @return \Illuminate\Http\JsonResponse
      */
     public function activities(Request $request, int $id)
     {
-        CommonHelper::assertUserMayAccessModel($request);
         $soa = $this->soa->findOrFail($id);
+        CommonHelper::assertUserMayAccessModel($request, $soa);
 
         $perPage = (int) $request->get('per_page', config('vc.default_pages'));
         $paginator = $soa->soaActivity()
@@ -460,7 +609,7 @@ class SoaController extends Controller
     public function concerns(Request $request, int $id)
     {
         $soa = $this->soa->findOrFail($id);
-        CommonHelper::assertUserMayAccessModel($request);
+        CommonHelper::assertUserMayAccessModel($request, $soa);
 
         $perPage = (int) $request->get('per_page', config('vc.default_pages'));
         $concerns = $soa->concerns()
@@ -477,7 +626,7 @@ class SoaController extends Controller
     public function soaAccountPayments(Request $request, int $id)
     {
         $soa = $this->soa->findOrFail($id);
-        CommonHelper::assertUserMayAccessModel($request);
+        CommonHelper::assertUserMayAccessModel($request, $soa);
 
         $perPage = (int) $request->get('per_page', config('vc.default_pages'));
         $accountPayments = $soa->accountPayments()
@@ -541,7 +690,17 @@ class SoaController extends Controller
     }
 
     /**
-     * Edit the specified resource.
+     * Return the specified SOA and lookup lists for the edit form (AJAX only).
+     *
+     * Resolves the SOA and includes account-type/bill-type/status/billing-ref
+     * option lists. Non-AJAX requests fall through and receive no content.
+     *
+     * Access control (RBAC): beyond route-level middleware,
+     * {@see CommonHelper::assertUserMayAccessModel()} enforces per-model ownership.
+     *
+     * @param Request $request
+     * @param int $id
+     * @return \Illuminate\Http\JsonResponse|void
      */
     public function edit(Request $request, int $id)
     {
@@ -561,18 +720,33 @@ class SoaController extends Controller
     }
 
     /**
-     * Update the specified resource in storage.
+     * Update the specified SOA, recording an audit activity and firing emails.
+     *
+     * Runs inside a DB transaction: resolves the SOA, rejects updates to a PAID
+     * SOA, and (for non account/group admins only) stores any uploaded files.
+     * After applying validated changes it diffs the filtered original vs. changed
+     * attributes and, when anything changed, records an "update" activity. It then
+     * emails a {@see NewBillingInvoiceUploaded} notice when a new PDF is uploaded
+     * on an UNPAID SOA, and a {@see BillingInvoiceStatusChanged} notice when an
+     * account/group admin moves the status into an allowed value. Returns an
+     * HTTP 200 envelope for AJAX requests; rolls back and returns a server-error
+     * envelope on failure. Input is validated by {@see UpdateRequest}.
+     *
+     * Access control (RBAC): {@see CommonHelper::assertUserMayAccessModel()} is
+     * enforced before the transaction begins.
+     *
+     * @param UpdateRequest $request
+     * @return \Illuminate\Http\JsonResponse|void
      */
     public function update(UpdateRequest $request)
     {
-        CommonHelper::assertUserMayAccessModel($request);
         $validated = $request->validated();
+        $soa = $this->soa->findOrFail($validated['id']);
+        CommonHelper::assertUserMayAccessModel($request, $soa);
         DB::beginTransaction();
 
         try {
-            $soa = DB::transaction(function () use ($validated, $request) {
-                $soa = $this->soa->findOrFail($validated['id']);
-
+            $soa = DB::transaction(function () use ($validated, $request, $soa) {
                 CommonHelper::validateNotPaid($soa, SoaStatus::PAID);
 
                 $soaNumber = $validated['soa_number'] ?? $soa->soa_number;
@@ -659,17 +833,22 @@ class SoaController extends Controller
      */
     public function memberFiles(MemberFilesRequest $request)
     {
-        CommonHelper::assertUserMayAccessModel($request);
         $claimnum = $request->validated('claimnum');
+
+        // Confine RM document access to claims the caller's account owns (F-02).
+        if (!(new $this->sqlDatabase(Server::HMS))->userCanAccessClaim($claimnum)) {
+            abort(Response::HTTP_FORBIDDEN);
+        }
+
         $userId = (int) auth()->id();
 
-        $paths = Storage::disk(env('RM_DISK', 'public'))->files($claimnum);
+        $paths = Storage::disk(config('vc.disks.rm'))->files($claimnum);
 
         $files = array_map(function (string $path) use ($userId) {
             return [
                 'name' => basename($path),
                 'preview_token' => CommonHelper::createFilePreviewToken(
-                    env('RM_DISK', 'public'),
+                    config('vc.disks.rm'),
                     $path,
                     $userId
                 ),
@@ -679,13 +858,29 @@ class SoaController extends Controller
         return response()->json(['files' => $files]);
     }
 
+    /**
+     * Toggle soft-delete state for the specified SOA (delete or restore).
+     *
+     * Runs inside a DB transaction: resolves the SOA including trashed rows,
+     * then restores it if already trashed or soft-deletes it otherwise, and
+     * reports which action was taken. Responds with a JSON envelope for AJAX
+     * requests, or a server-error envelope on failure.
+     *
+     * Access control (RBAC): beyond the route-level Spatie role/permission
+     * middleware, {@see CommonHelper::assertUserMayAccessModel()} enforces
+     * per-model ownership before the destructive action; input is validated by
+     * {@see DestroyRequest}.
+     *
+     * @param DestroyRequest $request
+     * @return \Illuminate\Http\JsonResponse|void
+     */
     public function destroy(DestroyRequest $request)
     {
-        CommonHelper::assertUserMayAccessModel($request);
         $validated = $request->validated();
         DB::beginTransaction();
         try {
             $soa = Soa::withTrashed()->findOrFail($validated['id']);
+            CommonHelper::assertUserMayAccessModel($request, $soa);
             if ($soa->trashed()) {
                 $soa->restore();
                 $label = 'restored';

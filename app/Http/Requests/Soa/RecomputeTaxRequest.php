@@ -10,7 +10,7 @@ use Illuminate\Foundation\Http\FormRequest;
 class RecomputeTaxRequest extends FormRequest
 {
     /**
-     * Get the validation rules that apply to the request.
+     * Validate a required ref_id string that must exist as bl_refid in the HMS billing table.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
@@ -26,7 +26,7 @@ class RecomputeTaxRequest extends FormRequest
     }
 
     /**
-     * Get the error messages for the defined validation rules.
+     * Custom validation messages for the ref_id rules.
      *
      * @return array<string, string>
      */

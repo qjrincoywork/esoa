@@ -30,16 +30,20 @@ class Concern extends Model
     ];
 
     /**
-     * Method: user
-     * This method defines the relationship between the User model and the UserDetail model.
+     * Get the user who raised this concern (belongs-to User via user_id).
      *
-     * @return BelongsTo The relationship between User and UserDetail models.
+     * @return BelongsTo
      */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
     }
 
+    /**
+     * Get the SOAs this concern is linked to, through the soa_concerns pivot (many-to-many).
+     *
+     * @return BelongsToMany
+     */
     public function soas(): BelongsToMany
     {
         return $this->belongsToMany(
@@ -50,6 +54,15 @@ class Concern extends Model
         );
     }
 
+    /**
+     * Get a paginated list of concerns with the user and linked SOAs eager-loaded.
+     *
+     * Brokers and account/group admins are scoped to their own concerns; superadmins
+     * also see soft-deleted rows. Optionally filters by title, description, type, and
+     * status, ordered by newest id first.
+     *
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     */
     public function getConcerns($params)
     {
         $authUser = auth()->user();

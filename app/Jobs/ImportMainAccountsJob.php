@@ -19,7 +19,9 @@ class ImportMainAccountsJob implements ShouldQueue
     public $chunk;
 
     /**
-     * Create a new job instance.
+     * Create the job with the chunk of legacy main-account rows to import.
+     *
+     * @param  iterable  $chunk  Legacy main-account records (objects exposing ma_* fields).
      */
     public function __construct($chunk)
     {
@@ -27,7 +29,12 @@ class ImportMainAccountsJob implements ShouldQueue
     }
 
     /**
-     * Execute the job.
+     * Import the chunked legacy main accounts into the main_accounts table.
+     *
+     * For each row a Contact is created when both contact person and number
+     * are present, and a MainAccount is created only when both code and name
+     * are present (linked to the contact when one was made). The chunk runs in
+     * one transaction that rolls back and rethrows on any failure.
      */
     public function handle(): void
     {

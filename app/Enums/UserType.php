@@ -11,6 +11,12 @@ final class UserType extends Enum
     public const BROKER = 3;
     public const GROUP_ACCOUNT_ADMIN = 4;
 
+    /**
+     * Map a user type value to its human-readable label.
+     *
+     * @param int $value
+     * @return string
+     */
     public static function label($value): string
     {
         return match ($value) {
@@ -22,6 +28,11 @@ final class UserType extends Enum
         };
     }
 
+    /**
+     * Return all user types as {value, name} option arrays for select inputs.
+     *
+     * @return array<array{value:int,name:string}>
+     */
     public static function list(): array
     {
         return [

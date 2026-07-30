@@ -30,10 +30,9 @@ class SoaActivity extends Model
     ];
 
     /**
-     * Method: user
-     * This method defines the relationship between the User model and the UserDetail model.
+     * Get the user who performed this activity (belongs-to User via user_id).
      *
-     * @return BelongsTo The relationship between User and UserDetail models.
+     * @return BelongsTo
      */
     public function user(): BelongsTo
     {
@@ -41,10 +40,9 @@ class SoaActivity extends Model
     }
 
     /**
-     * Method: soa
-     * This method defines the relationship between the User model and SoaActivity Model.
+     * Get the SOA this activity was recorded against (belongs-to Soa via soa_id).
      *
-     * @return BelongsTo The relationship between User and SoaActivity Model.
+     * @return BelongsTo
      */
     public function soa(): BelongsTo
     {

@@ -7,7 +7,19 @@ use Illuminate\Foundation\Http\FormRequest;
 class ListRequest extends FormRequest
 {
     /**
-     * Get the validation rules that apply to the request.
+     * Authorize superadmin/admin roles or users holding the 'account_payments.index' permission.
+     */
+    public function authorize(): bool
+    {
+        $user = $this->user();
+        return $user !== null && (
+            $user->hasAnyRole(['superadmin', 'admin']) ||
+            $user->hasAnyPermission(['account_payments.index'])
+        );
+    }
+
+    /**
+     * Validation rules for filtering and paginating the account payment listing.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
@@ -27,7 +39,7 @@ class ListRequest extends FormRequest
     }
 
     /**
-     * Prepare the data for validation.
+     * Default per_page to the configured page size when it is not supplied.
      */
     protected function prepareForValidation(): void
     {

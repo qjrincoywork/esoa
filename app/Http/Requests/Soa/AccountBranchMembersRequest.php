@@ -7,7 +7,9 @@ use Illuminate\Foundation\Http\FormRequest;
 class AccountBranchMembersRequest extends FormRequest
 {
     /**
-     * Get the validation rules that apply to the request.
+     * Validation rules for the account/branch member lookup: requires an account code and
+     * accepts optional branch, billing reference, period/contract date ranges, and member
+     * identity filters (policy/claim number, first/last name).
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
@@ -27,9 +29,28 @@ class AccountBranchMembersRequest extends FormRequest
                 'max:' . $max,
             ],
             'billing_ref' => [
-                'required',
+                'nullable',
                 'string',
-                'max:' . $max,
+            ],
+            'period_date_from' => [
+                'nullable',
+                'date',
+            ],
+            'period_date_to' => [
+                'nullable',
+                'required_with:period_date_from',
+                'date',
+                'after_or_equal:period_date_from',
+            ],
+            'contract_date_from' => [
+                'nullable',
+                'date',
+            ],
+            'contract_date_to' => [
+                'nullable',
+                'required_with:contract_date_from',
+                'date',
+                'after_or_equal:contract_date_from',
             ],
             'policynum'    => ['nullable', 'string', 'max:' . $max],
             'claimnum'     => ['nullable', 'string', 'max:' . $max],
@@ -39,7 +60,7 @@ class AccountBranchMembersRequest extends FormRequest
     }
 
     /**
-     * Get the error messages for the defined validation rules.
+     * Custom validation messages for the member identity and per-page rules.
      *
      * @return array<string, string>
      */

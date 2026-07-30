@@ -97,6 +97,8 @@ const selectedBillRefFrom = ref<string | number>(soa.value?.billing_ref_from ?? 
 const dueDate = ref(toDateInput(soa.value?.due_date))
 const periodDateFrom = ref(toDateInput(soa.value?.period_date_from))
 const periodDateTo = ref(toDateInput(soa.value?.period_date_to))
+const contractDateFrom = ref(toDateInput(soa.value?.contract_date_from))
+const contractDateTo = ref(toDateInput(soa.value?.contract_date_to))
 const amount = ref(soa.value?.amount != null ? String(soa.value.amount) : '')
 const billingDateFrom = ref('')
 const billingDateTo = ref('')
@@ -372,6 +374,8 @@ watch(soa, (val: Soa | undefined) => {
   if (val.due_date != null) dueDate.value = toDateInput(val.due_date);
   if (val.period_date_from != null) periodDateFrom.value = toDateInput(val.period_date_from);
   if (val.period_date_to != null) periodDateTo.value = toDateInput(val.period_date_to);
+  if (val.contract_date_from != null) contractDateFrom.value = toDateInput(val.contract_date_from);
+  if (val.contract_date_to != null) contractDateTo.value = toDateInput(val.contract_date_to);
   if (val.amount != null) amount.value = String(val.amount);
   if (val.account_code != null) accountCode.value = String(val.account_code);
   if (val.branch_code != null) branchCode.value = String(val.branch_code);
@@ -593,6 +597,19 @@ watch(soa, (val: Soa | undefined) => {
           to-name="period_date_to"
           @update:from="(v) => { periodDateFrom = v }"
           @update:to="(v) => { periodDateTo = v }"
+        />
+
+        <DateRangePicker
+          v-if="!isEndorsed"
+          class="md:col-span-2"
+          id="contract-date"
+          label="Contract Date Range"
+          :from="contractDateFrom"
+          :to="contractDateTo"
+          from-name="contract_date_from"
+          to-name="contract_date_to"
+          @update:from="(v) => { contractDateFrom = v }"
+          @update:to="(v) => { contractDateTo = v }"
         />
 
         <div class="grid gap-2">

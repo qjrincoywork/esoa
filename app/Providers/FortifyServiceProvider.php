@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
+use App\Http\Responses\LoginResponse;
 use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -13,21 +14,32 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
+use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
 use Laravel\Fortify\Features;
 use Laravel\Fortify\Fortify;
 
 class FortifyServiceProvider extends ServiceProvider
 {
     /**
-     * Register any application services.
+     * Pre-computed bcrypt hash (cost 12) used only to spend the same amount of
+     * time hashing when the submitted username does not exist, so login response
+     * timing cannot be used to enumerate valid usernames.
+     */
+    private const DUMMY_PASSWORD_HASH = '$2y$12$7mx7x8LRedVRhDbZMdxEw.R3Qn64wNvwCtEkB3.P4VPksi1hnXEWK';
+
+    /**
+     * Bind the custom Fortify login response so users are redirected to the SOA
+     * dashboard after authenticating (see App\Http\Responses\LoginResponse).
      */
     public function register(): void
     {
-        //
+        // Redirect users to the SOA dashboard after login (see App\Http\Responses\LoginResponse).
+        $this->app->singleton(LoginResponseContract::class, LoginResponse::class);
     }
 
     /**
-     * Bootstrap any application services.
+     * Wire up Fortify: its actions, Inertia views, login/2FA rate limiters, and
+     * the custom credential/eligibility authentication callback.
      */
     public function boot(): void
     {
@@ -47,7 +59,15 @@ class FortifyServiceProvider extends ServiceProvider
         Fortify::authenticateUsing(function (Request $request) {
             $user = User::where(Fortify::username(), $request->input(Fortify::username()))->first();
 
-            if (! $user || ! Hash::check($request->password, $user->password)) {
+            if (! $user) {
+                // Perform a dummy hash comparison so the response time matches the
+                // "user exists but wrong password" path (username-enumeration defense).
+                Hash::check($request->password, self::DUMMY_PASSWORD_HASH);
+
+                return null;
+            }
+
+            if (! Hash::check($request->password, $user->password)) {
                 return null;
             }
 

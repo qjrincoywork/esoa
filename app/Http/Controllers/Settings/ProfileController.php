@@ -61,7 +61,11 @@ class ProfileController extends Controller
     }
 
     /**
-     * Delete the user's profile.
+     * Delete the authenticated user's own account after password confirmation.
+     *
+     * Requires the current password, then logs the user out, deletes the account,
+     * invalidates the session and regenerates the CSRF token, and redirects to the
+     * site root.
      */
     public function destroy(Request $request): RedirectResponse
     {

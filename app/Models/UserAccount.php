@@ -14,6 +14,11 @@ class UserAccount extends Model
         'branch_code',
     ];
 
+    /**
+     * Get the user this account/branch assignment belongs to (belongs-to User via user_id).
+     *
+     * @return BelongsTo
+     */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');

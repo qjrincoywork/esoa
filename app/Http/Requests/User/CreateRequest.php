@@ -12,7 +12,10 @@ use Illuminate\Foundation\Http\FormRequest;
 class CreateRequest extends FormRequest
 {
     /**
-     * Get the validation rules that apply to the request.
+     * Validate a new user, including the account type-specific fields conditionally
+     * required by the user type (account/branch, group accounts, broker agent code,
+     * or VC employee department/position/number), personal details, and a unique,
+     * non-reserved username and unique email plus optional role IDs.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
@@ -130,12 +133,6 @@ class CreateRequest extends FormRequest
                 'string',
                 'max:' . config('vc.max_string_limit'),
                 'min:' . config('vc.min_username_string_limit'),
-                // Starts with a letter
-                // Only letters, numbers, _, ., -
-                // No consecutive symbols
-                // Ends with a letter or number
-                'regex:/^(?=.{3,30}$)[A-Za-z](?!.*[._-]{2})[A-Za-z0-9._-]*[A-Za-z0-9]$/',
-                'max:' . config('vc.max_string_limit'),
                 // Reserved words
                 Rule::notIn(config('vc.reserved_usernames')),
                 'unique:users,username',
@@ -146,11 +143,20 @@ class CreateRequest extends FormRequest
                 'max:' . config('vc.max_string_limit'),
                 'unique:users,email'
             ],
+            'roles' => [
+                'nullable',
+                'array',
+            ],
+            'roles.*' => [
+                'integer',
+                'exists:roles,id',
+            ],
         ];
     }
 
     /**
-     * Get the error messages for the defined validation rules.
+     * Custom validation messages for the user-creation fields, mainly the
+     * required and conditionally required demographic and account fields.
      *
      * @return array<string, string>
      */

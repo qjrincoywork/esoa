@@ -11,7 +11,13 @@ use PHPUnit\Metadata\RequiresOperatingSystem;
 class SoaAmountIsValid implements ValidationRule
 {
     /**
-     * Run the validation rule.
+     * Pass only when the SOA amount equals the total balance of its billing refs.
+     *
+     * Reads the billing_ref array from the request, sums each ref's bl_balance
+     * from the HMS server, and fails with "The total amount of the billing
+     * references is not equal to the amount of the SOA." when that total does
+     * not match the validated value (compared to 2 decimals). Non-array
+     * billing_ref input is skipped.
      *
      * @param  \Closure(string, ?string=): \Illuminate\Translation\PotentiallyTranslatedString  $fail
      */
