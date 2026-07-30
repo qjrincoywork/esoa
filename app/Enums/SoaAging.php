@@ -113,6 +113,18 @@ final class SoaAging extends Enum
     }
 
     /**
+     * Whether the bucket represents an invoice that is already overdue.
+     *
+     * Used by the dashboard aging chart to emphasize the past-due buckets (accent hue)
+     * against the still-current ones (de-emphasis gray), so the reader sees the story
+     * without a second color scale.
+     */
+    public static function isPastDue(int $value): bool
+    {
+        return !in_array($value, [self::NOT_YET_DUE, self::DUE_CURRENT_MONTH], true);
+    }
+
+    /**
      * SOA list route filtered by this aging bucket (same query as dashboard cards).
      */
     public static function listUrl(int $value): string

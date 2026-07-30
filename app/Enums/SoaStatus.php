@@ -44,6 +44,29 @@ final class SoaStatus extends Enum
     }
 
     /**
+     * Map an SOA status to a chart tone token.
+     *
+     * Charts must not reuse the badge utility classes from {@see color()} (those carry
+     * layout and only resolve inside Tailwind); they key on a tone token instead, which
+     * the front end resolves to the themed `--viz-status-*` custom properties. Each
+     * token mirrors the Tailwind 500 accent of {@see color()} so the donut, the badge
+     * and the status filter stay aligned.
+     *
+     * @param int $value
+     * @return string One of: status-unpaid, status-endorsed, status-paid, status-disputed.
+     */
+    public static function tone($value): string
+    {
+        return match ($value) {
+            self::UNPAID => 'status-unpaid',
+            self::ENDORSED => 'status-endorsed',
+            self::PAID => 'status-paid',
+            self::DISPUTED => 'status-disputed',
+            default => 'status-unpaid',
+        };
+    }
+
+    /**
      * Return all SOA statuses as {value, name} option arrays for select inputs.
      *
      * @return array<array{value:int,name:string}>

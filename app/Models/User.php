@@ -125,6 +125,43 @@ class User extends Authenticatable implements AuthorizableContract, MustVerifyEm
     }
 
     /**
+     * The account/branch pairs whose billing invoices are attributed to this user.
+     *
+     * Mirrors the row-level rule in {@see \App\Models\Soa::applyUserAccountRestriction()}
+     * so a report and the query it drills into can never describe different rows:
+     *  - account_branch_admin -> the first assignment only (with its branch, when set)
+     *  - group_account_admin  -> every assignment
+     *  - anyone else          -> none (their data is attributed by ownership instead)
+     *
+     * A pair with a null `branch_code` covers every branch of that account.
+     *
+     * @return array<int, array{account_code: string, branch_code: string|null}>
+     */
+    public function scopedAccountPairs(): array
+    {
+        $accounts = $this->userAccounts;
+
+        if ($this->hasRole('account_branch_admin')) {
+            $first = $accounts->first();
+
+            return $first
+                ? [['account_code' => (string) $first->account_code, 'branch_code' => $first->branch_code ?: null]]
+                : [];
+        }
+
+        if ($this->hasRole('group_account_admin')) {
+            return $accounts
+                ->map(static fn ($account): array => [
+                    'account_code' => (string) $account->account_code,
+                    'branch_code' => $account->branch_code ?: null,
+                ])
+                ->all();
+        }
+
+        return [];
+    }
+
+    /**
      * Get users with optional filters and pagination.
      *
      * @param array $params

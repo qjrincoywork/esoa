@@ -154,6 +154,66 @@ class SqlDatabase
     }
 
     /**
+     * Resolve the active account codes of several agents in one round trip.
+     *
+     * Same predicates as {@see getAccountsOfAgent()} (active, not yet cancelled) so a
+     * per-agent report and a per-agent query describe the same accounts; grouping many
+     * agents into one statement keeps a multi-broker report at a single HMS call.
+     *
+     * @param  array<int, string>  $agentCodes
+     * @return array<string, array<int, string>> Account codes keyed by agent code.
+     */
+    public function getAccountCodesByAgentCodes(array $agentCodes): array
+    {
+        $agentCodes = array_values(array_unique(array_filter($agentCodes)));
+
+        if ($agentCodes === []) {
+            return [];
+        }
+
+        $rows = $this->db
+            ->table('Accounts')
+            ->select('ac_code', 'ac_agcode')
+            ->whereIn('ac_agcode', $agentCodes)
+            ->where('ac_status', 'A') // Active accounts only
+            ->where(function ($query) {
+                $query->where('ac_candate', '>', now())
+                    ->orWhereNull('ac_candate');
+            })
+            ->get();
+
+        $grouped = [];
+        foreach ($rows as $row) {
+            $grouped[(string) $row->ac_agcode][] = (string) $row->ac_code;
+        }
+
+        return $grouped;
+    }
+
+    /**
+     * Retrieve account names for many account codes in one round trip.
+     *
+     * The per-code {@see getAccount()} is fine for a single record but turns a ranking or a
+     * report into one query per row; this keeps such screens at a single lookup.
+     *
+     * @param  array<int, string>  $accountCodes
+     * @return \Illuminate\Support\Collection<string, string> Account name keyed by code.
+     */
+    public function getAccountNamesByCodes(array $accountCodes)
+    {
+        $accountCodes = array_values(array_unique(array_filter($accountCodes)));
+
+        if ($accountCodes === []) {
+            return collect();
+        }
+
+        return $this->db
+            ->table('Accounts')
+            ->whereIn('ac_code', $accountCodes)
+            ->pluck('ac_name', 'ac_code');
+    }
+
+    /**
      * Retrieves a single branch record by its branchCode.
      *
      * @param string $branchCode
