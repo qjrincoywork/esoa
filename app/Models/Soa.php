@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\DataScope;
 use App\Enums\OrderType;
 use App\Enums\Server;
 use App\Enums\SoaAging;
@@ -156,6 +157,74 @@ class Soa extends Model
     }
 
     /**
+     * Restrict a query to the SOAs the given user is allowed to see (row-level boundary).
+     *
+     * This is the single source of truth for SOA visibility and is reused by the list,
+     * the export and every dashboard metric, so a new read path can never accidentally
+     * ship an unscoped query:
+     *  - no user             -> nothing (fails closed)
+     *  - superadmin/admin/billing_admin -> unrestricted (full-access staff roles)
+     *  - broker              -> the accounts belonging to their agent code
+     *  - account_branch_admin / group_account_admin -> their assigned account(s)/branch(es)
+     *  - any other role      -> unrestricted, matching the pre-existing list behavior
+     *
+     * Mirrors the per-record check in {@see \App\Helpers\CommonHelper::assertUserMayAccessModel()}.
+     */
+    public function scopeVisibleTo(Builder $query, ?User $authUser): Builder
+    {
+        if (!$authUser) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        if ($authUser->hasAnyRole([config('vc.superadmin'), 'admin', 'billing_admin'])) {
+            return $query;
+        }
+
+        if ($authUser->hasRole('broker')) {
+            $agentAccounts = (new SqlDatabase(Server::HMS))
+                ->getAccountsOfAgent($authUser->userDetail?->agent_code ?? null);
+
+            return $query->whereIn('account_code', $agentAccounts);
+        }
+
+        if ($authUser->hasAnyRole(['account_branch_admin', 'group_account_admin'])) {
+            $this->applyUserAccountRestriction($query, $authUser);
+        }
+
+        return $query;
+    }
+
+    /**
+     * Restrict a query to the invoices attributed to one particular user.
+     *
+     * Distinct from {@see scopeVisibleTo()}: that answers "what may the viewer read", this
+     * answers "whose data is this". Attribution follows {@see DataScope} — staff own the
+     * invoices they uploaded, account and group admins are attributed the invoices of their
+     * assigned accounts, and a broker those of their agent's accounts. Reporting on
+     * `user_id` alone would show every tenant admin an empty dashboard, since they never
+     * upload anything.
+     *
+     * A null user leaves the query untouched (no user filter is applied).
+     */
+    public function scopeAttributedTo(Builder $query, ?User $user): Builder
+    {
+        if (!$user) {
+            return $query;
+        }
+
+        return match (DataScope::forUser($user)) {
+            DataScope::ASSIGNED_ACCOUNTS => $query->tap(
+                fn (Builder $q) => $this->applyUserAccountRestriction($q, $user)
+            ),
+            DataScope::AGENT_ACCOUNTS => $query->whereIn(
+                'account_code',
+                (new SqlDatabase(Server::HMS))->getAccountsOfAgent($user->userDetail?->agent_code ?? null)
+            ),
+            default => $query->where('user_id', $user->id),
+        };
+    }
+
+    /**
      * Base query for SOA list and export (shared filters and role scoping).
      */
     public function listQuery(array $params): Builder
@@ -163,18 +232,11 @@ class Soa extends Model
         $authUser = auth()->user();
 
         $query = self::query()
+            ->visibleTo($authUser)
             ->when(!empty($params), function ($query) use ($params) {
                 $query->tap(fn (Builder $q) => $this->applyListSearchFilters($q, $params));
                 $query->tap(fn (Builder $q) => $this->applyListSearchFiltersDueIn($q, $params));
                 $query->tap(fn (Builder $q) => $this->applyListDateFilters($q, $params));
-            })
-            ->when($authUser->hasRole('broker'), function ($query) use ($authUser) {
-                $agentAccounts = (new SqlDatabase(Server::HMS))
-                    ->getAccountsOfAgent($authUser->userDetail?->agent_code ?? null);
-                $query->whereIn('account_code', $agentAccounts);
-            })
-            ->when($authUser->hasAnyRole(['account_branch_admin', 'group_account_admin']), function ($query) use ($authUser) {
-                $this->applyUserAccountRestriction($query, $authUser);
             })
             ->orderBy('created_at', OrderType::DESC);
 
@@ -232,7 +294,7 @@ class Soa extends Model
 
             return $bucket + [
                 'count' => self::query()
-                    ->tap(fn (Builder $q) => $this->applyUserAccountRestriction($q, $authUser))
+                    ->visibleTo($authUser)
                     ->tap(fn (Builder $q) => $this->applyListSearchFiltersDueIn($q, $filter))
                     ->count(),
             ];

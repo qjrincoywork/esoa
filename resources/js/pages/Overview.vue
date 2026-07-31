@@ -75,6 +75,7 @@ const statCards = [
     { label: 'Past Due – 90 Days', sub: 'Overdue 61–90 days', variant: '' },
     { label: 'Past Due – 120 Days', sub: 'Overdue 91–120 days', variant: '' },
     { label: 'Past Due – Over 120 Days', sub: 'Overdue 120+ days', variant: '' },
+    { label: 'Paid', sub: 'Payment received', variant: 'green' },
     { label: 'Endorsed', sub: 'Endorsed for payment', variant: 'gold' },
     { label: 'Disputed', sub: 'Under dispute', variant: 'dk' },
 ];
@@ -241,7 +242,7 @@ const endingPills = ['Centralized & secure', 'Transparent', 'Actionable', 'Compl
                         </div>
                         <p class="lead reveal" :style="{ '--reveal-delay': revealDelay(6) }" style="margin-top: clamp(12px, 1.8%, 18px); font-size: clamp(11px, 1.2vw, 15px)">
                             <b style="color: var(--ov-red)">Reading the board:</b> aging buckets show cash-flow urgency, while
-                            <b style="color: var(--ov-gold)">Endorsed</b> and <b style="color: var(--ov-ink)">Disputed</b> track where each invoice sits.
+                            <b style="color: var(--ov-green)">Paid, </b><b style="color: var(--ov-gold)">Endorsed</b> and <b style="color: var(--ov-ink)">Disputed</b> track where each invoice sits.
                         </p>
                     </section>
 
@@ -403,6 +404,8 @@ const endingPills = ['Centralized & secure', 'Transparent', 'Actionable', 'Compl
     --ov-red: #8c1420;
     --ov-red-dk: #5e0d16;
     --ov-red-deep: #43070e;
+    --ov-green: #2c8c5e;
+    --ov-green-lt: #6bcfa3;
     --ov-gold: #c7962c;
     --ov-gold-lt: #e3be6b;
     --ov-ink: #2b2b2b;

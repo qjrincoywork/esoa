@@ -491,6 +491,62 @@ section {
 }
 /* End Default Theme */
 
+/* Start Data visualization tokens
+   ---------------------------------------------------------------------------
+   Chart marks may not reuse the UI tokens above: those are tuned for surfaces and
+   text, not for colors that must stay tellable apart under color-vision deficiency.
+   The values below are the validated categorical/status palette (OKLab CVD ΔE and
+   WCAG contrast measured against the light card #fff, the dark card #0a0a0a and the
+   dim card), with one step per mode rather than an automatic flip.
+
+     --viz-series-N  identity of a series (assigned in fixed order, never cycled)
+     --viz-muted     de-emphasis mark ("context, not the point")
+     --viz-good…critical  semantic KPI tones — never used as "series 4"
+     --viz-status-*  invoice-status accents (Tailwind 500, aligned with SoaStatus::color)
+     --viz-grid/axis/surface  chrome, deliberately recessive and taken from the
+                     design system so charts sit in whichever theme is active.
+
+   Series marks in the sub-3:1 band (light-mode warning/serious) are always shipped
+   with a visible value label and a table view, which is the required relief. */
+:root {
+    --viz-series-1: #2a78d6;
+    --viz-series-2: #eb6834;
+    --viz-series-3: #1baf7a;
+    --viz-muted: #898781;
+    --viz-good: #0ca30c;
+    --viz-warning: #fab219;
+    --viz-serious: #ec835a;
+    --viz-critical: #d03b3b;
+    --viz-status-unpaid: #ef4444;
+    --viz-status-endorsed: #eab308;
+    --viz-status-paid: #22c55e;
+    --viz-status-disputed: #3b82f6;
+    --viz-neutral: #2a78d6;
+    --viz-surface: var(--card);
+    --viz-grid: var(--border);
+    --viz-axis: var(--muted-foreground);
+}
+
+.dark {
+    --viz-series-1: #3987e5;
+    --viz-series-2: #d95926;
+    --viz-series-3: #199e70;
+    --viz-muted: #898781;
+    --viz-good: #0ca30c;
+    --viz-warning: #fab219;
+    --viz-serious: #ec835a;
+    --viz-critical: #d03b3b;
+    --viz-status-unpaid: #ef4444;
+    --viz-status-endorsed: #eab308;
+    --viz-status-paid: #22c55e;
+    --viz-status-disputed: #3b82f6;
+    --viz-neutral: #3987e5;
+    --viz-surface: var(--card);
+    --viz-grid: var(--border);
+    --viz-axis: var(--muted-foreground);
+}
+/* End Data visualization tokens */
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

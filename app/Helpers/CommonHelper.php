@@ -83,6 +83,21 @@ class CommonHelper
     }
 
     /**
+     * Format a numeric amount as peso currency (e.g. "₱1,234.56").
+     *
+     * Single place where the currency sign and precision are decided, so exports,
+     * resources and dashboard widgets render money identically.
+     *
+     * @param  float|int|string|null  $amount
+     * @param  int  $decimals
+     * @return string
+     */
+    public static function formatMoney($amount, int $decimals = 2): string
+    {
+        return config('vc.peso_sign') . number_format((float) ($amount ?? 0), $decimals);
+    }
+
+    /**
      * Get filtered original values, excluding ignored keys.
      *
      * @param  object  $model
