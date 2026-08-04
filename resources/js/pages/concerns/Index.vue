@@ -277,7 +277,7 @@ onMounted(async () => {
       <div class="flex flex-col gap-4 mb-4">
         <div class="flex flex-row lg:flex-row justify-between items-stretch lg:items-start gap-4">
           <div class="flex flex-1 flex-row gap-3 min-w-0">
-            <Button class="cursor-pointer" v-if="canCreate" :onClick="newConcern">Submit Concern</Button>
+            <Button class="cursor-pointer" v-if="canCreate" :onClick="() => newConcern()">Submit Concern</Button>
           </div>
         </div>
         <div v-if="userDetail?.has_employee_no || auth?.is_superadmin" class="grid gap-2 md:col-span-1 w-1/2">

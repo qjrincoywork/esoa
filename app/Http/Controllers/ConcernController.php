@@ -213,7 +213,7 @@ class ConcernController extends Controller
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
-                'concern' => $concern,
+                'concern' => ConcernResource::make($concern),
                 'concern_types' => ConcernType::list(),
                 'ticket_statuses' => TicketStatus::list(),
             ]);
