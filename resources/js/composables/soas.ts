@@ -331,6 +331,10 @@ export function useSoas() {
   const fileList = async (soa: Soa, item: any) => {
     showLoader();
     try {
+      if (!item.claimnum) {
+        dispatchNotification({ title: 'Info', content: 'No claim number for this record.', type: 'info' });
+        return;
+      }
       const params = {
         soa_id: soa.id,
         claimnum: item.claimnum,
