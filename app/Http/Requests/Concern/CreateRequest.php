@@ -4,6 +4,7 @@ namespace App\Http\Requests\Concern;
 
 use App\Enums\ConcernType;
 use App\Enums\TicketStatus;
+use App\Rules\SoaIsVisibleToUser;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -24,6 +25,11 @@ class CreateRequest extends FormRequest
     /**
      * Validation rules for creating a concern (linked SOAs, type, title, description, status and optional attachment).
      *
+     * The linked SOAs may reach this request either from the billing-invoice picker
+     * on the concerns page or as the SOA context posted by the SOA details pane, so
+     * {@see SoaIsVisibleToUser} re-checks them against the user's own SOA visibility
+     * boundary instead of trusting the ids on the wire.
+     *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
     public function rules(): array
@@ -37,6 +43,7 @@ class CreateRequest extends FormRequest
             'soa_ids' => [
                 'required',
                 'array',
+                new SoaIsVisibleToUser(),
             ],
             'soa_ids.*' => [
                 'required',

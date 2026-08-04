@@ -307,6 +307,13 @@
   .global-modal {
     z-index: var(--z-global-modal);
     position: fixed;
+    /*
+     * An open Reka UI layer (Sheet/Dialog) sets `pointer-events: none` on <body> to make
+     * everything outside its own subtree inert. A global modal is teleported to <body>, so
+     * it inherits that and renders on top while ignoring every click. Re-declaring the
+     * property here overrides the inherited value for this layer and nothing below it.
+     */
+    pointer-events: auto;
   }
   .tooltip {
     z-index: var(--z-tooltip);
@@ -416,6 +423,13 @@
   .global-modal {
     z-index: var(--z-global-modal);
     position: fixed;
+    /*
+     * An open Reka UI layer (Sheet/Dialog) sets `pointer-events: none` on <body> to make
+     * everything outside its own subtree inert. A global modal is teleported to <body>, so
+     * it inherits that and renders on top while ignoring every click. Re-declaring the
+     * property here overrides the inherited value for this layer and nothing below it.
+     */
+    pointer-events: auto;
   }
   .tooltip {
     z-index: var(--z-tooltip);

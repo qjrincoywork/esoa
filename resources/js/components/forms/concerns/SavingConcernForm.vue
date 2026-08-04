@@ -43,6 +43,20 @@ const props = defineProps({
     type: Array as unknown as () => { value: string | number; name: string }[],
     default: () => [],
   },
+  /**
+   * SOA ids supplied by the calling context (e.g. the SOA details pane). When set,
+   * the billing-invoice picker is replaced by a read-only summary and these ids are
+   * the ones posted, so the concern is always linked to the SOA it was raised from.
+   */
+  locked_soa_ids: {
+    type: Array as unknown as () => (string | number)[],
+    default: () => [],
+  },
+  /** Human-readable billing invoice shown in place of the picker. */
+  locked_soa_label: {
+    type: String,
+    default: '',
+  },
   onReady: {
     type: Function as unknown as () => ((api: { getFormData: () => FormData | null; formRef: HTMLFormElement | null }) => void) | undefined,
     required: false,
@@ -72,7 +86,9 @@ const billingInvoicePage = ref(1)
 const billingInvoiceLastPage = ref(1)
 const billingInvoicesLoadingMore = ref(false)
 const searchedBillingInvoice = ref('')
-const billingInvoice = ref<(string | number)[]>([])
+/** The SOA is fixed by the calling context — no picker, no `/soas/list` lookup. */
+const isSoaLocked = computed(() => (props.locked_soa_ids?.length ?? 0) > 0)
+const billingInvoice = ref<(string | number)[]>([...(props.locked_soa_ids ?? [])])
 const hasMoreBillingInvoices = computed(() => billingInvoicePage.value < billingInvoiceLastPage.value)
 
 function getFormData(): FormData | null {
@@ -140,8 +156,10 @@ const debouncedGetBillingInvoices: (...args: any[]) => void = debounce((evOrName
 }, 2000);
 
 onMounted(() => {
-  // Load initial SOAs list
-  void searchBillingInvoicesByParams('', 1, false);
+  // Load initial SOAs list — skipped when the SOA is already fixed by the caller.
+  if (!isSoaLocked.value) {
+    void searchBillingInvoicesByParams('', 1, false);
+  }
 
   if (typeof props.onReady === 'function') {
     props.onReady({ getFormData, formRef: concernForm.value });
@@ -150,10 +168,16 @@ onMounted(() => {
 
 /**
  * Sync billingInvoice from concern data when component initializes or concern changes.
+ * A caller-supplied SOA always wins, so the context link can never be overwritten.
  */
 watch(
   () => props.concern?.soa_ids,
   (soa_ids) => {
+    if (isSoaLocked.value) {
+      billingInvoice.value = [...(props.locked_soa_ids ?? [])];
+      return;
+    }
+
     if (!soa_ids) {
       billingInvoice.value = [];
       return;
@@ -215,7 +239,16 @@ const openTab = () => {
           <input type="hidden" name="soa_ids[]" :value="id" />
         </template>
       </div>
-      <div class="grid gap-2 md:col-span-1 mb-2">
+      <div v-if="isSoaLocked" class="grid gap-2 md:col-span-1 mb-2">
+        <Label for="locked_billing_invoice">Billing Invoice</Label>
+        <Input
+          id="locked_billing_invoice"
+          class="mt-1 block w-full"
+          :model-value="locked_soa_label || 'Linked to this billing invoice'"
+          disabled
+        />
+      </div>
+      <div v-else class="grid gap-2 md:col-span-1 mb-2">
         <SearchableCombobox
           id="soa_ids"
           label="Billing Invoices"

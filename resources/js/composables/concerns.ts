@@ -26,6 +26,31 @@ export interface Concern {
   deleted_at?: string
 }
 
+export interface UseConcernsOptions {
+  /**
+   * Force the module slug. Required when the composable is used outside a concerns
+   * page (e.g. the SOA details pane), where the slug would otherwise resolve to the
+   * host page's module and point every request at the wrong controller.
+   */
+  slug?: string
+}
+
+export interface NewConcernOptions {
+  /**
+   * SOA ids to link the new concern to. When supplied, the billing-invoice picker is
+   * hidden and these ids are posted as `soa_ids[]`, so the concern is associated with
+   * the SOA it was raised from without the user selecting anything.
+   */
+  soaIds?: number[]
+  /** Human-readable billing invoice shown in place of the picker. */
+  soaLabel?: string
+  /**
+   * Called after a successful save instead of reloading the page. Lets embedded
+   * callers refresh just their own list and keep the surrounding pane open.
+   */
+  onSaved?: () => void | Promise<void>
+}
+
 /** Client-side overlays for list rows until the next Inertia `concerns` refresh (module singleton). */
 const listRowPatches: Ref<Record<number, Record<string, unknown>>> = ref({});
 
@@ -43,9 +68,9 @@ export function clearListRowPatches(): void {
   listRowPatches.value = {};
 }
 
-export function useConcerns() {
+export function useConcerns(options: UseConcernsOptions = {}) {
   const page = usePage();
-  const { slug } = useModulePermissions();
+  const { slug } = useModulePermissions(options);
   const { openModal, closeModal } = useModal();
   const {
     openPane,
@@ -65,7 +90,14 @@ export function useConcerns() {
   const rightPaneContentComponent = toRef(rightPane, 'contentComponent');
   const rightPaneComponentProps = toRef(rightPane, 'componentProps');
 
-  const newConcern = async () => {
+  /**
+   * Open the "Submit Concern" modal.
+   *
+   * Callers that already know the SOA — the SOA details pane, for instance — pass it
+   * through `soaIds` so the billing invoice is linked automatically and the picker is
+   * never shown; everywhere else the form keeps its searchable picker.
+   */
+  const newConcern = async ({ soaIds = [], soaLabel = '', onSaved }: NewConcernOptions = {}) => {
     try {
       // Make AJAX request without navigation using reusable composable
       const response = await get<{
@@ -83,13 +115,15 @@ export function useConcerns() {
 
       if (!payload) return;
       openModal({
-        modalTitle: 'Concern Form',
+        modalTitle: soaLabel ? `Concern Form - ${soaLabel}` : 'Concern Form',
         buttonText: 'Save',
         component: SavingConcernForm,
         componentProps: {
           concern_types: payload.concern_types,
           ticket_statuses: payload.ticket_statuses ?? [],
           auth: auth ?? undefined,
+          locked_soa_ids: soaIds,
+          locked_soa_label: soaLabel,
           onReady: (api: { getFormData: () => FormData | null }) => {
             formApi = api;
           }
@@ -109,7 +143,12 @@ export function useConcerns() {
             } else {
               dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
               closeModal();
-              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+              // Embedded callers refresh their own list so the surrounding pane stays open.
+              if (onSaved) {
+                await onSaved();
+              } else {
+                router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+              }
             }
           } catch (err) {
             dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
