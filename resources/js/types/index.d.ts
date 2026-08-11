@@ -104,6 +104,7 @@ export interface User {
     user_detail: UserDetail;
     /** Populated only for GROUP_ACCOUNT_ADMIN users (type 4). */
     user_accounts?: UserAccount[] | null;
+    roles: string[];
     is_superadmin: boolean;
     permissions: Permissions[];
 }

@@ -130,16 +130,18 @@ const handlerMap: Record<string, (row: any) => void> = {
 
 const columns = computed(() => {
   const rawModules = (page.props as { sub_modules?: { slug: string }[] }).sub_modules ?? []
-  // const subModules = rawModules
-  //   .filter((m: { slug: string }) => hasPermission(m.slug)
-  //     && m.slug.split('.')[1] != 'create'
-  //   )
-  //   .map((m: { slug: string }) => ({
-  //     ...m,
-  //     handler: handlerMap[m.slug.split('.')[1]],
-  //   }))
+  const subModules = rawModules
+    .filter((m: { slug: string }) => hasPermission(m.slug)
+      && m.slug.split('.')[1] != 'create'
+    )
+    .map((m: { slug: string }) => ({
+      ...m,
+      handler: handlerMap[m.slug.split('.')[1]],
+    }))
 
-  return baseColumns
+  return subModules.length
+    ? [...baseColumns, createActionColumn(subModules as any)]
+    : baseColumns
 })
 
 const fetchAccountPayments = () => {

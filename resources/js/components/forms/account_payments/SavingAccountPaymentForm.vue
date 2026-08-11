@@ -14,10 +14,22 @@ type SoaRelation = {
   branch_code?: string;
 };
 
+type BillingInvoice = { value: string | number; name: string; };
+
+/** Format a SOA relation the same way `/soas/list` search results are formatted. */
+function toBillingInvoiceOption(soa: SoaRelation): BillingInvoice {
+  return {
+    value: soa.id,
+    name: `${soa.soa_number ?? ''} - ${soa.account_code ?? ''}${soa.branch_code ? ` (${soa.branch_code})` : ''}`,
+  };
+}
+
 type AccountPayment = {
   id?: number
   user_id?: number
   deposit_date?: string
+  /** ISO (Y-m-d) form of deposit_date, suitable for an <input type="date">. */
+  deposit_date_value?: string | null
   mode_of_payment?: number
   mode_of_payment_value?: number
   image?: string
@@ -55,16 +67,11 @@ const props = defineProps({
 const accountPayment = computed<AccountPayment>(() => props.account_payment as AccountPayment);
 
 const form = ref({
-  id: accountPayment.value?.id || '',
-  deposit_date: accountPayment.value?.deposit_date || '',
-  mode_of_payment: accountPayment.value?.mode_of_payment || '',
-  image: null as File | null,
-  remarks: accountPayment.value?.remarks || '',
+  deposit_date: '',
+  remarks: '',
 });
 
-const selectedModeOfPayment = ref<string | number>(
-  accountPayment.value.mode_of_payment != null ? String(accountPayment.value.mode_of_payment) : ''
-);
+const selectedModeOfPayment = ref<string>('');
 
 const modeOfPaymentOptions = computed(() => props.mode_of_payment_options || []);
 const accountPaymentForm = ref<HTMLFormElement | null>(null);
@@ -73,7 +80,7 @@ const billingInvoicePage = ref(1);
 const billingInvoiceLastPage = ref(1);
 const billingInvoicesLoadingMore = ref(false);
 const searchedBillingInvoice = ref('');
-const selectedSoaIds = ref<(string | number)[]>(parseSoaIds(accountPayment.value?.soa_ids ?? accountPayment.value?.soas));
+const selectedSoaIds = ref<(string | number)[]>([]);
 const hasMoreBillingInvoices = computed(() => billingInvoicePage.value < billingInvoiceLastPage.value);
 
 function parseSoaIds(input: Array<number> | string | undefined | SoaRelation[]): (string | number)[] {
@@ -122,10 +129,7 @@ const searchBillingInvoicesByParams = async (name = '', page = 1, append = false
     const result = await response.json();
     const data = result?.data ?? [];
 
-    const transformed = data.map((soa: any) => ({
-      value: soa.id,
-      name: `${soa.soa_number} - ${soa.account_code}${soa.branch_code ? ` (${soa.branch_code})` : ''}`,
-    }));
+    const transformed = data.map((soa: any) => toBillingInvoiceOption(soa));
 
     if (append) {
       soaOptions.value = [...soaOptions.value, ...transformed];
@@ -158,10 +162,31 @@ onMounted(() => {
   }
 });
 
+/**
+ * Populate the editable fields from the account_payment prop whenever it's set or
+ * replaced, so the same form instance stays correct if the parent swaps records
+ * without remounting (e.g. the modal is reused across successive edits).
+ */
 watch(
   () => accountPayment.value,
   (accountPaymentValue: AccountPayment | undefined) => {
+    form.value.deposit_date = accountPaymentValue?.deposit_date_value ?? accountPaymentValue?.deposit_date ?? '';
+    form.value.remarks = accountPaymentValue?.remarks ?? '';
+    selectedModeOfPayment.value = accountPaymentValue?.mode_of_payment_value != null
+      ? String(accountPaymentValue.mode_of_payment_value)
+      : '';
     selectedSoaIds.value = parseSoaIds(accountPaymentValue?.soa_ids ?? accountPaymentValue?.soas);
+
+    // Seed the combobox options with the payment's own linked SOAs so they render
+    // with their real name even when they fall outside the general search's page.
+    const soas = accountPaymentValue?.soas;
+    if (soas?.length) {
+      const knownIds = new Set(soaOptions.value.map((option: BillingInvoice) => option.value));
+      const missing = soas.filter(soa => !knownIds.has(soa.id)).map(toBillingInvoiceOption);
+      if (missing.length) {
+        soaOptions.value = [...soaOptions.value, ...missing];
+      }
+    }
   },
   { immediate: true }
 );
