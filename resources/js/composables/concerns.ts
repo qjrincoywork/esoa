@@ -18,9 +18,11 @@ export interface Concern {
   user_id?: number
   billing_invoice?: string
   type?: string
+  type_value?: number
   title?: string
   description?: string
   status?: string
+  status_value?: number
   attachment?: string
   attachment_preview_token?: string | null
   deleted_at?: string

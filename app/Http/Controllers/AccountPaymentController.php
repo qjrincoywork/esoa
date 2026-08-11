@@ -207,19 +207,10 @@ class AccountPaymentController extends Controller
     {
         $accountPayment = $this->accountPayment->with('soas')->findOrFail($id);
         CommonHelper::assertUserMayAccessModel($request, $accountPayment);
-        if ($accountPayment) {
-            $accountPayment->remittance_advice_preview_token = $accountPayment->remittance_advice && $request->user()
-                ? CommonHelper::createFilePreviewToken(
-                    config('vc.disks.account_payments'),
-                    $accountPayment->remittance_advice,
-                    (int) $request->user()->id
-                )
-                : null;
-        }
 
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
-                'account_payment' => $accountPayment,
+                'account_payment' => AccountPaymentResource::make($accountPayment),
                 'mode_of_payment_options' => AccountPaymentMode::list(),
             ]);
         }

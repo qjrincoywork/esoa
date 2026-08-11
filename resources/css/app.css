@@ -154,8 +154,11 @@
     --z-left-pane: 200;
     --z-bottom-pane: 250;
     --z-modal: 300;
+    --z-global-modal: 400;
+    /* Popover content is teleported to <body> (PopoverPortal), so it must clear the
+       global-modal layer to stay visible when a popover is opened from inside one. */
+    --z-popover: calc(var(--z-global-modal) + 1);
     --z-loader: 500;
-    --z-global-modal: 600;
     --z-tooltip: 700;
     --z-notification: 900;
     --background: hsl(0 0% 100%);
@@ -327,8 +330,8 @@
     --z-left-pane: 200;
     --z-bottom-pane: 250;
     --z-modal: 300;
+    --z-global-modal: 400;
     --z-loader: 500;
-    --z-global-modal: 600;
     --z-tooltip: 700;
     --z-notification: 900;
     --background: hsl(0 0% 3.9%);

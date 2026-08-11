@@ -198,7 +198,7 @@ class ConcernController extends Controller
      */
     public function edit($id, Request $request)
     {
-        $concern = $this->concern->findOrFail($id);
+        $concern = $this->concern->with('soas')->findOrFail($id);
         CommonHelper::assertUserMayAccessModel($request, $concern);
         if ($concern) {
             $concern->attachment_preview_token = $concern->attachment && $request->user()

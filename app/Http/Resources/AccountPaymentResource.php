@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Enums\AccountPaymentMode;
 use App\Helpers\CommonHelper;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -21,7 +22,16 @@ class AccountPaymentResource extends JsonResource
         return [
             'id' => $this->id,
             'billing_invoice' => $this->soas->isNotEmpty() ? implode(', ', $this->soas->pluck('soa_number')->toArray()) : null,
+            'soa_ids' => $this->soas->pluck('id')->toArray(),
+            'soas' => $this->soas->map(fn ($soa) => [
+                'id' => $soa->id,
+                'soa_number' => $soa->soa_number,
+                'account_code' => $soa->account_code,
+                'branch_code' => $soa->branch_code,
+            ])->values()->toArray(),
             'deposit_date' => CommonHelper::formatDate($this->deposit_date),
+            /** ISO (Y-m-d) form of deposit_date, for populating an <input type="date"> on the edit form. */
+            'deposit_date_value' => $this->deposit_date ? Carbon::parse($this->deposit_date)->format('Y-m-d') : null,
             'mode_of_payment' => AccountPaymentMode::label((int) $this->mode_of_payment),
             'mode_of_payment_value' => $this->mode_of_payment,
             'image' => $this->image,
