@@ -32,10 +32,6 @@ type AccountPayment = {
   deposit_date_value?: string | null
   mode_of_payment?: number
   mode_of_payment_value?: number
-  image?: string
-  image_preview_token?: string | null
-  excel?: string
-  excel_preview_token?: string | null
   pdf?: string
   pdf_preview_token?: string | null
   remarks?: string
@@ -277,32 +273,6 @@ const openFilePreview = (type: string) => {
     </div>
 
     <div class="grid gap-2 md:col-span-2">
-      <Label for="image">Remittance Advice Image<span class="text-red-400">*</span></Label>
-      <p
-        v-if="accountPayment?.image"
-        class="mt-1 text-xs text-[var(--color-text-muted)]"
-      >
-        Current:
-        <a
-          @click="openFilePreview('image')"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="cursor-pointer font-medium text-[var(--color-text)] underline underline-offset-2 hover:opacity-90"
-        >
-          {{ accountPayment?.image?.split('/').pop() }}
-        </a>
-      </p>
-      <Input
-        class="mt-1 block w-full"
-        id="image"
-        name="image"
-        accept=".jpeg,.png,.jpg"
-        type="file"
-        :disabled="isViewOnly"
-      />
-    </div>
-
-    <div class="grid gap-2 md:col-span-2">
       <Label for="pdf">Remittance Advice PDF<span class="text-red-400">*</span></Label>
       <p
         v-if="accountPayment?.pdf"
@@ -323,32 +293,6 @@ const openFilePreview = (type: string) => {
         id="pdf"
         name="pdf"
         accept=".pdf"
-        type="file"
-        :disabled="isViewOnly"
-      />
-    </div>
-
-    <div class="grid gap-2 md:col-span-2">
-      <Label for="excel">Remittance Advice Excel<span class="text-red-400">*</span></Label>
-      <p
-        v-if="accountPayment?.excel"
-        class="mt-1 text-xs text-[var(--color-text-muted)]"
-      >
-        Current:
-        <a
-          @click="openFilePreview('excel')"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="cursor-pointer font-medium text-[var(--color-text)] underline underline-offset-2 hover:opacity-90"
-        >
-          {{ accountPayment?.excel?.split('/').pop() }}
-        </a>
-      </p>
-      <Input
-        class="mt-1 block w-full"
-        id="excel"
-        name="excel"
-        accept=".xlsx,.xls"
         type="file"
         :disabled="isViewOnly"
       />

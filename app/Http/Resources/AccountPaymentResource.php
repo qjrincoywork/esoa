@@ -13,7 +13,7 @@ class AccountPaymentResource extends JsonResource
     /**
      * Transform the account payment into an array, mapping the mode of payment to its
      * label, joining related SOA numbers, formatting dates, and issuing short-lived
-     * preview tokens for any attached image/PDF/Excel files when a user is authenticated.
+     * preview tokens for any attached PDF file when a user is authenticated.
      *
      * @return array<string, mixed>
      */
@@ -34,30 +34,14 @@ class AccountPaymentResource extends JsonResource
             'deposit_date_value' => $this->deposit_date ? Carbon::parse($this->deposit_date)->format('Y-m-d') : null,
             'mode_of_payment' => AccountPaymentMode::label((int) $this->mode_of_payment),
             'mode_of_payment_value' => $this->mode_of_payment,
-            'image' => $this->image,
             'pdf' => $this->pdf,
-            'excel' => $this->excel,
             'remarks' => $this->remarks,
             'created_by' => $this->resource->user->username ?? null,
             'created_at' => CommonHelper::formatDate($this->created_at),
-            'image_preview_token' => $this->image && $request->user()
-                ? CommonHelper::createFilePreviewToken(
-                    config('vc.disks.account_payments'),
-                    $this->image,
-                    (int) $request->user()->id
-                )
-                : null,
             'pdf_preview_token' => $this->pdf && $request->user()
                 ? CommonHelper::createFilePreviewToken(
                     config('vc.disks.account_payments'),
                     $this->pdf,
-                    (int) $request->user()->id
-                )
-                : null,
-            'excel_preview_token' => $this->excel && $request->user()
-                ? CommonHelper::createFilePreviewToken(
-                    config('vc.disks.account_payments'),
-                    $this->excel,
                     (int) $request->user()->id
                 )
                 : null,
