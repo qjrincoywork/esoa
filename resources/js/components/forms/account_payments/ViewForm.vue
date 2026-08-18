@@ -15,10 +15,6 @@ type AccountPayment = {
   deposit_date?: string
   mode_of_payment?: number
   mode_of_payment_value?: number
-  image?: string
-  image_preview_token?: string | null
-  excel?: string
-  excel_preview_token?: string | null
   pdf?: string
   pdf_preview_token?: string | null
   remarks?: string
@@ -68,14 +64,8 @@ const openFilePreview = (type: string) => {
         <li>Remarks: <p class="font-bold whitespace-pre-line">{{ accountPayment.remarks }}</p></li>
         <li>Created By: <span class="font-bold">{{ accountPayment.created_by }}</span></li>
         <li>Created At: <span class="font-bold">{{ accountPayment.created_at }}</span></li>
-        <li v-if="accountPayment.image">
-          <Button :onClick="() => openFilePreview('image')" class="cursor-pointer">View Image</Button>
-        </li>
         <li v-if="accountPayment.pdf">
           <Button :onClick="() => openFilePreview('pdf')" class="cursor-pointer">View PDF</Button>
-        </li>
-        <li v-if="accountPayment.excel">
-          <Button :onClick="() => openFilePreview('excel')" class="cursor-pointer">View Excel</Button>
         </li>
       </ul>
     </CardContent>

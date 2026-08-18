@@ -12,15 +12,11 @@ type SoaAccountPayment = {
   deposit_date?: string;
   mode_of_payment?: string;
   mode_of_payment_value?: number;
-  image?: string;
   pdf?: string;
-  excel?: string;
   remarks?: string;
   created_by?: string;
   created_at?: string;
-  image_preview_token?: string | null;
   pdf_preview_token?: string | null;
-  excel_preview_token?: string | null;
   deleted_at?: string | null;
 };
 

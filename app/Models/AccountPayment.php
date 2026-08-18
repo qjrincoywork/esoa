@@ -24,8 +24,6 @@ class AccountPayment extends Model
         'user_id',
         'deposit_date',
         'mode_of_payment',
-        'image',
-        'excel',
         'pdf',
         'remarks',
     ];
