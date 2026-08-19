@@ -29,6 +29,35 @@ type SelectedUserAccount = {
   branch_name: string
 }
 
+/** An access row as it arrives from the server (saved user) or from a picker. */
+type UserAccountSource = {
+  account_type?: string | number | null
+  account_code?: string | number | null
+  account_name?: string | null
+  branch_code?: string | number | null
+  branch_name?: string | null
+}
+
+/**
+ * Normalise an access row into the shape the list renders.
+ *
+ * The server labels saved and copied rows the same way the comboboxes label their
+ * options, so every row reads alike whatever its source; the code stands in when a
+ * name could not be resolved.
+ */
+function toSelectedUserAccount(row: UserAccountSource): SelectedUserAccount {
+  const accountCode = String(row.account_code ?? '')
+  const branchCode  = String(row.branch_code ?? '')
+
+  return {
+    account_type: String(row.account_type ?? ''),
+    account_code: accountCode,
+    account_name: String(row.account_name ?? '') || accountCode,
+    branch_code:  branchCode,
+    branch_name:  String(row.branch_name ?? '') || branchCode,
+  }
+}
+
 type UserDetail = {
   type?: number
   agent_code?: string
@@ -49,7 +78,7 @@ type UserBasic = {
   username?: string | number
   email?: string | number
   user_detail?: UserDetail
-  user_accounts?: Array<{ account_type?: string; account_code?: string; branch_code?: string }>
+  user_accounts?: UserAccountSource[]
   roles?: Array<{ id?: string | number }>
 }
 
@@ -166,13 +195,7 @@ const selectedAccount      = computed(() =>
 
 // ─── GROUP_ACCOUNT_ADMIN (type 4) multi-account state ─────────────────────
 const selectedUserAccounts = ref<SelectedUserAccount[]>(
-  (user.value?.user_accounts ?? []).map((ua: { account_type?: string | null; account_code?: string; branch_code?: string | null }) => ({
-    account_type: ua.account_type ?? '',
-    account_code: String(ua.account_code ?? ''),
-    account_name: String(ua.account_code ?? ''),
-    branch_code:  String(ua.branch_code  ?? ''),
-    branch_name:  String(ua.branch_code  ?? ''),
-  }))
+  (user.value?.user_accounts ?? []).map(toSelectedUserAccount)
 )
 
 // "Add entry" form state for GROUP_ACCOUNT_ADMIN
@@ -199,7 +222,7 @@ const newSelectedAccount   = computed(() =>
 const { getAccountsByParams, getBranchesByParams, getUsersWithAccounts } = useUsers();
 
 // ─── Copy access from another user (GROUP_ACCOUNT_ADMIN) ──────────────────
-type CopyableUser = { value: string | number; name: string; accounts?: Array<{ account_type?: string | null; account_code?: string | null; branch_code?: string | null }> }
+type CopyableUser = { value: string | number; name: string; accounts?: UserAccountSource[] }
 const copyUsers            = ref<CopyableUser[]>([])
 const copySourceUserId     = ref<string>('')
 const searchedCopyUser     = ref('')
@@ -359,13 +382,13 @@ function addUserAccount() {
   if (!newAccountCode.value) return;
   const account = newAccounts.value.find((a: Account) => String(a.value) === newAccountCode.value);
   const branch  = newBranches.value.find((b: Branch)  => String(b.value) === newBranchCode.value);
-  const added = tryAddUserAccount({
+  const added = tryAddUserAccount(toSelectedUserAccount({
     account_type: newAccountType.value,
     account_code: newAccountCode.value,
-    account_name: account?.name ?? newAccountCode.value,
+    account_name: account?.name,
     branch_code:  newBranchCode.value,
-    branch_name:  branch?.name  ?? newBranchCode.value,
-  });
+    branch_name:  branch?.name,
+  }));
   if (!added) {
     duplicateError.value = 'This account / branch combination has already been added.';
     return;
@@ -383,8 +406,8 @@ function addUserAccount() {
 
 /**
  * Copy every account/branch entry from the selected source user into the
- * current list, skipping duplicates. Source rows only carry codes, so the
- * code doubles as the display name (matching how edit-mode initialises).
+ * current list, skipping duplicates. Source rows arrive already labelled, so
+ * they land in the list reading exactly like a freshly picked entry.
  */
 function copyUserAccounts() {
   const source = copySelectedUser.value;
@@ -394,13 +417,7 @@ function copyUserAccounts() {
   let skipped = 0;
   for (const ua of source.accounts ?? []) {
     if (!ua.account_code) continue;
-    const ok = tryAddUserAccount({
-      account_type: ua.account_type ?? '',
-      account_code: String(ua.account_code),
-      account_name: String(ua.account_code),
-      branch_code:  String(ua.branch_code ?? ''),
-      branch_name:  String(ua.branch_code ?? ''),
-    });
+    const ok = tryAddUserAccount(toSelectedUserAccount(ua));
     ok ? added++ : skipped++;
   }
 

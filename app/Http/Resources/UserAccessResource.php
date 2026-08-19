@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Helpers\CommonHelper;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -14,8 +15,9 @@ class UserAccessResource extends JsonResource
 {
     /**
      * Transform the user into a combobox option, composing a "username (email)" display
-     * name and embedding the user's account/branch access so it can be copied without a
-     * second request.
+     * name and embedding the user's account/branch access — codes plus their display
+     * names, so copied rows read the same as freshly picked ones — allowing the copy to
+     * happen without a second request.
      *
      * @return array<string, mixed>
      */
@@ -24,11 +26,14 @@ class UserAccessResource extends JsonResource
         return [
             'value'    => $this->id,
             'name'     => trim(($this->username ?? '') . ' (' . ($this->email ?? '') . ')'),
-            'accounts' => $this->userAccounts->map(fn ($account) => [
-                'account_type' => $account->account_type,
-                'account_code' => $account->account_code,
-                'branch_code'  => $account->branch_code,
-            ])->values(),
+            'accounts' => collect(CommonHelper::withAccountBranchNames($this->userAccounts))
+                ->map(fn (array $account) => [
+                    'account_type' => $account['account_type'],
+                    'account_code' => $account['account_code'],
+                    'account_name' => $account['account_name'],
+                    'branch_code'  => $account['branch_code'],
+                    'branch_name'  => $account['branch_name'],
+                ])->values(),
         ];
     }
 }
