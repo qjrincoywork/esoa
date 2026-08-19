@@ -10,6 +10,7 @@ use App\Enums\{
     UserImportColumn,
     UserType
 };
+use App\Helpers\CommonHelper;
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
 use App\Http\Requests\User\AccountAccessUsersRequest;
@@ -301,6 +302,10 @@ class UserController extends Controller
             ->orderBy('username')
             ->paginate($perPage);
 
+        // Resolve every code on the page up front so each resource labels its rows
+        // from the memo instead of hitting HMS per user.
+        CommonHelper::primeAccountBranchNames($users->getCollection()->flatMap->userAccounts);
+
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
@@ -322,6 +327,8 @@ class UserController extends Controller
     public function edit(int $id, Request $request)
     {
         $user = $this->user->with(['userDetail', 'userAccounts', 'roles:id,name,guard_name'])->findOrFail($id)->toArray();
+        // Saved access stores codes only; label it so the form lists it the way the pickers show it.
+        $user['user_accounts'] = CommonHelper::withAccountBranchNames($user['user_accounts'] ?? []);
         $suffixes = Suffix::select(['id', 'name'])->get()->toArray();
         $civil_statuses = CivilStatus::select(['id', 'name'])->get()->toArray();
         $citizenships = Citizenship::select(['id', 'name'])->get()->toArray();
