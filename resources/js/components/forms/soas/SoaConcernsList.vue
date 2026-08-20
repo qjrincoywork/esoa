@@ -72,12 +72,12 @@ const columns = [
       ),
   }),
   columnHelper.accessor('created_by', {
-    header: 'Submitted By',
+    header: 'Created By',
     cell: ({ getValue }) => getValue() || '-',
   }),
   columnHelper.accessor('created_at', {
-    header: 'Date',
-    cell: ({ getValue }) => getValue() || '-',
+    header: 'Created At',
+    cell: (info: any) => info.getValue(),
   }),
 ];
 
