@@ -55,6 +55,18 @@ function fileBasename(path: string): string {
   return segment || path
 }
 
+/**
+ * Billing invoice caption, matching the label format of the concern form's picker so a
+ * concern raised from this pane reads the same as one raised from the concerns page.
+ */
+const soaLabel = computed(() => {
+  const soa = localSoa.value
+  if (!soa?.soa_number) return ''
+  const account = soa.account_code ? ` - ${soa.account_code}` : ''
+  const branch = soa.branch_code ? ` (${soa.branch_code})` : ''
+  return `${soa.soa_number}${account}${branch}`
+})
+
 /** Existing uploads (native file inputs cannot show these; we show name + link instead). */
 const existingPdf = computed(() => {
   const id = localSoa.value?.id
@@ -185,7 +197,8 @@ const existingExcel = computed(() => {
           <CardContent class="grid gap-6">
             <SoaConcernsList
               v-if="activeTab === 'concerns'"
-              :soa-id="localSoa.id ?? null" />
+              :soa-id="localSoa.id ?? null"
+              :soa-label="soaLabel" />
           </CardContent>
         </Card>
       </TabsContent>

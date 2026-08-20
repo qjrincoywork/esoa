@@ -3,8 +3,13 @@ import { h, onMounted, ref, watch } from 'vue';
 import { router } from '@inertiajs/vue3';
 import { createColumnHelper } from '@tanstack/vue-table';
 import Datatable from '@/components/Datatable.vue';
+import { Button } from '@/components/ui/button';
 import { useAjax } from '@/composables/useAjax';
 import { useModulePermissions } from '@/composables/useModulePermissions';
+import { useConcerns } from '@/composables/concerns';
+
+/** This list lives inside the SOA pane, so the concerns module has to be named explicitly. */
+const CONCERNS_MODULE = 'concerns';
 
 type SoaConcern = {
   id?: number;
@@ -22,10 +27,16 @@ type SoaConcern = {
 
 const props = defineProps<{
   soaId?: number | null;
+  /** Billing invoice label shown on the concern form in place of the picker. */
+  soaLabel?: string;
 }>();
 
 const { get } = useAjax();
+// The host page's module (soas) drives the fetch path; the button is gated by the
+// concerns module, and the concern modal must post to the concerns controller.
 const { slug } = useModulePermissions();
+const { canCreate } = useModulePermissions({ slug: CONCERNS_MODULE });
+const { newConcern } = useConcerns({ slug: CONCERNS_MODULE });
 const loading = ref(false);
 const concerns = ref<SoaConcern[]>([]);
 const error = ref('');
@@ -61,12 +72,12 @@ const columns = [
       ),
   }),
   columnHelper.accessor('created_by', {
-    header: 'Submitted By',
+    header: 'Created By',
     cell: ({ getValue }) => getValue() || '-',
   }),
   columnHelper.accessor('created_at', {
-    header: 'Date',
-    cell: ({ getValue }) => getValue() || '-',
+    header: 'Created At',
+    cell: (info: any) => info.getValue(),
   }),
 ];
 
@@ -116,6 +127,26 @@ const fetchConcerns = async () => {
   }
 };
 
+/** Reload from the first page — used after a concern is submitted from this pane. */
+const refreshConcerns = async () => {
+  pagination.value.current_page = 1;
+  await fetchConcerns();
+};
+
+/**
+ * Open the concern form pre-linked to this SOA. The id travels with the payload and is
+ * re-checked server-side, so no billing invoice has to be picked.
+ */
+const submitConcern = () => {
+  if (!props.soaId) return;
+
+  void newConcern({
+    soaIds: [props.soaId],
+    soaLabel: props.soaLabel,
+    onSaved: refreshConcerns,
+  });
+};
+
 const handlePaginationUpdate = (newPagination: {
   current_page: number;
   per_page: number;
@@ -143,6 +174,20 @@ onMounted(fetchConcerns);
 </script>
 
 <template>
+<div class="bg-[var(--color-surface)] shadow-sm border border-[var(--color-border)] p-6">
+  <div v-if="canCreate" class="flex flex-col gap-4 mb-4">
+    <div class="flex flex-row lg:flex-row justify-between items-stretch lg:items-start gap-4">
+      <div class="flex flex-1 flex-row gap-3 min-w-0">
+        <Button
+          class="cursor-pointer"
+          :disabled="!soaId"
+          :onClick="submitConcern"
+        >
+          Submit Concern
+        </Button>
+      </div>
+    </div>
+  </div>
   <Datatable
     :key="`${pagination.current_page}-${pagination.per_page}-${concerns.length}`"
     :data="concerns"
@@ -158,4 +203,5 @@ onMounted(fetchConcerns);
     empty-description="Concerns linked to this SOA will appear here."
     export-file-name="soa_concerns"
     @update:pagination="handlePaginationUpdate" />
+</div>
 </template>

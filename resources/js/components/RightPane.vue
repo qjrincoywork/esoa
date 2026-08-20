@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Component } from 'vue';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { keepOpenForGlobalOverlay } from '@/lib/overlay';
 
 type SheetSide = 'top' | 'right' | 'bottom' | 'left';
 
@@ -31,7 +32,11 @@ const emit = defineEmits<{
 
 <template>
     <Sheet :open="props.open" @update:open="emit('update:open', $event)">
-        <SheetContent :side="props.side" class="p-0">
+        <!-- A click inside a modal opened from this pane is not an "outside" click. -->
+        <SheetContent
+            :side="props.side"
+            class="p-0"
+            @interact-outside="keepOpenForGlobalOverlay">
             <div class="flex h-full w-full flex-col">
                 <div
                     class="flex items-center justify-between gap-3 border-b border-[var(--color-border)] px-4 py-3">

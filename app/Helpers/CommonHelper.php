@@ -14,6 +14,22 @@ use Symfony\Component\HttpFoundation\Response;
 class CommonHelper
 {
     /**
+     * HMS account names resolved this request, keyed by account code.
+     * An empty value means the code was looked up and HMS has no name for it.
+     *
+     * @var array<string, string>
+     */
+    protected static array $accountNameCache = [];
+
+    /**
+     * HMS branch names resolved this request, keyed by branch code.
+     * An empty value means the code was looked up and HMS has no name for it.
+     *
+     * @var array<string, string>
+     */
+    protected static array $branchNameCache = [];
+
+    /**
      * Best-effort fix for legacy mojibake like:
      * - "PIÃ‘AS" or "PIÃƒâ€˜AS" -> "PIÑAS"
      *
@@ -246,6 +262,118 @@ class CommonHelper
             $branch = (new SqlDatabase(Server::HMS))->getBranch($model->branch_code);
             $model->client_name = $branch?->br_branch_name ?? $model->branch_code;
         }
+    }
+
+    /**
+     * Attach account/branch display names to rows that only carry codes.
+     *
+     * `user_accounts` stores codes only, so a saved assignment would render as a raw
+     * code where the account/branch pickers show a name. Codes are resolved in bulk —
+     * two HMS lookups for the whole set, however many rows — and labelled exactly the
+     * way {@see \App\Http\Resources\AccountResource} and
+     * {@see \App\Http\Resources\BranchResource} label picker options, so a saved row
+     * reads identically to one that was just picked. Codes HMS no longer knows fall
+     * back to the code itself.
+     *
+     * Resolved names are memoised for the request, so priming this once with every row
+     * on a page keeps later per-row calls query-free.
+     *
+     * @param  iterable<int, array<string, mixed>|\Illuminate\Database\Eloquent\Model|object>  $rows
+     * @return array<int, array<string, mixed>> The rows as arrays, plus account_name / branch_name.
+     */
+    public static function withAccountBranchNames(iterable $rows): array
+    {
+        $rows = collect($rows)
+            ->map(fn ($row) => $row instanceof Model ? $row->toArray() : (array) $row)
+            ->all();
+
+        if ($rows === []) {
+            return [];
+        }
+
+        self::cacheAccountBranchNames(
+            array_column($rows, 'account_code'),
+            array_column($rows, 'branch_code')
+        );
+
+        return array_map(function (array $row) {
+            $accountCode = $row['account_code'] ?? null;
+            $branchCode = $row['branch_code'] ?? null;
+            $accountName = $accountCode ? (self::$accountNameCache[$accountCode] ?? null) : null;
+            $branchName = $branchCode ? (self::$branchNameCache[$branchCode] ?? null) : null;
+
+            return $row + [
+                'account_name' => $accountName ?: $accountCode,
+                'branch_name' => $branchName ?: $branchCode,
+            ];
+        }, $rows);
+    }
+
+    /**
+     * Warm the name memo for a whole set of rows at once.
+     *
+     * Call this before labelling rows one group at a time — a page of users, say — so
+     * the per-group calls resolve from memory instead of querying HMS per group.
+     *
+     * @param  iterable<int, array<string, mixed>|\Illuminate\Database\Eloquent\Model|object>  $rows
+     * @return void
+     */
+    public static function primeAccountBranchNames(iterable $rows): void
+    {
+        self::withAccountBranchNames($rows);
+    }
+
+    /**
+     * Resolve any account/branch codes not yet memoised, in one lookup per directory.
+     *
+     * Unresolvable codes are cached as an empty string so a missing record is not
+     * looked up again for the rest of the request.
+     *
+     * @param  array<int, string|null>  $accountCodes
+     * @param  array<int, string|null>  $branchCodes
+     * @return void
+     */
+    protected static function cacheAccountBranchNames(array $accountCodes, array $branchCodes): void
+    {
+        $accountCodes = self::uncachedCodes($accountCodes, self::$accountNameCache);
+        $branchCodes = self::uncachedCodes($branchCodes, self::$branchNameCache);
+
+        if ($accountCodes === [] && $branchCodes === []) {
+            return;
+        }
+
+        $sqlDatabase = new SqlDatabase(Server::HMS);
+
+        if ($accountCodes !== []) {
+            $names = $sqlDatabase->getAccountNamesByCodes($accountCodes);
+
+            foreach ($accountCodes as $code) {
+                self::$accountNameCache[$code] = self::convertStringEncoding($names[$code] ?? '');
+            }
+        }
+
+        if ($branchCodes !== []) {
+            $names = $sqlDatabase->getBranchNamesByCodes($branchCodes);
+
+            foreach ($branchCodes as $code) {
+                self::$branchNameCache[$code] = self::convertStringEncoding($names[$code] ?? '');
+            }
+        }
+    }
+
+    /**
+     * Reduce a set of codes to the distinct, non-empty ones that are not memoised yet.
+     *
+     * @param  array<int, string|null>  $codes
+     * @param  array<string, string>  $cache
+     * @return array<int, string>
+     */
+    protected static function uncachedCodes(array $codes, array $cache): array
+    {
+        return array_values(array_diff(
+            array_unique(array_filter($codes)),
+            array_keys($cache)
+        ));
     }
 
     /**

@@ -89,8 +89,8 @@ class AccountPaymentController extends Controller
      * Persist a newly created account payment with its linked SOAs and attachment.
      *
      * Runs inside a DB transaction: creates the account payment, syncs any
-     * related SOA ids, stores an uploaded remittance-advice file (image/pdf/excel
-     * on the account-payments disk, persisting the resulting path back onto the
+     * related SOA ids, stores an uploaded remittance-advice PDF file on the
+     * account-payments disk, persisting the resulting path back onto the
      * model), then commits and sends an {@see AccountPaymentNotification} email.
      * Rolls back and returns a server-error envelope on failure.
      *
@@ -119,7 +119,7 @@ class AccountPaymentController extends Controller
             CommonHelper::storeUploadedFile(
                 $request,
                 $validated,
-                ['image', 'pdf', 'excel'],
+                ['pdf'],
                 null,
                 $accountPayment,
                 config('vc.disks.account_payments')
@@ -207,19 +207,10 @@ class AccountPaymentController extends Controller
     {
         $accountPayment = $this->accountPayment->with('soas')->findOrFail($id);
         CommonHelper::assertUserMayAccessModel($request, $accountPayment);
-        if ($accountPayment) {
-            $accountPayment->remittance_advice_preview_token = $accountPayment->remittance_advice && $request->user()
-                ? CommonHelper::createFilePreviewToken(
-                    config('vc.disks.account_payments'),
-                    $accountPayment->remittance_advice,
-                    (int) $request->user()->id
-                )
-                : null;
-        }
 
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
-                'account_payment' => $accountPayment,
+                'account_payment' => AccountPaymentResource::make($accountPayment),
                 'mode_of_payment_options' => AccountPaymentMode::list(),
             ]);
         }
@@ -229,9 +220,9 @@ class AccountPaymentController extends Controller
      * Update the specified account payment, its linked SOAs and attachment.
      *
      * Runs inside a DB transaction: resolves the account payment, syncs any
-     * related SOA ids, stores a replacement remittance-advice file (image/pdf/
-     * excel on the account-payments disk, persisting the resulting path back onto
-     * the model), then commits and sends an {@see AccountPaymentNotification}
+     * related SOA ids, stores a replacement remittance-advice PDF file on the
+     * account-payments disk, persisting the resulting path back onto the model,
+     * then commits and sends an {@see AccountPaymentNotification}
      * email. Rolls back and returns a server-error envelope on failure.
      *
      * Access control (RBAC): beyond the route-level Spatie role/permission
@@ -259,7 +250,7 @@ class AccountPaymentController extends Controller
             CommonHelper::storeUploadedFile(
                 $request,
                 $validated,
-                ['image', 'pdf', 'excel'],
+                ['pdf'],
                 null,
                 $accountPayment,
                 config('vc.disks.account_payments')

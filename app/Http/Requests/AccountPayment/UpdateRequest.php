@@ -3,6 +3,7 @@
 namespace App\Http\Requests\AccountPayment;
 
 use App\Enums\AccountPaymentMode;
+use App\Models\AccountPayment;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -21,12 +22,27 @@ class UpdateRequest extends FormRequest
     }
 
     /**
-     * Validation rules for updating an account payment (deposit date, mode of payment, image/PDF/Excel uploads, optional SOA IDs and remarks).
+     * Validation rules for updating an account payment (deposit date, mode of payment, PDF upload, optional SOA IDs and remarks).
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
+        $existingFilePdf = AccountPayment::whereKey($this->input('id'))->value('pdf');
+        $pdfRules = [];
+        if (!$existingFilePdf) {
+            $pdfRules = [
+                'required',
+            ];
+        }
+        if ($this->hasFile('pdf')) {
+            $pdfRules = [
+                ...$pdfRules,
+                'file',
+                'mimes:pdf',
+                'max:' . config('vc.max_file_size'), // 2MB (size is in KB)
+            ];
+        }
         return [
             'id' => [
                 'required',
@@ -42,24 +58,7 @@ class UpdateRequest extends FormRequest
                 'integer',
                 Rule::in(AccountPaymentMode::getValues()),
             ],
-            'image' => [
-                'required',
-                'file',
-                'mimes:jpg,jpeg,png',
-                'max:' . config('vc.max_file_size'),
-            ],
-            'pdf' => [
-                'required',
-                'file',
-                'mimes:pdf',
-                'max:' . config('vc.max_file_size'),
-            ],
-            'excel' => [
-                'required',
-                'file',
-                'mimes:xls,xlsx',
-                'max:' . config('vc.max_file_size'),
-            ],
+            'pdf' => $pdfRules,
             'soa_ids' => [
                 'nullable',
                 'array',

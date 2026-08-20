@@ -230,6 +230,29 @@ class SqlDatabase
     }
 
     /**
+     * Retrieve branch names for many branch codes in one round trip.
+     *
+     * Branch counterpart of {@see getAccountNamesByCodes()}: the per-code {@see getBranch()}
+     * turns a list of saved access into one query per row, this keeps it at a single lookup.
+     *
+     * @param  array<int, string>  $branchCodes
+     * @return \Illuminate\Support\Collection<string, string> Branch name keyed by code.
+     */
+    public function getBranchNamesByCodes(array $branchCodes)
+    {
+        $branchCodes = array_values(array_unique(array_filter($branchCodes)));
+
+        if ($branchCodes === []) {
+            return collect();
+        }
+
+        return $this->db
+            ->table('Branches')
+            ->whereIn('br_code', $branchCodes)
+            ->pluck('br_branch_name', 'br_code');
+    }
+
+    /**
      * Retrieves a single billing record by its reference ID.
      *
      * Excludes records that are currently being recomputed.
@@ -486,9 +509,9 @@ class SqlDatabase
             //     $query->where('c.ch_branch_code', $params['branch_code']);
             // })
             ->when(!empty($params), function ($query) use ($params) {
-                $query->when(!empty($params['period_date_from']) && !empty($params['period_date_to']), function ($query) use ($params) {
-                    $query->whereBetween('act.act_dateposted', [$params['period_date_from'], $params['period_date_to']]);
-                });
+                // $query->when(!empty($params['period_date_from']) && !empty($params['period_date_to']), function ($query) use ($params) {
+                //     $query->whereBetween('act.act_dateposted', [$params['period_date_from'], $params['period_date_to']]);
+                // });
                 // $query->whereBetween('cl.cl_processdate', [$params['period_date_from'], $params['period_date_to']]);
                 // if (empty($params['contract_date_from'])) {
                 //     $query->when(!empty($params['period_date_from']) && !empty($params['period_date_to']), function ($query) use ($params) {

@@ -198,7 +198,7 @@ class ConcernController extends Controller
      */
     public function edit($id, Request $request)
     {
-        $concern = $this->concern->findOrFail($id);
+        $concern = $this->concern->with('soas')->findOrFail($id);
         CommonHelper::assertUserMayAccessModel($request, $concern);
         if ($concern) {
             $concern->attachment_preview_token = $concern->attachment && $request->user()
@@ -213,7 +213,7 @@ class ConcernController extends Controller
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
-                'concern' => $concern,
+                'concern' => ConcernResource::make($concern),
                 'concern_types' => ConcernType::list(),
                 'ticket_statuses' => TicketStatus::list(),
             ]);

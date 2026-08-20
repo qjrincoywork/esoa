@@ -41,16 +41,27 @@ watch(totalPages, (total) => {
 
 const pageStart = computed(() => (currentPage.value - 1) * props.perPage);
 
-const paginatedItems = computed(() =>
-  props.items.slice(pageStart.value, pageStart.value + props.perPage).map((item, i) => ({
-    ...item,
-    globalIndex: pageStart.value + i,
-  }))
+// Keyed once per option list so labelling a page is a lookup per row, not a scan.
+const accountTypeNames = computed(
+  () => new Map((props.accountTypes as AccountType[]).map((at: AccountType) => [String(at.value), at.name]))
 );
 
-function getAccountTypeName(value: string): string {
-  return props.accountTypes.find(at => String(at.value) === value)?.name ?? value;
-}
+/**
+ * Rows of the current page with their display labels resolved.
+ *
+ * Names come from whoever supplied the row — the picker for a freshly added entry,
+ * the server for one that was already saved or copied — so both read the same; the
+ * code stands in whenever a name could not be resolved.
+ */
+const paginatedItems = computed(() =>
+  (props.items as SelectedUserAccount[]).slice(pageStart.value, pageStart.value + props.perPage).map((item: SelectedUserAccount, i: number) => ({
+    ...item,
+    globalIndex: pageStart.value + i,
+    accountTypeLabel: accountTypeNames.value.get(String(item.account_type ?? '')) ?? item.account_type ?? '',
+    accountLabel: item.account_name + (item.account_code ? ' (' + item.account_code + ')' : '') || item.account_code || '',
+    branchLabel: item.branch_name + (item.branch_code ? ' (' + item.branch_code + ')' : '') || item.branch_code || '',
+  }))
+);
 </script>
 
 <template>
@@ -70,9 +81,9 @@ function getAccountTypeName(value: string): string {
           <tbody>
             <tr v-for="ua in paginatedItems" :key="ua.globalIndex" class="border-b last:border-0">
               <td class="px-3 py-2 text-[var(--color-text-muted)]">{{ ua.globalIndex + 1 }}</td>
-              <td class="px-3 py-2">{{ getAccountTypeName(ua.account_type) || '—' }}</td>
-              <td class="px-3 py-2">{{ ua.account_name || ua.account_code }}</td>
-              <td class="px-3 py-2">{{ ua.branch_name || ua.branch_code || '—' }}</td>
+              <td class="px-3 py-2">{{ ua.accountTypeLabel || '—' }}</td>
+              <td class="px-3 py-2" :title="ua.account_code">{{ ua.accountLabel || '—' }}</td>
+              <td class="px-3 py-2" :title="ua.branch_code">{{ ua.branchLabel || '—' }}</td>
               <td class="px-3 py-2">
                 <Button
                   type="button" variant="ghost" size="sm"

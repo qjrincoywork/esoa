@@ -29,10 +29,19 @@ class ConcernResource extends JsonResource
         return [
             'id' => $this->id,
             'billing_invoice' => implode(', ', $this->soas->pluck('soa_number')->toArray()),
+            'soa_ids' => $this->soas->pluck('id')->toArray(),
+            'soas' => $this->soas->map(fn ($soa) => [
+                'id' => $soa->id,
+                'soa_number' => $soa->soa_number,
+                'account_code' => $soa->account_code,
+                'branch_code' => $soa->branch_code,
+            ])->values()->toArray(),
             'type' => ConcernType::label((int) $this->type),
+            'type_value' => (int) $this->type,
             'title' => $this->title,
             'description' => $this->description,
             'status' => TicketStatus::label((int) $this->status),
+            'status_value' => (int) $this->status,
             'status_color' => TicketStatus::color((int) $this->status),
             'attachment' => $this->attachment,
             'attachment_preview_token' => $this->attachment && $request->user()

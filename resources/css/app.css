@@ -154,10 +154,13 @@
     --z-left-pane: 200;
     --z-bottom-pane: 250;
     --z-modal: 300;
-    --z-notification: 400;
+    --z-global-modal: 400;
+    /* Popover content is teleported to <body> (PopoverPortal), so it must clear the
+       global-modal layer to stay visible when a popover is opened from inside one. */
+    --z-popover: calc(var(--z-global-modal) + 1);
     --z-loader: 500;
-    --z-global-modal: 600;
     --z-tooltip: 700;
+    --z-notification: 900;
     --background: hsl(0 0% 100%);
     --foreground: hsl(0 0% 3.9%);
     --card: hsl(0 0% 100%);
@@ -307,6 +310,13 @@
   .global-modal {
     z-index: var(--z-global-modal);
     position: fixed;
+    /*
+     * An open Reka UI layer (Sheet/Dialog) sets `pointer-events: none` on <body> to make
+     * everything outside its own subtree inert. A global modal is teleported to <body>, so
+     * it inherits that and renders on top while ignoring every click. Re-declaring the
+     * property here overrides the inherited value for this layer and nothing below it.
+     */
+    pointer-events: auto;
   }
   .tooltip {
     z-index: var(--z-tooltip);
@@ -320,10 +330,10 @@
     --z-left-pane: 200;
     --z-bottom-pane: 250;
     --z-modal: 300;
-    --z-notification: 400;
+    --z-global-modal: 400;
     --z-loader: 500;
-    --z-global-modal: 600;
     --z-tooltip: 700;
+    --z-notification: 900;
     --background: hsl(0 0% 3.9%);
     --foreground: hsl(0 0% 98%);
     --card: hsl(0 0% 3.9%);
@@ -416,6 +426,13 @@
   .global-modal {
     z-index: var(--z-global-modal);
     position: fixed;
+    /*
+     * An open Reka UI layer (Sheet/Dialog) sets `pointer-events: none` on <body> to make
+     * everything outside its own subtree inert. A global modal is teleported to <body>, so
+     * it inherits that and renders on top while ignoring every click. Re-declaring the
+     * property here overrides the inherited value for this layer and nothing below it.
+     */
+    pointer-events: auto;
   }
   .tooltip {
     z-index: var(--z-tooltip);
