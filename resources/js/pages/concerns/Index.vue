@@ -138,6 +138,10 @@ const baseColumns: any[] = [
     header: 'Created By',
     cell: (info: any) => info.getValue(),
   }),
+  columnHelper.accessor('created_at', {
+    header: 'Created At',
+    cell: (info: any) => info.getValue(),
+  }),
 ];
 const handlerMap: Record<string, (row: any) => void> = {
   edit: editConcern,
@@ -280,7 +284,7 @@ onMounted(async () => {
             <Button class="cursor-pointer" v-if="canCreate" :onClick="() => newConcern()">Submit Concern</Button>
           </div>
         </div>
-        <div v-if="userDetail?.has_employee_no || auth?.is_superadmin" class="grid gap-2 md:col-span-1 w-1/2">
+        <div class="grid gap-2 md:col-span-1 w-1/2">
           <Accordion type="single" collapsible>
             <AccordionItem value="filters">
               <AccordionTrigger class="cursor-pointer">Filters</AccordionTrigger>
@@ -363,19 +367,6 @@ onMounted(async () => {
               </AccordionContent>
             </AccordionItem>
           </Accordion>
-        </div>
-        <div v-else class="w-md">
-          <div class="grid gap-2 md:col-span-1">
-            <Label for="concern-filter-title">Title</Label>
-            <Input
-              id="concern-filter-title"
-              v-model="filters.title"
-              type="text"
-              autocomplete="off"
-              placeholder="Title"
-              class="mt-0"
-            />
-          </div>
         </div>
       </div>
       <Datatable
