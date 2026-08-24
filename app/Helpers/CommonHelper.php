@@ -30,6 +30,14 @@ class CommonHelper
     protected static array $branchNameCache = [];
 
     /**
+     * HMS system-user display names resolved this request, keyed by login.
+     * An empty value means the login was looked up and HMS has no user for it.
+     *
+     * @var array<string, string>
+     */
+    protected static array $systemUserNameCache = [];
+
+    /**
      * Best-effort fix for legacy mojibake like:
      * - "PIÃ‘AS" or "PIÃƒâ€˜AS" -> "PIÑAS"
      *
@@ -335,8 +343,8 @@ class CommonHelper
      */
     protected static function cacheAccountBranchNames(array $accountCodes, array $branchCodes): void
     {
-        $accountCodes = self::uncachedCodes($accountCodes, self::$accountNameCache);
-        $branchCodes = self::uncachedCodes($branchCodes, self::$branchNameCache);
+        $accountCodes = self::uncachedKeys($accountCodes, self::$accountNameCache);
+        $branchCodes = self::uncachedKeys($branchCodes, self::$branchNameCache);
 
         if ($accountCodes === [] && $branchCodes === []) {
             return;
@@ -362,16 +370,73 @@ class CommonHelper
     }
 
     /**
-     * Reduce a set of codes to the distinct, non-empty ones that are not memoised yet.
+     * Resolve an HMS system user's display name from their login.
      *
-     * @param  array<int, string|null>  $codes
+     * Returns null when the login is blank or HMS has no such user — legacy records
+     * reference long-deactivated accounts, and those keep whatever name the record
+     * itself carries.
+     *
+     * @param  string|null  $login
+     * @return string|null
+     */
+    public static function systemUserName(?string $login): ?string
+    {
+        $login = trim((string) $login);
+
+        if ($login === '') {
+            return null;
+        }
+
+        if (! array_key_exists($login, self::$systemUserNameCache)) {
+            self::primeSystemUserNames([$login]);
+        }
+
+        return self::$systemUserNameCache[$login] ?: null;
+    }
+
+    /**
+     * Resolve every not-yet-memoised login in a single HMS lookup.
+     *
+     * Call this with a whole page of logins before reading them one at a time through
+     * {@see systemUserName()}, which then costs no queries at all.
+     *
+     * @param  iterable<int, string|null>  $logins
+     * @return void
+     */
+    public static function primeSystemUserNames(iterable $logins): void
+    {
+        $logins = self::uncachedKeys(
+            collect($logins)->map(fn ($login) => trim((string) $login))->all(),
+            self::$systemUserNameCache
+        );
+
+        if ($logins === []) {
+            return;
+        }
+
+        // SQL Server matches logins case-insensitively but returns them as stored, so
+        // re-key the result to the casing we asked with before reading it back.
+        $names = collect((new SqlDatabase(Server::HMS))->getSystemUserNamesByLogins($logins))
+            ->keyBy(fn ($name, $login) => strtoupper((string) $login));
+
+        foreach ($logins as $login) {
+            self::$systemUserNameCache[$login] = self::convertStringEncoding(
+                $names[strtoupper($login)] ?? ''
+            );
+        }
+    }
+
+    /**
+     * Reduce a set of lookup keys to the distinct, non-empty ones not memoised yet.
+     *
+     * @param  array<int, string|null>  $keys
      * @param  array<string, string>  $cache
      * @return array<int, string>
      */
-    protected static function uncachedCodes(array $codes, array $cache): array
+    protected static function uncachedKeys(array $keys, array $cache): array
     {
         return array_values(array_diff(
-            array_unique(array_filter($codes)),
+            array_unique(array_filter($keys)),
             array_keys($cache)
         ));
     }

@@ -155,6 +155,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/export', 'exportList')->name('export');
             Route::get('/file_list', 'fileList')->name('file_list');
             Route::get('/preview_file', 'previewFile')->name('preview_file');
+            Route::get('/preview_old_remark_file', 'previewOldRemarkFile')->name('preview_old_remark_file');
             Route::get('/find_member', 'findMember')->name('find_member');
             Route::get('/member_files', 'memberFiles')->name('member_files');
             Route::get('/get_accounts', 'getAccounts')->name('get_accounts');
@@ -162,6 +163,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/get_branches', 'getBranches')->name('get_branches');
             Route::get('/{id}/activities', 'activities')->name('activities');
             Route::get('/{id}/concerns', 'concerns')->name('concerns');
+            Route::get('/{id}/old_remarks', 'oldRemarks')->name('old_remarks');
             Route::get('/{id}/account_payments', 'soaAccountPayments')->name('account_payments');
             Route::post('/{id}/record_viewed', 'recordViewed')->name('record_viewed');
             Route::get('/{id}/view_billing_invoice', 'viewBillingInvoice')->name('view_billing_invoice');

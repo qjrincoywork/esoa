@@ -65,6 +65,9 @@ return [
         'billing' => env('BILLING_DISK', 'billing'),
         'concerns' => env('CONCERNS_DISK', 'concerns'),
         'account_payments' => env('ACCOUNT_PAYMENTS_DISK', 'payments'),
+        // Files attached to the legacy remarks thread; rooted at the old system's
+        // chat_attachments directory (see LEGACY_CHAT_ATTACHMENTS_ROOT).
+        'legacy_chat' => env('LEGACY_CHAT_DISK', 'legacy_chat'),
     ],
     'soa_import' => [
         'chunk_size' => (int) env('SOA_IMPORT_CHUNK_SIZE', 2000),

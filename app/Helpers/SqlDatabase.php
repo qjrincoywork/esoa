@@ -253,6 +253,32 @@ class SqlDatabase
     }
 
     /**
+     * Retrieve the display names of many HMS system users in one round trip.
+     *
+     * Legacy remarks record their author as an HMS login; resolving each one on its own
+     * — what the old chat page did, per message — turns a page of conversation into a
+     * query per row, so the whole page is looked up at once.
+     *
+     * Must be called on a {@see Server::HMS} connection instance.
+     *
+     * @param  array<int, string>  $logins
+     * @return \Illuminate\Support\Collection<string, string> User name keyed by login.
+     */
+    public function getSystemUserNamesByLogins(array $logins)
+    {
+        $logins = array_values(array_unique(array_filter($logins)));
+
+        if ($logins === []) {
+            return collect();
+        }
+
+        return $this->db
+            ->table('Sys_user')
+            ->whereIn('user_login', $logins)
+            ->pluck('user_name', 'user_login');
+    }
+
+    /**
      * Retrieves a single billing record by its reference ID.
      *
      * Excludes records that are currently being recomputed.
@@ -1185,6 +1211,49 @@ class SqlDatabase
                 'soa_hc_datetime' => $params['datetime'],
                 'soa_hc_ip' => $params['ip'],
             ]);
+    }
+
+    /**
+     * Retrieves a paginated page of legacy eSOA remarks for one SOA number.
+     *
+     * These are the rows the previous system's conversation view rendered: `remarks`
+     * filtered by `rem_refid` (the SOA number, which is how the legacy side keys them),
+     * newest first, with `rem_id` breaking ties so messages posted within the same
+     * second paginate deterministically. The ref id is the only filter — the caller is
+     * responsible for authorising the SOA it belongs to.
+     *
+     * Must be called on a {@see Server::SOA} connection instance.
+     *
+     * @param array $params Supports refid (required) and per_page.
+     * @return \Illuminate\Pagination\LengthAwarePaginator
+     */
+    public function getOldRemarksByParams($params)
+    {
+        $perPage = $params['per_page'] ?? config('vc.default_pages');
+        $refId = trim((string) ($params['refid'] ?? ''));
+
+        $result = $this->db
+            ->table('remarks')
+            ->select([
+                'rem_id',
+                'rem_refid',
+                'rem_date',
+                'rem_remark',
+                'rem_by',
+                'rem_filename',
+                'rem_to',
+                'rem_isVC',
+                'rem_accode',
+                'rem_macode',
+                'rem_branch',
+            ])
+            // Without a ref id this would read every conversation in the legacy table.
+            ->when($refId === '', fn ($query) => $query->whereRaw('1 = 0'))
+            ->when($refId !== '', fn ($query) => $query->where('rem_refid', $refId))
+            ->orderByDesc('rem_date')
+            ->orderByDesc('rem_id');
+
+        return $result->paginate($perPage);
     }
 
     /**
