@@ -13,11 +13,11 @@ use App\Helpers\CommonHelper;
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Soa\{AccountBranchMembersRequest, AdjustAmountRequest, BillRefsRequest, CreateRequest, DestroyRequest, FileListRequest, FileProxyRequest, FindMemberRequest, ListRequest, MemberFilesRequest, RecordViewedRequest, RecomputeTaxRequest, UpdateRequest, UpdateTagRequest };
+use App\Http\Requests\Soa\{AccountBranchMembersRequest, AdjustAmountRequest, BillRefsRequest, CreateRequest, DestroyRequest, FileListRequest, FileProxyRequest, FindMemberRequest, ListRequest, MemberFilesRequest, OldRemarksRequest, RecordViewedRequest, RecomputeTaxRequest, UpdateRequest, UpdateTagRequest };
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
-use App\Http\Resources\{AccountBranchMemberResource, AccountPaymentResource, BillingRefResource, ConcernResource, MemberResource, OldSoaResource, SoaActivityListResource, SoaAgingCountResource, SoaResource };
+use App\Http\Resources\{AccountBranchMemberResource, AccountPaymentResource, BillingRefResource, ConcernResource, MemberResource, OldRemarkResource, OldSoaResource, SoaActivityListResource, SoaAgingCountResource, SoaResource };
 use App\Mail\{ BillingInvoiceStatusChanged, NewBillingInvoiceUploaded };
 use App\Models\Soa;
 use Illuminate\Http\Request;
@@ -618,6 +618,47 @@ class SoaController extends Controller
             ->paginate($perPage);
 
         return response()->json(['concerns' => new CommonResource(ConcernResource::collection($concerns))]);
+    }
+
+    /**
+     * Display a page of the legacy eSOA conversation for the given SOA (on-demand).
+     *
+     * The previous system kept its remarks/concerns thread on the SOA server keyed by
+     * SOA number rather than id, so the record is resolved and authorised here and only
+     * its number is handed to the legacy query.
+     */
+    public function oldRemarks(OldRemarksRequest $request, int $id)
+    {
+        $soa = $this->soa->findOrFail($id);
+        CommonHelper::assertUserMayAccessModel($request, $soa);
+
+        $remarks = (new $this->sqlDatabase(Server::SOA))->getOldRemarksByParams([
+            'refid' => $soa->soa_number,
+            'per_page' => $request->validated('per_page') ?? config('vc.default_pages'),
+        ]);
+
+        // Resolve the page's authors in one HMS lookup instead of one per message.
+        CommonHelper::primeSystemUserNames(collect($remarks->items())->pluck('rem_by'));
+
+        return response()->json(['old_remarks' => new CommonResource(OldRemarkResource::collection($remarks))]);
+    }
+
+    /**
+     * Stream a file attached to a legacy remark, from this app's own origin.
+     *
+     * The legacy chat_attachments tree is reachable as a directory but not as a URL a
+     * browser may open, so the token minted by {@see OldRemarkResource} — encrypted,
+     * bound to the user who was shown the message, and valid for
+     * `vc.file_preview_token_ttl_minutes` — is exchanged here for the bytes. The client
+     * never learns the legacy path, and nothing outside the legacy disk can be read.
+     */
+    public function previewOldRemarkFile(Request $request)
+    {
+        return CommonHelper::previewStoredFileFromToken(
+            (string) $request->query('token', ''),
+            config('vc.disks.legacy_chat'),
+            $request->user()?->id
+        );
     }
 
     /**

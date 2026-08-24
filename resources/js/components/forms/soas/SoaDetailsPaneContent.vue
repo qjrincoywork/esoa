@@ -20,12 +20,15 @@ import {
 } from '@/components/ui/tooltip'
 import SoaActivitiesList from '@/components/forms/soas/SoaActivitiesList.vue';
 import SoaConcernsList from '@/components/forms/soas/SoaConcernsList.vue';
+import SoaOldRemarksList from '@/components/forms/soas/SoaOldRemarksList.vue';
 import SoaAccountPaymentsList from '@/components/forms/soas/SoaAccountPaymentsList.vue';
 import AmountManagementForm from '@/components/forms/soas/AmountManagementForm.vue';
 import AccountBranchMembers from '@/components/forms/soas/AccountBranchMembers.vue';
 import { Soa } from '@/types';
+import { useAjax } from '@/composables/useAjax';
 import { useModulePermissions } from '@/composables/useModulePermissions';
 const { slug, hasPermission } = useModulePermissions();
+const { get } = useAjax();
 
 const props = defineProps({
   soa: {
@@ -49,6 +52,84 @@ function onAmountAdjusted(payload: { amount: string; amount_raw: number }) {
 }
 
 const activeTab = ref('details')
+
+/**
+ * Sub-tabs of the Concerns pane, kept as data so the trigger row stays one line and
+ * renaming or adding a view means touching this list plus its pane. Each names the
+ * permission that reveals it — the legacy thread has its own endpoint, so a role
+ * without it never sees a tab that would answer 403 — and whether it needs the SOA to
+ * actually have legacy history behind it.
+ */
+const CONCERN_TABS = [
+  { value: 'current', label: 'Current', permission: 'concerns', requiresHistory: false },
+  { value: 'old', label: 'Old Remarks / Concerns', permission: 'old_remarks', requiresHistory: true },
+] as const
+
+/**
+ * How many messages this SOA's legacy thread holds; null until probed.
+ *
+ * Most SOAs predate nothing and have no old conversation at all, and a lone tab is
+ * just noise, so the count is settled before the trigger row is offered. One
+ * single-row request answers it — the endpoint the list itself uses, asked for the
+ * smallest page it will serve.
+ */
+const oldRemarksTotal = ref<number | null>(null)
+const hasOldRemarks = computed(() => (oldRemarksTotal.value ?? 0) > 0)
+
+const concernTabs = computed(() =>
+  CONCERN_TABS.filter(tab =>
+    hasPermission(`${slug.value}.${tab.permission}`)
+    && (!tab.requiresHistory || hasOldRemarks.value)
+  )
+)
+
+/** True once the legacy thread has earned a tab of its own. */
+const showOldRemarksTab = computed(() =>
+  concernTabs.value.some(tab => tab.value === 'old')
+)
+
+const activeConcernTab = ref<string>(CONCERN_TABS[0].value)
+
+/**
+ * Each list is gated on its sub-tab as well as the outer tab, so it only fetches while
+ * it is the pane on screen — the same lazy-mount rule the other panes use.
+ */
+const visibleConcernTab = computed(() =>
+  activeTab.value === 'concerns' ? activeConcernTab.value : null
+)
+
+const probeOldRemarks = async () => {
+  const soaId = localSoa.value?.id
+  const alreadyProbed = oldRemarksTotal.value !== null
+
+  if (!soaId || alreadyProbed || !hasPermission(`${slug.value}.old_remarks`)) return
+
+  const response = await get<{ old_remarks?: { total?: number } }>(
+    `/${slug.value}/${soaId}/old_remarks`,
+    { per_page: 1 }
+  )
+
+  // A failed probe reads as "no history": the pane still shows the current list.
+  oldRemarksTotal.value = response.ok ? Number(response.data?.old_remarks?.total ?? 0) : 0
+}
+
+// A different SOA is a different conversation — forget what was probed and fall back
+// to the current list until the new one has been asked about.
+watch(() => localSoa.value?.id, () => {
+  oldRemarksTotal.value = null
+  activeConcernTab.value = CONCERN_TABS[0].value
+})
+
+// Probe only once the Concerns pane is open, so the legacy database stays untouched
+// for anyone who never looks at it.
+watch(
+  [activeTab, () => localSoa.value?.id],
+  ([tab]) => {
+    if (tab === 'concerns') void probeOldRemarks()
+  },
+  { immediate: true }
+)
+
 function fileBasename(path: string): string {
   const normalized = path.replace(/\\/g, '/')
   const segment = normalized.split('/').pop()
@@ -195,10 +276,31 @@ const existingExcel = computed(() => {
       <TabsContent v-if="hasPermission(`${slug}.concerns`)" value="concerns">
         <Card>
           <CardContent class="grid gap-6">
-            <SoaConcernsList
-              v-if="activeTab === 'concerns'"
-              :soa-id="localSoa.id ?? null"
-              :soa-label="soaLabel" />
+            <Tabs v-model="activeConcernTab" :default-value="CONCERN_TABS[0].value">
+              <!-- With nothing to switch to, the current list stands on its own. The
+                   Tabs wrapper stays either way so revealing the row never remounts it. -->
+              <TabsList v-if="concernTabs.length > 1">
+                <TabsTrigger
+                  v-for="tab in concernTabs"
+                  :key="tab.value"
+                  class="cursor-pointer"
+                  :value="tab.value"
+                >
+                  {{ tab.label }}
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="current">
+                <SoaConcernsList
+                  v-if="visibleConcernTab === 'current'"
+                  :soa-id="localSoa.id ?? null"
+                  :soa-label="soaLabel" />
+              </TabsContent>
+              <TabsContent v-if="showOldRemarksTab" value="old">
+                <SoaOldRemarksList
+                  v-if="visibleConcernTab === 'old'"
+                  :soa-id="localSoa.id ?? null" />
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
       </TabsContent>
