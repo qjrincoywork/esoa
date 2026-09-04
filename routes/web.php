@@ -61,6 +61,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('overview', function () {
         return Inertia::render('Overview');
     })->name('overview');
+
+    Route::get('faq', function () {
+        return Inertia::render('Faq');
+    })->name('faq');
     // Superadmin-only routes - only admins can access these
     Route::middleware(['role:superadmin'])->group(function () {
         // Route::resource('admin', AdminController::class)->middleware('check_permissions');

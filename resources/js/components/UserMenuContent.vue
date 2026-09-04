@@ -6,11 +6,11 @@ import {
     DropdownMenuLabel,
     DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { logout, overview } from '@/routes';
+import { faq, logout, overview } from '@/routes';
 import { edit } from '@/routes/profile';
 import type { User } from '@/types';
 import { Link, router } from '@inertiajs/vue3';
-import { LogOut, Presentation, Settings } from 'lucide-vue-next';
+import { CircleHelp, LogOut, Presentation, Settings } from 'lucide-vue-next';
 
 interface Props {
     user: User;
@@ -35,6 +35,12 @@ defineProps<Props>();
             <Link class="block w-full" :href="overview()" prefetch as="button">
                 <Presentation class="mr-2 h-4 w-4" />
                 System Overview
+            </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem :as-child="true">
+            <Link class="block w-full" :href="faq()" prefetch as="button">
+                <CircleHelp class="mr-2 h-4 w-4" />
+                FAQs
             </Link>
         </DropdownMenuItem>
         <DropdownMenuItem :as-child="true">
