@@ -53,15 +53,15 @@ return [
         ],
         'billing' => [
             'driver' => 'local',
-            'root' => env('ROOT_FOLDER') . DIRECTORY_SEPARATOR . 'billing' . DIRECTORY_SEPARATOR . 'billing_invoices',
+            'root' => env('ROOT_FOLDER') . DIRECTORY_SEPARATOR . 'billing_invoices',
         ],
         'concerns' => [
             'driver' => 'local',
-            'root' => env('ROOT_FOLDER') . DIRECTORY_SEPARATOR . 'billing' . DIRECTORY_SEPARATOR . 'concerns',
+            'root' => env('ROOT_FOLDER') . DIRECTORY_SEPARATOR . 'concerns',
         ],
         'payments' => [
             'driver' => 'local',
-            'root' => env('ROOT_FOLDER') . DIRECTORY_SEPARATOR . 'billing' . DIRECTORY_SEPARATOR . 'payments',
+            'root' => env('ROOT_FOLDER') . DIRECTORY_SEPARATOR . 'payments',
         ],
         /*
          * Read-only view of the previous eSOA system's chat_attachments tree, which
