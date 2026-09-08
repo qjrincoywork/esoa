@@ -1097,9 +1097,6 @@ class SqlDatabase
                     }
                 });
             })
-            ->when(!empty($selectedCode), function ($query) use ($selectedCode) {
-                $query->orderByRaw("CASE WHEN br_code = ? THEN 0 ELSE 1 END", [$selectedCode]);
-            })
             ->orderBy('br_branch_name');
 
         return $result->paginate($perPage);
