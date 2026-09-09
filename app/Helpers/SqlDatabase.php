@@ -319,6 +319,7 @@ class SqlDatabase
             ->table('Accounts')
             ->select('ac_name', 'ac_code', 'ac_ma_code')
             ->tap(fn ($query) => $this->applyAccountDirectoryFilter($query, auth()->user(), 'ac_code'))
+            ->tap(fn ($query) => $this->applyExcludedAccountPrefixes($query, 'ac_code', $params['exclude_prefixes'] ?? []))
             ->when(isset($params['type']), function ($query) use ($params) {
                 switch ($params['type']) {
                     case AccountType::TPA:
@@ -421,6 +422,37 @@ class SqlDatabase
 
         // Any other non-staff role has no directory access.
         $query->whereRaw('1 = 0');
+    }
+
+    /**
+     * Drop rows whose account code starts with any of the given prefixes.
+     *
+     * Keeps account classes that are never granted to a user out of the pickers
+     * ({@see \App\Enums\AccountCodePrefix::excludedFromUserAccess()}). Like
+     * {@see applyAccountDirectoryFilter()} it takes the account-code column, so a
+     * branch is excluded by the account it belongs to (`br_ac_code`) rather than by
+     * its own code.
+     *
+     * Prefixes are server-supplied literals from the enum — never client input, which
+     * the lookup requests strip — so they are concatenated into the LIKE pattern
+     * without an ESCAPE clause.
+     *
+     * @param  \Illuminate\Database\Query\Builder  $query
+     * @param  string  $accountColumn  The account-code column on the queried table.
+     * @param  array<int, string>  $prefixes
+     * @return void
+     */
+    private function applyExcludedAccountPrefixes($query, string $accountColumn, array $prefixes): void
+    {
+        foreach ($prefixes as $prefix) {
+            $prefix = trim((string) $prefix);
+
+            if ($prefix === '') {
+                continue;
+            }
+
+            $query->where($accountColumn, 'not like', $prefix.'%');
+        }
     }
 
     /**
@@ -1086,6 +1118,7 @@ class SqlDatabase
             ->table('Branches')
             ->select('br_branch_name', 'br_ac_code', 'br_code')
             ->tap(fn ($query) => $this->applyAccountDirectoryFilter($query, auth()->user(), 'br_ac_code'))
+            ->tap(fn ($query) => $this->applyExcludedAccountPrefixes($query, 'br_ac_code', $params['exclude_prefixes'] ?? []))
             ->when(isset($params['account_code']), function ($query) use ($params) {
                 $query->where('br_ac_code', $params['account_code']);
             })

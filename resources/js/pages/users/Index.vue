@@ -5,6 +5,7 @@ import { createColumnHelper } from '@tanstack/vue-table';
 import { type BreadcrumbItem } from '@/types';
 import AppLayout from '@/layouts/AppLayout.vue';
 import Datatable from '@/components/Datatable.vue';
+import RightPane from '@/components/RightPane.vue';
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectContent, SelectGroup, SelectItem, SelectValue } from '@/components/ui/select';
 import { createActionColumn } from '@/composables/datatable/datatableColumns';
@@ -33,7 +34,27 @@ const users = computed(() => {
     }
     return propsUsers;
 });
-const { createUser, bulkImportUsers, editUser, deleteUser, manageUserRoles, bulkManageUserRoles, bulkToggleActiveUsers, bulkDeleteUsers, verifyUsers, bulkVerifyCredentials, toggleActiveUser } = useUsers();
+const {
+    createUser,
+    bulkImportUsers,
+    editUser,
+    deleteUser,
+    manageUserRoles,
+    bulkManageUserRoles,
+    bulkToggleActiveUsers,
+    bulkDeleteUsers,
+    verifyUsers,
+    bulkVerifyCredentials,
+    toggleActiveUser,
+    openUserPane,
+    closePane,
+    rightPaneVisible,
+    rightPaneTitle,
+    rightPaneLoading,
+    rightPaneError,
+    rightPaneContentComponent,
+    rightPaneComponentProps,
+} = useUsers();
 const columnHelper = createColumnHelper();
 const pagination = ref({
 	current_page: users.value.current_page,
@@ -132,6 +153,13 @@ const baseColumns: any[] = [
       );
     },
   }),
+  columnHelper.accessor('created_at', {
+    header: 'Created',
+    // The server sends the label; `created_at_value` carries the sortable timestamp.
+    sortingFn: (a: any, b: any) =>
+      String(a.original?.created_at_value ?? '').localeCompare(String(b.original?.created_at_value ?? '')),
+    cell: (info: any) => info.getValue() ?? '—',
+  }),
 ]
 
 const handlerMap: Record<string, Function> = {
@@ -142,7 +170,12 @@ const handlerMap: Record<string, Function> = {
   edit_roles: (user: any) => manageUserRoles(user),
   verify: (user: any) => verifyUsers([user]),
   toggle_active: (user: any) => toggleActiveUser(user),
+  // The action opens the same pane a row click does, straight onto the mapping tab.
+  account_mapping: (user: any) => openUserPane(user, 'account_mapping'),
 }
+
+/** A row click opens the pane on the details tab; the mapping action opens it on the other. */
+const openUserDetails = (user: any) => openUserPane(user, 'details')
 
 const columns = computed(() => {
   const subModules = page.props.sub_modules
@@ -159,6 +192,11 @@ const columns = computed(() => {
         entry.dynamicProps = (item: any) => item.deleted_at
           ? { name: 'Restore', icon: 'RotateCcw', color: 'green' }
           : { name: 'Delete',  icon: 'Trash2',    color: 'red'   };
+      }
+      if (key === 'account_mapping') {
+        // Only the account-scoped types are mapped to accounts and branches; the
+        // server decides which those are (UserType::allowsAccountMapping).
+        entry.shouldRender = (item: any) => item.allows_account_mapping === true;
       }
       return entry;
     });
@@ -417,6 +455,8 @@ watch(
                 :pagination="pagination"
                 :show-selection-column="true"
                 :enable-search="false"
+                :enable-row-click="true"
+                :row-click="openUserDetails"
                 empty-message="No users found"
                 empty-description="System users will appear here. Use search, pagination, or change rows per page to load data."
                 export-file-name="users_list"
@@ -472,5 +512,14 @@ watch(
                 </template>
             </Datatable>
         </div>
+
+        <RightPane
+            :open="rightPaneVisible"
+            :title="rightPaneTitle"
+            :loading="rightPaneLoading"
+            :error="rightPaneError"
+            :content-component="rightPaneContentComponent"
+            :component-props="rightPaneComponentProps"
+            @update:open="(v) => { if (!v && !rightPaneLoading) closePane('right') }" />
     </AppLayout>
 </template>

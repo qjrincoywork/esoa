@@ -35,6 +35,7 @@ class RolePermissionSeeder extends Seeder
             'users.destroy',
             'users.verify',
             'users.toggle_active',
+            'users.account_mapping',
 
             // roles
             'roles.index',

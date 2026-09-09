@@ -14,6 +14,8 @@ use App\Helpers\CommonHelper;
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
 use App\Http\Requests\User\AccountAccessUsersRequest;
+use App\Http\Requests\User\AccountLookupRequest;
+use App\Http\Requests\User\BranchLookupRequest;
 use App\Http\Requests\User\BulkDestroyRequest;
 use App\Http\Requests\User\BulkStoreRequest;
 use App\Http\Requests\User\BulkToggleActiveRequest;
@@ -23,6 +25,7 @@ use App\Http\Requests\User\CreateRequest;
 use App\Http\Requests\User\DeleteRequest;
 use App\Http\Requests\User\ListRequest;
 use App\Http\Requests\User\ToggleActiveRequest;
+use App\Http\Requests\User\UpdateAccountMappingRequest;
 use App\Http\Requests\User\UpdateRequest;
 use App\Http\Requests\User\UpdateRoleRequest;
 use App\Http\Requests\User\VerifyRequest;
@@ -30,7 +33,9 @@ use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
 use App\Http\Resources\UserAccessResource;
+use App\Http\Resources\UserAccountMappingResource;
 use App\Http\Resources\UserBulkImportResultResource;
+use App\Http\Resources\UserDetailsResource;
 use App\Http\Resources\UserListResource;
 use App\Mail\UserWelcome;
 use App\Models\Account;
@@ -40,6 +45,7 @@ use App\Models\Department;
 use App\Models\Position;
 use App\Models\Suffix;
 use App\Models\User;
+use App\Models\UserAccount;
 use App\Services\UserBulkImportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -239,15 +245,17 @@ class UserController extends Controller
     /**
      * Return HMS accounts matching the request params as JSON (AJAX only).
      *
-     * Queries the HMS server via {@see SqlDatabase} to feed account-picker
-     * comboboxes on the user forms. Non-AJAX requests fall through and receive
-     * no content.
+     * Queries the HMS server via {@see SqlDatabase} to feed the account pickers on the
+     * user forms — the create/edit modal and the account/branch mapping pane. Account
+     * classes that are never granted to a user are filtered out server-side by
+     * {@see AccountLookupRequest}, which also whitelists the filters the client may
+     * send. Non-AJAX requests fall through and receive no content.
      *
      * @return \Illuminate\Http\JsonResponse|void
      */
-    public function getAccounts(Request $request)
+    public function getAccounts(AccountLookupRequest $request)
     {
-        $accounts = (new $this->sqlDatabase(Server::HMS))->getAccountsByParams($request->all());
+        $accounts = (new $this->sqlDatabase(Server::HMS))->getAccountsByParams($request->lookupParams());
 
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
@@ -260,15 +268,16 @@ class UserController extends Controller
     /**
      * Return HMS branches matching the request params as JSON (AJAX only).
      *
-     * Queries the HMS server via {@see SqlDatabase} to feed branch-picker
-     * comboboxes on the user forms. Non-AJAX requests fall through and receive
-     * no content.
+     * The branch-picker counterpart of {@see getAccounts()}: same forms, same
+     * server-side exclusions — applied through the owning account's code, so a branch
+     * of an excluded account never appears — validated by {@see BranchLookupRequest}.
+     * Non-AJAX requests fall through and receive no content.
      *
      * @return \Illuminate\Http\JsonResponse|void
      */
-    public function getBranches(Request $request)
+    public function getBranches(BranchLookupRequest $request)
     {
-        $branches = (new $this->sqlDatabase(Server::HMS))->getBranchesByParams($request->all());
+        $branches = (new $this->sqlDatabase(Server::HMS))->getBranchesByParams($request->lookupParams());
 
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
@@ -459,6 +468,86 @@ class UserController extends Controller
             'user_roles' => $user->roles,
             'all_roles' => Role::query()->get(['id', 'name', 'guard_name']),
         ]);
+    }
+
+    /**
+     * Return a user's details and current account/branch mappings for the right pane.
+     *
+     * Serves both pane tabs in one request — the details tab reads the user, the
+     * mapping tab reads the mappings and the account-type options its pickers offer —
+     * so opening the pane on either tab costs a single round trip. Non-AJAX requests
+     * fall through and receive no content.
+     *
+     * @return \Illuminate\Http\JsonResponse|void
+     */
+    public function accountMapping(int $id, Request $request)
+    {
+        $user = $this->user
+            ->with([
+                'userDetail.department',
+                'userDetail.position',
+                'userDetail.civil_status',
+                'userDetail.citizenship',
+                'userAccounts',
+                'roles:id,name',
+            ])
+            ->findOrFail($id);
+
+        // Resolve every mapped code in one lookup per directory so the resource labels
+        // its rows from the memo instead of querying HMS per row.
+        CommonHelper::primeAccountBranchNames($user->userAccounts);
+
+        // Return JSON for AJAX requests (no URL change)
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'user' => new UserDetailsResource($user),
+                'user_accounts' => UserAccountMappingResource::collection($user->userAccounts),
+                'account_types' => AccountType::list(),
+            ]);
+        }
+    }
+
+    /**
+     * Replace a user's account/branch mappings with the submitted set.
+     *
+     * The payload is the complete intended state, so this both grants and revokes:
+     * {@see UserAccount::syncForUser()} drops what is stored and writes the normalised
+     * set in one batch inside a transaction. The saved rows are returned relabelled so
+     * the pane re-syncs from the server rather than trusting what it dragged.
+     * Input — including the type's mapping limit — is validated by
+     * {@see UpdateAccountMappingRequest}.
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function updateAccountMapping(UpdateAccountMappingRequest $request)
+    {
+        DB::beginTransaction();
+
+        try {
+            $target = $request->target() ?? User::findOrFail($request->validated()['user_id']);
+            $count = UserAccount::syncForUser($target, $request->mappings(), $request->mappingLimit());
+
+            DB::commit();
+
+            $mappings = $target->userAccounts()->get();
+            CommonHelper::primeAccountBranchNames($mappings);
+
+            $message = $count === 0
+                ? 'Account & branch mapping cleared successfully'
+                : ($count === 1
+                    ? '1 account & branch mapping saved successfully'
+                    : "{$count} account & branch mappings saved successfully");
+
+            return response()->json([
+                'status' => 'success',
+                'message' => $message,
+                'user_accounts' => UserAccountMappingResource::collection($mappings),
+            ], Response::HTTP_OK);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return CustomResponse::serverError($e, 'UserController::updateAccountMapping');
+        }
     }
 
     /**
