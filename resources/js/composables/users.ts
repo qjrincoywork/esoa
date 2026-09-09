@@ -9,10 +9,13 @@ import BulkToggleActiveForm from '@/components/forms/users/BulkToggleActiveForm.
 import BulkDeleteForm from '@/components/forms/users/BulkDeleteForm.vue';
 import VerifyForm from '@/components/forms/users/VerifyForm.vue';
 import ToggleActiveForm from '@/components/forms/users/ToggleActiveForm.vue';
+import UserPaneContent from '@/components/forms/users/UserPaneContent.vue';
 let formApi: { getFormData: () => FormData | null } | null = null;
+import { toRef } from 'vue';
 import { dispatchNotification } from '@/components/notification';
 import { showLoader, hideLoader } from '@/composables/useLoader';
 import { useModulePermissions } from '@/composables/useModulePermissions';
+import { usePane } from '@/composables/usePane';
 import { router } from '@inertiajs/vue3';
 
 export interface User {
@@ -36,10 +39,68 @@ export interface Role {
   [key: string]: any
 }
 
+/**
+ * One account/branch mapping row, as `UserAccountMappingResource` shapes it.
+ *
+ * `key` is the composite identity the mapping UI drags and dedupes on — it is rebuilt
+ * identically server-side, so unsaved rows (which have no `id` yet) still compare.
+ * A blank `branch_code` covers every branch of the account.
+ */
+export interface UserAccountMapping {
+  id?: number | null
+  key: string
+  account_type: string
+  account_type_label?: string | null
+  account_code: string
+  account_name: string
+  branch_code: string
+  branch_name: string
+}
+
+/** The user a pane tab renders, as `UserDetailsResource` shapes it. */
+export interface UserPaneDetails {
+  id?: number | string
+  username?: string
+  email?: string
+  full_name?: string | null
+  type?: number | null
+  type_label?: string | null
+  /** Whether this user's type is scoped by account/branch mappings at all. */
+  allows_account_mapping?: boolean
+  /** How many mappings the type may hold; null when unlimited. */
+  account_mapping_limit?: number | null
+  [key: string]: any
+}
+
+/** Everything `users.account_mapping` returns — details tab, mapping tab and its options. */
+export interface UserAccountMappingPayload {
+  user: UserPaneDetails
+  user_accounts: UserAccountMapping[]
+  account_types: Array<{ value: string | number; name: string }>
+}
+
+/** The tabs the user right pane offers. */
+export type UserPaneTab = 'details' | 'account_mapping';
+
 export function useUsers() {
   const { slug } = useModulePermissions();
   const { openModal, closeModal } = useModal();
   const { get, post } = useAjax();
+  const {
+    openPane,
+    closePane,
+    setPaneLoading,
+    setPaneError,
+    setPaneContent,
+    rightPane,
+  } = usePane();
+
+  const rightPaneVisible = toRef(rightPane, 'open');
+  const rightPaneTitle = toRef(rightPane, 'title');
+  const rightPaneLoading = toRef(rightPane, 'loading');
+  const rightPaneError = toRef(rightPane, 'error');
+  const rightPaneContentComponent = toRef(rightPane, 'contentComponent');
+  const rightPaneComponentProps = toRef(rightPane, 'componentProps');
 
   const editUser = async (user: User) => {
     try {
@@ -739,6 +800,115 @@ export function useUsers() {
     }
   };
 
+  /**
+   * Fetch a user's details and current account/branch mappings.
+   *
+   * One request feeds both pane tabs, so opening the pane on either costs a single
+   * round trip. Returns null when the request fails; the caller decides whether that
+   * is fatal — the pane falls back to the row it already has.
+   */
+  const getUserAccountMapping = async (userId: number | string): Promise<UserAccountMappingPayload | null> => {
+    try {
+      const response = await get<UserAccountMappingPayload>(`/${slug.value}/${userId}/account_mapping`);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch account mapping');
+      }
+
+      return response.data ?? null;
+    } catch {
+      dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
+
+      return null;
+    }
+  };
+
+  /**
+   * Persist a user's account/branch mappings.
+   *
+   * The full set is posted because the endpoint treats it as the complete intended
+   * state — it grants and revokes in one call — and only the three stored columns are
+   * sent, since the display names are the server's to resolve. Returns the rows as
+   * saved so the caller can re-seed from them instead of trusting local state.
+   */
+  const saveUserAccountMapping = async (
+    userId: number | string,
+    mappings: UserAccountMapping[],
+  ): Promise<{ ok: boolean; user_accounts?: UserAccountMapping[] }> => {
+    showLoader();
+
+    try {
+      const response = await post<{ message: string; user_accounts?: UserAccountMapping[] }>(
+        `/${slug.value}/update_account_mapping`,
+        {
+          user_id: userId,
+          user_accounts: mappings.map((mapping) => ({
+            account_type: mapping.account_type || null,
+            account_code: mapping.account_code,
+            // Blank means "every branch of this account"; send it as null, not ''.
+            branch_code: mapping.branch_code || null,
+          })),
+        },
+      );
+
+      if (!response.ok) {
+        dispatchNotification({
+          title: 'Error',
+          content: response.data?.message ?? 'Could not save the account & branch mapping',
+          type: 'error',
+        });
+
+        return { ok: false };
+      }
+
+      dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+
+      return { ok: true, user_accounts: response.data.user_accounts ?? [] };
+    } catch {
+      dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+
+      return { ok: false };
+    } finally {
+      hideLoader();
+    }
+  };
+
+  /**
+   * Open the user right pane, on the given tab.
+   *
+   * A row click lands on the details tab and the mapping action lands on the mapping
+   * tab, but both open the same pane so a user's details and their access are never
+   * two screens apart. The pane opens even when the fetch fails, showing what the list
+   * row already knows rather than nothing at all.
+   */
+  const openUserPane = async (user: User, initialTab: UserPaneTab = 'details') => {
+    showLoader();
+
+    try {
+      const payload = await getUserAccountMapping(user.id ?? '');
+
+      openPane({
+        side: 'right',
+        title: `User: ${payload?.user?.username ?? user.username ?? user.email ?? user.id}`,
+        component: UserPaneContent,
+        componentProps: {
+          user,
+          details: payload?.user ?? null,
+          mappings: payload?.user_accounts ?? [],
+          accountTypes: payload?.account_types ?? [],
+          initialTab,
+        },
+      });
+    } catch {
+      setPaneLoading('right', false);
+      setPaneError('right', 'Error fetching user data.');
+      setPaneContent('right', null);
+      dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
+    } finally {
+      hideLoader();
+    }
+  };
+
   return {
     editUser,
     createUser,
@@ -747,6 +917,9 @@ export function useUsers() {
     getAccountsByParams,
     getBranchesByParams,
     getUsersWithAccounts,
+    getUserAccountMapping,
+    saveUserAccountMapping,
+    openUserPane,
     manageUserRoles,
     bulkManageUserRoles,
     bulkToggleActiveUsers,
@@ -754,6 +927,13 @@ export function useUsers() {
     verifyUsers,
     bulkVerifyCredentials,
     toggleActiveUser,
+    closePane,
+    rightPaneVisible,
+    rightPaneTitle,
+    rightPaneLoading,
+    rightPaneError,
+    rightPaneContentComponent,
+    rightPaneComponentProps,
   };
 }
 

@@ -22,6 +22,12 @@ export interface ActionColumnOptions {
     handler?: (item: any) => void;
     class?: string;
     dynamicProps?: (item: any) => Partial<{ name: string; icon: string | any; color: string }>;
+    /**
+     * Per-row visibility. Return false to leave the action off this row — for actions
+     * that only apply to some rows, so the rule lives in the page that owns it rather
+     * than in the hardcoded list below.
+     */
+    shouldRender?: (item: any) => boolean;
   }>;
 }
 
@@ -94,6 +100,10 @@ export function createActionColumn(customActions: ActionColumnOptions['customAct
           const label = resolved.name || resolved.slug || 'Action';
           const colorClass = ACTION_COLOR_CLASSES[resolved.color ?? ''] ?? ACTION_COLOR_CLASSES['gray'];
           const css = `cursor-pointer p-1 ${colorClass} transition-colors rounded`;
+
+          if (action.shouldRender && !action.shouldRender(item)) {
+            continue; // The owning page decided this action does not apply to this row
+          }
 
           if (
             (item.status?.toLowerCase() == 'paid' && action.slug == 'soas.edit')

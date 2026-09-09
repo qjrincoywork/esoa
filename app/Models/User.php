@@ -263,38 +263,32 @@ class User extends Authenticatable implements AuthorizableContract, MustVerifyEm
      * - ACCOUNT_BRANCH_ADMIN (type 2): single account_code/branch_code as top-level fields.
      * - GROUP_ACCOUNT_ADMIN  (type 4): array of {account_type, account_code, branch_code} entries.
      * - Other types: remove all user_accounts.
+     *
+     * The rows themselves are written by {@see UserAccount::syncForUser()}, which the
+     * dedicated mapping screen also goes through, so both entry points normalise and
+     * cap a mapping set the same way.
      */
     private function syncUserAccounts(self $user, array $data): void
     {
         $type = (int) ($data['type'] ?? 0);
 
-        if ($type === UserType::ACCOUNT_BRANCH_ADMIN && !empty($data['account_code'])) {
-            $user->userAccounts()->delete();
-            $user->userAccounts()->create([
-                'account_type' => $data['account_type'] ?? null,
-                'account_code' => $data['account_code'],
-                'branch_code'  => $data['branch_code'] ?? null,
-            ]);
-            return;
-        }
-
-        if ($type === UserType::GROUP_ACCOUNT_ADMIN && !empty($data['user_accounts'])) {
-            $user->userAccounts()->delete();
-            foreach ($data['user_accounts'] as $ua) {
-                if (!empty($ua['account_code'])) {
-                    $user->userAccounts()->create([
-                        'account_type' => $ua['account_type'] ?? null,
-                        'account_code' => $ua['account_code'],
-                        'branch_code'  => $ua['branch_code'] ?? null,
-                    ]);
-                }
-            }
-            return;
-        }
-
         // VC_EMPLOYEE, BROKER, or type change — clear any residual accounts
-        if (!in_array($type, [UserType::ACCOUNT_BRANCH_ADMIN, UserType::GROUP_ACCOUNT_ADMIN])) {
+        if (!UserType::allowsAccountMapping($type)) {
             $user->userAccounts()->delete();
+
+            return;
         }
+
+        $rows = UserType::allowsMultipleAccounts($type)
+            ? ($data['user_accounts'] ?? [])
+            : (!empty($data['account_code']) ? [$data] : []);
+
+        // An absent set means the form did not manage these fields, not that access was
+        // revoked — leave whatever is stored alone.
+        if (empty($rows)) {
+            return;
+        }
+
+        UserAccount::syncForUser($user, $rows, UserType::accountMappingLimit($type));
     }
 }

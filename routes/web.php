@@ -84,6 +84,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::get('/get_branches', 'getBranches')->name('get_branches');
                 Route::get('/account_access_users', 'accountAccessUsers')->name('account_access_users');
                 Route::get('/{id}/edit_roles', 'editRoles')->name('edit_roles');
+                Route::get('/{id}/account_mapping', 'accountMapping')->name('account_mapping');
+                Route::post('/update_account_mapping', 'updateAccountMapping')->name('update_account_mapping');
                 Route::get('/all_roles', 'allRoles')->name('all_roles');
                 Route::post('/update_roles', 'updateRoles')->name('update_roles');
                 Route::post('/bulk_update_roles', 'bulkUpdateRoles')->name('bulk_update_roles');
