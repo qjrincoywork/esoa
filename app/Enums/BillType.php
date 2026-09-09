@@ -74,6 +74,7 @@ final class BillType extends Enum
             self::BILLBACK_ARRANGEMENT => 'Billback Arrangement',
             self::NURSE_OVERTIME => 'Nurse Overtime',
             self::SPONSORSHIP_ON_NEWSPAPER => 'Sponsorship on Newspaper',
+            self::MIGRATED => 'Migrated or Unknown', // fallback for unrecognized legacy values
         };
     }
 
