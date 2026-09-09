@@ -9,8 +9,10 @@
  *
  * Both lists are searched and paged server-side (`users.get_accounts` /
  * `users.get_branches`), so a directory of thousands is never pulled down to be
- * filtered in the browser. Saving posts the whole assigned set, since that endpoint
- * treats the payload as the complete intended state — it grants and revokes at once.
+ * filtered in the browser. Anything already mapped is dropped from the choices, so the
+ * panel only ever offers something that would actually change the mapping. Saving posts
+ * the whole assigned set, since that endpoint treats the payload as the complete
+ * intended state — it grants and revokes at once.
  */
 import { computed, onMounted, ref, watch } from 'vue';
 import { Button } from '@/components/ui/button';
@@ -131,6 +133,8 @@ const loading = ref(false);
 const loadingMore = ref(false);
 const page = ref(1);
 const lastPage = ref(1);
+/** How many all-mapped pages have been skipped since the last fresh load. */
+const autoAdvanced = ref(0);
 
 const hasMore = computed(() => page.value < lastPage.value);
 const isBranchMode = computed(() => mode.value === 'branches' && focusedAccount.value !== null);
@@ -180,9 +184,52 @@ const sourceItems = computed<SourceItem[]>(() => {
   });
 });
 
+/** The mapped pairs, as a set, so filtering a page is one lookup per row. */
+const assignedKeys = computed(() => new Set(assigned.value.map((mapping) => mapping.key)));
+
+/**
+ * What the panel actually offers: the loaded rows minus anything already mapped.
+ *
+ * Removing them rather than showing them inert keeps every row in the list actionable,
+ * and it happens here — not inside the transfer list — because the transfer list
+ * identifies a dragged row by its position in the array it was given.
+ */
+const availableItems = computed(() =>
+  sourceItems.value.filter((item) => !assignedKeys.value.has(item.key)),
+);
+
+/** True once a page was loaded but every row on it turned out to be mapped already. */
+const allLoadedAreMapped = computed(
+  () => sourceItems.value.length > 0 && availableItems.value.length === 0,
+);
+
+const emptyText = computed(() => {
+  const noun = isBranchMode.value ? 'branch' : 'account';
+
+  if (allLoadedAreMapped.value) {
+    return `Every ${noun} loaded here is already mapped.`;
+  }
+
+  return `No ${noun === 'branch' ? 'branches' : 'accounts'} match this search.`;
+});
+
+/**
+ * Whether to stand a spinner in for the whole list.
+ *
+ * Only while there is nothing behind it — appending a page (by "Load more" or by
+ * skipping an all-mapped one) must not blank the rows already on screen.
+ */
+const showSourceSpinner = computed(
+  () => loading.value || (loadingMore.value && availableItems.value.length === 0),
+);
+
 const fetchAccounts = async (name = '', nextPage = 1, append = false) => {
-  if (append) loadingMore.value = true;
-  else loading.value = true;
+  if (append) {
+    loadingMore.value = true;
+  } else {
+    loading.value = true;
+    autoAdvanced.value = 0;
+  }
 
   const result = await getAccountsByParams({ type: accountType.value, name, page: nextPage });
 
@@ -197,8 +244,12 @@ const fetchBranches = async (name = '', nextPage = 1, append = false) => {
   const account = focusedAccount.value;
   if (!account) return;
 
-  if (append) loadingMore.value = true;
-  else loading.value = true;
+  if (append) {
+    loadingMore.value = true;
+  } else {
+    loading.value = true;
+    autoAdvanced.value = 0;
+  }
 
   const result = await getBranchesByParams({ account_code: account.code, name, page: nextPage });
 
@@ -219,6 +270,32 @@ const loadMore = () => {
   if (!hasMore.value || loadingMore.value) return;
   void refresh(search.value, page.value + 1, true);
 };
+
+/**
+ * Pages skipped past because every row on them was already mapped.
+ *
+ * Filtering mapped rows out can empty a page completely, which would read as "nothing
+ * here" while the directory still has plenty to offer — so the next page is pulled
+ * automatically instead of making the user click "Load more" to get past it. The count
+ * is capped, and reset whenever a fresh search starts, so a long run of mapped rows
+ * cannot turn into an unbounded chain of requests.
+ */
+const AUTO_ADVANCE_LIMIT = 5;
+
+watch(
+  [availableItems, hasMore, loading, loadingMore],
+  () => {
+    const stalled = availableItems.value.length === 0
+      && hasMore.value
+      && !loading.value
+      && !loadingMore.value;
+
+    if (!stalled || autoAdvanced.value >= AUTO_ADVANCE_LIMIT) return;
+
+    autoAdvanced.value += 1;
+    loadMore();
+  },
+);
 
 /** Narrow the panel to one account's branches. */
 const focusAccount = (item: SourceItem) => {
@@ -247,7 +324,9 @@ onMounted(() => void fetchAccounts());
 
 // ─── Transfers ────────────────────────────────────────────────────────────
 const assign = (item: SourceItem) => {
-  if (assigned.value.some((mapping) => mapping.key === item.key)) return;
+  // Mapped pairs are already filtered out of the choices; this just makes the
+  // invariant local, so no path can push a second row for the same pair.
+  if (assignedKeys.value.has(item.key)) return;
 
   assigned.value = [
     ...assigned.value,
@@ -329,7 +408,7 @@ const accountTypeName = computed(
     </div>
 
     <DragDropTransfer
-      :source="sourceItems"
+      :source="availableItems"
       :target="assigned"
       item-key="key"
       :source-title="isBranchMode ? 'Branches' : 'Accounts'"
@@ -337,9 +416,9 @@ const accountTypeName = computed(
       :source-hint="isBranchMode
         ? 'Assign one branch of this account'
         : 'Assign an account to cover all of its branches'"
-      :source-empty="isBranchMode ? 'No branches match this search.' : 'No accounts match this search.'"
+      :source-empty="emptyText"
       target-empty="No accounts or branches mapped yet."
-      :source-loading="loading"
+      :source-loading="showSourceSpinner"
       :disabled="!allowsMapping"
       :max="limit"
       reorderable
@@ -411,7 +490,8 @@ const accountTypeName = computed(
         </div>
       </template>
 
-      <template #source-item="{ item, assigned: isMapped }">
+      <!-- Mapped pairs are filtered out upstream, so every row here is assignable -->
+      <template #source-item="{ item }">
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0">
             <p class="truncate font-medium" :title="item.title">{{ item.title }}</p>
@@ -431,7 +511,6 @@ const accountTypeName = computed(
             <Building2 class="h-3.5 w-3.5" />
           </Button>
         </div>
-        <p v-if="isMapped" class="mt-0.5 text-xs text-green-600">Already mapped</p>
       </template>
 
       <template #source-footer>
