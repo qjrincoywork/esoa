@@ -25,6 +25,15 @@ import { ArrowLeft, Building2, ChevronRight, Info, RotateCcw, Save, Search, X } 
 
 type Option = { value: string | number; name: string };
 
+/**
+ * A branch option carries the account it belongs to, because a branch found by a
+ * directory-wide search has no other way to say which account it maps under.
+ */
+type BranchOption = Option & {
+  account_code?: string | number;
+  account_name?: string;
+};
+
 /** One row of the available panel, whichever directory it came from. */
 type SourceItem = {
   key: string;
@@ -127,62 +136,101 @@ const mode = ref<'accounts' | 'branches'>('accounts');
 const focusedAccount = ref<{ code: string; name: string } | null>(null);
 
 const accounts = ref<Option[]>([]);
-const branches = ref<Option[]>([]);
+const branches = ref<BranchOption[]>([]);
 const search = ref('');
 const loading = ref(false);
 const loadingMore = ref(false);
-const page = ref(1);
-const lastPage = ref(1);
 /** How many all-mapped pages have been skipped since the last fresh load. */
 const autoAdvanced = ref(0);
 
-const hasMore = computed(() => page.value < lastPage.value);
+/** Page position of one directory list. */
+type Cursor = { page: number; lastPage: number };
+
+const freshCursor = (): Cursor => ({ page: 1, lastPage: 1 });
+const hasNextPage = (cursor: Cursor): boolean => cursor.page < cursor.lastPage;
+
+/**
+ * The two directories page independently — an account search and a branch search run
+ * out at different points — so each keeps its own cursor.
+ */
+const accountCursor = ref<Cursor>(freshCursor());
+const branchCursor = ref<Cursor>(freshCursor());
+
+const searchTerm = computed(() => search.value.trim());
 const isBranchMode = computed(() => mode.value === 'branches' && focusedAccount.value !== null);
+
+/**
+ * Whether typing searches both directories at once.
+ *
+ * It does by default: a search matches accounts by name and branches by name across
+ * the whole directory, and the results share one list. The exception is a panel
+ * focused on a single account, where the search deliberately stays inside that
+ * account's branches — that context was chosen on purpose.
+ */
+const isUnifiedSearch = computed(() => !isBranchMode.value && searchTerm.value !== '');
+
+const hasMore = computed(() => {
+  if (isBranchMode.value) return hasNextPage(branchCursor.value);
+  if (isUnifiedSearch.value) {
+    return hasNextPage(accountCursor.value) || hasNextPage(branchCursor.value);
+  }
+
+  return hasNextPage(accountCursor.value);
+});
+
+const toAccountItem = (account: Option): SourceItem => {
+  const accountCode = String(account.value ?? '');
+  const accountName = bareAccountName(account.name, accountCode);
+
+  return {
+    key: mappingKey(accountCode, ''),
+    kind: 'account',
+    account_type: accountType.value,
+    account_code: accountCode,
+    account_name: accountName,
+    branch_code: '',
+    branch_name: '',
+    title: accountName || accountCode,
+    subtitle: `${accountCode} · all branches`,
+  };
+};
+
+/**
+ * A branch row knows its own account when it came from a directory-wide search, and
+ * borrows the focused one when the panel was drilled into an account.
+ */
+const toBranchItem = (branch: BranchOption): SourceItem => {
+  const branchCode = String(branch.value ?? '');
+  const accountCode = String(branch.account_code ?? '') || focusedAccount.value?.code || '';
+  const accountName = String(branch.account_name ?? '')
+    || focusedAccount.value?.name
+    || accountCode;
+
+  return {
+    key: mappingKey(accountCode, branchCode),
+    kind: 'branch',
+    account_type: accountType.value,
+    account_code: accountCode,
+    account_name: accountName,
+    branch_code: branchCode,
+    branch_name: branch.name,
+    title: branch.name || branchCode,
+    subtitle: `${accountName} · branch ${branchCode}`,
+  };
+};
 
 /**
  * The available rows, normalised so the transfer list — and a drop — treats an account
  * and a branch identically.
+ *
+ * Accounts lead, then branches, so a mixed result stays legible. Outside a search the
+ * branch list is empty, which makes this one expression for every context.
  */
-const sourceItems = computed<SourceItem[]>(() => {
-  const type = accountType.value;
-
-  if (isBranchMode.value) {
-    const account = focusedAccount.value!;
-
-    return branches.value.map((branch) => {
-      const branchCode = String(branch.value ?? '');
-
-      return {
-        key: mappingKey(account.code, branchCode),
-        kind: 'branch' as const,
-        account_type: type,
-        account_code: account.code,
-        account_name: account.name,
-        branch_code: branchCode,
-        branch_name: branch.name,
-        title: branch.name || branchCode,
-        subtitle: `${account.name} · branch ${branchCode}`,
-      };
-    });
-  }
-
-  return accounts.value.map((account) => {
-    const accountCode = String(account.value ?? '');
-    const accountName = bareAccountName(account.name, accountCode);
-
-    return {
-      key: mappingKey(accountCode, ''),
-      kind: 'account' as const,
-      account_type: type,
-      account_code: accountCode,
-      account_name: accountName,
-      branch_code: '',
-      branch_name: '',
-      title: accountName || accountCode,
-      subtitle: `${accountCode} · all branches`,
-    };
-  });
-});
+const sourceItems = computed<SourceItem[]>(() =>
+  isBranchMode.value
+    ? branches.value.map(toBranchItem)
+    : [...accounts.value.map(toAccountItem), ...branches.value.map(toBranchItem)],
+);
 
 /** The mapped pairs, as a set, so filtering a page is one lookup per row. */
 const assignedKeys = computed(() => new Set(assigned.value.map((mapping) => mapping.key)));
@@ -203,14 +251,27 @@ const allLoadedAreMapped = computed(
   () => sourceItems.value.length > 0 && availableItems.value.length === 0,
 );
 
-const emptyText = computed(() => {
-  const noun = isBranchMode.value ? 'branch' : 'account';
-
-  if (allLoadedAreMapped.value) {
-    return `Every ${noun} loaded here is already mapped.`;
+/** What the panel is listing right now, for its title and its messages. */
+const subject = computed(() => {
+  if (isBranchMode.value) return { one: 'branch', many: 'branches', title: 'Branches' };
+  if (isUnifiedSearch.value) {
+    return { one: 'account or branch', many: 'accounts or branches', title: 'Accounts & Branches' };
   }
 
-  return `No ${noun === 'branch' ? 'branches' : 'accounts'} match this search.`;
+  return { one: 'account', many: 'accounts', title: 'Accounts' };
+});
+
+const emptyText = computed(() =>
+  allLoadedAreMapped.value
+    ? `Every ${subject.value.one} loaded here is already mapped.`
+    : `No ${subject.value.many} match this search.`,
+);
+
+const sourceHint = computed(() => {
+  if (isBranchMode.value) return 'Assign one branch of this account';
+  if (isUnifiedSearch.value) return 'Searching accounts and branches together';
+
+  return 'Assign an account to cover all of its branches';
 });
 
 /**
@@ -223,27 +284,37 @@ const showSourceSpinner = computed(
   () => loading.value || (loadingMore.value && availableItems.value.length === 0),
 );
 
-const fetchAccounts = async (name = '', nextPage = 1, append = false) => {
-  if (append) {
-    loadingMore.value = true;
-  } else {
-    loading.value = true;
-    autoAdvanced.value = 0;
-  }
-
-  const result = await getAccountsByParams({ type: accountType.value, name, page: nextPage });
+const fetchAccountPage = async (nextPage: number, append: boolean) => {
+  const result = await getAccountsByParams({
+    type: accountType.value,
+    name: searchTerm.value,
+    page: nextPage,
+  });
 
   accounts.value = append ? [...accounts.value, ...(result?.data ?? [])] : (result?.data ?? []);
-  page.value = result?.current_page ?? 1;
-  lastPage.value = result?.last_page ?? 1;
-  loading.value = false;
-  loadingMore.value = false;
+  accountCursor.value = { page: result?.current_page ?? 1, lastPage: result?.last_page ?? 1 };
 };
 
-const fetchBranches = async (name = '', nextPage = 1, append = false) => {
-  const account = focusedAccount.value;
-  if (!account) return;
+const fetchBranchPage = async (nextPage: number, append: boolean) => {
+  // Scoped to one account while the panel is focused on it; directory-wide otherwise,
+  // which is what lets a search reach branches of accounts not on screen.
+  const scope = focusedAccount.value ? { account_code: focusedAccount.value.code } : {};
 
+  const result = await getBranchesByParams({ ...scope, name: searchTerm.value, page: nextPage });
+
+  branches.value = append ? [...branches.value, ...(result?.data ?? [])] : (result?.data ?? []);
+  branchCursor.value = { page: result?.current_page ?? 1, lastPage: result?.last_page ?? 1 };
+};
+
+/**
+ * Fill the panel for whatever context it is in — one entry point, so searching, paging
+ * and switching context all go through the same path.
+ *
+ * A search runs both directories together rather than one after the other, so asking
+ * for both costs one round trip of latency instead of two. Appending advances only the
+ * directories that still have pages left.
+ */
+const load = async (append = false) => {
   if (append) {
     loadingMore.value = true;
   } else {
@@ -251,24 +322,36 @@ const fetchBranches = async (name = '', nextPage = 1, append = false) => {
     autoAdvanced.value = 0;
   }
 
-  const result = await getBranchesByParams({ account_code: account.code, name, page: nextPage });
+  const nextPageOf = (cursor: Cursor) => (append ? cursor.page + 1 : 1);
+  const wanted = (cursor: Cursor) => !append || hasNextPage(cursor);
 
-  branches.value = append ? [...branches.value, ...(result?.data ?? [])] : (result?.data ?? []);
-  page.value = result?.current_page ?? 1;
-  lastPage.value = result?.last_page ?? 1;
-  loading.value = false;
-  loadingMore.value = false;
+  try {
+    const pending: Promise<void>[] = [];
+
+    if (!isBranchMode.value && wanted(accountCursor.value)) {
+      pending.push(fetchAccountPage(nextPageOf(accountCursor.value), append));
+    }
+
+    if ((isBranchMode.value || isUnifiedSearch.value) && wanted(branchCursor.value)) {
+      pending.push(fetchBranchPage(nextPageOf(branchCursor.value), append));
+    } else if (!isBranchMode.value && !isUnifiedSearch.value && !append) {
+      // Browsing accounts: no branch rows until something is searched or focused.
+      branches.value = [];
+      branchCursor.value = freshCursor();
+    }
+
+    await Promise.all(pending);
+  } finally {
+    loading.value = false;
+    loadingMore.value = false;
+  }
 };
 
-/** One entry point, so search, paging and mode changes all refill the same list. */
-const refresh = (name = search.value, nextPage = 1, append = false) =>
-  isBranchMode.value ? fetchBranches(name, nextPage, append) : fetchAccounts(name, nextPage, append);
-
-const debouncedSearch = debounce(() => void refresh(search.value, 1, false), 400);
+const debouncedSearch = debounce(() => void load(false), 400);
 
 const loadMore = () => {
   if (!hasMore.value || loadingMore.value) return;
-  void refresh(search.value, page.value + 1, true);
+  void load(true);
 };
 
 /**
@@ -303,24 +386,26 @@ const focusAccount = (item: SourceItem) => {
   mode.value = 'branches';
   search.value = '';
   branches.value = [];
-  void fetchBranches('', 1, false);
+  branchCursor.value = freshCursor();
+  void load();
 };
 
+/** Leave a focused account and go back to browsing the account directory. */
 const backToAccounts = () => {
   mode.value = 'accounts';
   focusedAccount.value = null;
   search.value = '';
-  void fetchAccounts('', 1, false);
+  void load();
 };
 
 watch(accountType, () => {
   mode.value = 'accounts';
   focusedAccount.value = null;
   search.value = '';
-  void fetchAccounts('', 1, false);
+  void load();
 });
 
-onMounted(() => void fetchAccounts());
+onMounted(() => void load());
 
 // ─── Transfers ────────────────────────────────────────────────────────────
 const assign = (item: SourceItem) => {
@@ -411,11 +496,9 @@ const accountTypeName = computed(
       :source="availableItems"
       :target="assigned"
       item-key="key"
-      :source-title="isBranchMode ? 'Branches' : 'Accounts'"
+      :source-title="subject.title"
       target-title="Mapped Accounts & Branches"
-      :source-hint="isBranchMode
-        ? 'Assign one branch of this account'
-        : 'Assign an account to cover all of its branches'"
+      :source-hint="sourceHint"
       :source-empty="emptyText"
       target-empty="No accounts or branches mapped yet."
       :source-loading="showSourceSpinner"
@@ -473,10 +556,10 @@ const accountTypeName = computed(
             <input
               v-model="search"
               type="text"
-              :placeholder="isBranchMode ? 'Search branches...' : 'Search accounts...'"
+              :placeholder="isBranchMode ? 'Search branches...' : 'Search accounts or branches...'"
               class="w-full rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface)] py-1.5 pr-7 pl-7 text-xs text-[var(--color-text)] focus:border-transparent focus:ring-2 focus:ring-opacity-50"
               :style="{ '--tw-ring-color': 'var(--primary-color)' }"
-              :aria-label="isBranchMode ? 'Search branches' : 'Search accounts'"
+              :aria-label="isBranchMode ? 'Search branches' : 'Search accounts and branches'"
               @input="debouncedSearch" />
             <button
               v-if="search"
@@ -494,7 +577,18 @@ const accountTypeName = computed(
       <template #source-item="{ item }">
         <div class="flex items-start justify-between gap-2">
           <div class="min-w-0">
-            <p class="truncate font-medium" :title="item.title">{{ item.title }}</p>
+            <p class="flex items-center gap-1.5 truncate font-medium" :title="item.title">
+              <!-- One list, two directories: say which a row came from -->
+              <span
+                v-if="isUnifiedSearch"
+                class="shrink-0 rounded px-1 py-px text-[10px] font-semibold uppercase"
+                :class="item.kind === 'branch'
+                  ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300'
+                  : 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300'">
+                {{ item.kind }}
+              </span>
+              <span class="truncate">{{ item.title }}</span>
+            </p>
             <p class="truncate text-xs text-[var(--color-text-muted)]" :title="item.subtitle">
               {{ item.subtitle }}
             </p>

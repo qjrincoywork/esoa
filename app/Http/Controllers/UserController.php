@@ -279,6 +279,10 @@ class UserController extends Controller
     {
         $branches = (new $this->sqlDatabase(Server::HMS))->getBranchesByParams($request->lookupParams());
 
+        // Each branch is labelled with the account it belongs to; resolve the page's
+        // codes in one lookup so the resource reads them from the memo per row.
+        CommonHelper::primeAccountNames($branches->getCollection()->pluck('br_ac_code'));
+
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
