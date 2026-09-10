@@ -207,10 +207,21 @@ class SqlDatabase
             return collect();
         }
 
-        return $this->db
-            ->table('Accounts')
-            ->whereIn('ac_code', $accountCodes)
-            ->pluck('ac_name', 'ac_code');
+        // One bound parameter per code, so a large set has to be asked for in batches
+        // rather than one statement. Chunks are disjoint, so union() merges them
+        // without the key loss a flatten would risk on numeric-looking codes.
+        $names = collect();
+
+        foreach (SqlServerBinding::chunkValues($accountCodes) as $batch) {
+            $names = $names->union(
+                $this->db
+                    ->table('Accounts')
+                    ->whereIn('ac_code', $batch)
+                    ->pluck('ac_name', 'ac_code')
+            );
+        }
+
+        return $names;
     }
 
     /**
@@ -246,10 +257,20 @@ class SqlDatabase
             return collect();
         }
 
-        return $this->db
-            ->table('Branches')
-            ->whereIn('br_code', $branchCodes)
-            ->pluck('br_branch_name', 'br_code');
+        // Batched for the same reason as {@see getAccountNamesByCodes()}: one bound
+        // parameter per code, and SQL Server caps a statement at 2100 of them.
+        $names = collect();
+
+        foreach (SqlServerBinding::chunkValues($branchCodes) as $batch) {
+            $names = $names->union(
+                $this->db
+                    ->table('Branches')
+                    ->whereIn('br_code', $batch)
+                    ->pluck('br_branch_name', 'br_code')
+            );
+        }
+
+        return $names;
     }
 
     /**

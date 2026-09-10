@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Helpers\SqlServerBinding;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -62,10 +63,12 @@ class UserAccount extends Model
      * Replace a user's whole set of account/branch mappings with the given rows.
      *
      * The submitted list is the complete intended state, so the existing rows are
-     * dropped and the normalised set written in one batch insert — a mapping set is
-     * small but can run to dozens of pairs for a group account admin, and one
-     * statement beats one per row. Call inside a transaction: the delete and the
-     * insert are only meaningful together.
+     * dropped and the normalised set written in batch inserts — a group account admin
+     * can hold hundreds of pairs, and batching beats one statement per row. It is
+     * batches rather than one statement because SQL Server caps a statement at
+     * {@see SqlServerBinding::MAX_PARAMETERS} bound parameters, which six columns per
+     * row reach at 350 mappings. Call inside a transaction: the delete and the inserts
+     * are only meaningful together.
      *
      * @param  iterable<int, array<string, mixed>|\Illuminate\Database\Eloquent\Model|object>  $rows
      * @param  int|null  $limit  Rows to keep, per {@see \App\Enums\UserType::accountMappingLimit()}; null keeps all.
@@ -83,14 +86,18 @@ class UserAccount extends Model
 
         $now = now();
 
-        self::insert(array_map(
+        $rows = array_map(
             static fn (array $mapping): array => $mapping + [
                 'user_id' => $user->id,
                 'created_at' => $now,
                 'updated_at' => $now,
             ],
             $mappings
-        ));
+        );
+
+        foreach (SqlServerBinding::chunkRows($rows) as $batch) {
+            self::insert($batch);
+        }
 
         return count($mappings);
     }
