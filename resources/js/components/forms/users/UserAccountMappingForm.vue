@@ -242,9 +242,19 @@ const assignedKeys = computed(() => new Set(assigned.value.map((mapping) => mapp
  * and it happens here — not inside the transfer list — because the transfer list
  * identifies a dragged row by its position in the array it was given.
  */
-const availableItems = computed(() =>
-  sourceItems.value.filter((item) => !assignedKeys.value.has(item.key)),
-);
+const availableItems = computed(() => {
+  // HMS has a account/branch pair duplicated in its directory, and a directory-wide
+  // search surfaces it twice. Two rows sharing a key would collide as v-for keys and
+  // be rejected as a duplicate mapping on save, so only the first is offered.
+  const offered = new Set(assignedKeys.value);
+
+  return sourceItems.value.filter((item) => {
+    if (offered.has(item.key)) return false;
+    offered.add(item.key);
+
+    return true;
+  });
+});
 
 /** True once a page was loaded but every row on it turned out to be mapped already. */
 const allLoadedAreMapped = computed(
