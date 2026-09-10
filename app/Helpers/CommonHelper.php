@@ -370,6 +370,55 @@ class CommonHelper
     }
 
     /**
+     * Read an HMS account's name from the memo, without going and fetching it.
+     *
+     * For rows that carry an account code but no name of their own — a branch, say,
+     * which stores `br_ac_code` and nothing more. Reads the same memo
+     * {@see withAccountBranchNames()} fills, so a page primed by either is free to the
+     * other.
+     *
+     * Deliberately does *not* resolve a miss: this is called per row from a resource
+     * that several screens share, and fetching on demand would be one HMS query per
+     * distinct account on the page. A caller that wants names calls
+     * {@see primeAccountNames()} for the whole page first; one that does not gets null
+     * and shows the code instead.
+     *
+     * Resolving by code rather than joining `Accounts` is deliberate too: `ac_code` is
+     * not unique in HMS and some branches reference an account that no longer exists,
+     * so a join would both duplicate and drop rows — and corrupt the paginator's counts.
+     *
+     * @param  string|null  $code
+     * @return string|null
+     */
+    public static function accountName(?string $code): ?string
+    {
+        $code = trim((string) $code);
+
+        if ($code === '') {
+            return null;
+        }
+
+        return (self::$accountNameCache[$code] ?? '') ?: null;
+    }
+
+    /**
+     * Resolve every not-yet-memoised account code in a single HMS lookup.
+     *
+     * Call this with a whole page of codes before reading them one at a time through
+     * {@see accountName()}, which then costs no queries at all.
+     *
+     * @param  iterable<int, string|null>  $codes
+     * @return void
+     */
+    public static function primeAccountNames(iterable $codes): void
+    {
+        self::cacheAccountBranchNames(
+            collect($codes)->map(fn ($code) => trim((string) $code))->all(),
+            []
+        );
+    }
+
+    /**
      * Resolve an HMS system user's display name from their login.
      *
      * Returns null when the login is blank or HMS has no such user — legacy records
