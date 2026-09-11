@@ -3,6 +3,7 @@
 use App\Enums\SoaAging;
 use App\Http\Controllers\{
     AccountPaymentController,
+    ActivityLogController,
     AdminController,
     ConcernController,
     DashboardController,
@@ -123,6 +124,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::post('/update', 'update')->name('update');
                 Route::post('/store', 'store')->name('store');
                 Route::post('/destroy', 'destroy')->name('destroy');
+        });
+
+        // Activity logs — read-only audit trail across the audited modules
+        Route::prefix('activity_logs')->name('activity_logs.')
+            ->middleware('check_permissions')
+            ->controller(ActivityLogController::class)->group(function () {
+                Route::get('/', 'index')->name('index');
+                Route::get('/{id}/show', 'show')->name('show');
         });
 
         //Navigations
