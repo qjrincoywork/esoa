@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Enums\AuditLogName;
+use App\Support\LogsAuditActivity;
 use Illuminate\Database\Eloquent\{
     Factories\HasFactory,
     Model,
@@ -13,7 +15,26 @@ use Illuminate\Database\Eloquent\{
 class AccountPayment extends Model
 {
     /** @use HasFactory<\Database\Factories\AccountPaymentFactory> */
-    use HasFactory, SoftDeletes;
+    use HasFactory, SoftDeletes, LogsAuditActivity;
+
+    /**
+     * Write this model's audit trail to the remittance-advice channel.
+     */
+    public function auditLogName(): string
+    {
+        return AuditLogName::REMITTANCE_ADVICE;
+    }
+
+    /**
+     * A remittance advice has no reference of its own, so it is named by the deposit
+     * it records — which is what distinguishes one from another to a reader.
+     */
+    protected function auditSubjectLabel(): string
+    {
+        return $this->deposit_date
+            ? sprintf('#%s (%s)', $this->getKey(), $this->deposit_date)
+            : '#'.$this->getKey();
+    }
 
     /**
      * The attributes that are mass assignable.
