@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use App\Enums\AuditLogName;
 use App\Enums\DataScope;
 use App\Enums\OrderType;
 use App\Enums\Server;
 use App\Enums\SoaAging;
 use App\Enums\SoaStatus;
 use App\Helpers\SqlDatabase;
+use App\Support\LogsAuditActivity;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -24,7 +26,26 @@ use Illuminate\Database\Eloquent\{
 class Soa extends Model
 {
     /** @use HasFactory<\Database\Factories\SoaFactory> */
-    use HasFactory, SoftDeletes;
+    use HasFactory, SoftDeletes, LogsAuditActivity;
+
+    /**
+     * Write this model's audit trail to the billing-invoice channel.
+     *
+     * Separate from {@see soaActivity()}: that is the change feed the details pane
+     * shows a user, this is the cross-module audit trail.
+     */
+    public function auditLogName(): string
+    {
+        return AuditLogName::BILLING_INVOICE;
+    }
+
+    /**
+     * Billing invoices are known by their SOA number, not their row id.
+     */
+    protected function auditSubjectLabel(): string
+    {
+        return (string) ($this->soa_number ?: '#'.$this->getKey());
+    }
 
     /**
      * The attributes that are mass assignable.

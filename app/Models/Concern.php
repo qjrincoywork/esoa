@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Enums\AuditLogName;
+use App\Support\LogsAuditActivity;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\{
     Model,
@@ -13,7 +15,23 @@ use Illuminate\Database\Eloquent\{
 class Concern extends Model
 {
     /** @use HasFactory<\Database\Factories\ConcernFactory> */
-    use HasFactory, SoftDeletes;
+    use HasFactory, SoftDeletes, LogsAuditActivity;
+
+    /**
+     * Write this model's audit trail to the concern channel.
+     */
+    public function auditLogName(): string
+    {
+        return AuditLogName::CONCERN;
+    }
+
+    /**
+     * A concern is recognised by its title.
+     */
+    protected function auditSubjectLabel(): string
+    {
+        return (string) ($this->title ?: '#'.$this->getKey());
+    }
 
     /**
      * The attributes that are mass assignable.
