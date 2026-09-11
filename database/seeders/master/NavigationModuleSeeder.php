@@ -55,6 +55,9 @@ class NavigationModuleSeeder extends Seeder
             ['nav' => 'ICT Admin', 'perm' => 'navigations.destroy',   'name' => 'Delete Navigation',            'slug' => 'navigations.destroy',          'icon' => 'Trash2',         'color' => 'red',    'url' => '/navigations/destroy',         'parent' => 'navigations.index',     'order' => 17],
 
             ['nav' => 'ICT Admin', 'perm' => 'navigation_modules.index',   'name' => 'Navigation Modules',           'slug' => 'navigation_modules.index',     'icon' => 'SquareMenu',     'color' => null,     'url' => '/navigation_modules',              'parent' => null,                      'order' => 16],
+
+            // Activity logs — read-only audit trail, superadmin only
+            ['nav' => 'ICT Admin', 'perm' => 'activity_logs.index',        'name' => 'Activity Logs',                'slug' => 'activity_logs.index',          'icon' => 'ScrollText',     'color' => null,     'url' => '/activity_logs',                   'parent' => null,                      'order' => 20],
             ['nav' => 'ICT Admin', 'perm' => 'navigation_modules.edit',    'name' => 'Edit Navigation Module',       'slug' => 'navigation_modules.edit',      'icon' => 'Pencil',         'color' => 'blue',   'url' => '/navigation_modules/{id}/edit',    'parent' => 'navigation_modules.index', 'order' => 1],
             ['nav' => 'ICT Admin', 'perm' => 'navigation_modules.destroy', 'name' => 'Delete Navigation Module',     'slug' => 'navigation_modules.destroy',   'icon' => 'Trash2',         'color' => 'red',    'url' => '/navigation_modules/destroy',      'parent' => 'navigation_modules.index', 'order' => 2],
 

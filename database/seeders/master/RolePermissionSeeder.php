@@ -37,6 +37,10 @@ class RolePermissionSeeder extends Seeder
             'users.toggle_active',
             'users.account_mapping',
 
+            // activity logs (superadmin only — granted via syncPermissions below)
+            'activity_logs.index',
+            'activity_logs.show',
+
             // roles
             'roles.index',
             'roles.create',
