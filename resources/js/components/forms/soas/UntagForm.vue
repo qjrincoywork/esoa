@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
+import FormField from '@/components/FormField.vue';
 
 type UntagType = { value: number; name: string }
 type Soa = {
@@ -105,7 +106,7 @@ onMounted(() => {
       />
     </div>
 
-    <div class="grid gap-2 md:col-span-1">
+    <FormField name="untag_type" class="md:col-span-1">
       <RadioGroup v-model="selectedType">
         <div class="flex items-center space-x-2" v-for="type in untag_types" :key="type.value">
           <RadioGroupItem
@@ -116,10 +117,9 @@ onMounted(() => {
           <Label :for="type.name">{{ type.name }}</Label>
         </div>
       </RadioGroup>
-    </div>
+    </FormField>
 
-    <div class="grid gap-2 md:col-span-1" v-if="showReason">
-      <Label for="reason">Reason</Label>
+    <FormField v-if="showReason" name="reason" label="Reason" class="md:col-span-1">
       <Textarea
         class="mt-1 block w-full"
         type="textarea"
@@ -128,7 +128,7 @@ onMounted(() => {
         autocomplete="reason"
         placeholder="Type your reason here."
       />
-    </div>
+    </FormField>
 
   </form>
 </template>

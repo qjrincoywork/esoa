@@ -9,6 +9,7 @@ import { Select, SelectTrigger, SelectContent, SelectGroup, SelectLabel, SelectI
 import { Button } from '@/components/ui/button';
 import Switch from '@/components/ui/switch/Switch.vue';
 import UserAccountsList from '@/components/forms/users/UserAccountsList.vue';
+import FormField from '@/components/FormField.vue';
 
 type Type = { value: string | number; name: string }
 type AccountType = { value: string | number; name: string }
@@ -529,8 +530,7 @@ watch([userType, searchedCopyUser], async () => {
     </div>
 
     <!-- User Type -->
-    <div class="grid gap-2 md:col-span-1">
-      <Label for="type">User Type<span class="text-red-400">*</span></Label>
+    <FormField name="type" label="User Type" required class="md:col-span-1">
       <Select id="type" class="mt-1 block w-full" name="type" :default-value="userType" v-model="userType">
         <SelectTrigger class="w-full">
           <SelectValue placeholder="Select User type" />
@@ -544,11 +544,10 @@ watch([userType, searchedCopyUser], async () => {
           </SelectGroup>
         </SelectContent>
       </Select>
-    </div>
+    </FormField>
 
     <!-- ── ACCOUNT_BRANCH_ADMIN (type 2): single account/branch ─────────── -->
-    <div v-if="userType === 2" class="grid gap-2 md:col-span-1">
-      <Label for="account_type">Account Type<span class="text-red-400">*</span></Label>
+    <FormField v-if="userType === 2" name="account_type" label="Account Type" for="account_type" required class="md:col-span-1">
       <Select id="account_type" class="mt-1 block w-full" v-model="selectedAccountType">
         <SelectTrigger class="w-full">
           <SelectValue placeholder="Select an account type" />
@@ -562,9 +561,9 @@ watch([userType, searchedCopyUser], async () => {
           </SelectGroup>
         </SelectContent>
       </Select>
-    </div>
+    </FormField>
 
-    <div v-if="userType === 2" class="md:col-span-1">
+    <FormField v-if="userType === 2" name="account_code" class="md:col-span-1">
       <SearchableCombobox
         id="account" label="Account" :required="true"
         v-model="accountCode" v-model:search="searchedAccountName"
@@ -573,9 +572,9 @@ watch([userType, searchedCopyUser], async () => {
         :disabled="!selectedAccountType" :has-more="hasMoreAccounts"
         :loading-more="accountsLoadingMore" @load-more="loadMoreData('accounts')"
       />
-    </div>
+    </FormField>
 
-    <div v-if="userType === 2" class="md:col-span-1">
+    <FormField v-if="userType === 2" name="branch_code" class="md:col-span-1">
       <SearchableCombobox
         id="branch" label="Branch"
         v-model="branchCode" v-model:search="searchedBranchName"
@@ -584,7 +583,7 @@ watch([userType, searchedCopyUser], async () => {
         :disabled="!selectedAccount" :has-more="hasMoreBranches"
         :loading-more="branchesLoadingMore" @load-more="loadMoreData('branches')"
       />
-    </div>
+    </FormField>
 
     <!-- ── GROUP_ACCOUNT_ADMIN (type 4): multiple account/branch pairs ───── -->
     <div v-if="userType === 4" class="md:col-span-2 flex flex-col gap-3">
@@ -660,17 +659,22 @@ watch([userType, searchedCopyUser], async () => {
         <p v-if="copyMessage" class="text-sm text-emerald-600 dark:text-emerald-400">{{ copyMessage }}</p>
       </div>
 
-      <!-- Selected list -->
-      <UserAccountsList
-        :items="selectedUserAccounts"
-        :account-types="account_types"
-        @remove="removeUserAccount"
-      />
+      <!--
+        The list stands for the whole mapping, so it answers for anything rejected on
+        `user_accounts` or on a row of it — the picker above builds rows rather than
+        being submitted itself, so there is no single control to mark instead.
+      -->
+      <FormField name="user_accounts" nested>
+        <UserAccountsList
+          :items="selectedUserAccounts"
+          :account-types="account_types"
+          @remove="removeUserAccount"
+        />
+      </FormField>
     </div>
 
     <!-- ── VC Employee (type 1) ──────────────────────────────────────────── -->
-    <div v-if="userType === 1" class="grid gap-2 md:col-span-1">
-      <Label for="department">Department<span class="text-red-400">*</span></Label>
+    <FormField v-if="userType === 1" name="department_id" label="Department" for="department" required class="md:col-span-1">
       <Select id="department" class="mt-1 block w-full" name="department_id"
         :default-value="detail?.department_id ? Number(detail?.department_id) : undefined">
         <SelectTrigger class="w-full"><SelectValue placeholder="Select a department" /></SelectTrigger>
@@ -683,10 +687,9 @@ watch([userType, searchedCopyUser], async () => {
           </SelectGroup>
         </SelectContent>
       </Select>
-    </div>
+    </FormField>
 
-    <div v-if="userType === 1" class="grid gap-2 md:col-span-1">
-      <Label for="position">Position<span class="text-red-400">*</span></Label>
+    <FormField v-if="userType === 1" name="position_id" label="Position" for="position" required class="md:col-span-1">
       <Select id="position" class="mt-1 block w-full" name="position_id"
         :default-value="detail?.position_id ? String(detail?.position_id) : undefined">
         <SelectTrigger class="w-full"><SelectValue placeholder="Select a position" /></SelectTrigger>
@@ -699,48 +702,41 @@ watch([userType, searchedCopyUser], async () => {
           </SelectGroup>
         </SelectContent>
       </Select>
-    </div>
+    </FormField>
 
-    <div v-if="userType === 1" class="grid gap-2 md:col-span-1">
-      <Label for="employee_no">Employee No<span class="text-red-400">*</span></Label>
+    <FormField v-if="userType === 1" name="employee_no" label="Employee No" for="employee_no" required class="md:col-span-1">
       <Input id="employee_no" class="mt-1 block w-full" name="employee_no"
         :default-value="detail?.employee_no" autocomplete="employee_no" placeholder="Employee No" />
-    </div>
+    </FormField>
 
     <!-- ── Broker (type 3) ───────────────────────────────────────────────── -->
-    <div v-if="userType === 3" class="grid gap-2 md:col-span-1">
-      <Label for="agent_code">Agent Code<span class="text-red-400">*</span></Label>
+    <FormField v-if="userType === 3" name="agent_code" label="Agent Code" for="agent_code" required class="md:col-span-1">
       <Input id="agent_code" class="mt-1 block w-full" name="agent_code"
         :default-value="detail?.agent_code" autocomplete="agent_code" placeholder="Agent Code" />
-    </div>
+    </FormField>
 
     <!-- ── Shared personal information ───────────────────────────────────── -->
-    <div class="grid gap-2 md:col-span-1">
-      <Label for="first_name">First Name<span class="text-red-400">*</span></Label>
+    <FormField name="first_name" label="First Name" required class="md:col-span-1">
       <Input id="first_name" class="mt-1 block w-full" name="first_name"
         :default-value="detail?.first_name" autocomplete="first_name" placeholder="First Name" />
-    </div>
+    </FormField>
 
-    <div class="grid gap-2 md:col-span-1">
-      <Label for="middle_name">Middle Name</Label>
+    <FormField name="middle_name" label="Middle Name" class="md:col-span-1">
       <Input id="middle_name" class="mt-1 block w-full" name="middle_name"
         :default-value="detail?.middle_name" autocomplete="middle_name" placeholder="Middle Name" />
-    </div>
+    </FormField>
 
-    <div class="grid gap-2 md:col-span-1">
-      <Label for="last_name">Last Name<span class="text-red-400">*</span></Label>
+    <FormField name="last_name" label="Last Name" required class="md:col-span-1">
       <Input id="last_name" class="mt-1 block w-full" name="last_name"
         :default-value="detail?.last_name" autocomplete="last_name" placeholder="Last Name" />
-    </div>
+    </FormField>
 
-    <div class="grid gap-2 md:col-span-1">
-      <Label for="suffix">Suffix</Label>
+    <FormField name="suffix" label="Suffix" class="md:col-span-1">
       <Input id="suffix" class="mt-1 block w-full" name="suffix"
         :default-value="detail?.suffix" autocomplete="suffix" placeholder="Suffix" />
-    </div>
+    </FormField>
 
-    <div class="grid gap-2 md:col-span-1">
-      <Label for="gender">Gender<span class="text-red-400">*</span></Label>
+    <FormField name="gender_id" label="Gender" for="gender" required class="md:col-span-1">
       <Select id="gender" class="mt-1 block w-full" name="gender_id"
         :default-value="detail?.gender_id ? String(detail?.gender_id) : undefined">
         <SelectTrigger class="w-full"><SelectValue placeholder="Select a gender" /></SelectTrigger>
@@ -753,10 +749,9 @@ watch([userType, searchedCopyUser], async () => {
           </SelectGroup>
         </SelectContent>
       </Select>
-    </div>
+    </FormField>
 
-    <div class="grid gap-2 md:col-span-1">
-      <Label for="civil_status">Civil Status<span class="text-red-400">*</span></Label>
+    <FormField name="civil_status_id" label="Civil Status" for="civil_status" required class="md:col-span-1">
       <Select id="civil_status" class="mt-1 block w-full" name="civil_status_id"
         :default-value="detail?.civil_status_id ? String(detail?.civil_status_id) : undefined">
         <SelectTrigger class="w-full"><SelectValue placeholder="Select a civil status" /></SelectTrigger>
@@ -769,10 +764,9 @@ watch([userType, searchedCopyUser], async () => {
           </SelectGroup>
         </SelectContent>
       </Select>
-    </div>
+    </FormField>
 
-    <div class="grid gap-2 md:col-span-1">
-      <Label for="citizenship">Citizenship<span class="text-red-400">*</span></Label>
+    <FormField name="citizenship_id" label="Citizenship" for="citizenship" required class="md:col-span-1">
       <Select id="citizenship" class="mt-1 block w-full" name="citizenship_id"
         :default-value="detail?.citizenship_id ? String(detail?.citizenship_id) : undefined">
         <SelectTrigger class="w-full"><SelectValue placeholder="Select a citizenship" /></SelectTrigger>
@@ -785,29 +779,25 @@ watch([userType, searchedCopyUser], async () => {
           </SelectGroup>
         </SelectContent>
       </Select>
-    </div>
+    </FormField>
 
-    <div class="grid gap-2 md:col-span-1">
-      <Label for="birthdate">Birth Date</Label>
+    <FormField name="birthdate" label="Birth Date" class="md:col-span-1">
       <Input id="birthdate" type="date" class="mt-1 block w-full" name="birthdate"
         :default-value="detail?.birthdate" autocomplete="birthdate" placeholder="Birth Date" />
-    </div>
+    </FormField>
 
-    <div class="grid gap-2 md:col-span-1">
-      <Label for="username">Username<span class="text-red-400">*</span></Label>
+    <FormField name="username" label="Username" required class="md:col-span-1">
       <Input id="username" class="mt-1 block w-full" name="username"
         :default-value="user?.username" autocomplete="username" placeholder="Username" />
-    </div>
+    </FormField>
 
-    <div class="grid gap-2 md:col-span-1">
-      <Label for="email">Email<span class="text-red-400">*</span></Label>
+    <FormField name="email" label="Email" required class="md:col-span-1">
       <Input id="email" class="mt-1 block w-full" name="email"
         :default-value="user?.email" autocomplete="email" placeholder="Email" />
-    </div>
+    </FormField>
 
     <!-- ── Roles ─────────────────────────────────────────────────────────── -->
-    <div v-if="all_roles.length" class="grid gap-2 md:col-span-2">
-      <Label for="role-search">Roles</Label>
+    <FormField v-if="all_roles.length" name="roles" label="Roles" for="role-search" nested class="md:col-span-2">
       <Input id="role-search" v-model="roleSearch" class="mt-1 block w-full"
         placeholder="Search by role name..." />
       <div class="border rounded-md max-h-56 overflow-auto">
@@ -831,6 +821,6 @@ watch([userType, searchedCopyUser], async () => {
           </tbody>
         </table>
       </div>
-    </div>
+    </FormField>
   </form>
 </template>

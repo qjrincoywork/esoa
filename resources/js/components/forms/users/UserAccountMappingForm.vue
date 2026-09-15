@@ -22,6 +22,7 @@ import DragDropTransfer from '@/components/DragDropTransfer.vue';
 import { useUsers, type UserAccountMapping } from '@/composables/users';
 import { debounce } from '@/composables/utilities/helper';
 import { ArrowLeft, Building2, ChevronRight, Info, RotateCcw, Save, Search, X } from 'lucide-vue-next';
+import FormField from '@/components/FormField.vue';
 
 type Option = { value: string | number; name: string };
 
@@ -502,173 +503,179 @@ const accountTypeName = computed(
       </span>
     </div>
 
-    <DragDropTransfer
-      :source="availableItems"
-      :target="assigned"
-      item-key="key"
-      :source-title="subject.title"
-      target-title="Mapped Accounts & Branches"
-      :source-hint="sourceHint"
-      :source-empty="emptyText"
-      target-empty="No accounts or branches mapped yet."
-      :source-loading="showSourceSpinner"
-      :disabled="!allowsMapping"
-      :max="limit"
-      reorderable
-      list-class="max-h-80"
-      @add="assign"
-      @remove="unassign"
-      @reorder="reorder">
-      <!-- Directory controls: account type, breadcrumb back to accounts, and search -->
-      <template #source-toolbar>
-        <div class="mt-2 flex flex-col gap-2">
-          <div v-if="isBranchMode" class="flex items-center gap-1 text-xs">
+    <!--
+      The transfer panel is the field: a rejected mapping is rejected as a set, or on a
+      row that only exists inside it, so there is no single control to mark instead.
+    -->
+    <FormField name="user_accounts" nested>
+      <DragDropTransfer
+        :source="availableItems"
+        :target="assigned"
+        item-key="key"
+        :source-title="subject.title"
+        target-title="Mapped Accounts & Branches"
+        :source-hint="sourceHint"
+        :source-empty="emptyText"
+        target-empty="No accounts or branches mapped yet."
+        :source-loading="showSourceSpinner"
+        :disabled="!allowsMapping"
+        :max="limit"
+        reorderable
+        list-class="max-h-80"
+        @add="assign"
+        @remove="unassign"
+        @reorder="reorder">
+        <!-- Directory controls: account type, breadcrumb back to accounts, and search -->
+        <template #source-toolbar>
+          <div class="mt-2 flex flex-col gap-2">
+            <div v-if="isBranchMode" class="flex items-center gap-1 text-xs">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                class="h-6 shrink-0 px-1.5 text-xs"
+                @click="backToAccounts">
+                <ArrowLeft class="mr-1 h-3 w-3" /> Accounts
+              </Button>
+              <ChevronRight class="h-3 w-3 shrink-0 text-[var(--color-text-muted)]" aria-hidden="true" />
+              <span class="truncate font-medium" :title="focusedAccount?.name">
+                {{ focusedAccount?.name }}
+              </span>
+            </div>
+
+            <div v-else class="flex items-center gap-2">
+              <Label class="shrink-0 text-xs text-[var(--color-text-muted)]" for="mapping_account_type">
+                Type
+              </Label>
+              <Select id="mapping_account_type" v-model="accountType">
+                <SelectTrigger class="h-7 flex-1 text-xs">
+                  <SelectValue :placeholder="accountTypeName || 'Account type'" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem
+                      v-for="option in accountTypes"
+                      :key="String(option.value)"
+                      :value="String(option.value)"
+                      class="text-xs">
+                      {{ option.name }}
+                    </SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div class="relative">
+              <Search
+                class="pointer-events-none absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--color-text-muted)]"
+                aria-hidden="true" />
+              <input
+                v-model="search"
+                type="text"
+                :placeholder="isBranchMode ? 'Search branches...' : 'Search accounts or branches...'"
+                class="w-full rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface)] py-1.5 pr-7 pl-7 text-xs text-[var(--color-text)] focus:border-transparent focus:ring-2 focus:ring-opacity-50"
+                :style="{ '--tw-ring-color': 'var(--primary-color)' }"
+                :aria-label="isBranchMode ? 'Search branches' : 'Search accounts and branches'"
+                @input="debouncedSearch" />
+              <button
+                v-if="search"
+                type="button"
+                class="absolute top-1/2 right-2 -translate-y-1/2 text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+                aria-label="Clear search"
+                @click="search = ''; debouncedSearch()">
+                <X class="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        </template>
+
+        <!-- Mapped pairs are filtered out upstream, so every row here is assignable -->
+        <template #source-item="{ item }">
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0">
+              <p class="flex items-center gap-1.5 truncate font-medium" :title="item.title">
+                <!-- One list, two directories: say which a row came from -->
+                <span
+                  v-if="isUnifiedSearch"
+                  class="shrink-0 rounded px-1 py-px text-[10px] font-semibold uppercase"
+                  :class="item.kind === 'branch'
+                    ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300'
+                    : 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300'">
+                  {{ item.kind }}
+                </span>
+                <span class="truncate">{{ item.title }}</span>
+              </p>
+              <p class="truncate text-xs text-[var(--color-text-muted)]" :title="item.subtitle">
+                {{ item.subtitle }}
+              </p>
+            </div>
+            <!-- Drill into an account's branches without assigning the account itself -->
+            <Button
+              v-if="item.kind === 'account'"
+              type="button"
+              variant="ghost"
+              size="sm"
+              class="h-6 shrink-0 px-1.5 text-xs text-[var(--color-text-muted)]"
+              :title="`Show branches of ${item.title}`"
+              @click.stop="focusAccount(item)">
+              <Building2 class="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </template>
+
+        <template #source-footer>
+          <div v-if="hasMore" class="pt-2 text-center">
             <Button
               type="button"
               variant="ghost"
               size="sm"
-              class="h-6 shrink-0 px-1.5 text-xs"
-              @click="backToAccounts">
-              <ArrowLeft class="mr-1 h-3 w-3" /> Accounts
+              class="h-7 text-xs"
+              :disabled="loadingMore"
+              @click="loadMore">
+              {{ loadingMore ? 'Loading...' : 'Load more' }}
             </Button>
-            <ChevronRight class="h-3 w-3 shrink-0 text-[var(--color-text-muted)]" aria-hidden="true" />
-            <span class="truncate font-medium" :title="focusedAccount?.name">
-              {{ focusedAccount?.name }}
+          </div>
+        </template>
+
+        <template #target-toolbar>
+          <div v-if="assigned.length" class="mt-2 flex items-center justify-between gap-2">
+            <span v-if="limitReached" class="text-xs text-amber-600 dark:text-amber-400">
+              Limit reached
             </span>
-          </div>
-
-          <div v-else class="flex items-center gap-2">
-            <Label class="shrink-0 text-xs text-[var(--color-text-muted)]" for="mapping_account_type">
-              Type
-            </Label>
-            <Select id="mapping_account_type" v-model="accountType">
-              <SelectTrigger class="h-7 flex-1 text-xs">
-                <SelectValue :placeholder="accountTypeName || 'Account type'" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  <SelectItem
-                    v-for="option in accountTypes"
-                    :key="String(option.value)"
-                    :value="String(option.value)"
-                    class="text-xs">
-                    {{ option.name }}
-                  </SelectItem>
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div class="relative">
-            <Search
-              class="pointer-events-none absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--color-text-muted)]"
-              aria-hidden="true" />
-            <input
-              v-model="search"
-              type="text"
-              :placeholder="isBranchMode ? 'Search branches...' : 'Search accounts or branches...'"
-              class="w-full rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface)] py-1.5 pr-7 pl-7 text-xs text-[var(--color-text)] focus:border-transparent focus:ring-2 focus:ring-opacity-50"
-              :style="{ '--tw-ring-color': 'var(--primary-color)' }"
-              :aria-label="isBranchMode ? 'Search branches' : 'Search accounts and branches'"
-              @input="debouncedSearch" />
-            <button
-              v-if="search"
+            <span v-else class="text-xs text-[var(--color-text-muted)]">
+              Drag to reorder
+            </span>
+            <Button
               type="button"
-              class="absolute top-1/2 right-2 -translate-y-1/2 text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
-              aria-label="Clear search"
-              @click="search = ''; debouncedSearch()">
-              <X class="h-3.5 w-3.5" />
-            </button>
+              variant="ghost"
+              size="sm"
+              class="h-6 px-1.5 text-xs text-red-500 hover:text-red-700"
+              :disabled="!allowsMapping"
+              @click="clearAll">
+              Clear all
+            </Button>
           </div>
-        </div>
-      </template>
+        </template>
 
-      <!-- Mapped pairs are filtered out upstream, so every row here is assignable -->
-      <template #source-item="{ item }">
-        <div class="flex items-start justify-between gap-2">
+        <template #target-item="{ item }">
           <div class="min-w-0">
-            <p class="flex items-center gap-1.5 truncate font-medium" :title="item.title">
-              <!-- One list, two directories: say which a row came from -->
-              <span
-                v-if="isUnifiedSearch"
-                class="shrink-0 rounded px-1 py-px text-[10px] font-semibold uppercase"
-                :class="item.kind === 'branch'
-                  ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300'
-                  : 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300'">
-                {{ item.kind }}
+            <p class="truncate font-medium" :title="item.account_name">
+              {{ item.account_name }}
+              <span class="text-xs font-normal text-[var(--color-text-muted)]">
+                ({{ item.account_code }})
               </span>
-              <span class="truncate">{{ item.title }}</span>
             </p>
-            <p class="truncate text-xs text-[var(--color-text-muted)]" :title="item.subtitle">
-              {{ item.subtitle }}
+            <p class="truncate text-xs text-[var(--color-text-muted)]">
+              <template v-if="item.branch_code">
+                {{ item.branch_name }} · branch {{ item.branch_code }}
+              </template>
+              <template v-else>All branches</template>
+              <template v-if="item.account_type_label"> · {{ item.account_type_label }}</template>
             </p>
           </div>
-          <!-- Drill into an account's branches without assigning the account itself -->
-          <Button
-            v-if="item.kind === 'account'"
-            type="button"
-            variant="ghost"
-            size="sm"
-            class="h-6 shrink-0 px-1.5 text-xs text-[var(--color-text-muted)]"
-            :title="`Show branches of ${item.title}`"
-            @click.stop="focusAccount(item)">
-            <Building2 class="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      </template>
-
-      <template #source-footer>
-        <div v-if="hasMore" class="pt-2 text-center">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            class="h-7 text-xs"
-            :disabled="loadingMore"
-            @click="loadMore">
-            {{ loadingMore ? 'Loading...' : 'Load more' }}
-          </Button>
-        </div>
-      </template>
-
-      <template #target-toolbar>
-        <div v-if="assigned.length" class="mt-2 flex items-center justify-between gap-2">
-          <span v-if="limitReached" class="text-xs text-amber-600 dark:text-amber-400">
-            Limit reached
-          </span>
-          <span v-else class="text-xs text-[var(--color-text-muted)]">
-            Drag to reorder
-          </span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            class="h-6 px-1.5 text-xs text-red-500 hover:text-red-700"
-            :disabled="!allowsMapping"
-            @click="clearAll">
-            Clear all
-          </Button>
-        </div>
-      </template>
-
-      <template #target-item="{ item }">
-        <div class="min-w-0">
-          <p class="truncate font-medium" :title="item.account_name">
-            {{ item.account_name }}
-            <span class="text-xs font-normal text-[var(--color-text-muted)]">
-              ({{ item.account_code }})
-            </span>
-          </p>
-          <p class="truncate text-xs text-[var(--color-text-muted)]">
-            <template v-if="item.branch_code">
-              {{ item.branch_name }} · branch {{ item.branch_code }}
-            </template>
-            <template v-else>All branches</template>
-            <template v-if="item.account_type_label"> · {{ item.account_type_label }}</template>
-          </p>
-        </div>
-      </template>
-    </DragDropTransfer>
+        </template>
+      </DragDropTransfer>
+    </FormField>
 
     <!-- Save bar -->
     <div class="flex items-center justify-between gap-2 border-t border-[var(--color-border)] pt-3">

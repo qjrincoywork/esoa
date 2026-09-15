@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import ExcelPreview from '@/components/ExcelPreview.vue';
+import FormField from '@/components/FormField.vue';
 
 type Soa = {
   id?: number
@@ -81,8 +81,7 @@ onMounted(() => {
       />
     </div>
 
-    <div class="grid gap-2 md:col-span-1">
-      <Label for="file_pdf">PDF</Label>
+    <FormField name="file_pdf" label="PDF" class="md:col-span-1">
       <Input
         type="text"
         id="file_pdf"
@@ -99,7 +98,7 @@ onMounted(() => {
           frameborder="0"
         />
       </div>
-    </div>
+    </FormField>
 
     <!-- <div class="grid gap-2 md:col-span-1">
       <Label for="file_xls">Excel File</Label>
