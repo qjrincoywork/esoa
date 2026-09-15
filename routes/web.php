@@ -12,6 +12,7 @@ use App\Http\Controllers\{
     PermissionController,
     RoleController,
     SoaController,
+    UnmappedAccountController,
     UserController,
 };
 use App\Models\{ AccountPayment, Concern, Soa };
@@ -132,6 +133,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->controller(ActivityLogController::class)->group(function () {
                 Route::get('/', 'index')->name('index');
                 Route::get('/{id}/show', 'show')->name('show');
+        });
+
+        // Unmapped accounts & branches — the account-mapping coverage gap, read-only
+        Route::prefix('unmapped_accounts')->name('unmapped_accounts.')
+            ->middleware('check_permissions')
+            ->controller(UnmappedAccountController::class)->group(function () {
+                Route::get('/', 'index')->name('index');
         });
 
         //Navigations

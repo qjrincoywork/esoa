@@ -60,6 +60,63 @@ class UserAccount extends Model
     }
 
     /**
+     * Every account code that at least one user is mapped to.
+     *
+     * The inverse is what the unmapped-directory module lists, so "assigned" is
+     * defined here once: an account counts as assigned as soon as any mapping names
+     * it, whether that mapping covers the whole account or a single branch of it.
+     *
+     * @return array<int, string>
+     */
+    public static function assignedAccountCodes(): array
+    {
+        return self::query()
+            ->whereNotNull('account_code')
+            ->where('account_code', '!=', '')
+            ->distinct()
+            ->pluck('account_code')
+            ->all();
+    }
+
+    /**
+     * Every branch code named by at least one mapping.
+     *
+     * Mappings that cover a whole account carry no branch code and are reported by
+     * {@see accountCodesMappedInFull()} instead — a branch is reachable through
+     * either, so the unmapped listing has to subtract both.
+     *
+     * @return array<int, string>
+     */
+    public static function assignedBranchCodes(): array
+    {
+        return self::query()
+            ->whereNotNull('branch_code')
+            ->where('branch_code', '!=', '')
+            ->distinct()
+            ->pluck('branch_code')
+            ->all();
+    }
+
+    /**
+     * Account codes mapped without a branch, i.e. granting every branch of them.
+     *
+     * A blank branch code means "every branch of this account" ({@see mappingKey()}),
+     * so none of those branches is unassigned even though no row names them.
+     *
+     * @return array<int, string>
+     */
+    public static function accountCodesMappedInFull(): array
+    {
+        return self::query()
+            ->where(fn ($query) => $query->whereNull('branch_code')->orWhere('branch_code', ''))
+            ->whereNotNull('account_code')
+            ->where('account_code', '!=', '')
+            ->distinct()
+            ->pluck('account_code')
+            ->all();
+    }
+
+    /**
      * Replace a user's whole set of account/branch mappings with the given rows.
      *
      * The submitted list is the complete intended state, so the existing rows are
