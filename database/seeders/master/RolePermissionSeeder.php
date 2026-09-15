@@ -41,6 +41,9 @@ class RolePermissionSeeder extends Seeder
             'activity_logs.index',
             'activity_logs.show',
 
+            // unmapped accounts & branches (superadmin only — granted via syncPermissions below)
+            'unmapped_accounts.index',
+
             // roles
             'roles.index',
             'roles.create',

@@ -137,7 +137,13 @@ const table = useVueTable({
     get data() {
         return filteredData.value
     },
-    columns: props.columns,
+    // Read through a getter for the same reason `data` does: a plain value is captured
+    // once at setup, so a table whose columns change with what it is showing kept
+    // rendering the previous set's headers against the new rows. Tables with a fixed
+    // column list pass a stable array and are unaffected.
+    get columns() {
+        return props.columns
+    },
     state: {
         get sorting() {
             return sorting.value

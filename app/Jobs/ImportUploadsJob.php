@@ -132,9 +132,7 @@ class ImportUploadsJob implements ShouldQueue
         $soa->fill([
             'user_id' => $this->authId,
             'soa_number' => trim($upload->up_soanum), //$upload->up_soanum,
-            'account_type' => str_starts_with($upload->up_accode, 'TP')
-                ? AccountType::TPA
-                : AccountType::HMO,
+            'account_type' => AccountType::fromAccountCode($upload->up_accode),
             'account_code' => $upload->up_accode,
             'branch_code' => ! empty($upload->up_branchcode) ? $upload->up_branchcode : null,
             'bill_type' => BillType::oldValue($upload->up_billtype),

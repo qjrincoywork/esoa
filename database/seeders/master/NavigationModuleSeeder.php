@@ -56,6 +56,9 @@ class NavigationModuleSeeder extends Seeder
 
             ['nav' => 'ICT Admin', 'perm' => 'navigation_modules.index',   'name' => 'Navigation Modules',           'slug' => 'navigation_modules.index',     'icon' => 'SquareMenu',     'color' => null,     'url' => '/navigation_modules',              'parent' => null,                      'order' => 16],
 
+            // Unmapped accounts & branches — account-mapping coverage gap, superadmin only
+            ['nav' => 'ICT Admin', 'perm' => 'unmapped_accounts.index',    'name' => 'Unmapped Accounts',            'slug' => 'unmapped_accounts.index',      'icon' => 'Unlink',         'color' => null,     'url' => '/unmapped_accounts',               'parent' => null,                      'order' => 19],
+
             // Activity logs — read-only audit trail, superadmin only
             ['nav' => 'ICT Admin', 'perm' => 'activity_logs.index',        'name' => 'Activity Logs',                'slug' => 'activity_logs.index',          'icon' => 'ScrollText',     'color' => null,     'url' => '/activity_logs',                   'parent' => null,                      'order' => 20],
             ['nav' => 'ICT Admin', 'perm' => 'navigation_modules.edit',    'name' => 'Edit Navigation Module',       'slug' => 'navigation_modules.edit',      'icon' => 'Pencil',         'color' => 'blue',   'url' => '/navigation_modules/{id}/edit',    'parent' => 'navigation_modules.index', 'order' => 1],
