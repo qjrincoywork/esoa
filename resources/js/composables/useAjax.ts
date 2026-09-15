@@ -1,4 +1,25 @@
 import { applyCsrfHeader, readMetaCsrfToken } from '@/lib/csrf';
+import { useFormErrors, type ValidationErrorBag } from '@/composables/useFormErrors';
+
+/** The status Laravel answers a rejected form with. */
+const HTTP_UNPROCESSABLE_ENTITY = 422;
+
+/**
+ * Whether a response body carries a field-by-field rejection.
+ *
+ * Both envelopes this API uses put it in the same place — Laravel's own 422 body and
+ * {@see CustomResponse::error} — but `errors` is also sent as null by failures that
+ * have nothing to do with a form, so the shape is checked rather than the key.
+ */
+const toValidationErrors = (data: unknown): ValidationErrorBag | null => {
+    const errors = (data as { errors?: unknown } | null)?.errors;
+
+    if (!errors || typeof errors !== 'object' || Array.isArray(errors)) {
+        return null;
+    }
+
+    return Object.keys(errors).length > 0 ? (errors as ValidationErrorBag) : null;
+};
 
 export interface AjaxOptions {
     method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -18,6 +39,36 @@ export interface AjaxResponse<T = any> {
  * Useful for fetching data without changing the URL
  */
 export function useAjax() {
+    const { setErrors, clearErrors } = useFormErrors();
+
+    /**
+     * Hand a rejected submission's field messages to the form that made it.
+     *
+     * Done here rather than at each call site because every form in the application
+     * submits through this one function: a form gets its messages by existing, and a
+     * form added later needs no wiring at all. Only submissions are considered — a GET
+     * that fails is a lookup, and has no field on screen to blame.
+     */
+    const captureValidationErrors = (isMutatingRequest: boolean, status: number, data: unknown): void => {
+        if (!isMutatingRequest) return;
+
+        if (status === HTTP_UNPROCESSABLE_ENTITY) {
+            const errors = toValidationErrors(data);
+
+            if (errors) {
+                setErrors(errors);
+
+                return;
+            }
+        }
+
+        // A submission the server accepted answers every field it was holding against
+        // the form, so nothing is left to show.
+        if (status >= 200 && status < 300) {
+            clearErrors();
+        }
+    };
+
     /**
      * Build query string from params object
      */
@@ -90,6 +141,8 @@ export function useAjax() {
 
             // Parse JSON response
             const data = await response.json().catch(() => ({}));
+
+            captureValidationErrors(isMutatingRequest, response.status, data);
 
             return {
                 data: data as T,

@@ -2,10 +2,10 @@
 import { ref, computed } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useSoas } from '@/composables/soas';
 import { dispatchNotification } from '@/components/notification';
+import FormField from '@/components/FormField.vue';
 
 type SoaPane = {
   id?: number
@@ -86,8 +86,7 @@ async function submit() {
       </p>
     </div>
 
-    <div class="grid gap-2">
-      <Label for="amount-op">Add or deduct</Label>
+    <FormField name="operation" label="Add or deduct" for="amount-op">
       <Select
         :model-value="operation"
         @update:model-value="setOperation">
@@ -102,10 +101,9 @@ async function submit() {
           </SelectGroup>
         </SelectContent>
       </Select>
-    </div>
+    </FormField>
 
-    <div class="grid gap-2">
-      <Label for="amount-value">Amount</Label>
+    <FormField name="amount" label="Amount" for="amount-value">
       <Input
         id="amount-value"
         v-model="valueInput"
@@ -114,7 +112,7 @@ async function submit() {
         autocomplete="off"
         placeholder="e.g. 1000.50"
       />
-    </div>
+    </FormField>
 
     <Button
       type="submit"

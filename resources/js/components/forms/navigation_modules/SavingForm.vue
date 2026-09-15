@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
     Select, SelectTrigger, SelectContent, SelectGroup,
     SelectItem, SelectValue, SelectLabel,
 } from '@/components/ui/select';
+import FormField from '@/components/FormField.vue';
 
 type Status       = { value: number; name: string };
 type Navigation   = { id: number; name: string };
@@ -88,8 +88,7 @@ onMounted(() => props.onReady({ getFormData }));
         <input v-if="navigationModule?.id" type="hidden" name="id" :value="navigationModule.id" />
 
         <!-- Name -->
-        <div class="grid gap-2">
-            <Label for="nm-name">Name <span class="text-red-500">*</span></Label>
+        <FormField name="name" label="Name" for="nm-name" required>
             <Input
                 id="nm-name"
                 name="name"
@@ -97,25 +96,24 @@ onMounted(() => props.onReady({ getFormData }));
                 :default-value="navigationModule?.name"
                 @input="onNameInput"
             />
-        </div>
+        </FormField>
 
         <!-- Slug -->
-        <div class="grid gap-2">
-            <Label for="nm-slug">
+        <FormField name="slug" for="nm-slug">
+            <template #label>
                 Slug <span class="text-red-500">*</span>
                 <span class="text-xs text-[var(--color-text-muted)] ml-1">(e.g. users.edit)</span>
-            </Label>
+            </template>
             <Input
                 id="nm-slug"
                 name="slug"
                 placeholder="navigation.action"
                 v-model="slugValue"
             />
-        </div>
+        </FormField>
 
         <!-- Navigation (required) -->
-        <div class="grid gap-2">
-            <Label for="nm-navigation">Navigation <span class="text-red-500">*</span></Label>
+        <FormField name="navigation_id" label="Navigation" for="nm-navigation" required>
             <Select v-model="selectedNavigationId">
                 <SelectTrigger id="nm-navigation" class="w-full">
                     <SelectValue placeholder="Select navigation" />
@@ -133,11 +131,10 @@ onMounted(() => props.onReady({ getFormData }));
                     </SelectGroup>
                 </SelectContent>
             </Select>
-        </div>
+        </FormField>
 
         <!-- Permission (optional) -->
-        <div class="grid gap-2">
-            <Label for="nm-permission">Permission</Label>
+        <FormField name="permission_id" label="Permission" for="nm-permission">
             <Select v-model="selectedPermissionId">
                 <SelectTrigger id="nm-permission" class="w-full">
                     <SelectValue placeholder="None (public)" />
@@ -156,33 +153,30 @@ onMounted(() => props.onReady({ getFormData }));
                     </SelectGroup>
                 </SelectContent>
             </Select>
-        </div>
+        </FormField>
 
         <!-- URL -->
-        <div class="grid gap-2">
-            <Label for="nm-url">URL</Label>
+        <FormField name="url" label="URL" for="nm-url">
             <Input
                 id="nm-url"
                 name="url"
                 placeholder="/path/to/page"
                 :default-value="navigationModule?.url"
             />
-        </div>
+        </FormField>
 
         <!-- Icon -->
-        <div class="grid gap-2">
-            <Label for="nm-icon">Icon</Label>
+        <FormField name="icon" label="Icon" for="nm-icon">
             <Input
                 id="nm-icon"
                 name="icon"
                 placeholder="e.g. LayoutDashboard"
                 :default-value="navigationModule?.icon"
             />
-        </div>
+        </FormField>
 
         <!-- Parent Module (ref_id, optional) -->
-        <div class="grid gap-2">
-            <Label for="nm-ref">Parent Module</Label>
+        <FormField name="ref_id" label="Parent Module" for="nm-ref">
             <Select v-model="selectedRefId">
                 <SelectTrigger id="nm-ref" class="w-full">
                     <SelectValue placeholder="None (top-level)" />
@@ -201,11 +195,10 @@ onMounted(() => props.onReady({ getFormData }));
                     </SelectGroup>
                 </SelectContent>
             </Select>
-        </div>
+        </FormField>
 
         <!-- Status -->
-        <div class="grid gap-2">
-            <Label for="nm-status">Status</Label>
+        <FormField name="status" label="Status" for="nm-status">
             <Select v-model="selectedStatus">
                 <SelectTrigger id="nm-status" class="w-full">
                     <SelectValue placeholder="Select status" />
@@ -223,22 +216,20 @@ onMounted(() => props.onReady({ getFormData }));
                     </SelectGroup>
                 </SelectContent>
             </Select>
-        </div>
+        </FormField>
 
         <!-- Color -->
-        <div class="grid gap-2">
-            <Label for="nm-color">Color</Label>
+        <FormField name="color" label="Color" for="nm-color">
             <Input
                 id="nm-color"
                 name="color"
                 placeholder="e.g. blue"
                 :default-value="navigationModule?.color"
             />
-        </div>
+        </FormField>
 
         <!-- Order Number -->
-        <div class="grid gap-2">
-            <Label for="nm-order">Order</Label>
+        <FormField name="order_number" label="Order" for="nm-order">
             <Input
                 id="nm-order"
                 type="number"
@@ -247,6 +238,6 @@ onMounted(() => props.onReady({ getFormData }));
                 min="0"
                 :default-value="navigationModule?.order_number ?? 0"
             />
-        </div>
+        </FormField>
     </form>
 </template>

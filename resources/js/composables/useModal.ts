@@ -1,5 +1,6 @@
 import { ref, shallowRef, type Component } from 'vue';
 import { router } from '@inertiajs/vue3';
+import { useFormErrors } from '@/composables/useFormErrors';
 
 export type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
 /** Width tokens consumed by Modal.vue (aliases 2xl→xl2, etc. are resolved there). */
@@ -48,7 +49,13 @@ const size = ref<ModalSize>('md');
 const closeOnClickOutside = ref(false);
 
 export function useModal() {
+  const { clearErrors } = useFormErrors();
+
   const openModal = (options: ModalOptions = {}) => {
+    // A form opens clean: messages belong to the submission that earned them, and
+    // carrying them into the next form would mark fields nobody has filled in yet.
+    clearErrors();
+
     title.value = options.modalTitle || 'Modal';
     buttonLabel.value = options.buttonText || 'Submit';
     buttonClass.value = options.buttonClass || 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500 dark:bg-blue-500 dark:hover:bg-blue-600';
@@ -66,6 +73,7 @@ export function useModal() {
 
   const closeModal = () => {
     visible.value = false;
+    clearErrors();
     // Clear values after animation
     setTimeout(() => {
       title.value = '';

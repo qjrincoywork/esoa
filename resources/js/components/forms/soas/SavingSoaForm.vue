@@ -10,6 +10,7 @@ import { useSoas } from '@/composables/soas';
 import { debounce } from '@/composables/utilities/helper';
 import { Auth, User, UserDetail, Soa } from '@/types';
 import { Select, SelectTrigger, SelectContent, SelectGroup, SelectLabel, SelectItem, SelectValue } from '@/components/ui/select';
+import FormField from '@/components/FormField.vue';
 
 type UserBasic = {
   id?: number
@@ -403,8 +404,7 @@ watch(soa, (val: Soa | undefined) => {
     <section v-if="!isEndorsed" class="rounded-lg border p-4 flex flex-col gap-4">
       <h3 class="text-sm font-semibold">Account Information</h3>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div class="grid gap-2">
-          <Label for="account_type">Account Type<span class="text-red-400">*</span></Label>
+        <FormField name="account_type" label="Account Type" for="account_type" required>
           <Select id="account_type" v-model="selectedAccountType">
             <SelectTrigger class="w-full">
               <SelectValue placeholder="Select an account type" />
@@ -422,38 +422,42 @@ watch(soa, (val: Soa | undefined) => {
               </SelectGroup>
             </SelectContent>
           </Select>
-        </div>
+        </FormField>
 
-        <SearchableCombobox
-          id="account"
-          label="Account"
-          :required="true"
-          v-model="accountCode"
-          v-model:search="searchedAccountName"
-          :items="accounts"
-          placeholder="Select Account..."
-          search-placeholder="Search Account..."
-          empty-text="No account found."
-          :disabled="!selectedAccountType"
-          :has-more="hasMoreAccounts"
-          :loading-more="accountsLoadingMore"
-          @load-more="loadMoreData('accounts')"
-        />
+        <FormField name="account_code">
+          <SearchableCombobox
+            id="account"
+            label="Account"
+            :required="true"
+            v-model="accountCode"
+            v-model:search="searchedAccountName"
+            :items="accounts"
+            placeholder="Select Account..."
+            search-placeholder="Search Account..."
+            empty-text="No account found."
+            :disabled="!selectedAccountType"
+            :has-more="hasMoreAccounts"
+            :loading-more="accountsLoadingMore"
+            @load-more="loadMoreData('accounts')"
+          />
+        </FormField>
 
-        <SearchableCombobox
-          id="branch"
-          label="Branch"
-          v-model="branchCode"
-          v-model:search="searchedBranchName"
-          :items="branches"
-          placeholder="Select Branch..."
-          search-placeholder="Search Branch..."
-          empty-text="No branch found."
-          :disabled="!selectedAccount"
-          :has-more="hasMoreBranches"
-          :loading-more="branchesLoadingMore"
-          @load-more="loadMoreData('branches')"
-        />
+        <FormField name="branch_code">
+          <SearchableCombobox
+            id="branch"
+            label="Branch"
+            v-model="branchCode"
+            v-model:search="searchedBranchName"
+            :items="branches"
+            placeholder="Select Branch..."
+            search-placeholder="Search Branch..."
+            empty-text="No branch found."
+            :disabled="!selectedAccount"
+            :has-more="hasMoreBranches"
+            :loading-more="branchesLoadingMore"
+            @load-more="loadMoreData('branches')"
+          />
+        </FormField>
       </div>
     </section>
 
@@ -477,8 +481,7 @@ watch(soa, (val: Soa | undefined) => {
           @update:to="(v) => { billingDateTo = v }"
         />
 
-        <div class="grid gap-2">
-          <Label for="billing_ref_from">Billing Reference From<span class="text-red-400">*</span></Label>
+        <FormField name="billing_ref_from" label="Billing Reference From" for="billing_ref_from" required>
           <Select id="billing_ref_from" v-model="selectedBillRefFrom" :disabled="!selectedAccount">
             <SelectTrigger class="w-full">
               <SelectValue placeholder="Select a billing reference from" />
@@ -496,23 +499,25 @@ watch(soa, (val: Soa | undefined) => {
               </SelectGroup>
             </SelectContent>
           </Select>
-        </div>
+        </FormField>
 
-        <SearchableCombobox
-          id="billing_ref"
-          label="Billing Reference"
-          v-model="billingRef"
-          v-model:search="searchedBillingRef"
-          :items="billing_refs"
-          placeholder="Select Billing Reference..."
-          search-placeholder="Search Billing Reference..."
-          empty-text="No Billing Reference found."
-          :disabled="billing_refs?.length == 0"
-          :has-more="hasMoreBillingRefs"
-          :loading-more="billingRefsLoadingMore"
-          :multiple="true"
-          @load-more="loadMoreData('billingRefs')"
-        />
+        <FormField name="billing_ref" nested>
+          <SearchableCombobox
+            id="billing_ref"
+            label="Billing Reference"
+            v-model="billingRef"
+            v-model:search="searchedBillingRef"
+            :items="billing_refs"
+            placeholder="Select Billing Reference..."
+            search-placeholder="Search Billing Reference..."
+            empty-text="No Billing Reference found."
+            :disabled="billing_refs?.length == 0"
+            :has-more="hasMoreBillingRefs"
+            :loading-more="billingRefsLoadingMore"
+            :multiple="true"
+            @load-more="loadMoreData('billingRefs')"
+          />
+        </FormField>
       </div>
     </section>
 
@@ -520,8 +525,7 @@ watch(soa, (val: Soa | undefined) => {
     <section class="rounded-lg border p-4 flex flex-col gap-4">
       <h3 class="text-sm font-semibold">SOA Details</h3>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div v-if="!isEndorsed" class="grid gap-2">
-          <Label for="soa_number">SOA Number / Billing Invoice<span class="text-red-400">*</span></Label>
+        <FormField v-if="!isEndorsed" name="soa_number" label="SOA Number / Billing Invoice" for="soa_number" required>
           <Input
             id="soa_number"
             class="w-full"
@@ -530,10 +534,9 @@ watch(soa, (val: Soa | undefined) => {
             autocomplete="off"
             placeholder="SOA Number / Billing Invoice"
           />
-        </div>
+        </FormField>
 
-        <div v-if="!isEndorsed" class="grid gap-2">
-          <Label for="bill_type">Bill Type<span class="text-red-400">*</span></Label>
+        <FormField v-if="!isEndorsed" name="bill_type" label="Bill Type" for="bill_type" required>
           <Select id="bill_type" v-model="selectedBillType">
             <SelectTrigger class="w-full">
               <SelectValue placeholder="Select bill type" />
@@ -551,10 +554,9 @@ watch(soa, (val: Soa | undefined) => {
               </SelectGroup>
             </SelectContent>
           </Select>
-        </div>
+        </FormField>
 
-        <div v-if="!isEndorsed" class="grid gap-2">
-          <Label for="due_date">Due Date<span class="text-red-400">*</span></Label>
+        <FormField v-if="!isEndorsed" name="due_date" label="Due Date" for="due_date" required>
           <Input
             id="due_date"
             type="date"
@@ -562,10 +564,9 @@ watch(soa, (val: Soa | undefined) => {
             name="due_date"
             v-model="dueDate"
           />
-        </div>
+        </FormField>
 
-        <div class="grid gap-2">
-          <Label for="status">Status<span class="text-red-400">*</span></Label>
+        <FormField name="status" label="Status" for="status" required>
           <Select id="status" v-model="selectedStatus">
             <SelectTrigger class="w-full">
               <SelectValue placeholder="Select status" />
@@ -583,37 +584,36 @@ watch(soa, (val: Soa | undefined) => {
               </SelectGroup>
             </SelectContent>
           </Select>
-        </div>
+        </FormField>
 
-        <DateRangePicker
-          v-if="!isEndorsed"
-          class="md:col-span-2"
-          id="period-date"
-          label="Period Date Range"
-          :required="true"
-          :from="periodDateFrom"
-          :to="periodDateTo"
-          from-name="period_date_from"
-          to-name="period_date_to"
-          @update:from="(v) => { periodDateFrom = v }"
-          @update:to="(v) => { periodDateTo = v }"
-        />
+        <FormField v-if="!isEndorsed" :name="['period_date_from', 'period_date_to']" class="md:col-span-2">
+          <DateRangePicker
+            id="period-date"
+            label="Period Date Range"
+            :required="true"
+            :from="periodDateFrom"
+            :to="periodDateTo"
+            from-name="period_date_from"
+            to-name="period_date_to"
+            @update:from="(v) => { periodDateFrom = v }"
+            @update:to="(v) => { periodDateTo = v }"
+          />
+        </FormField>
 
-        <DateRangePicker
-          v-if="!isEndorsed"
-          class="md:col-span-2"
-          id="contract-date"
-          label="Contract Date Range"
-          :from="contractDateFrom"
-          :to="contractDateTo"
-          from-name="contract_date_from"
-          to-name="contract_date_to"
-          @update:from="(v) => { contractDateFrom = v }"
-          @update:to="(v) => { contractDateTo = v }"
-        />
+        <FormField v-if="!isEndorsed" :name="['contract_date_from', 'contract_date_to']" class="md:col-span-2">
+          <DateRangePicker
+            id="contract-date"
+            label="Contract Date Range"
+            :from="contractDateFrom"
+            :to="contractDateTo"
+            from-name="contract_date_from"
+            to-name="contract_date_to"
+            @update:from="(v) => { contractDateFrom = v }"
+            @update:to="(v) => { contractDateTo = v }"
+          />
+        </FormField>
 
-        <div class="grid gap-2">
-          <Label for="file_pdf">PDF File<span class="text-red-400">*</span></Label>
+        <FormField name="file_pdf" label="PDF File" required>
           <p v-if="existingPdf" class="text-xs text-[var(--color-text-muted)]">
             Current:
             <a
@@ -631,10 +631,9 @@ watch(soa, (val: Soa | undefined) => {
             class="w-full"
             name="file_pdf"
           />
-        </div>
+        </FormField>
 
-        <div class="grid gap-2">
-          <Label for="file_xls">Excel File</Label>
+        <FormField name="file_xls" label="Excel File">
           <p v-if="existingExcel" class="text-xs text-[var(--color-text-muted)]">
             Current:
             <a
@@ -652,10 +651,9 @@ watch(soa, (val: Soa | undefined) => {
             class="w-full"
             name="file_xls"
           />
-        </div>
+        </FormField>
 
-        <div v-if="!isEndorsed" class="grid gap-2">
-          <Label for="amount">Amount<span class="text-red-400">*</span></Label>
+        <FormField v-if="!isEndorsed" name="amount" label="Amount" for="amount" required>
           <Input
             id="amount"
             type="number"
@@ -665,7 +663,7 @@ watch(soa, (val: Soa | undefined) => {
             v-model="amount"
             placeholder="0.00"
           />
-        </div>
+        </FormField>
       </div>
     </section>
   </form>

@@ -2,9 +2,9 @@
 import { ref, onMounted, computed, watch } from 'vue';
 import { usePage } from '@inertiajs/vue3';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Auth, User, UserDetail } from '@/types';
 import { Select, SelectTrigger, SelectContent, SelectGroup, SelectLabel, SelectItem, SelectValue } from '@/components/ui/select';
+import FormField from '@/components/FormField.vue';
 
 type Soa = {
   id?: number
@@ -85,8 +85,7 @@ watch(soa, (val: Soa | undefined) => {
       <input type="hidden" name="status" :value="String(selectedStatus ?? '')" />
     </div>
 
-    <div class="grid gap-2 md:col-span-1">
-      <Label for="status">Status<span class="text-red-400">*</span></Label>
+    <FormField name="status" label="Status" for="status" required class="md:col-span-1">
       <Select
         id="status"
         class="mt-1 block w-full"
@@ -108,6 +107,6 @@ watch(soa, (val: Soa | undefined) => {
           </SelectGroup>
         </SelectContent>
       </Select>
-    </div>
+    </FormField>
   </form>
 </template>
