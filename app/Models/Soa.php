@@ -8,6 +8,7 @@ use App\Enums\OrderType;
 use App\Enums\Server;
 use App\Enums\SoaAging;
 use App\Enums\SoaStatus;
+use App\Enums\TenancyScope;
 use App\Helpers\SqlDatabase;
 use App\Support\LogsAuditActivity;
 use Carbon\Carbon;
@@ -182,37 +183,42 @@ class Soa extends Model
      *
      * This is the single source of truth for SOA visibility and is reused by the list,
      * the export and every dashboard metric, so a new read path can never accidentally
-     * ship an unscoped query:
-     *  - no user             -> nothing (fails closed)
-     *  - superadmin/admin/billing_admin -> unrestricted (full-access staff roles)
-     *  - broker              -> the accounts belonging to their agent code
-     *  - account_branch_admin / group_account_admin -> their assigned account(s)/branch(es)
-     *  - any other role      -> unrestricted, matching the pre-existing list behavior
+     * ship an unscoped query. {@see \App\Enums\TenancyScope} decides which branch applies:
+     *  - ALL                -> unrestricted (full-access staff roles)
+     *  - AGENT_ACCOUNTS     -> the accounts belonging to their agent code
+     *  - ASSIGNED_ACCOUNTS  -> their assigned account(s)/branch(es)
+     *  - NONE               -> nothing
+     *
+     * NONE is the default, so no user and no recognised role both end at no rows. The
+     * previous default was to return the query untouched, which handed every row to any
+     * user the role list did not name — including one with no role at all.
      *
      * Mirrors the per-record check in {@see \App\Helpers\CommonHelper::assertUserMayAccessModel()}.
      */
     public function scopeVisibleTo(Builder $query, ?User $authUser): Builder
     {
-        if (!$authUser) {
-            return $query->whereRaw('1 = 0');
+        switch (TenancyScope::forUser($authUser)) {
+            case TenancyScope::ALL:
+                return $query;
+
+            case TenancyScope::AGENT_ACCOUNTS:
+                $agentAccounts = (new SqlDatabase(Server::HMS))
+                    ->getAccountsOfAgent($authUser->userDetail?->agent_code ?? null);
+
+                // An agent with no accounts resolved must see nothing, not everything:
+                // whereIn on an empty set is already no rows, and this says so outright.
+                return $agentAccounts->isEmpty()
+                    ? $query->whereRaw('1 = 0')
+                    : $query->whereIn('account_code', $agentAccounts);
+
+            case TenancyScope::ASSIGNED_ACCOUNTS:
+                $this->applyUserAccountRestriction($query, $authUser);
+
+                return $query;
+
+            default:
+                return $query->whereRaw('1 = 0');
         }
-
-        if ($authUser->hasAnyRole([config('vc.superadmin'), 'admin', 'billing_admin'])) {
-            return $query;
-        }
-
-        if ($authUser->hasRole('broker')) {
-            $agentAccounts = (new SqlDatabase(Server::HMS))
-                ->getAccountsOfAgent($authUser->userDetail?->agent_code ?? null);
-
-            return $query->whereIn('account_code', $agentAccounts);
-        }
-
-        if ($authUser->hasAnyRole(['account_branch_admin', 'group_account_admin'])) {
-            $this->applyUserAccountRestriction($query, $authUser);
-        }
-
-        return $query;
     }
 
     /**
@@ -336,8 +342,18 @@ class Soa extends Model
 
         if ($authUser->hasRole('account_branch_admin')) {
             $firstAccount = $authUser->userAccounts->first();
-            $query->where('account_code', $firstAccount?->account_code ?? null);
-            if (!empty($firstAccount?->branch_code)) {
+
+            // Without an assigned account there is nothing to scope to. Passing the null
+            // through would compile to "account_code IS NULL", which matches rows rather
+            // than none of them.
+            if (empty($firstAccount?->account_code)) {
+                $query->whereRaw('1 = 0');
+
+                return;
+            }
+
+            $query->where('account_code', $firstAccount->account_code);
+            if (!empty($firstAccount->branch_code)) {
                 $query->where('branch_code', $firstAccount->branch_code);
             }
             return;
@@ -359,7 +375,14 @@ class Soa extends Model
                     });
                 }
             });
+
+            return;
         }
+
+        // Only reached with an assigned-account role today, but a helper that returns an
+        // unrestricted query when it recognises nothing is exactly what this finding was
+        // about. Terminate closed instead.
+        $query->whereRaw('1 = 0');
     }
 
     /**

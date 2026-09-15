@@ -6,6 +6,7 @@ use App\Enums\AccountType;
 use App\Enums\BillRefFrom;
 use App\Enums\OrderType;
 use App\Enums\Server;
+use App\Enums\TenancyScope;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use Ramsey\Collection\Sort;
@@ -58,15 +59,25 @@ class SqlDatabase
             ->orderBy('up_id', 'desc');
 
         $authUser = auth()->user();
-        if ($authUser && !$authUser->hasRole('superadmin')) {
-            $result->whereNull('up_delete_date');
+        $scope = TenancyScope::forUser($authUser);
 
-            // F-03: scope the legacy SOA listing to the caller's own accounts so
-            // tenant roles can no longer read every account's statements.
-            if ($authUser->hasAnyRole(['broker', 'account_branch_admin', 'group_account_admin'])) {
-                $this->applyUploadAccountRestriction($result, $authUser);
-            }
+        // Unchanged: only a superadmin sees soft-deleted statements. This is keyed on the
+        // role itself rather than the tenancy scope, because admin and billing_admin see
+        // every account but still not the deleted rows.
+        if (!$authUser?->hasRole(config('vc.superadmin'))) {
+            $result->whereNull('up_delete_date');
         }
+
+        // Scope the legacy SOA listing to the caller's own accounts so tenant roles
+        // cannot read every account's statements. Anything the enum does not recognise
+        // — an unknown role, or no role — resolves to no rows; it previously fell
+        // through to an unrestricted listing.
+        match ($scope) {
+            TenancyScope::ALL => null,
+            TenancyScope::AGENT_ACCOUNTS,
+            TenancyScope::ASSIGNED_ACCOUNTS => $this->applyUploadAccountRestriction($result, $authUser),
+            default => $result->whereRaw('1 = 0'),
+        };
 
         return $result->paginate($perPage);
     }
@@ -118,7 +129,14 @@ class SqlDatabase
                     });
                 }
             });
+
+            return;
         }
+
+        // Callers only reach this with a scoped role, but a helper that quietly returns
+        // an unrestricted query if that ever stops holding is the shape this finding was
+        // about. Terminate closed instead.
+        $query->whereRaw('1 = 0');
     }
 
     /**
@@ -412,37 +430,37 @@ class SqlDatabase
      */
     private function applyAccountDirectoryFilter($query, $authUser, string $accountColumn): void
     {
-        if (!$authUser || $authUser->hasAnyRole([config('vc.superadmin'), 'admin', 'billing_admin'])) {
-            return;
-        }
+        switch (TenancyScope::forUser($authUser)) {
+            case TenancyScope::ALL:
+                return;
 
-        if ($authUser->hasRole('broker')) {
-            $agentAccounts = (new self(Server::HMS))
-                ->getAccountsOfAgent($authUser->userDetail?->agent_code ?? null);
-            if ($agentAccounts->isEmpty()) {
+            case TenancyScope::AGENT_ACCOUNTS:
+                $agentAccounts = (new self(Server::HMS))
+                    ->getAccountsOfAgent($authUser->userDetail?->agent_code ?? null);
+
+                $agentAccounts->isEmpty()
+                    ? $query->whereRaw('1 = 0')
+                    : $query->whereIn($accountColumn, $agentAccounts);
+
+                return;
+
+            case TenancyScope::ASSIGNED_ACCOUNTS:
+                $accountCodes = $authUser->userAccounts
+                    ->pluck('account_code')
+                    ->filter()
+                    ->unique()
+                    ->values();
+
+                $accountCodes->isEmpty()
+                    ? $query->whereRaw('1 = 0')
+                    : $query->whereIn($accountColumn, $accountCodes->all());
+
+                return;
+
+            default:
+                // Any other role, or none, has no directory access.
                 $query->whereRaw('1 = 0');
-            } else {
-                $query->whereIn($accountColumn, $agentAccounts);
-            }
-            return;
         }
-
-        if ($authUser->hasAnyRole(['account_branch_admin', 'group_account_admin'])) {
-            $accountCodes = $authUser->userAccounts
-                ->pluck('account_code')
-                ->filter()
-                ->unique()
-                ->values();
-            if ($accountCodes->isEmpty()) {
-                $query->whereRaw('1 = 0');
-            } else {
-                $query->whereIn($accountColumn, $accountCodes->all());
-            }
-            return;
-        }
-
-        // Any other non-staff role has no directory access.
-        $query->whereRaw('1 = 0');
     }
 
     /**
@@ -625,13 +643,17 @@ class SqlDatabase
     /**
      * Applies the row-level authorization boundary for cardholder ("c") queries.
      *
-     * Single source of truth for restricting which cardholders a user may see
-     * based on their role and associated userAccounts:
-     *  - broker              -> only cardholders under the agent's accounts
-     *  - account_branch_admin -> only the user's first account (+ branch if set)
-     *  - group_account_admin -> only the union of the user's accounts (+ branch
-     *    per account), grouped so the account set is AND-ed against the query;
-     *    an empty account set resolves to no rows (1 = 0).
+     * Single source of truth for restricting which cardholders a user may see.
+     * {@see \App\Enums\TenancyScope} decides which branch applies:
+     *  - ALL                 -> unrestricted (full-access staff roles)
+     *  - AGENT_ACCOUNTS      -> only cardholders under the agent's accounts
+     *  - ASSIGNED_ACCOUNTS   -> the user's assigned account(s); an account/branch admin
+     *    is held to their first pair, a group admin to the union of theirs
+     *  - NONE                -> no rows (1 = 0)
+     *
+     * NONE is the default, so a user the enum does not recognise — including one with no
+     * role — sees nothing. This previously returned the query untouched, which made an
+     * unrecognised role equivalent to full-access staff.
      *
      * @param  \Illuminate\Database\Query\Builder  $query
      * @param  array  $params
@@ -640,39 +662,85 @@ class SqlDatabase
      */
     private function applyCholderAccountFilters($query, $params, $authUser)
     {
-        if ($authUser?->hasRole('broker')) {
-            $agentAccounts = (new SqlDatabase(Server::HMS))
-                ->getAccountsOfAgent($authUser->userDetail?->agent_code ?? null);
-            $query->whereIn('c.ch_accountid', $agentAccounts);
-        }
+        switch (TenancyScope::forUser($authUser)) {
+            case TenancyScope::ALL:
+                return $query;
 
-        if ($authUser?->hasRole('account_branch_admin')) {
+            case TenancyScope::AGENT_ACCOUNTS:
+                $agentAccounts = (new SqlDatabase(Server::HMS))
+                    ->getAccountsOfAgent($authUser->userDetail?->agent_code ?? null);
+
+                if ($agentAccounts->isEmpty()) {
+                    $query->whereRaw('1 = 0');
+
+                    return $query;
+                }
+
+                $query->whereIn('c.ch_accountid', $agentAccounts);
+
+                return $query;
+
+            case TenancyScope::ASSIGNED_ACCOUNTS:
+                $this->applyCholderUserAccountRestriction($query, $authUser);
+
+                return $query;
+
+            default:
+                $query->whereRaw('1 = 0');
+
+                return $query;
+        }
+    }
+
+    /**
+     * Narrow a cardholder query to the accounts assigned to the user.
+     *
+     * An account/branch admin is held to their first assigned pair and a group admin to
+     * the union of theirs; either with nothing assigned resolves to no rows rather than
+     * to an unfiltered query.
+     *
+     * @param  \Illuminate\Database\Query\Builder  $query
+     * @param  \App\Models\User  $authUser
+     * @return void
+     */
+    private function applyCholderUserAccountRestriction($query, $authUser): void
+    {
+        if ($authUser->hasRole('account_branch_admin')) {
             $firstAccount = $authUser->userAccounts->first();
-            $query->where('c.ch_accountid', $firstAccount?->account_code ?? null);
-            if (!empty($firstAccount?->branch_code)) {
+
+            // A null account code would compile to "IS NULL", which matches rows.
+            if (empty($firstAccount?->account_code)) {
+                $query->whereRaw('1 = 0');
+
+                return;
+            }
+
+            $query->where('c.ch_accountid', $firstAccount->account_code);
+            if (!empty($firstAccount->branch_code)) {
                 $query->where('c.ch_branch_code', $firstAccount->branch_code);
             }
+
+            return;
         }
 
-        if ($authUser?->hasRole('group_account_admin')) {
-            $userAccounts = $authUser->userAccounts;
-            if ($userAccounts->isEmpty()) {
-                $query->whereRaw('1 = 0');
-            } else {
-                $query->where(function ($q) use ($userAccounts) {
-                    foreach ($userAccounts as $ua) {
-                        $q->orWhere(function ($sub) use ($ua) {
-                            $sub->where('c.ch_accountid', $ua->account_code);
-                            if (!empty($ua->branch_code)) {
-                                $sub->where('c.ch_branch_code', $ua->branch_code);
-                            }
-                        });
+        $userAccounts = $authUser->userAccounts;
+
+        if ($userAccounts->isEmpty()) {
+            $query->whereRaw('1 = 0');
+
+            return;
+        }
+
+        $query->where(function ($q) use ($userAccounts) {
+            foreach ($userAccounts as $ua) {
+                $q->orWhere(function ($sub) use ($ua) {
+                    $sub->where('c.ch_accountid', $ua->account_code);
+                    if (!empty($ua->branch_code)) {
+                        $sub->where('c.ch_branch_code', $ua->branch_code);
                     }
                 });
             }
-        }
-
-        return $query;
+        });
     }
 
     /**
@@ -711,9 +779,19 @@ class SqlDatabase
 
     /**
      * Applies account, branch, broker, and billing-date filters on a Claims query (alias "c").
+     *
+     * Like the other row-level scopes, a user {@see \App\Enums\TenancyScope} does not
+     * recognise gets no rows. Without that the account code below comes from the request,
+     * so an unscoped caller could name any account and read its claims.
      */
     private function applyClaimsPolicyFilters($query, array $params, $authUser): string
     {
+        if (TenancyScope::forUser($authUser) === TenancyScope::NONE) {
+            $query->whereRaw('1 = 0');
+
+            return '';
+        }
+
         $accountCode = $params['account_code'] ?? null;
 
         if ($authUser?->hasRole('account_branch_admin')) {
