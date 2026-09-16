@@ -35,6 +35,7 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
             \App\Http\Middleware\SecurityHeaders::class,
+            \App\Http\Middleware\BatchAuditActivity::class,
             // \App\Http\Middleware\EnsureTwoFactorEnabled::class,
         ]);
     })
@@ -50,6 +51,17 @@ return Application::configure(basePath: dirname(__DIR__))
             })
             ->onSuccess(function () {
                 \Illuminate\Support\Facades\Log::info('Billing due reminders executed successfully');
+            });
+
+        // Audit trail retention. Without this the activity log only ever grows; the
+        // cut-off is config('activitylog.delete_records_older_than_days').
+        $schedule->command('activitylog:clean')
+            ->daily()
+            ->at('01:00')
+            ->onOneServer()
+            ->withoutOverlapping(config('vc.overlapping_timeout'))
+            ->onFailure(function () {
+                \Illuminate\Support\Facades\Log::error('Activity log cleanup failed');
             });
     })
     ->withExceptions(function (Exceptions $exceptions) {

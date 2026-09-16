@@ -6,6 +6,7 @@ use App\Enums\AccountType;
 use App\Enums\BillRefFrom;
 use App\Enums\OrderType;
 use App\Enums\Server;
+use App\Enums\TenancyScope;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use Ramsey\Collection\Sort;
@@ -58,15 +59,25 @@ class SqlDatabase
             ->orderBy('up_id', 'desc');
 
         $authUser = auth()->user();
-        if ($authUser && !$authUser->hasRole('superadmin')) {
-            $result->whereNull('up_delete_date');
+        $scope = TenancyScope::forUser($authUser);
 
-            // F-03: scope the legacy SOA listing to the caller's own accounts so
-            // tenant roles can no longer read every account's statements.
-            if ($authUser->hasAnyRole(['broker', 'account_branch_admin', 'group_account_admin'])) {
-                $this->applyUploadAccountRestriction($result, $authUser);
-            }
+        // Unchanged: only a superadmin sees soft-deleted statements. This is keyed on the
+        // role itself rather than the tenancy scope, because admin and billing_admin see
+        // every account but still not the deleted rows.
+        if (!$authUser?->hasRole(config('vc.superadmin'))) {
+            $result->whereNull('up_delete_date');
         }
+
+        // Scope the legacy SOA listing to the caller's own accounts so tenant roles
+        // cannot read every account's statements. Anything the enum does not recognise
+        // — an unknown role, or no role — resolves to no rows; it previously fell
+        // through to an unrestricted listing.
+        match ($scope) {
+            TenancyScope::ALL => null,
+            TenancyScope::AGENT_ACCOUNTS,
+            TenancyScope::ASSIGNED_ACCOUNTS => $this->applyUploadAccountRestriction($result, $authUser),
+            default => $result->whereRaw('1 = 0'),
+        };
 
         return $result->paginate($perPage);
     }
@@ -118,7 +129,14 @@ class SqlDatabase
                     });
                 }
             });
+
+            return;
         }
+
+        // Callers only reach this with a scoped role, but a helper that quietly returns
+        // an unrestricted query if that ever stops holding is the shape this finding was
+        // about. Terminate closed instead.
+        $query->whereRaw('1 = 0');
     }
 
     /**
@@ -207,10 +225,21 @@ class SqlDatabase
             return collect();
         }
 
-        return $this->db
-            ->table('Accounts')
-            ->whereIn('ac_code', $accountCodes)
-            ->pluck('ac_name', 'ac_code');
+        // One bound parameter per code, so a large set has to be asked for in batches
+        // rather than one statement. Chunks are disjoint, so union() merges them
+        // without the key loss a flatten would risk on numeric-looking codes.
+        $names = collect();
+
+        foreach (SqlServerBinding::chunkValues($accountCodes) as $batch) {
+            $names = $names->union(
+                $this->db
+                    ->table('Accounts')
+                    ->whereIn('ac_code', $batch)
+                    ->pluck('ac_name', 'ac_code')
+            );
+        }
+
+        return $names;
     }
 
     /**
@@ -246,10 +275,46 @@ class SqlDatabase
             return collect();
         }
 
+        // Batched for the same reason as {@see getAccountNamesByCodes()}: one bound
+        // parameter per code, and SQL Server caps a statement at 2100 of them.
+        $names = collect();
+
+        foreach (SqlServerBinding::chunkValues($branchCodes) as $batch) {
+            $names = $names->union(
+                $this->db
+                    ->table('Branches')
+                    ->whereIn('br_code', $batch)
+                    ->pluck('br_branch_name', 'br_code')
+            );
+        }
+
+        return $names;
+    }
+
+    /**
+     * Retrieve the display names of many HMS system users in one round trip.
+     *
+     * Legacy remarks record their author as an HMS login; resolving each one on its own
+     * — what the old chat page did, per message — turns a page of conversation into a
+     * query per row, so the whole page is looked up at once.
+     *
+     * Must be called on a {@see Server::HMS} connection instance.
+     *
+     * @param  array<int, string>  $logins
+     * @return \Illuminate\Support\Collection<string, string> User name keyed by login.
+     */
+    public function getSystemUserNamesByLogins(array $logins)
+    {
+        $logins = array_values(array_unique(array_filter($logins)));
+
+        if ($logins === []) {
+            return collect();
+        }
+
         return $this->db
-            ->table('Branches')
-            ->whereIn('br_code', $branchCodes)
-            ->pluck('br_branch_name', 'br_code');
+            ->table('Sys_user')
+            ->whereIn('user_login', $logins)
+            ->pluck('user_name', 'user_login');
     }
 
     /**
@@ -293,19 +358,8 @@ class SqlDatabase
             ->table('Accounts')
             ->select('ac_name', 'ac_code', 'ac_ma_code')
             ->tap(fn ($query) => $this->applyAccountDirectoryFilter($query, auth()->user(), 'ac_code'))
-            ->when(isset($params['type']), function ($query) use ($params) {
-                switch ($params['type']) {
-                    case AccountType::TPA:
-                        $query->where('ac_code', 'like', 'TP%');
-                        break;
-                    case AccountType::HMO:
-                        $query->where('ac_code', 'not like', 'TP%');
-                        break;
-                    // default:
-                        // $query->where('ac_code', 'not like', 'TP%');
-                        // break;
-                }
-            })
+            ->tap(fn ($query) => $this->applyExcludedAccountPrefixes($query, 'ac_code', $params['exclude_prefixes'] ?? []))
+            ->tap(fn ($query) => $this->applyAccountTypeFilter($query, 'ac_code', $params['type'] ?? null))
             ->when(isset($params['name']) && $params['name'] !== '', function ($query) use ($params, $selectedCode) {
                 $query->where(function ($nameQuery) use ($params, $selectedCode) {
                     $nameQuery->where('ac_name', 'like', '%' . $params['name'] . '%');
@@ -364,37 +418,397 @@ class SqlDatabase
      */
     private function applyAccountDirectoryFilter($query, $authUser, string $accountColumn): void
     {
-        if (!$authUser || $authUser->hasAnyRole([config('vc.superadmin'), 'admin', 'billing_admin'])) {
-            return;
-        }
+        switch (TenancyScope::forUser($authUser)) {
+            case TenancyScope::ALL:
+                return;
 
-        if ($authUser->hasRole('broker')) {
-            $agentAccounts = (new self(Server::HMS))
-                ->getAccountsOfAgent($authUser->userDetail?->agent_code ?? null);
-            if ($agentAccounts->isEmpty()) {
+            case TenancyScope::AGENT_ACCOUNTS:
+                $agentAccounts = (new self(Server::HMS))
+                    ->getAccountsOfAgent($authUser->userDetail?->agent_code ?? null);
+
+                $agentAccounts->isEmpty()
+                    ? $query->whereRaw('1 = 0')
+                    : $query->whereIn($accountColumn, $agentAccounts);
+
+                return;
+
+            case TenancyScope::ASSIGNED_ACCOUNTS:
+                $accountCodes = $authUser->userAccounts
+                    ->pluck('account_code')
+                    ->filter()
+                    ->unique()
+                    ->values();
+
+                $accountCodes->isEmpty()
+                    ? $query->whereRaw('1 = 0')
+                    : $query->whereIn($accountColumn, $accountCodes->all());
+
+                return;
+
+            default:
+                // Any other role, or none, has no directory access.
                 $query->whereRaw('1 = 0');
-            } else {
-                $query->whereIn($accountColumn, $agentAccounts);
+        }
+    }
+
+    /**
+     * Drop rows whose account code starts with any of the given prefixes.
+     *
+     * Keeps account classes that are never granted to a user out of the pickers
+     * ({@see \App\Enums\AccountCodePrefix::excludedFromUserAccess()}). Like
+     * {@see applyAccountDirectoryFilter()} it takes the account-code column, so a
+     * branch is excluded by the account it belongs to (`br_ac_code`) rather than by
+     * its own code.
+     *
+     * Prefixes are server-supplied literals from the enum — never client input, which
+     * the lookup requests strip — so they are concatenated into the LIKE pattern
+     * without an ESCAPE clause.
+     *
+     * @param  \Illuminate\Database\Query\Builder  $query
+     * @param  string  $accountColumn  The account-code column on the queried table.
+     * @param  array<int, string>  $prefixes
+     * @return void
+     */
+    private function applyExcludedAccountPrefixes($query, string $accountColumn, array $prefixes): void
+    {
+        foreach ($prefixes as $prefix) {
+            $prefix = trim((string) $prefix);
+
+            if ($prefix === '') {
+                continue;
             }
+
+            $query->where($accountColumn, 'not like', $prefix.'%');
+        }
+    }
+
+    /**
+     * Narrow a directory query to one account class by account code.
+     *
+     * HMS has no account-type column: the type is carried by the code, "TP" leading a
+     * TPA account and anything else an HMO one. That is the same rule
+     * {@see AccountType::fromAccountCode()} stamps onto a record — expressed as a
+     * predicate rather than an evaluation, because a listing has to narrow the query
+     * rather than classify a row it already has. The two say the same thing and must
+     * change together; nothing else may restate it.
+     *
+     * {@see AccountType::TPA_HMO} covers both classes, so it narrows nothing — and
+     * neither does an absent or unrecognised value.
+     *
+     * @param  \Illuminate\Database\Query\Builder  $query
+     * @param  string  $accountColumn  The account-code column on the queried table.
+     * @param  string|null  $type
+     * @return void
+     */
+    private function applyAccountTypeFilter($query, string $accountColumn, $type): void
+    {
+        match ($type) {
+            AccountType::TPA => $query->where($accountColumn, 'like', 'TP%'),
+            AccountType::HMO => $query->where($accountColumn, 'not like', 'TP%'),
+            default => null,
+        };
+    }
+
+    /**
+     * Keep only rows whose account code carries the given prefix.
+     *
+     * The counterpart of {@see applyExcludedAccountPrefixes()}: that one drops classes
+     * nobody may be given, this one narrows to the single class being looked at. The
+     * value is validated against {@see \App\Enums\AccountCodePrefix} before it gets
+     * here, so — like the exclusions — it is a server-known literal and needs no
+     * ESCAPE clause.
+     *
+     * @param  \Illuminate\Database\Query\Builder  $query
+     * @param  string  $accountColumn  The account-code column on the queried table.
+     * @param  string|null  $prefix
+     * @return void
+     */
+    private function applyAccountCodePrefixFilter($query, string $accountColumn, $prefix): void
+    {
+        $prefix = trim((string) $prefix);
+
+        if ($prefix === '') {
             return;
         }
 
-        if ($authUser->hasAnyRole(['account_branch_admin', 'group_account_admin'])) {
-            $accountCodes = $authUser->userAccounts
-                ->pluck('account_code')
-                ->filter()
-                ->unique()
-                ->values();
-            if ($accountCodes->isEmpty()) {
-                $query->whereRaw('1 = 0');
-            } else {
-                $query->whereIn($accountColumn, $accountCodes->all());
-            }
+        $query->where($accountColumn, 'like', $prefix.'%');
+    }
+
+    /**
+     * Exclude a set of codes from a query, however large the set is.
+     *
+     * One `whereNotIn` per value would blow the bound-parameter ceiling on a big set,
+     * so the values are split into statement-sized batches
+     * ({@see SqlServerBinding::chunkValues()}) and applied as several ANDed clauses —
+     * excluding each batch in turn excludes exactly their union, which is what one
+     * clause would have done.
+     *
+     * @param  \Illuminate\Database\Query\Builder  $query
+     * @param  string  $column
+     * @param  array<int, string>  $values
+     * @return void
+     */
+    private function applyNotInChunked($query, string $column, array $values): void
+    {
+        $values = array_values(array_unique(array_filter(
+            array_map(static fn ($value): string => trim((string) $value), $values),
+            static fn (string $value): bool => $value !== ''
+        )));
+
+        foreach (SqlServerBinding::chunkValues($values) as $batch) {
+            $query->whereNotIn($column, $batch);
+        }
+    }
+
+    /**
+     * Retrieves a paginated list of HMS accounts that no user is mapped to, each
+     * carrying how many cardholders it has.
+     *
+     * The complement of {@see getAccountsByParams()} minus what is already granted:
+     * the same directory, the same excluded classes, so an account listed here is one
+     * the account picker would offer and nobody has been given. Which codes count as
+     * granted is decided by {@see \App\Models\UserAccount::assignedAccountCodes()} and
+     * passed in — the mappings live on the application database and HMS cannot be
+     * joined to it.
+     *
+     * Cancelled and expired accounts are listed alongside active ones, because they
+     * are equally mappable; `ac_status` travels with each row so the difference is
+     * visible rather than silently decided here.
+     *
+     * @param  array  $params  Supports per_page, search_string, code_prefix, account_type,
+     *                         members_min, members_max, exclude_prefixes and
+     *                         assigned_account_codes.
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     */
+    public function getUnassignedAccountsByParams($params)
+    {
+        $perPage = $params['per_page'] ?? config('vc.default_pages');
+        $search = trim((string) ($params['search_string'] ?? ''));
+
+        $query = $this->db
+            ->table('Accounts')
+            ->select('Accounts.ac_code', 'Accounts.ac_name', 'Accounts.ac_ma_code', 'Accounts.ac_status')
+            ->tap(fn ($q) => $this->applyAccountDirectoryFilter($q, auth()->user(), 'Accounts.ac_code'))
+            ->tap(fn ($q) => $this->applyExcludedAccountPrefixes($q, 'Accounts.ac_code', $params['exclude_prefixes'] ?? []))
+            ->tap(fn ($q) => $this->applyAccountCodePrefixFilter($q, 'Accounts.ac_code', $params['code_prefix'] ?? null))
+            ->tap(fn ($q) => $this->applyAccountTypeFilter($q, 'Accounts.ac_code', $params['account_type'] ?? null))
+            ->tap(fn ($q) => $this->applyNotInChunked($q, 'Accounts.ac_code', $params['assigned_account_codes'] ?? []))
+            ->when($search !== '', function ($q) use ($search) {
+                $q->where(function ($sub) use ($search) {
+                    $sub->where('Accounts.ac_name', 'like', '%'.$search.'%')
+                        ->orWhere('Accounts.ac_code', 'like', '%'.$search.'%');
+                });
+            });
+
+        $this->applyMemberCountRange($query, $params, 'ch_accountid', 'Accounts.ac_code');
+
+        return $this->attachAccountMemberCounts($query->orderBy('Accounts.ac_name')->paginate($perPage));
+    }
+
+    /**
+     * Retrieves a paginated list of HMS branches that no user is mapped to, each
+     * carrying how many cardholders it has.
+     *
+     * A branch is reachable two ways, so both are subtracted: its own code being
+     * mapped, and its account being mapped with no branch at all — which grants every
+     * branch of that account ({@see \App\Models\UserAccount::mappingKey()}). The
+     * branch's own code is the unit of exclusion because that is all a mapping stores;
+     * two HMS branches sharing a code are therefore both reachable, and both drop out
+     * together.
+     *
+     * @param  array  $params  Supports per_page, search_string, code_prefix, account_type,
+     *                         members_min, members_max, exclude_prefixes,
+     *                         assigned_branch_codes and accounts_mapped_in_full.
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     */
+    public function getUnassignedBranchesByParams($params)
+    {
+        $perPage = $params['per_page'] ?? config('vc.default_pages');
+        $search = trim((string) ($params['search_string'] ?? ''));
+
+        $query = $this->db
+            ->table('Branches')
+            ->select('Branches.br_code', 'Branches.br_branch_name', 'Branches.br_ac_code')
+            ->tap(fn ($q) => $this->applyAccountDirectoryFilter($q, auth()->user(), 'Branches.br_ac_code'))
+            ->tap(fn ($q) => $this->applyExcludedAccountPrefixes($q, 'Branches.br_ac_code', $params['exclude_prefixes'] ?? []))
+            ->tap(fn ($q) => $this->applyAccountCodePrefixFilter($q, 'Branches.br_ac_code', $params['code_prefix'] ?? null))
+            ->tap(fn ($q) => $this->applyAccountTypeFilter($q, 'Branches.br_ac_code', $params['account_type'] ?? null))
+            ->tap(fn ($q) => $this->applyNotInChunked($q, 'Branches.br_code', $params['assigned_branch_codes'] ?? []))
+            ->tap(fn ($q) => $this->applyNotInChunked($q, 'Branches.br_ac_code', $params['accounts_mapped_in_full'] ?? []))
+            ->when($search !== '', function ($q) use ($search) {
+                $q->where(function ($sub) use ($search) {
+                    $sub->where('Branches.br_branch_name', 'like', '%'.$search.'%')
+                        ->orWhere('Branches.br_code', 'like', '%'.$search.'%')
+                        ->orWhere('Branches.br_ac_code', 'like', '%'.$search.'%')
+                        // The account name lives on another table, and joining Accounts
+                        // would both duplicate and drop branch rows — ac_code is not
+                        // unique and some branches point at an account HMS no longer
+                        // has. A semi-join filters without touching the row count.
+                        ->orWhereIn('Branches.br_ac_code', function ($accounts) use ($search) {
+                            $accounts->select('ac_code')
+                                ->from('Accounts')
+                                ->where('ac_name', 'like', '%'.$search.'%');
+                        });
+                });
+            });
+
+        $this->applyMemberCountRange($query, $params, 'ch_branch_code', 'Branches.br_code');
+
+        return $this->attachBranchMemberCounts($query->orderBy('Branches.br_branch_name')->paginate($perPage));
+    }
+
+    /**
+     * Whether a listing was asked to filter on how many cardholders a row has.
+     *
+     * Filtering on the count is the one thing that cannot be answered per page — every
+     * candidate has to be counted before the page is cut — so it is the only case that
+     * pays for the directory-wide aggregate below.
+     *
+     * @param  array  $params
+     */
+    private function hasMemberCountRange(array $params): bool
+    {
+        return isset($params['members_min']) || isset($params['members_max']);
+    }
+
+    /**
+     * Restrict a directory listing to rows holding a given number of cardholders.
+     *
+     * Each bound is a join against `cholders` grouped and filtered by a HAVING clause,
+     * so the aggregate is computed once, over an index, and already narrowed to the
+     * rows that qualify. The obvious alternative — joining the whole ungrouped
+     * aggregate and comparing the count in the WHERE — measured between ten and fifty
+     * times slower here, because the bound can no longer be applied while grouping.
+     *
+     * The upper bound is expressed the other way round, as the *absence* of a group
+     * above the maximum. That is what makes "at most N" — and "none at all" — include
+     * rows with no cardholder records whatsoever, which have no aggregate row to
+     * compare against in the first place.
+     *
+     * A lower bound of zero excludes nothing and so is not joined at all.
+     *
+     * @param  \Illuminate\Database\Query\Builder  $query
+     * @param  array  $params
+     * @param  string  $memberColumn  The `cholders` column rows are counted by.
+     * @param  string  $directoryColumn  The matching column on the queried directory table.
+     * @return void
+     */
+    private function applyMemberCountRange($query, array $params, string $memberColumn, string $directoryColumn): void
+    {
+        if (!$this->hasMemberCountRange($params)) {
             return;
         }
 
-        // Any other non-staff role has no directory access.
-        $query->whereRaw('1 = 0');
+        $min = isset($params['members_min']) ? max(0, (int) $params['members_min']) : null;
+        $max = isset($params['members_max']) ? max(0, (int) $params['members_max']) : null;
+
+        if ($min !== null && $min > 0) {
+            $query->joinSub(
+                $this->memberCountsHaving($memberColumn, '>=', $min),
+                'members_at_least',
+                "members_at_least.{$memberColumn}",
+                '=',
+                $directoryColumn
+            );
+        }
+
+        if ($max !== null) {
+            $query->leftJoinSub(
+                $this->memberCountsHaving($memberColumn, '>', $max),
+                'members_above_max',
+                "members_above_max.{$memberColumn}",
+                '=',
+                $directoryColumn
+            )->whereNull("members_above_max.{$memberColumn}");
+        }
+    }
+
+    /**
+     * The codes whose cardholder count satisfies one bound, as a joinable subquery.
+     *
+     * The operator is a literal chosen by {@see applyMemberCountRange()} and the
+     * threshold is bound, so nothing a client sends reaches the HAVING clause as SQL.
+     *
+     * @param  string  $memberColumn  The `cholders` column rows are counted by.
+     * @param  string  $operator  Comparison against the count, e.g. '>=' or '>'.
+     * @param  int  $value
+     * @return \Illuminate\Database\Query\Builder
+     */
+    private function memberCountsHaving(string $memberColumn, string $operator, int $value)
+    {
+        return $this->db
+            ->table('cholders')
+            ->select($memberColumn)
+            ->groupBy($memberColumn)
+            ->havingRaw("COUNT(*) {$operator} ?", [$value]);
+    }
+
+    /**
+     * Fill in `member_count` for the accounts on one page.
+     *
+     * Counting only what is displayed keeps the common case — no member filter — off
+     * the directory-wide aggregate entirely: a page's worth of codes is a handful of
+     * index seeks. The page size is capped by `vc.max_per_pages`, so the `whereIn`
+     * cannot approach the bound-parameter ceiling.
+     *
+     * @param  \Illuminate\Contracts\Pagination\LengthAwarePaginator  $page
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     */
+    private function attachAccountMemberCounts($page)
+    {
+        $rows = $page->getCollection();
+        $accountCodes = $rows->pluck('ac_code')->filter()->unique()->values()->all();
+
+        $counts = $accountCodes === []
+            ? collect()
+            : $this->db->table('cholders')
+                ->selectRaw('ch_accountid, COUNT(*) AS member_count')
+                ->whereIn('ch_accountid', $accountCodes)
+                ->groupBy('ch_accountid')
+                ->pluck('member_count', 'ch_accountid');
+
+        $rows->transform(function ($row) use ($counts) {
+            $row->member_count = (int) ($counts[$row->ac_code] ?? 0);
+
+            return $row;
+        });
+
+        return $page;
+    }
+
+    /**
+     * Fill in `member_count` for the branches on one page.
+     *
+     * Branch counterpart of {@see attachAccountMemberCounts()}, counting on the branch
+     * code alone. That is the same identity a mapping uses — a row stores a branch
+     * code and nothing narrower ({@see \App\Models\UserAccount::mappingKey()}) — so a
+     * branch's member count and its assignment are talking about the same thing. It is
+     * also the only column `cholders` indexes for this, which is what keeps the
+     * bounded listing above under a second rather than over twenty.
+     *
+     * @param  \Illuminate\Contracts\Pagination\LengthAwarePaginator  $page
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     */
+    private function attachBranchMemberCounts($page)
+    {
+        $rows = $page->getCollection();
+        $branchCodes = $rows->pluck('br_code')->filter()->unique()->values()->all();
+
+        $counts = $branchCodes === []
+            ? collect()
+            : $this->db->table('cholders')
+                ->selectRaw('ch_branch_code, COUNT(*) AS member_count')
+                ->whereIn('ch_branch_code', $branchCodes)
+                ->groupBy('ch_branch_code')
+                ->pluck('member_count', 'ch_branch_code');
+
+        $rows->transform(function ($row) use ($counts) {
+            $row->member_count = (int) ($counts[$row->br_code] ?? 0);
+
+            return $row;
+        });
+
+        return $page;
     }
 
     /**
@@ -546,13 +960,17 @@ class SqlDatabase
     /**
      * Applies the row-level authorization boundary for cardholder ("c") queries.
      *
-     * Single source of truth for restricting which cardholders a user may see
-     * based on their role and associated userAccounts:
-     *  - broker              -> only cardholders under the agent's accounts
-     *  - account_branch_admin -> only the user's first account (+ branch if set)
-     *  - group_account_admin -> only the union of the user's accounts (+ branch
-     *    per account), grouped so the account set is AND-ed against the query;
-     *    an empty account set resolves to no rows (1 = 0).
+     * Single source of truth for restricting which cardholders a user may see.
+     * {@see \App\Enums\TenancyScope} decides which branch applies:
+     *  - ALL                 -> unrestricted (full-access staff roles)
+     *  - AGENT_ACCOUNTS      -> only cardholders under the agent's accounts
+     *  - ASSIGNED_ACCOUNTS   -> the user's assigned account(s); an account/branch admin
+     *    is held to their first pair, a group admin to the union of theirs
+     *  - NONE                -> no rows (1 = 0)
+     *
+     * NONE is the default, so a user the enum does not recognise — including one with no
+     * role — sees nothing. This previously returned the query untouched, which made an
+     * unrecognised role equivalent to full-access staff.
      *
      * @param  \Illuminate\Database\Query\Builder  $query
      * @param  array  $params
@@ -561,39 +979,85 @@ class SqlDatabase
      */
     private function applyCholderAccountFilters($query, $params, $authUser)
     {
-        if ($authUser?->hasRole('broker')) {
-            $agentAccounts = (new SqlDatabase(Server::HMS))
-                ->getAccountsOfAgent($authUser->userDetail?->agent_code ?? null);
-            $query->whereIn('c.ch_accountid', $agentAccounts);
-        }
+        switch (TenancyScope::forUser($authUser)) {
+            case TenancyScope::ALL:
+                return $query;
 
-        if ($authUser?->hasRole('account_branch_admin')) {
+            case TenancyScope::AGENT_ACCOUNTS:
+                $agentAccounts = (new SqlDatabase(Server::HMS))
+                    ->getAccountsOfAgent($authUser->userDetail?->agent_code ?? null);
+
+                if ($agentAccounts->isEmpty()) {
+                    $query->whereRaw('1 = 0');
+
+                    return $query;
+                }
+
+                $query->whereIn('c.ch_accountid', $agentAccounts);
+
+                return $query;
+
+            case TenancyScope::ASSIGNED_ACCOUNTS:
+                $this->applyCholderUserAccountRestriction($query, $authUser);
+
+                return $query;
+
+            default:
+                $query->whereRaw('1 = 0');
+
+                return $query;
+        }
+    }
+
+    /**
+     * Narrow a cardholder query to the accounts assigned to the user.
+     *
+     * An account/branch admin is held to their first assigned pair and a group admin to
+     * the union of theirs; either with nothing assigned resolves to no rows rather than
+     * to an unfiltered query.
+     *
+     * @param  \Illuminate\Database\Query\Builder  $query
+     * @param  \App\Models\User  $authUser
+     * @return void
+     */
+    private function applyCholderUserAccountRestriction($query, $authUser): void
+    {
+        if ($authUser->hasRole('account_branch_admin')) {
             $firstAccount = $authUser->userAccounts->first();
-            $query->where('c.ch_accountid', $firstAccount?->account_code ?? null);
-            if (!empty($firstAccount?->branch_code)) {
+
+            // A null account code would compile to "IS NULL", which matches rows.
+            if (empty($firstAccount?->account_code)) {
+                $query->whereRaw('1 = 0');
+
+                return;
+            }
+
+            $query->where('c.ch_accountid', $firstAccount->account_code);
+            if (!empty($firstAccount->branch_code)) {
                 $query->where('c.ch_branch_code', $firstAccount->branch_code);
             }
+
+            return;
         }
 
-        if ($authUser?->hasRole('group_account_admin')) {
-            $userAccounts = $authUser->userAccounts;
-            if ($userAccounts->isEmpty()) {
-                $query->whereRaw('1 = 0');
-            } else {
-                $query->where(function ($q) use ($userAccounts) {
-                    foreach ($userAccounts as $ua) {
-                        $q->orWhere(function ($sub) use ($ua) {
-                            $sub->where('c.ch_accountid', $ua->account_code);
-                            if (!empty($ua->branch_code)) {
-                                $sub->where('c.ch_branch_code', $ua->branch_code);
-                            }
-                        });
+        $userAccounts = $authUser->userAccounts;
+
+        if ($userAccounts->isEmpty()) {
+            $query->whereRaw('1 = 0');
+
+            return;
+        }
+
+        $query->where(function ($q) use ($userAccounts) {
+            foreach ($userAccounts as $ua) {
+                $q->orWhere(function ($sub) use ($ua) {
+                    $sub->where('c.ch_accountid', $ua->account_code);
+                    if (!empty($ua->branch_code)) {
+                        $sub->where('c.ch_branch_code', $ua->branch_code);
                     }
                 });
             }
-        }
-
-        return $query;
+        });
     }
 
     /**
@@ -632,9 +1096,19 @@ class SqlDatabase
 
     /**
      * Applies account, branch, broker, and billing-date filters on a Claims query (alias "c").
+     *
+     * Like the other row-level scopes, a user {@see \App\Enums\TenancyScope} does not
+     * recognise gets no rows. Without that the account code below comes from the request,
+     * so an unscoped caller could name any account and read its claims.
      */
     private function applyClaimsPolicyFilters($query, array $params, $authUser): string
     {
+        if (TenancyScope::forUser($authUser) === TenancyScope::NONE) {
+            $query->whereRaw('1 = 0');
+
+            return '';
+        }
+
         $accountCode = $params['account_code'] ?? null;
 
         if ($authUser?->hasRole('account_branch_admin')) {
@@ -1060,6 +1534,7 @@ class SqlDatabase
             ->table('Branches')
             ->select('br_branch_name', 'br_ac_code', 'br_code')
             ->tap(fn ($query) => $this->applyAccountDirectoryFilter($query, auth()->user(), 'br_ac_code'))
+            ->tap(fn ($query) => $this->applyExcludedAccountPrefixes($query, 'br_ac_code', $params['exclude_prefixes'] ?? []))
             ->when(isset($params['account_code']), function ($query) use ($params) {
                 $query->where('br_ac_code', $params['account_code']);
             })
@@ -1070,9 +1545,6 @@ class SqlDatabase
                         $nameQuery->orWhere('br_code', $selectedCode);
                     }
                 });
-            })
-            ->when(!empty($selectedCode), function ($query) use ($selectedCode) {
-                $query->orderByRaw("CASE WHEN br_code = ? THEN 0 ELSE 1 END", [$selectedCode]);
             })
             ->orderBy('br_branch_name');
 
@@ -1185,6 +1657,49 @@ class SqlDatabase
                 'soa_hc_datetime' => $params['datetime'],
                 'soa_hc_ip' => $params['ip'],
             ]);
+    }
+
+    /**
+     * Retrieves a paginated page of legacy eSOA remarks for one SOA number.
+     *
+     * These are the rows the previous system's conversation view rendered: `remarks`
+     * filtered by `rem_refid` (the SOA number, which is how the legacy side keys them),
+     * newest first, with `rem_id` breaking ties so messages posted within the same
+     * second paginate deterministically. The ref id is the only filter — the caller is
+     * responsible for authorising the SOA it belongs to.
+     *
+     * Must be called on a {@see Server::SOA} connection instance.
+     *
+     * @param array $params Supports refid (required) and per_page.
+     * @return \Illuminate\Pagination\LengthAwarePaginator
+     */
+    public function getOldRemarksByParams($params)
+    {
+        $perPage = $params['per_page'] ?? config('vc.default_pages');
+        $refId = trim((string) ($params['refid'] ?? ''));
+
+        $result = $this->db
+            ->table('remarks')
+            ->select([
+                'rem_id',
+                'rem_refid',
+                'rem_date',
+                'rem_remark',
+                'rem_by',
+                'rem_filename',
+                'rem_to',
+                'rem_isVC',
+                'rem_accode',
+                'rem_macode',
+                'rem_branch',
+            ])
+            // Without a ref id this would read every conversation in the legacy table.
+            ->when($refId === '', fn ($query) => $query->whereRaw('1 = 0'))
+            ->when($refId !== '', fn ($query) => $query->where('rem_refid', $refId))
+            ->orderByDesc('rem_date')
+            ->orderByDesc('rem_id');
+
+        return $result->paginate($perPage);
     }
 
     /**

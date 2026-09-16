@@ -161,7 +161,7 @@ class CreateRequest extends FormRequest
     protected function passedValidation(): void
     {
         $this->merge([
-            'account_type' => str_starts_with($this->input('account_code'), 'TP') ? AccountType::TPA : AccountType::HMO,
+            'account_type' => AccountType::fromAccountCode($this->input('account_code')),
         ]);
     }
 }

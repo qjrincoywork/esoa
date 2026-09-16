@@ -40,6 +40,11 @@ class ImportUploadsJob implements ShouldQueue
      * Iterates the normalized records and delegates to importUpload(), then
      * commits. Any failure rolls back the transaction, logs the error, and
      * rethrows so the job can be retried.
+     *
+     * The backfill is deliberately kept out of the audit trail: it is a machine
+     * migration of legacy records with no user behind it, and one entry per imported
+     * invoice would bury the changes people actually made under thousands of rows
+     * nobody can act on. The import already reports itself through the job log.
      */
     public function handle(): void
     {
@@ -49,9 +54,11 @@ class ImportUploadsJob implements ShouldQueue
             $uploadsFolder = config('vc.uploads_folder');
             $billingDisk = Storage::disk(config('vc.billing_disk'));
 
-            foreach ($this->records() as $upload) {
-                $this->importUpload($upload, $uploadsFolder, $billingDisk);
-            }
+            activity()->withoutLogs(function () use ($uploadsFolder, $billingDisk): void {
+                foreach ($this->records() as $upload) {
+                    $this->importUpload($upload, $uploadsFolder, $billingDisk);
+                }
+            });
 
             DB::commit();
         } catch (Throwable $e) {
@@ -125,9 +132,7 @@ class ImportUploadsJob implements ShouldQueue
         $soa->fill([
             'user_id' => $this->authId,
             'soa_number' => trim($upload->up_soanum), //$upload->up_soanum,
-            'account_type' => str_starts_with($upload->up_accode, 'TP')
-                ? AccountType::TPA
-                : AccountType::HMO,
+            'account_type' => AccountType::fromAccountCode($upload->up_accode),
             'account_code' => $upload->up_accode,
             'branch_code' => ! empty($upload->up_branchcode) ? $upload->up_branchcode : null,
             'bill_type' => BillType::oldValue($upload->up_billtype),

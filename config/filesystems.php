@@ -49,19 +49,31 @@ return [
 
         'rm' => [
             'driver' => 'local',
-            'root' => env('ROOT_FOLDER') . DIRECTORY_SEPARATOR . 'rm',
+            'root' => env('RM_ROOT_FOLDER') . DIRECTORY_SEPARATOR . 'rm',
         ],
         'billing' => [
             'driver' => 'local',
-            'root' => env('ROOT_FOLDER') . DIRECTORY_SEPARATOR . 'billing' . DIRECTORY_SEPARATOR . 'billing_invoices',
+            'root' => env('ROOT_FOLDER') . DIRECTORY_SEPARATOR . 'billing_invoices',
         ],
         'concerns' => [
             'driver' => 'local',
-            'root' => env('ROOT_FOLDER') . DIRECTORY_SEPARATOR . 'billing' . DIRECTORY_SEPARATOR . 'concerns',
+            'root' => env('ROOT_FOLDER') . DIRECTORY_SEPARATOR . 'concerns',
         ],
         'payments' => [
             'driver' => 'local',
-            'root' => env('ROOT_FOLDER') . DIRECTORY_SEPARATOR . 'billing' . DIRECTORY_SEPARATOR . 'payments',
+            'root' => env('ROOT_FOLDER') . DIRECTORY_SEPARATOR . 'payments',
+        ],
+        /*
+         * Read-only view of the previous eSOA system's chat_attachments tree, which
+         * still holds the files attached to the old remarks/concerns thread. Point
+         * LEGACY_CHAT_ATTACHMENTS_ROOT at that directory (a UNC share is fine — the
+         * disks above already use one); the app streams from here rather than sending
+         * the browser to the legacy host, which it cannot reach. An unset root falls
+         * back to an empty local directory, so attachments simply resolve to 404.
+         */
+        'legacy_chat' => [
+            'driver' => 'local',
+            'root' => env('LEGACY_CHAT_ATTACHMENTS_ROOT') ?: storage_path('app/private/legacy_chat'),
         ],
 
         's3' => [

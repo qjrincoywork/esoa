@@ -91,40 +91,42 @@ defineExpose({ formRef, getFormData })
       </div>
     </div>
 
-    <div class="border rounded max-h-72 overflow-auto">
-      <table class="min-w-full text-sm">
-        <thead class="bg-muted sticky top-0 z-10">
-          <tr>
-            <th class="px-3 py-2 text-left w-10">#</th>
-            <th class="px-3 py-2 text-left">Role</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="role in filteredRoles"
-            :key="role.id"
-            class="border-t"
-          >
-            <td class="px-3 py-2">
-              <Switch
-                name="roles[]"
-                :default-value="isChecked(role.id)"
-                :value="role.id"
-              />
-            </td>
-            <td class="px-3 py-2">
-              {{ role.name }}
-            </td>
-          </tr>
+    <FormField name="roles" nested>
+      <div class="border rounded max-h-72 overflow-auto">
+        <table class="min-w-full text-sm">
+          <thead class="bg-muted sticky top-0 z-10">
+            <tr>
+              <th class="px-3 py-2 text-left w-10">#</th>
+              <th class="px-3 py-2 text-left">Role</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="role in filteredRoles"
+              :key="role.id"
+              class="border-t"
+            >
+              <td class="px-3 py-2">
+                <Switch
+                  name="roles[]"
+                  :default-value="isChecked(role.id)"
+                  :value="role.id"
+                />
+              </td>
+              <td class="px-3 py-2">
+                {{ role.name }}
+              </td>
+            </tr>
 
-          <tr v-if="!filteredRoles.length">
-            <td colspan="2" class="px-3 py-4 text-center text-muted-foreground">
-              No roles found.
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+            <tr v-if="!filteredRoles.length">
+              <td colspan="2" class="px-3 py-4 text-center text-muted-foreground">
+                No roles found.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </FormField>
   </form>
 </template>
 

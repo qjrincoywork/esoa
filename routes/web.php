@@ -3,6 +3,7 @@
 use App\Enums\SoaAging;
 use App\Http\Controllers\{
     AccountPaymentController,
+    ActivityLogController,
     AdminController,
     ConcernController,
     DashboardController,
@@ -11,6 +12,7 @@ use App\Http\Controllers\{
     PermissionController,
     RoleController,
     SoaController,
+    UnmappedAccountController,
     UserController,
 };
 use App\Models\{ AccountPayment, Concern, Soa };
@@ -61,6 +63,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('overview', function () {
         return Inertia::render('Overview');
     })->name('overview');
+
+    Route::get('faq', function () {
+        return Inertia::render('Faq');
+    })->name('faq');
     // Superadmin-only routes - only admins can access these
     Route::middleware(['role:superadmin'])->group(function () {
         // Route::resource('admin', AdminController::class)->middleware('check_permissions');
@@ -80,6 +86,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::get('/get_branches', 'getBranches')->name('get_branches');
                 Route::get('/account_access_users', 'accountAccessUsers')->name('account_access_users');
                 Route::get('/{id}/edit_roles', 'editRoles')->name('edit_roles');
+                Route::get('/{id}/account_mapping', 'accountMapping')->name('account_mapping');
+                Route::post('/update_account_mapping', 'updateAccountMapping')->name('update_account_mapping');
                 Route::get('/all_roles', 'allRoles')->name('all_roles');
                 Route::post('/update_roles', 'updateRoles')->name('update_roles');
                 Route::post('/bulk_update_roles', 'bulkUpdateRoles')->name('bulk_update_roles');
@@ -119,6 +127,21 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::post('/destroy', 'destroy')->name('destroy');
         });
 
+        // Activity logs — read-only audit trail across the audited modules
+        Route::prefix('activity_logs')->name('activity_logs.')
+            ->middleware('check_permissions')
+            ->controller(ActivityLogController::class)->group(function () {
+                Route::get('/', 'index')->name('index');
+                Route::get('/{id}/show', 'show')->name('show');
+        });
+
+        // Unmapped accounts & branches — the account-mapping coverage gap, read-only
+        Route::prefix('unmapped_accounts')->name('unmapped_accounts.')
+            ->middleware('check_permissions')
+            ->controller(UnmappedAccountController::class)->group(function () {
+                Route::get('/', 'index')->name('index');
+        });
+
         //Navigations
         Route::prefix('navigations')->name('navigations.')
             ->middleware('check_permissions')
@@ -155,6 +178,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/export', 'exportList')->name('export');
             Route::get('/file_list', 'fileList')->name('file_list');
             Route::get('/preview_file', 'previewFile')->name('preview_file');
+            Route::get('/preview_old_remark_file', 'previewOldRemarkFile')->name('preview_old_remark_file');
             Route::get('/find_member', 'findMember')->name('find_member');
             Route::get('/member_files', 'memberFiles')->name('member_files');
             Route::get('/get_accounts', 'getAccounts')->name('get_accounts');
@@ -162,6 +186,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/get_branches', 'getBranches')->name('get_branches');
             Route::get('/{id}/activities', 'activities')->name('activities');
             Route::get('/{id}/concerns', 'concerns')->name('concerns');
+            Route::get('/{id}/old_remarks', 'oldRemarks')->name('old_remarks');
             Route::get('/{id}/account_payments', 'soaAccountPayments')->name('account_payments');
             Route::post('/{id}/record_viewed', 'recordViewed')->name('record_viewed');
             Route::get('/{id}/view_billing_invoice', 'viewBillingInvoice')->name('view_billing_invoice');

@@ -1,4 +1,5 @@
 import { shallowReactive, type Component } from 'vue';
+import { useFormErrors } from '@/composables/useFormErrors';
 
 export type PaneSide = 'top' | 'right' | 'bottom' | 'left';
 
@@ -46,7 +47,12 @@ function resetPaneState(pane: PaneState) {
 }
 
 export function usePane() {
+  const { clearErrors } = useFormErrors();
+
   const openPane = (options: PaneOptions = {}) => {
+    // Same reasoning as useModal: a form opens clean, whichever surface holds it.
+    clearErrors();
+
     const side = options.side ?? 'right';
     const pane = panes[side];
 
@@ -59,6 +65,8 @@ export function usePane() {
   };
 
   const closePane = (side?: PaneSide) => {
+    clearErrors();
+
     if (side) {
       resetPaneState(panes[side]);
       return;

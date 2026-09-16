@@ -35,6 +35,14 @@ class RolePermissionSeeder extends Seeder
             'users.destroy',
             'users.verify',
             'users.toggle_active',
+            'users.account_mapping',
+
+            // activity logs (superadmin only — granted via syncPermissions below)
+            'activity_logs.index',
+            'activity_logs.show',
+
+            // unmapped accounts & branches (superadmin only — granted via syncPermissions below)
+            'unmapped_accounts.index',
 
             // roles
             'roles.index',

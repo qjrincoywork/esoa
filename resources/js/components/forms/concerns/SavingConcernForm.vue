@@ -9,6 +9,7 @@ import { SearchableCombobox } from '@/components/ui/searchable-combobox';
 import { Auth, User } from '@/types';
 import { debounce } from 'lodash-es';
 import { useModulePermissions } from '@/composables/useModulePermissions';
+import FormField from '@/components/FormField.vue';
 
 const { slug, hasPermission } = useModulePermissions();
 type SoaRelation = {
@@ -314,7 +315,7 @@ const openTab = () => {
           disabled
         />
       </div>
-      <div v-else class="grid gap-2 md:col-span-1 mb-2">
+      <FormField v-else name="soa_ids" nested class="md:col-span-1 mb-2">
         <SearchableCombobox
           id="soa_ids"
           label="Billing Invoices"
@@ -330,9 +331,8 @@ const openTab = () => {
           :multiple="true"
           @load-more="loadMoreData('soas')"
         />
-      </div>
-      <div class="grid gap-2 md:col-span-1 mb-2">
-        <Label for="type">Type<span class="text-red-400">*</span></Label>
+      </FormField>
+      <FormField name="type" label="Type" required class="md:col-span-1 mb-2">
         <Select
           class="mt-1 block w-full"
           v-model="selectedType"
@@ -350,18 +350,16 @@ const openTab = () => {
             </SelectItem>
           </SelectContent>
         </Select>
-      </div>
-      <div class="grid gap-2 md:col-span-1 mb-2">
-        <Label for="title">Title<span class="text-red-400">*</span></Label>
+      </FormField>
+      <FormField name="title" label="Title" required class="md:col-span-1 mb-2">
         <Input
           class="mt-1 block w-full"
           id="title"
           name="title"
           v-model="form.title"
         />
-      </div>
-      <div class="grid gap-2 md:col-span-1 mb-2">
-        <Label for="description">Description<span class="text-red-400">*</span></Label>
+      </FormField>
+      <FormField name="description" label="Description" required class="md:col-span-1 mb-2">
         <Textarea
           placeholder="Type the description here."
           class="mt-1 block w-full"
@@ -369,9 +367,8 @@ const openTab = () => {
           name="description"
           v-model="form.description"
         />
-      </div>
-      <div v-if="auth?.is_superadmin || hasPermission(slug + '.edit')" class="grid gap-2 md:col-span-1 mb-2">
-        <Label for="status">Status<span class="text-red-400">*</span></Label>
+      </FormField>
+      <FormField v-if="auth?.is_superadmin || hasPermission(slug + '.edit')" name="status" label="Status" required class="md:col-span-1 mb-2">
         <Select
           class="mt-1 block w-full"
           v-model="selectedStatus"
@@ -389,9 +386,8 @@ const openTab = () => {
             </SelectItem>
           </SelectContent>
         </Select>
-      </div>
-      <div class="grid gap-2 md:col-span-1">
-        <Label for="attachment">Attachment</Label>
+      </FormField>
+      <FormField name="attachment" label="Attachment" class="md:col-span-1">
         <p
           v-if="concern.attachment"
           class="mt-1 text-xs text-[var(--color-text-muted)]"
@@ -412,7 +408,7 @@ const openTab = () => {
           name="attachment"
           type="file"
         />
-      </div>
+      </FormField>
     </div>
     <div v-else>
       <div class="md:col-span-2 hidden">
@@ -424,8 +420,7 @@ const openTab = () => {
           <input type="hidden" name="soa_ids[]" :value="id" />
         </template>
       </div>
-      <div class="grid gap-2 md:col-span-1 mb-2">
-        <Label for="status">Status<span class="text-red-400">*</span></Label>
+      <FormField name="status" label="Status" required class="md:col-span-1 mb-2">
         <Select
           class="mt-1 block w-full"
           v-model="selectedStatus"
@@ -443,7 +438,7 @@ const openTab = () => {
             </SelectItem>
           </SelectContent>
         </Select>
-      </div>
+      </FormField>
     </div>
   </form>
 </template>

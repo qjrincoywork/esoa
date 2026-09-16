@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue';
-import { usePage } from '@inertiajs/vue3';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Auth, User, UserDetail } from '@/types';
 import { Select, SelectTrigger, SelectContent, SelectGroup, SelectLabel, SelectItem, SelectValue } from '@/components/ui/select';
+import FormField from '@/components/FormField.vue';
+import { useAssignableSoaStatuses } from '@/composables/utilities/soaStatus';
 
 type Soa = {
   id?: number
@@ -41,20 +40,20 @@ const props = defineProps({
 
 const soa = computed<Soa>(() => props.soa as Soa)
 const status_types = computed<{ value: string | number; name: string }[]>(() => (props.status_types ?? []) as { value: string | number; name: string }[]);
-const page = usePage();
-const auth = computed(() => (page.props as any).auth as Auth);
-const user = computed(() => auth.value?.user as User);
-const userDetail = computed(() => user.value?.user_detail as UserDetail);
 
 // Expose a form ref so parent components can access without document.getElementById
 const savingForm = ref<HTMLFormElement | null>(null)
 const selectedStatus = ref<string | number>(soa.value?.status ?? '2')
 const isSyncingFromSoa = ref(false)
-const isAccountBranchAdmin = !userDetail.value?.has_employee_no;
-
-const filteredStatusTypes = computed(() => {
-  return isAccountBranchAdmin ? status_types.value?.filter(s => (s.value == 2 || s.value == 4)) : []
-});
+/**
+ * Only the statuses this user may actually set — the same set the server will accept.
+ *
+ * This form is reached by anyone without an employee number, which is not the same
+ * audience as the account-scoped roles the server checks: a billing admin landing here
+ * was shown the account admin's statuses and had every save rejected.
+ * {@see useAssignableSoaStatuses}.
+ */
+const filteredStatusTypes = useAssignableSoaStatuses(status_types);
 // Helper to extract FormData from this form (exposed to parent)
 function getFormData(): FormData | null {
   if (!savingForm.value) return null
@@ -85,8 +84,7 @@ watch(soa, (val: Soa | undefined) => {
       <input type="hidden" name="status" :value="String(selectedStatus ?? '')" />
     </div>
 
-    <div class="grid gap-2 md:col-span-1">
-      <Label for="status">Status<span class="text-red-400">*</span></Label>
+    <FormField name="status" label="Status" for="status" required class="md:col-span-1">
       <Select
         id="status"
         class="mt-1 block w-full"
@@ -108,6 +106,6 @@ watch(soa, (val: Soa | undefined) => {
           </SelectGroup>
         </SelectContent>
       </Select>
-    </div>
+    </FormField>
   </form>
 </template>

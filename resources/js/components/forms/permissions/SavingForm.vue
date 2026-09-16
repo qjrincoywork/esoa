@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import FormField from '@/components/FormField.vue';
 
 type Permission = {
   id?: number
@@ -54,8 +54,7 @@ onMounted(() => {
             :default-value="permission?.id"
         />
     </div>
-    <div class="grid gap-2 md:col-span-1">
-        <Label for="name">Name</Label>
+    <FormField name="name" label="Name" required class="md:col-span-1">
         <Input
             id="name"
             class="mt-1 block w-full"
@@ -64,9 +63,8 @@ onMounted(() => {
             autocomplete="name"
             placeholder="Name"
         />
-    </div>
-    <div class="grid gap-2 md:col-span-1">
-        <Label for="guard_name">Guard Name</Label>
+    </FormField>
+    <FormField name="guard_name" label="Guard Name" required class="md:col-span-1">
         <Input
             id="guard_name"
             class="mt-1 block w-full"
@@ -75,6 +73,6 @@ onMounted(() => {
             autocomplete="guard_name"
             placeholder="Guard Name"
         />
-    </div>
+    </FormField>
   </form>
 </template>

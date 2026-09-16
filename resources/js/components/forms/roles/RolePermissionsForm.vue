@@ -114,39 +114,41 @@ onMounted(() => {
       </div>
     </div>
 
-    <div class="border rounded max-h-72 overflow-auto">
-      <table class="min-w-full text-sm">
-        <thead class="bg-muted sticky top-0 z-10">
-          <tr>
-            <th class="px-3 py-2 text-left w-10">#</th>
-            <th class="px-3 py-2 text-left">Permission</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="permission in filteredPermissions"
-            :key="permission.id"
-            class="border-t"
-          >
-            <td class="px-3 py-2">
-              <Switch
-                name="permissions[]"
-                :default-value="isChecked(permission.id)"
-                :value="permission.name"
-              />
-            </td>
-            <td class="px-3 py-2">
-              {{ permission.name }}
-            </td>
-          </tr>
-          <tr v-if="!filteredPermissions.length">
-            <td colspan="2" class="px-3 py-4 text-center text-muted-foreground">
-              No permissions found.
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <FormField name="permissions" nested>
+      <div class="border rounded max-h-72 overflow-auto">
+        <table class="min-w-full text-sm">
+          <thead class="bg-muted sticky top-0 z-10">
+            <tr>
+              <th class="px-3 py-2 text-left w-10">#</th>
+              <th class="px-3 py-2 text-left">Permission</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="permission in filteredPermissions"
+              :key="permission.id"
+              class="border-t"
+            >
+              <td class="px-3 py-2">
+                <Switch
+                  name="permissions[]"
+                  :default-value="isChecked(permission.id)"
+                  :value="permission.name"
+                />
+              </td>
+              <td class="px-3 py-2">
+                {{ permission.name }}
+              </td>
+            </tr>
+            <tr v-if="!filteredPermissions.length">
+              <td colspan="2" class="px-3 py-4 text-center text-muted-foreground">
+                No permissions found.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </FormField>
   </form>
 </template>
 

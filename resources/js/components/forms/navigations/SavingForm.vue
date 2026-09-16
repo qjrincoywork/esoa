@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectContent, SelectGroup, SelectLabel, SelectItem, SelectValue } from '@/components/ui/select';
+import FormField from '@/components/FormField.vue';
 
 type Status = { value: number; name: string }
 type Navigation = {
@@ -66,8 +66,7 @@ onMounted(() => {
         />
     </div>
 
-    <div class="grid gap-2 md:col-span-1">
-        <Label for="name">Name</Label>
+    <FormField name="name" label="Name" class="md:col-span-1">
         <Input
             id="name"
             class="mt-1 block w-full"
@@ -76,10 +75,9 @@ onMounted(() => {
             autocomplete="name"
             placeholder="Name"
         />
-    </div>
+    </FormField>
 
-    <div class="grid gap-2 md:col-span-1">
-        <Label for="label">Label</Label>
+    <FormField name="label" label="Label" class="md:col-span-1">
         <Input
             id="label"
             class="mt-1 block w-full"
@@ -88,10 +86,9 @@ onMounted(() => {
             autocomplete="label"
             placeholder="Label"
         />
-    </div>
+    </FormField>
 
-    <div class="grid gap-2 md:col-span-1">
-        <Label for="icon">Icon</Label>
+    <FormField name="icon" label="Icon" class="md:col-span-1">
         <Input
             id="icon"
             class="mt-1 block w-full"
@@ -100,10 +97,9 @@ onMounted(() => {
             autocomplete="icon"
             placeholder="Icon"
         />
-    </div>
+    </FormField>
 
-    <div class="grid gap-2 md:col-span-1">
-        <Label for="status">Status</Label>
+    <FormField name="status" label="Status" class="md:col-span-1">
         <Select
             id="status"
             class="mt-1 block w-full"
@@ -126,6 +122,6 @@ onMounted(() => {
               </SelectGroup>
           </SelectContent>
         </Select>
-    </div>
+    </FormField>
   </form>
 </template>

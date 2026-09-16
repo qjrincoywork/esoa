@@ -94,7 +94,9 @@ class UpdateRequest extends FormRequest
                     new IsServerDataExists(Server::HMS, 'Branches', 'br_code'),
                 ],
                 'soa_number' => [
-                    'required_unless:status,' . SoaStatus::ENDORSED,
+                    Rule::requiredIf(
+                        in_array($this->status, [SoaStatus::UNPAID, SoaStatus::DISPUTED])
+                    ),
                     'string',
                     'max:191',
                     'regex:/^[A-Za-z0-9-]+$/',
@@ -116,12 +118,16 @@ class UpdateRequest extends FormRequest
                     'max:' . config('vc.max_string_limit'),
                 ],
                 'bill_type' => [
-                    'required_unless:status,' . SoaStatus::ENDORSED,
+                    Rule::requiredIf(
+                        in_array($this->status, [SoaStatus::UNPAID, SoaStatus::DISPUTED])
+                    ),
                     'integer',
                     Rule::in(BillType::getValues()),
                 ],
                 'due_date' => [
-                    'required_unless:status,' . SoaStatus::ENDORSED,
+                    Rule::requiredIf(
+                        in_array($this->status, [SoaStatus::UNPAID, SoaStatus::DISPUTED])
+                    ),
                     'date',
                 ],
                 'status' => [
@@ -130,11 +136,15 @@ class UpdateRequest extends FormRequest
                     new SoaStatusIsValid(),
                 ],
                 'period_date_from' => [
-                    'required_unless:status,' . SoaStatus::ENDORSED,
+                    Rule::requiredIf(
+                        in_array($this->status, [SoaStatus::UNPAID, SoaStatus::DISPUTED])
+                    ),
                     'date',
                 ],
                 'period_date_to' => [
-                    'required_unless:status,' . SoaStatus::ENDORSED,
+                    Rule::requiredIf(
+                        in_array($this->status, [SoaStatus::UNPAID, SoaStatus::DISPUTED])
+                    ),
                     'date',
                 ],
                 'contract_date_from' => [
@@ -153,7 +163,9 @@ class UpdateRequest extends FormRequest
                 'file_pdf' => $filePdfRules,
                 'file_xls' => $fileXlsRules,
                 'amount' => [
-                    'required_unless:status,' . SoaStatus::ENDORSED,
+                    Rule::requiredIf(
+                        in_array($this->status, [SoaStatus::UNPAID, SoaStatus::DISPUTED])
+                    ),
                     'numeric',
                 ],
             ];
@@ -196,7 +208,7 @@ class UpdateRequest extends FormRequest
     protected function passedValidation(): void
     {
         $this->merge([
-            'account_type' => str_starts_with($this->input('account_code'), 'TP') ? AccountType::TPA : AccountType::HMO,
+            'account_type' => AccountType::fromAccountCode($this->input('account_code')),
         ]);
     }
 }

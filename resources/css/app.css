@@ -572,3 +572,71 @@ section {
     @apply bg-background text-foreground;
   }
 }
+
+/*
+ * Invalid form fields
+ * --------------------------------------------------------------------------
+ * A field the server rejected marks itself `data-invalid` (see
+ * components/FormField.vue) and these rules highlight whatever control is inside it.
+ *
+ * Written once, against the control rather than against a component, because a field
+ * can be an <input>, a <textarea>, a reka Select trigger, a combobox button or a date
+ * range, and each of those is a different component with a different class list.
+ * Styling them from the wrapper means a form only has to say which field is wrong,
+ * never how to show it — and a control added later is covered without being told.
+ *
+ * Deliberately outside `@layer`, so it wins.
+ * Every control here is styled by Tailwind utilities (`border-input`, `focus:ring-*`),
+ * which live in the utilities layer; a rule inside `@layer components` loses to them
+ * however specific it is, and one inside `@layer utilities` would be decided by source
+ * order against the variants of the very classes it is trying to override. Unlayered
+ * CSS outranks every layer, which is what an error state should do — and only an error
+ * state, which is why nothing else in this file is written this way.
+ *
+ * The message itself is rendered by the field; this is only the highlight.
+ */
+[data-invalid='true']
+    :is(
+        /*
+         * A composite control — several inputs sharing one bordered box, as the date
+         * range picker has. The box carries the border a reader sees, so it is what
+         * gets highlighted; the inputs inside it have none of their own to colour, and
+         * ringing each of them separately would draw a box around every part.
+         */
+        [data-slot='control'],
+        input:not([type='hidden']),
+        textarea,
+        select,
+        [data-slot='input'],
+        [data-slot='select-trigger'],
+        [role='combobox']
+    ):not([data-slot='control'] *) {
+    border-color: var(--destructive);
+    /* A ring rather than a thicker border, so nothing shifts when a field turns invalid. */
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--destructive) 40%, transparent);
+
+    /*
+     * Keep the field reading as invalid while it has focus, rather than reverting to
+     * the neutral focus ring and looking as though the problem had been dealt with.
+     * `:focus-within` rather than `:focus`, so a composite control lights up when one
+     * of the inputs inside it is focused — on a plain control the two are the same.
+     */
+    &:focus-within {
+        outline: none;
+        box-shadow: 0 0 0 3px color-mix(in oklab, var(--destructive) 30%, transparent);
+    }
+}
+
+/*
+ * The label too, so the field is identifiable from a glance down the form without
+ * having to read every message.
+ *
+ * Matched on `field-label` rather than on any descendant label: controls that draw
+ * their own label (the combobox, the date range) nest it a level deeper than the ones
+ * FormField labels itself, so a child selector reaches only half of them — while a
+ * plain descendant selector would reach too far and colour the label of every option
+ * inside a field, such as the individual choices in a radio group.
+ */
+[data-invalid='true'] [data-slot='field-label'] {
+    color: var(--destructive);
+}

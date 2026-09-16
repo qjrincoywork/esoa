@@ -34,6 +34,7 @@ class NavigationModuleSeeder extends Seeder
             ['nav' => 'ICT Admin', 'perm' => 'users.destroy',         'name' => 'Delete User',                  'slug' => 'users.destroy',                'icon' => 'Trash2',         'color' => 'red',    'url' => '/users/destroy',               'parent' => 'users.index',           'order' => 5],
             ['nav' => 'ICT Admin', 'perm' => 'users.verify',          'name' => 'Verify User',                  'slug' => 'users.verify',                 'icon' => 'ShieldCheck',    'color' => 'teal',   'url' => '/users/verify',                'parent' => 'users.index',           'order' => 1],
             ['nav' => 'ICT Admin', 'perm' => 'users.toggle_active',   'name' => 'Toggle User Active Status',    'slug' => 'users.toggle_active',          'icon' => 'ToggleRight',    'color' => 'orange', 'url' => '/users/toggle_active',         'parent' => 'users.index',           'order' => 6],
+            ['nav' => 'ICT Admin', 'perm' => 'users.account_mapping', 'name' => 'Map Accounts & Branches',      'slug' => 'users.account_mapping',        'icon' => 'Network',        'color' => 'indigo', 'url' => '/users/{id}/account_mapping',  'parent' => 'users.index',           'order' => 7],
 
             // Roles
             ['nav' => 'ICT Admin', 'perm' => 'roles.index',           'name' => 'Roles',                        'slug' => 'roles.index',                  'icon' => 'Lock',           'color' => null,     'url' => '/roles',                       'parent' => null,                    'order' => 6],
@@ -54,6 +55,12 @@ class NavigationModuleSeeder extends Seeder
             ['nav' => 'ICT Admin', 'perm' => 'navigations.destroy',   'name' => 'Delete Navigation',            'slug' => 'navigations.destroy',          'icon' => 'Trash2',         'color' => 'red',    'url' => '/navigations/destroy',         'parent' => 'navigations.index',     'order' => 17],
 
             ['nav' => 'ICT Admin', 'perm' => 'navigation_modules.index',   'name' => 'Navigation Modules',           'slug' => 'navigation_modules.index',     'icon' => 'SquareMenu',     'color' => null,     'url' => '/navigation_modules',              'parent' => null,                      'order' => 16],
+
+            // Unmapped accounts & branches — account-mapping coverage gap, superadmin only
+            ['nav' => 'ICT Admin', 'perm' => 'unmapped_accounts.index',    'name' => 'Unmapped Accounts',            'slug' => 'unmapped_accounts.index',      'icon' => 'Unlink',         'color' => null,     'url' => '/unmapped_accounts',               'parent' => null,                      'order' => 19],
+
+            // Activity logs — read-only audit trail, superadmin only
+            ['nav' => 'ICT Admin', 'perm' => 'activity_logs.index',        'name' => 'Activity Logs',                'slug' => 'activity_logs.index',          'icon' => 'ScrollText',     'color' => null,     'url' => '/activity_logs',                   'parent' => null,                      'order' => 20],
             ['nav' => 'ICT Admin', 'perm' => 'navigation_modules.edit',    'name' => 'Edit Navigation Module',       'slug' => 'navigation_modules.edit',      'icon' => 'Pencil',         'color' => 'blue',   'url' => '/navigation_modules/{id}/edit',    'parent' => 'navigation_modules.index', 'order' => 1],
             ['nav' => 'ICT Admin', 'perm' => 'navigation_modules.destroy', 'name' => 'Delete Navigation Module',     'slug' => 'navigation_modules.destroy',   'icon' => 'Trash2',         'color' => 'red',    'url' => '/navigation_modules/destroy',      'parent' => 'navigation_modules.index', 'order' => 2],
 

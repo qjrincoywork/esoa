@@ -17,6 +17,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Label } from '@/components/ui/label';
+import { useFormField } from '@/composables/useFormField';
 
 /**
  * Item shape: { value, name } or { value, label }.
@@ -79,6 +80,13 @@ const emit = defineEmits<{
 
 const open = ref(false);
 
+/**
+ * Null outside a form field — this combobox is just as often a listing filter.
+ * Inside one, picking an option is what clears a validation message, since a combobox
+ * is a button and a popover and fires none of the native events a field listens for.
+ */
+const field = useFormField();
+
 const searchProxy = computed({
   get: () => props.search ?? '',
   set: (val: string) => emit('update:search', val),
@@ -135,6 +143,8 @@ function onSelect(value: string) {
     emit('update:modelValue', value);
     open.value = false;
   }
+
+  field?.valueChanged();
 }
 
 function onLoadMore() {
@@ -144,7 +154,12 @@ function onLoadMore() {
 
 <template>
   <div class="grid gap-2 truncate">
-    <Label v-if="label" :for="id">
+    <!--
+      `field-label` marks this as the label for the field as a whole, so a rejected
+      field can colour it. The plain `data-slot="label"` every Label carries would also
+      match the labels of individual options inside a field, which is not the same thing.
+    -->
+    <Label v-if="label" :for="id" data-slot="field-label">
       {{ label }}
       <span v-if="required" class="text-red-400">*</span>
     </Label>

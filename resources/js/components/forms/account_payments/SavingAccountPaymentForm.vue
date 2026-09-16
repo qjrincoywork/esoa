@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
 import { SearchableCombobox } from '@/components/ui/searchable-combobox';
 import { debounce } from 'lodash-es';
+import FormField from '@/components/FormField.vue';
 
 type SoaRelation = {
   id: string | number;
@@ -220,8 +221,7 @@ const openFilePreview = (type: string) => {
       </template>
     </div>
 
-    <div class="grid gap-2">
-      <Label for="deposit_date">Deposit Date<span class="text-red-400">*</span></Label>
+    <FormField name="deposit_date" label="Deposit Date" required>
       <Input
         class="flex-1 min-w-0 bg-transparent text-base outline-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm [color-scheme:light] dark:[color-scheme:dark]"
         id="deposit_date"
@@ -230,10 +230,9 @@ const openFilePreview = (type: string) => {
         v-model="form.deposit_date"
         :disabled="isViewOnly"
       />
-    </div>
+    </FormField>
 
-    <div class="grid gap-2">
-      <Label for="mode_of_payment">Mode of Payment<span class="text-red-400">*</span></Label>
+    <FormField name="mode_of_payment" label="Mode of Payment" required>
       <Select
         class="mt-1 block w-full"
         v-model="selectedModeOfPayment"
@@ -252,9 +251,9 @@ const openFilePreview = (type: string) => {
           </SelectItem>
         </SelectContent>
       </Select>
-    </div>
+    </FormField>
 
-    <div class="grid gap-2 md:col-span-2">
+    <FormField name="soa_ids" nested class="md:col-span-2">
       <SearchableCombobox
         id="soa_ids"
         label="Billing Invoices"
@@ -270,10 +269,9 @@ const openFilePreview = (type: string) => {
         :disabled="isViewOnly"
         @load-more="loadMoreData('soas')"
       />
-    </div>
+    </FormField>
 
-    <div class="grid gap-2 md:col-span-2">
-      <Label for="pdf">Remittance Advice PDF<span class="text-red-400">*</span></Label>
+    <FormField name="pdf" label="Remittance Advice PDF" required class="md:col-span-2">
       <p
         v-if="accountPayment?.pdf"
         class="mt-1 text-xs text-[var(--color-text-muted)]"
@@ -296,10 +294,9 @@ const openFilePreview = (type: string) => {
         type="file"
         :disabled="isViewOnly"
       />
-    </div>
+    </FormField>
 
-    <div class="grid gap-2 md:col-span-2">
-      <Label for="remarks">Remarks</Label>
+    <FormField name="remarks" label="Remarks" class="md:col-span-2">
       <Textarea
         placeholder="Type the remarks here."
         class="mt-1 block w-full"
@@ -308,7 +305,7 @@ const openFilePreview = (type: string) => {
         v-model="form.remarks"
         :disabled="isViewOnly"
       />
-    </div>
+    </FormField>
 
     <!-- View mode details -->
     <template v-if="isViewOnly">
