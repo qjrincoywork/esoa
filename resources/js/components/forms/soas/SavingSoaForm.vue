@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue';
-import { usePage } from '@inertiajs/vue3';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
@@ -8,7 +7,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { SearchableCombobox } from '@/components/ui/searchable-combobox';
 import { useSoas } from '@/composables/soas';
 import { debounce } from '@/composables/utilities/helper';
-import { Auth, User, UserDetail, Soa } from '@/types';
+import { useAssignableSoaStatuses } from '@/composables/utilities/soaStatus';
+import { Soa } from '@/types';
 import { Select, SelectTrigger, SelectContent, SelectGroup, SelectLabel, SelectItem, SelectValue } from '@/components/ui/select';
 import FormField from '@/components/FormField.vue';
 
@@ -63,10 +63,6 @@ const billing_refs = ref<BillingRef[]>([])
 const account_types = computed<AccountType[]>(() => props.account_types as AccountType[]);
 const bill_types = computed<{ value: string | number; name: string }[]>(() => (props.bill_types ?? []) as { value: string | number; name: string }[]);
 const status_types = computed<{ value: string | number; name: string }[]>(() => (props.status_types ?? []) as { value: string | number; name: string }[]);
-const page = usePage();
-const auth = computed(() => (page.props as any).auth as Auth);
-const user = computed(() => auth.value?.user as User);
-const userDetail = computed(() => user.value?.user_detail as UserDetail);
 
 // Expose a form ref so parent components can access without document.getElementById
 const savingForm = ref<HTMLFormElement | null>(null)
@@ -143,12 +139,11 @@ const existingExcel = computed(() => {
   if (id == null || !path) return null
   return { name: fileBasename(String(path)), href: `/soas/${id}/attachment/excel` }
 })
-const filteredStatusTypes = computed(() => {
-  if (userDetail.value?.has_employee_no) {
-    return status_types.value?.filter(s => s.value !== 2)
-  }
-  return status_types.value?.filter(s => s.value == 2)
-});
+/**
+ * Only the statuses this user may actually set — the same set the server will accept.
+ * {@see useAssignableSoaStatuses} for why the two must be derived from one rule.
+ */
+const filteredStatusTypes = useAssignableSoaStatuses(status_types);
 // Helper to extract FormData from this form (exposed to parent)
 function getFormData(): FormData | null {
   if (!savingForm.value) return null
