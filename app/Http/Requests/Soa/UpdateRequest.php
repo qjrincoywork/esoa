@@ -95,7 +95,7 @@ class UpdateRequest extends FormRequest
                 ],
                 'soa_number' => [
                     Rule::requiredIf(
-                        $this->status == SoaStatus::ENDORSED
+                        in_array($this->status, [SoaStatus::UNPAID, SoaStatus::DISPUTED])
                     ),
                     'string',
                     'max:191',
@@ -119,14 +119,14 @@ class UpdateRequest extends FormRequest
                 ],
                 'bill_type' => [
                     Rule::requiredIf(
-                        $this->status == SoaStatus::ENDORSED
+                        in_array($this->status, [SoaStatus::UNPAID, SoaStatus::DISPUTED])
                     ),
                     'integer',
                     Rule::in(BillType::getValues()),
                 ],
                 'due_date' => [
                     Rule::requiredIf(
-                        $this->status == SoaStatus::ENDORSED
+                        in_array($this->status, [SoaStatus::UNPAID, SoaStatus::DISPUTED])
                     ),
                     'date',
                 ],
@@ -137,13 +137,13 @@ class UpdateRequest extends FormRequest
                 ],
                 'period_date_from' => [
                     Rule::requiredIf(
-                        $this->status == SoaStatus::ENDORSED
+                        in_array($this->status, [SoaStatus::UNPAID, SoaStatus::DISPUTED])
                     ),
                     'date',
                 ],
                 'period_date_to' => [
                     Rule::requiredIf(
-                        $this->status == SoaStatus::ENDORSED
+                        in_array($this->status, [SoaStatus::UNPAID, SoaStatus::DISPUTED])
                     ),
                     'date',
                 ],
@@ -164,7 +164,7 @@ class UpdateRequest extends FormRequest
                 'file_xls' => $fileXlsRules,
                 'amount' => [
                     Rule::requiredIf(
-                        $this->status == SoaStatus::ENDORSED
+                        in_array($this->status, [SoaStatus::UNPAID, SoaStatus::DISPUTED])
                     ),
                     'numeric',
                 ],
