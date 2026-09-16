@@ -41,10 +41,21 @@ const dateInputClass =
 
 <template>
   <div :class="cn('grid gap-2', props.class)">
-    <Label v-if="label" :for="resolvedFromId">
+    <!--
+      `field-label` marks this as the label for the field as a whole, so a rejected
+      field can colour it. The plain `data-slot="label"` every Label carries would also
+      match the labels of individual options inside a field, which is not the same thing.
+    -->
+    <Label v-if="label" :for="resolvedFromId" data-slot="field-label">
       {{ label }}<span v-if="required" class="text-red-400">*</span>
     </Label>
+    <!--
+      The two date inputs are borderless and share one bordered box, so the box is the
+      control a reader sees: `data-slot="control"` says to highlight this rather than
+      the inputs within it, which have no border of their own to colour.
+    -->
     <div
+      data-slot="control"
       class="border-input flex h-9 w-full items-center rounded-md border bg-background dark:bg-input/30 px-3 shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-ring/50 focus-within:ring-[3px]"
     >
       <input
