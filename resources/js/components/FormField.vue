@@ -17,6 +17,7 @@ import { computed, nextTick, ref, useId, watch } from 'vue';
 import { Label } from '@/components/ui/label';
 import InputError from '@/components/InputError.vue';
 import { useFormErrors, type FieldName } from '@/composables/useFormErrors';
+import { provideFormField } from '@/composables/useFormField';
 
 const props = withDefaults(
     defineProps<{
@@ -100,13 +101,19 @@ watch(
  *
  * Listened for on the wrapper rather than the control, so this works for whatever was
  * slotted in without the form having to wire an event per field — `input` and `change`
- * both bubble. Controls that emit neither (a reka Select, a combobox) keep their
- * message until the next submit answers for them, which is the truthful thing to show
- * in the meantime.
+ * both bubble.
  */
 const handleCorrection = (): void => {
     if (invalid.value) clearError(props.name);
 };
+
+/**
+ * The same, for controls that are not native inputs and so bubble nothing: a reka
+ * Select, the searchable combobox. They reach this through {@see useFormField} and
+ * report the change themselves, so picking an option clears the message exactly as
+ * typing into a text field does.
+ */
+provideFormField({ valueChanged: handleCorrection });
 </script>
 
 <template>
@@ -122,7 +129,7 @@ const handleCorrection = (): void => {
             carry a hint or an extra mark after the field name, and appending the asterisk
             after that would read as though it belonged to the hint.
         -->
-        <Label v-if="label || $slots.label" :for="labelFor">
+        <Label v-if="label || $slots.label" :for="labelFor" data-slot="field-label">
             <template v-if="$slots.label">
                 <slot name="label" />
             </template>
