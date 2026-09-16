@@ -140,6 +140,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->middleware('check_permissions')
             ->controller(UnmappedAccountController::class)->group(function () {
                 Route::get('/', 'index')->name('index');
+                // Scope and code travel as query parameters, not path segments: they
+                // are HMS codes from another system, not ids of ours.
+                Route::get('/details', 'details')->name('details');
+                Route::get('/members', 'members')->name('members');
         });
 
         //Navigations

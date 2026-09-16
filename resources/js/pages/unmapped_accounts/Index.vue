@@ -23,20 +23,9 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectTrigger, SelectContent, SelectGroup, SelectItem, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useModulePermissions } from '@/composables/useModulePermissions';
+import RightPane from '@/components/RightPane.vue';
+import { useUnmappedAccounts, type DirectoryRow, type DirectoryScope } from '@/composables/unmappedAccounts';
 import { SlidersHorizontal, X } from 'lucide-vue-next';
-
-type DirectoryRow = {
-    account_code: string
-    account_name: string
-    branch_code: string | null
-    branch_name?: string | null
-    main_account_code?: string | null
-    code_prefix: string | null
-    account_type: string
-    account_type_label: string
-    is_active?: boolean
-    member_count: number
-}
 
 type DirectoryPagination = {
     current_page: number
@@ -51,6 +40,16 @@ const SCOPE_BRANCH = 'branch';
 
 const page = usePage();
 const { slug } = useModulePermissions();
+const {
+    openDirectoryRow,
+    closePane,
+    rightPaneVisible,
+    rightPaneTitle,
+    rightPaneLoading,
+    rightPaneError,
+    rightPaneContentComponent,
+    rightPaneComponentProps,
+} = useUnmappedAccounts();
 
 const directory = computed<DirectoryPagination>(() => {
     const props = (page.props as any).directory as DirectoryPagination | undefined;
@@ -60,13 +59,14 @@ const directory = computed<DirectoryPagination>(() => {
 
 const filterOptions = computed(() => {
     const opts = (page.props as any).filter_options as
-        | { scopes?: Option[]; code_prefixes?: Option[]; account_types?: Option[] }
+        | { scopes?: Option[]; code_prefixes?: Option[]; account_types?: Option[]; statuses?: Option[] }
         | undefined;
 
     return {
         scopes: opts?.scopes ?? [],
         codePrefixes: opts?.code_prefixes ?? [],
         accountTypes: opts?.account_types ?? [],
+        statuses: opts?.statuses ?? [],
     };
 });
 
@@ -97,21 +97,22 @@ const hasInitialized = ref(false);
 // --- Filters ---
 const FILTER_ALL = 'all'; // sentinel — means "no filter applied"
 
-const filters = ref({ code_prefix: '', account_type: '', members_min: '', members_max: '' });
+const filters = ref({ code_prefix: '', account_type: '', is_active: '', members_min: '', members_max: '' });
 
 const filtersActive = computed(() => Object.values(filters.value).some((value) => value !== ''));
 
 /** Selects bind to a sentinel rather than '' so "All" is a real, selectable option. */
-const asSelectModel = (key: 'code_prefix' | 'account_type') => computed({
+const asSelectModel = (key: 'code_prefix' | 'account_type' | 'is_active') => computed({
     get: () => filters.value[key] || FILTER_ALL,
     set: (v: string | undefined) => { filters.value[key] = v === FILTER_ALL ? '' : (v ?? ''); },
 });
 
 const codePrefixModel = asSelectModel('code_prefix');
 const accountTypeModel = asSelectModel('account_type');
+const statusModel = asSelectModel('is_active');
 
 const clearFilters = () => {
-    filters.value = { code_prefix: '', account_type: '', members_min: '', members_max: '' };
+    filters.value = { code_prefix: '', account_type: '', is_active: '', members_min: '', members_max: '' };
 };
 
 /** A small pill, so a row's class reads at a glance down the column. */
@@ -227,6 +228,8 @@ const fetchDirectory = () => {
     if (searchQuery.value.trim()) params.search_string = searchQuery.value.trim();
     if (filters.value.code_prefix) params.code_prefix = filters.value.code_prefix;
     if (filters.value.account_type) params.account_type = filters.value.account_type;
+    // '' means "either"; '0' is a real choice, so this cannot be a falsy test.
+    if (filters.value.is_active !== '') params.is_active = filters.value.is_active;
     // '' means "no bound"; 0 is a real bound, so the emptiness test cannot be falsy.
     if (filters.value.members_min !== '') params.members_min = filters.value.members_min;
     if (filters.value.members_max !== '') params.members_max = filters.value.members_max;
@@ -306,6 +309,15 @@ watch(filters, () => {
         fetchDirectory();
     }, 400);
 }, { deep: true });
+
+/**
+ * Opening a row.
+ *
+ * The scope comes from what is rendered rather than from the tab just clicked: the row
+ * belongs to the listing on screen, and an account row opened as a branch would look up
+ * the wrong code.
+ */
+const openRow = (row: DirectoryRow) => openDirectoryRow(row, renderedScope.value as DirectoryScope);
 </script>
 
 <template>
@@ -410,6 +422,31 @@ watch(filters, () => {
                             </SelectContent>
                         </Select>
 
+                        <!--
+                            Status. A branch has none of its own, so this asks about
+                            the account it belongs to — the same account the type and
+                            prefix filters already classify it by.
+                        -->
+                        <Select v-model="statusModel">
+                            <SelectTrigger class="h-8 w-36 text-xs">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectGroup>
+                                    <SelectItem :value="FILTER_ALL" class="text-xs text-[var(--color-text-muted)]">
+                                        Any status
+                                    </SelectItem>
+                                    <SelectItem
+                                        v-for="opt in filterOptions.statuses"
+                                        :key="String(opt.value)"
+                                        :value="String(opt.value)"
+                                        class="text-xs">
+                                        {{ opt.name }}
+                                    </SelectItem>
+                                </SelectGroup>
+                            </SelectContent>
+                        </Select>
+
                         <!-- Members held by the account or branch -->
                         <div class="flex items-end gap-1">
                             <div class="flex flex-col">
@@ -458,6 +495,8 @@ watch(filters, () => {
                         :columns="columns"
                         :pagination="pagination"
                         :enable-search="false"
+                        :enable-row-click="true"
+                        :row-click="openRow"
                         :empty-message="emptyMessage"
                         :empty-description="emptyDescription"
                         :export-file-name="exportFileName"
@@ -465,5 +504,14 @@ watch(filters, () => {
                 </TabsContent>
             </Tabs>
         </div>
+
+        <RightPane
+            :open="rightPaneVisible"
+            :title="rightPaneTitle"
+            :loading="rightPaneLoading"
+            :error="rightPaneError"
+            :content-component="rightPaneContentComponent"
+            :component-props="rightPaneComponentProps"
+            @update:open="(v) => { if (!v && !rightPaneLoading) closePane('right') }" />
     </AppLayout>
 </template>

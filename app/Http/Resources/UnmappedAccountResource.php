@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Enums\AccountCodePrefix;
+use App\Enums\AccountStatus;
 use App\Enums\AccountType;
 use App\Helpers\CommonHelper;
 use Illuminate\Http\Request;
@@ -52,7 +53,7 @@ class UnmappedAccountResource extends JsonResource
             // Cancelled and expired accounts are listed too — they are just as
             // mappable — so the row says which it is rather than leaving the reader
             // to guess why a long-dead account has no user.
-            'is_active' => $this->ac_status === 'A',
+            'is_active' => AccountStatus::isActive($this->ac_status),
 
             'member_count' => (int) ($this->member_count ?? 0),
         ];

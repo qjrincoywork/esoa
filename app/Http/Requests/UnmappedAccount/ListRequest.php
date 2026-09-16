@@ -5,6 +5,7 @@ namespace App\Http\Requests\UnmappedAccount;
 use App\Enums\AccountCodePrefix;
 use App\Enums\AccountDirectoryScope;
 use App\Enums\AccountType;
+use App\Enums\IsActive;
 use App\Models\UserAccount;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -64,6 +65,13 @@ class ListRequest extends FormRequest
                 'nullable',
                 'string',
                 Rule::in(AccountType::getValues()),
+            ],
+            // Whether the account is still in force — and for a branch, whether the
+            // account it belongs to is, which is the only status a branch has.
+            'is_active' => [
+                'nullable',
+                'integer',
+                Rule::in(IsActive::getValues()),
             ],
             'members_min' => [
                 'nullable',
@@ -137,6 +145,7 @@ class ListRequest extends FormRequest
             'scope.in' => 'The selected view is invalid',
             'code_prefix.in' => 'The selected account code prefix is invalid',
             'account_type.in' => 'The selected account type is invalid',
+            'is_active.in' => 'The selected status is invalid',
             'members_max.gte' => 'The maximum number of members must not be lower than the minimum',
         ];
     }

@@ -2,8 +2,10 @@
 
 namespace App\Helpers;
 
+use App\Enums\AccountStatus;
 use App\Enums\AccountType;
 use App\Enums\BillRefFrom;
+use App\Enums\IsActive;
 use App\Enums\OrderType;
 use App\Enums\Server;
 use App\Enums\TenancyScope;
@@ -592,6 +594,7 @@ class SqlDatabase
             ->tap(fn ($q) => $this->applyExcludedAccountPrefixes($q, 'Accounts.ac_code', $params['exclude_prefixes'] ?? []))
             ->tap(fn ($q) => $this->applyAccountCodePrefixFilter($q, 'Accounts.ac_code', $params['code_prefix'] ?? null))
             ->tap(fn ($q) => $this->applyAccountTypeFilter($q, 'Accounts.ac_code', $params['account_type'] ?? null))
+            ->tap(fn ($q) => $this->applyAccountStatusFilter($q, 'Accounts.ac_status', $params['is_active'] ?? null))
             ->tap(fn ($q) => $this->applyNotInChunked($q, 'Accounts.ac_code', $params['assigned_account_codes'] ?? []))
             ->when($search !== '', function ($q) use ($search) {
                 $q->where(function ($sub) use ($search) {
@@ -633,6 +636,10 @@ class SqlDatabase
             ->tap(fn ($q) => $this->applyExcludedAccountPrefixes($q, 'Branches.br_ac_code', $params['exclude_prefixes'] ?? []))
             ->tap(fn ($q) => $this->applyAccountCodePrefixFilter($q, 'Branches.br_ac_code', $params['code_prefix'] ?? null))
             ->tap(fn ($q) => $this->applyAccountTypeFilter($q, 'Branches.br_ac_code', $params['account_type'] ?? null))
+            // A branch has no status of its own; it is in force exactly when the
+            // account it belongs to is, which is the same account this listing already
+            // classifies it by.
+            ->tap(fn ($q) => $this->applyBranchAccountStatusFilter($q, 'Branches.br_ac_code', $params['is_active'] ?? null))
             ->tap(fn ($q) => $this->applyNotInChunked($q, 'Branches.br_code', $params['assigned_branch_codes'] ?? []))
             ->tap(fn ($q) => $this->applyNotInChunked($q, 'Branches.br_ac_code', $params['accounts_mapped_in_full'] ?? []))
             ->when($search !== '', function ($q) use ($search) {
@@ -655,6 +662,225 @@ class SqlDatabase
         $this->applyMemberCountRange($query, $params, 'ch_branch_code', 'Branches.br_code');
 
         return $this->attachBranchMemberCounts($query->orderBy('Branches.br_branch_name')->paginate($perPage));
+    }
+
+    /**
+     * Narrow a listing to accounts that are, or are not, still in force.
+     *
+     * HMS records this as a letter ({@see AccountStatus}), and only the active one is
+     * named — so "inactive" is expressed as the absence of that value rather than as a
+     * list of the others, and picks up the couple of hundred rows where HMS left the
+     * column null.
+     *
+     * @param  \Illuminate\Database\Query\Builder  $query
+     * @param  string  $statusColumn  The `ac_status` column on the queried table.
+     * @param  int|string|bool|null  $isActive  {@see IsActive} value; null narrows nothing.
+     * @return void
+     */
+    private function applyAccountStatusFilter($query, string $statusColumn, $isActive): void
+    {
+        if ($isActive === null || $isActive === '') {
+            return;
+        }
+
+        if ((int) $isActive === IsActive::ACTIVE) {
+            $query->where($statusColumn, AccountStatus::ACTIVE);
+
+            return;
+        }
+
+        $query->where(function ($sub) use ($statusColumn) {
+            $sub->where($statusColumn, '!=', AccountStatus::ACTIVE)
+                ->orWhereNull($statusColumn);
+        });
+    }
+
+    /**
+     * Narrow a branch listing by the status of the account each branch belongs to.
+     *
+     * A semi-join for the same reason the branch search uses one: `ac_code` is not
+     * unique in HMS and some branches point at an account it no longer has, so an
+     * ordinary join would duplicate branches and drop others, and the paginator would
+     * report both. A branch whose account has gone counts as not in force, which is
+     * what falling outside the "active" sub-select already says.
+     *
+     * @param  \Illuminate\Database\Query\Builder  $query
+     * @param  string  $accountColumn  The account-code column on the queried table.
+     * @param  int|string|bool|null  $isActive  {@see IsActive} value; null narrows nothing.
+     * @return void
+     */
+    private function applyBranchAccountStatusFilter($query, string $accountColumn, $isActive): void
+    {
+        if ($isActive === null || $isActive === '') {
+            return;
+        }
+
+        $activeAccounts = fn ($accounts) => $accounts
+            ->select('ac_code')
+            ->from('Accounts')
+            ->where('ac_status', AccountStatus::ACTIVE);
+
+        (int) $isActive === IsActive::ACTIVE
+            ? $query->whereIn($accountColumn, $activeAccounts)
+            : $query->whereNotIn($accountColumn, $activeAccounts);
+    }
+
+    /**
+     * Retrieve one HMS account in full, for the detail pane behind the unmapped listing.
+     *
+     * The listing carries only what its columns show; everything a reader needs to
+     * decide what to do about the gap — when the account runs, who to contact, why it
+     * was cancelled — is fetched only for the row actually opened.
+     *
+     * @param  string  $accountCode
+     * @return object|null
+     */
+    public function getAccountDirectoryDetail(string $accountCode)
+    {
+        return $this->db
+            ->table('Accounts')
+            ->select(
+                'ac_code',
+                'ac_name',
+                'ac_ma_code',
+                'ac_status',
+                'ac_accttype',
+                'ac_address',
+                'ac_tin',
+                'ac_conper',
+                'ac_phone',
+                'ac_agcode',
+                'ac_effdate',
+                'ac_rendate',
+                'ac_expiry',
+                'ac_candate',
+                'ac_cancel_reason',
+            )
+            ->where('ac_code', $accountCode)
+            ->first();
+    }
+
+    /**
+     * Retrieve one HMS branch in full, for the detail pane behind the unmapped listing.
+     *
+     * The owning account is looked up separately rather than joined, for the reason
+     * {@see \App\Helpers\CommonHelper::accountName()} sets out: `ac_code` is not unique
+     * and some branches reference an account HMS no longer holds. Two statements always
+     * return one branch and either an account or nothing.
+     *
+     * @param  string  $branchCode
+     * @return object|null
+     */
+    public function getBranchDirectoryDetail(string $branchCode)
+    {
+        return $this->db
+            ->table('Branches')
+            ->select(
+                'br_code',
+                'br_branch_name',
+                'br_ac_code',
+                'br_ma_code',
+                'br_address',
+                'br_tin',
+                'br_attention',
+                'br_position',
+            )
+            ->where('br_code', $branchCode)
+            ->first();
+    }
+
+    /**
+     * How many cardholders sit behind one account or branch code.
+     *
+     * The same single-column predicate the listing counts by, so a detail pane and the
+     * row it was opened from never disagree about the number.
+     *
+     * @param  string  $memberColumn  The `cholders` column to count by.
+     * @param  string  $code
+     */
+    public function countMembersBy(string $memberColumn, string $code): int
+    {
+        return (int) $this->db
+            ->table('cholders')
+            ->where($memberColumn, $code)
+            ->count();
+    }
+
+    /**
+     * How many branches an account has, for the account detail pane.
+     *
+     * @param  string  $accountCode
+     */
+    public function countBranchesOfAccount(string $accountCode): int
+    {
+        return (int) $this->db
+            ->table('Branches')
+            ->where('br_ac_code', $accountCode)
+            ->count();
+    }
+
+    /**
+     * Retrieves a paginated list of the cardholders behind one unmapped account or
+     * branch — the very rows its "Members" count counted.
+     *
+     * The predicate is the single column the count was grouped by, and nothing else:
+     * `ch_accountid` for an account, `ch_branch_code` for a branch
+     * ({@see attachAccountMemberCounts()}, {@see attachBranchMemberCounts()}). That is
+     * the whole point of this query existing rather than reusing
+     * {@see getCardHolderDetailsByParams()}, which joins claims and posting details and
+     * so returns a row per claim — a list whose total could not match the number the
+     * reader clicked on.
+     *
+     * @param  string  $memberColumn  The `cholders` column the count was grouped by.
+     * @param  string  $code
+     * @param  array  $params  Supports per_page, page, lastname, firstname and policynum.
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     */
+    public function getDirectoryMembersByParams(string $memberColumn, string $code, array $params)
+    {
+        $perPage = $params['per_page'] ?? config('vc.default_pages');
+
+        return $this->db
+            ->table('cholders')
+            // Only columns that read as themselves. HMS codes membership type and
+            // member status as bare numbers and letters ('1', 'S') with no lookup this
+            // application holds, so they are left out rather than shown unlabelled.
+            //
+            // `ch_name` is carried alongside the split name columns because it is the
+            // one HMS always fills: the first/last pair is empty on some 59,000
+            // cardholders, who would otherwise appear in the list as a blank row.
+            ->select(
+                'ch_id',
+                'ch_policynum',
+                'ch_name',
+                'ch_firstname',
+                'ch_lastname',
+                'ch_middlename',
+                'ch_suffix',
+                'ch_sex',
+                'ch_bdate',
+                'ch_plancode',
+                'ch_effdate',
+                'ch_expirydate',
+                'ch_accountid',
+                'ch_branch_code',
+                'ch_branch_name',
+            )
+            ->where($memberColumn, $code)
+            ->when(!empty($params['name']), function ($q) use ($params) {
+                // Searched across all three for the same reason: a name typed by a
+                // reader has to find the cardholders whose split columns are blank,
+                // and `ch_name` reads "LASTNAME, FIRSTNAME M." so one term matches
+                // either part of it.
+                $q->where(function ($sub) use ($params) {
+                    $sub->where('ch_name', 'like', '%'.$params['name'].'%')
+                        ->orWhere('ch_lastname', 'like', '%'.$params['name'].'%')
+                        ->orWhere('ch_firstname', 'like', '%'.$params['name'].'%');
+                });
+            })
+            ->when(!empty($params['policynum']), fn ($q) => $q->where('ch_policynum', 'like', '%'.$params['policynum'].'%'))
+            ->orderBy('ch_name')
+            ->paginate($perPage);
     }
 
     /**
