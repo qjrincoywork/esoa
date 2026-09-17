@@ -182,6 +182,10 @@ export function useSoas() {
       // Make AJAX request without navigation using reusable composable
       const response = await get<{
         soa: Soa;
+        account_types?: Array<{ value: number | string; name: string }>;
+        bill_types?: Array<{ value: number | string; name: string }>;
+        status_types?: Array<{ value: number | string; name: string }>;
+        billing_ref_from_types?: Array<{ value: number | string; name: string }>;
       }>(
         `/${slug.value}/${soa.id}/edit`
       );

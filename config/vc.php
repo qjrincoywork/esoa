@@ -88,6 +88,7 @@ return [
         'Account Type',
         'Billing Ref',
         'Bill Date',
+        'Uploaded Date',
         'Due Date',
         'Due In',
         'Amount',

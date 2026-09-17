@@ -38,6 +38,10 @@ class SoaResource extends JsonResource
             'billing_ref_names' => $this->getBillingRefNames($this->billing_ref),
             'bill_type' => BillType::label((int) $this->bill_type),
             'created_at' => CommonHelper::formatDate($this->created_at),
+            'billing_date' => CommonHelper::formatDate($this->billing_date),
+            'billing_date_value' => $this->billing_date
+                ? Carbon::parse($this->billing_date)->toDateString()
+                : null,
             'due_date' => CommonHelper::formatDate($this->due_date),
             'due_in' => $this->formatDaysDue($this->due_date),
             'due_in_color' => $this->dueInColor($this->due_date),
