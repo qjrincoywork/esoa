@@ -131,7 +131,9 @@ class UpdateRequest extends FormRequest
                     'date',
                 ],
                 'billing_date' => [
-                    'required',
+                    Rule::requiredIf(
+                        in_array($this->status, [SoaStatus::UNPAID, SoaStatus::DISPUTED])
+                    ),
                     'date',
                 ],
                 'status' => [
