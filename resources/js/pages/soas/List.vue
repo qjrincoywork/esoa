@@ -193,7 +193,7 @@ const baseColumns: any[] = [
   columnHelper.accessor('branch_name', {
     header: 'Branch',
   }),
-  columnHelper.accessor('created_at', {
+  columnHelper.accessor('billing_date', {
     header: 'Bill Date',
   }),
   columnHelper.accessor('due_in', {

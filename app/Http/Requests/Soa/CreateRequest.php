@@ -83,6 +83,10 @@ class CreateRequest extends FormRequest
                 'required',
                 'date',
             ],
+            'billing_date' => [
+                'required',
+                'date',
+            ],
             'status' => [
                 'required',
                 'integer',

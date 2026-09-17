@@ -130,6 +130,10 @@ class UpdateRequest extends FormRequest
                     ),
                     'date',
                 ],
+                'billing_date' => [
+                    'required',
+                    'date',
+                ],
                 'status' => [
                     'required',
                     'integer',

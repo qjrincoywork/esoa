@@ -90,6 +90,7 @@ class SoaBillingInvoiceExporter
             $this->branchName($soa->branch_code),
             AccountType::label($soa->account_type),
             $billingRef,
+            CommonHelper::formatDate($soa->billing_date),
             CommonHelper::formatDate($soa->created_at),
             CommonHelper::formatDate($soa->due_date),
             $this->formatDaysDue($soa->due_date),

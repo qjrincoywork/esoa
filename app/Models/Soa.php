@@ -64,6 +64,7 @@ class Soa extends Model
         'bill_type',
         'status',
         'due_date',
+        'billing_date',
         'period_date_from',
         'period_date_to',
         'contract_date_from',
@@ -414,7 +415,7 @@ class Soa extends Model
     }
 
     /**
-     * Apply due-date and bill-date (created_at) range filters for list and export.
+     * Apply due-date and bill-date range filters for list and export.
      */
     protected function applyListDateFilters(Builder $query, array $params): void
     {
@@ -434,19 +435,23 @@ class Soa extends Model
             );
         }
 
+        // Bounded on `billing_date`, which is what the list has always called the bill
+        // date; it used to be read off `created_at` for want of a column of its own.
+        // Whole days on both ends: the column is a date, so a timestamp upper bound
+        // would exclude the last day of the range for want of a time.
         if (!empty($params['bill_date_from'] ?? null)) {
-            $query->where(
-                'created_at',
+            $query->whereDate(
+                'billing_date',
                 '>=',
-                Carbon::parse($params['bill_date_from'])->startOfDay()
+                Carbon::parse($params['bill_date_from'])->toDateString()
             );
         }
 
         if (!empty($params['bill_date_to'] ?? null)) {
-            $query->where(
-                'created_at',
+            $query->whereDate(
+                'billing_date',
                 '<=',
-                Carbon::parse($params['bill_date_to'])->endOfDay()
+                Carbon::parse($params['bill_date_to'])->toDateString()
             );
         }
     }

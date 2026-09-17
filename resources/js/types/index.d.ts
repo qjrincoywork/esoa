@@ -53,6 +53,10 @@ export interface Soa {
     status?: number;
     status_color?: string;
     bill_date?: string;
+    /** The invoice's bill date, formatted for display. */
+    billing_date?: string;
+    /** The same date as YYYY-MM-DD, for the date input on the form. */
+    billing_date_value?: string | null;
     due_date?: string;
     /** Aging bucket label for the due date (e.g. "Past Due – 30 Days"). */
     due_in?: string;
