@@ -24,7 +24,7 @@ class SoaResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        if (!$this->contract_date_from) {
+        if (!empty($this->period_date_from)) {
             $startDate = $this->period_date_from;
             $endDate = $this->period_date_to;
         } else {
