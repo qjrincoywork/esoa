@@ -7,6 +7,7 @@ import AccountBranchUpdateForm from '@/components/forms/soas/AccountBranchUpdate
 import ViewForm from '@/components/forms/soas/ViewForm.vue';
 import UntagForm from '@/components/forms/soas/UntagForm.vue';
 import ManageFileForm from '@/components/forms/soas/ManageFileForm.vue';
+import BatchUploadForm from '@/components/forms/soas/BatchUploadForm.vue';
 import { computed, ref, shallowRef, toRef, type Component, type Ref } from 'vue';
 import { Auth, Soa, User } from '@/types';
 let formApi: { getFormData: () => FormData | null } | null = null;
@@ -628,6 +629,96 @@ export function useSoas() {
     }
   };
 
+  /**
+   * Open the batch billing-invoice upload in the top pane.
+   *
+   * The pane's form parses the spreadsheet and matches the attachments; the request
+   * itself is made here, so `soas.ts` keeps owning the data-fetch and pane state. The
+   * upload is all-or-nothing server-side: a response carrying row errors has saved
+   * nothing, and is handed back to the form to display against the rows rather than
+   * flattened into a toast.
+   */
+  const batchUploadSoas = async () => {
+    try {
+      const response = await get<{
+        columns: string[];
+        required_columns: string[];
+        attachment_columns: string[];
+        date_columns: string[];
+        account_types: Array<{ value: number | string; name: string }>;
+        bill_types: Array<{ value: number | string; name: string }>;
+        status_types: Array<{ value: number | string; name: string }>;
+        max_rows: number;
+        max_attachments: number;
+        max_file_size: number;
+      }>(`/${slug.value}/batch_create`);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch batch upload metadata');
+      }
+
+      const meta = response.data;
+      if (!meta) return;
+
+      openPane({
+        side: 'top',
+        title: 'Batch Upload Billing Invoices',
+        component: BatchUploadForm,
+        componentProps: {
+          columns: meta.columns,
+          requiredColumns: meta.required_columns,
+          attachmentColumns: meta.attachment_columns,
+          dateColumns: meta.date_columns,
+          accountTypes: meta.account_types ?? [],
+          billTypes: meta.bill_types ?? [],
+          statusTypes: meta.status_types ?? [],
+          maxRows: meta.max_rows,
+          maxAttachments: meta.max_attachments,
+          maxFileSize: meta.max_file_size,
+          onCancel: () => closePane('top'),
+          onSubmit: async (payload: FormData) => {
+            showLoader();
+            try {
+              const res = await post(`/${slug.value}/batch_store`, payload);
+              const data = res.data as {
+                message?: string;
+                result?: { total: number; created: number; failed: number; errors: unknown[] };
+              };
+
+              if (!res.ok) {
+                dispatchNotification({
+                  title: 'Error',
+                  content: data?.message ?? 'Batch upload failed',
+                  type: 'error',
+                });
+
+                // The per-row detail belongs on the rows, so hand it back to the form.
+                return data?.result ?? null;
+              }
+
+              dispatchNotification({
+                title: 'Success',
+                content: data?.message ?? 'Billing invoices uploaded',
+                type: 'success',
+              });
+              closePane('top');
+              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+
+              return data?.result ?? null;
+            } catch {
+              dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+              return null;
+            } finally {
+              hideLoader();
+            }
+          },
+        },
+      });
+    } catch {
+      dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
+    }
+  };
+
   return {
     editSoa,
     viewSoa,
@@ -635,6 +726,7 @@ export function useSoas() {
     billingAttachments,
     openSoaFilesPane,
     newSoa,
+    batchUploadSoas,
     deleteSoa,
     manageFile,
     untagSoa,

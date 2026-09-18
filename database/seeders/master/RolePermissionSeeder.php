@@ -75,6 +75,8 @@ class RolePermissionSeeder extends Seeder
             // soas
             'soas.index',
             'soas.create',
+            'soas.batch_create',
+            'soas.batch_store',
             'soas.edit',
             'soas.destroy',
             'soas.manage_file',

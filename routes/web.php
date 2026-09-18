@@ -196,6 +196,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/{id}/view_billing_invoice', 'viewBillingInvoice')->name('view_billing_invoice');
             Route::get('/create', 'create')->name('create');
             Route::post('/store', 'store')->name('store');
+            Route::get('/batch_create', 'batchCreate')->name('batch_create');
+            Route::post('/batch_store', 'batchStore')->name('batch_store');
             Route::get('/{id}/edit', 'edit')->name('edit');
             Route::get('/{id}/attachment/{type}', 'streamBillingAttachment')
                 ->name('billing_attachments')

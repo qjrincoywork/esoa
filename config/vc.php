@@ -69,6 +69,23 @@ return [
         // chat_attachments directory (see LEGACY_CHAT_ATTACHMENTS_ROOT).
         'legacy_chat' => env('LEGACY_CHAT_DISK', 'legacy_chat'),
     ],
+    /*
+    |--------------------------------------------------------------------------
+    | Batch billing-invoice upload
+    |--------------------------------------------------------------------------
+    |
+    | Bounds for the spreadsheet-driven batch upload. Each row carries up to two
+    | attachments, so max_attachments is the real constraint: PHP refuses silently
+    | past its own max_file_uploads, and the importer would then report perfectly
+    | good rows as missing their files. The default is read from that ini setting
+    | so the two cannot disagree, and max_rows is derived to match.
+    |
+    */
+    'soa_batch' => [
+        'max_attachments' => (int) env('SOA_BATCH_MAX_ATTACHMENTS', (int) ini_get('max_file_uploads') ?: 20),
+        'max_rows' => (int) env('SOA_BATCH_MAX_ROWS', (int) floor(((int) ini_get('max_file_uploads') ?: 20) / 2)),
+    ],
+
     'soa_import' => [
         'chunk_size' => (int) env('SOA_IMPORT_CHUNK_SIZE', 2000),
         'limit' => ($limit = env('SOA_IMPORT_LIMIT')) !== null && $limit !== ''

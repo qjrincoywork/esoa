@@ -7,19 +7,22 @@ use App\Enums\BillRefFrom;
 use App\Enums\BillType;
 use App\Enums\Server;
 use App\Enums\SoaAmountOperation;
+use App\Enums\SoaImportColumn;
 use App\Enums\SoaStatus;
 use App\Exports\SoaBillingInvoiceExporter;
 use App\Helpers\CommonHelper;
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Soa\{AccountBranchMembersRequest, AdjustAmountRequest, BillRefsRequest, CreateRequest, DestroyRequest, FileListRequest, FileProxyRequest, FindMemberRequest, ListRequest, MemberFilesRequest, OldRemarksRequest, RecordViewedRequest, RecomputeTaxRequest, UpdateRequest, UpdateTagRequest };
+use App\Http\Requests\Soa\{AccountBranchMembersRequest, AdjustAmountRequest, BatchStoreRequest, BillRefsRequest, CreateRequest, DestroyRequest, FileListRequest, FileProxyRequest, FindMemberRequest, ListRequest, MemberFilesRequest, OldRemarksRequest, RecordViewedRequest, RecomputeTaxRequest, UpdateRequest, UpdateTagRequest };
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
+use App\Http\Resources\SoaBatchImportResultResource;
 use App\Http\Resources\{AccountBranchMemberResource, AccountPaymentResource, BillingRefResource, ConcernResource, MemberResource, OldRemarkResource, OldSoaResource, SoaActivityListResource, SoaAgingCountResource, SoaResource };
 use App\Mail\{ BillingInvoiceStatusChanged, NewBillingInvoiceUploaded };
 use App\Models\Soa;
+use App\Services\SoaBatchImportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\{ DB, Http, Storage };
 use Inertia\Inertia;
@@ -434,6 +437,83 @@ class SoaController extends Controller
             if ($request->wantsJson() || $request->ajax()) {
                 return CustomResponse::serverError($e, 'SoaController');
             }
+        }
+    }
+
+    /**
+     * Return the metadata needed to drive the batch-upload pane (AJAX only).
+     *
+     * Surfaces the canonical template columns plus the accepted values for the coded
+     * columns (account types, bill types, statuses) so the client can build a template
+     * and check headers before uploading, and the upload bounds so it can warn about a
+     * file too large for the server to accept before the user waits on the request.
+     *
+     * Access control (RBAC): route-level permission middleware gates the endpoint.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse|void
+     */
+    public function batchCreate(Request $request)
+    {
+        // Return JSON for AJAX requests (no URL change)
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'columns' => SoaImportColumn::ordered(),
+                'required_columns' => SoaImportColumn::required(),
+                'attachment_columns' => SoaImportColumn::attachments(),
+                'date_columns' => SoaImportColumn::dates(),
+                'account_types' => AccountType::list(),
+                'bill_types' => BillType::list(),
+                'status_types' => SoaStatus::list(),
+                'max_rows' => config('vc.soa_batch.max_rows'),
+                'max_attachments' => config('vc.soa_batch.max_attachments'),
+                'max_file_size' => config('vc.max_file_size'),
+            ]);
+        }
+    }
+
+    /**
+     * Upload many billing invoices at once from parsed spreadsheet rows.
+     *
+     * Delegates per-row validation and persistence to {@see SoaBatchImportService},
+     * which runs every row through the same rules {@see CreateRequest} applies to a
+     * single upload and refuses the whole file when any row fails — so the response is
+     * either "nothing was saved, here is what to fix" or "all of it was saved". The
+     * envelope is validated by {@see BatchStoreRequest}.
+     *
+     * Access control (RBAC): route-level permission middleware restricts this endpoint
+     * to users authorized to batch-upload; {@see BatchStoreRequest} authorizes again at
+     * the request layer as defense-in-depth.
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function batchStore(BatchStoreRequest $request, SoaBatchImportService $service)
+    {
+        try {
+            $validated = $request->validated();
+
+            $result = $service->import(
+                $validated['rows'],
+                $validated['attachments'] ?? [],
+                $request->user(),
+            );
+
+            $created = $result['created'];
+            $failed = $result['failed'];
+
+            $message = $failed === 0
+                ? ($created === 1
+                    ? '1 billing invoice uploaded successfully'
+                    : "{$created} billing invoices uploaded successfully")
+                : "Nothing was uploaded: {$failed} of {$result['total']} rows did not pass validation.";
+
+            return response()->json([
+                'status' => $failed === 0 ? 'success' : 'error',
+                'message' => $message,
+                'result' => new SoaBatchImportResultResource($result),
+            ], $failed === 0 ? Response::HTTP_OK : Response::HTTP_UNPROCESSABLE_ENTITY);
+        } catch (\Exception $e) {
+            return CustomResponse::serverError($e, 'SoaController::batchStore');
         }
     }
 

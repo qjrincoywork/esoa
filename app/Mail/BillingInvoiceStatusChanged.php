@@ -8,6 +8,7 @@ use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
+use App\Helpers\CommonHelper;
 use App\Models\Soa;
 use App\Enums\SoaStatus;
 
@@ -49,6 +50,11 @@ class BillingInvoiceStatusChanged extends Mailable
      */
     public function content(): Content
     {
+        // The view greets the client by name, which is not a column on the SOA; see
+        // {@see CommonHelper::prepareBillingInvoiceForEmail}. Resolved here so this
+        // renders correctly whether it was sent inline or restored by a queue worker.
+        CommonHelper::prepareBillingInvoiceForEmail($this->soa);
+
         return new Content(
             view: 'emails.esoa.billing-invoice-status-changed',
         );
