@@ -25,6 +25,7 @@ final class AuditEvent extends Enum
     public const RESTORED = 'restored';
     public const BATCH_UPLOADED = 'batch_uploaded';
     public const BATCH_REJECTED = 'batch_rejected';
+    public const BATCH_PARTIAL = 'batch_partial';
 
     /**
      * Map an event to how it is described in the interface.
@@ -40,6 +41,7 @@ final class AuditEvent extends Enum
             self::RESTORED => 'Restored',
             self::BATCH_UPLOADED => 'Batch uploaded',
             self::BATCH_REJECTED => 'Batch rejected',
+            self::BATCH_PARTIAL => 'Batch partially uploaded',
             default => ucfirst((string) $value),
         };
     }

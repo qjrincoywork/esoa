@@ -465,21 +465,61 @@ class SoaController extends Controller
                 'account_types' => AccountType::list(),
                 'bill_types' => BillType::list(),
                 'status_types' => SoaStatus::list(),
+                // The ceiling on the whole manifest: how many rows/attachments a batch
+                // may contain in total. A large manifest is sent to /batch_store as
+                // several smaller requests (see php_limits below), so this is no longer
+                // a single request's size — just a sanity bound on the batch as a whole.
                 'max_rows' => config('vc.soa_batch.max_rows'),
                 'max_attachments' => config('vc.soa_batch.max_attachments'),
                 'max_file_size' => config('vc.max_file_size'),
+                // What any *one* request to /batch_store may actually carry. PHP enforces
+                // these before Laravel ever sees the request, so the client needs the
+                // real values to split a large manifest into requests that will not be
+                // silently truncated (max_file_uploads) or outright rejected
+                // (post_max_size), rather than guessing at safe numbers.
+                'php_limits' => [
+                    'max_file_uploads' => (int) ini_get('max_file_uploads'),
+                    'post_max_size' => $this->parseIniBytes(ini_get('post_max_size')),
+                    'upload_max_filesize' => $this->parseIniBytes(ini_get('upload_max_filesize')),
+                ],
             ]);
         }
     }
 
     /**
+     * Parse a php.ini size shorthand (e.g. "8M", "1G", "512K") into bytes.
+     *
+     * ini_get() returns these settings as the raw string from php.ini, not a number —
+     * this is the one place that needs the byte value, to size batch-upload chunks
+     * against the server's real limits instead of a guessed constant.
+     */
+    private function parseIniBytes(string|false $value): int
+    {
+        if ($value === false || trim($value) === '') {
+            return 0;
+        }
+
+        $value = trim($value);
+        $unit = strtolower(substr($value, -1));
+        $number = (int) $value;
+
+        return match ($unit) {
+            'g' => $number * 1024 * 1024 * 1024,
+            'm' => $number * 1024 * 1024,
+            'k' => $number * 1024,
+            default => (int) $value,
+        };
+    }
+
+    /**
      * Upload many billing invoices at once from parsed spreadsheet rows.
      *
-     * Delegates per-row validation and persistence to {@see SoaBatchImportService},
-     * which runs every row through the same rules {@see CreateRequest} applies to a
-     * single upload and refuses the whole file when any row fails — so the response is
-     * either "nothing was saved, here is what to fix" or "all of it was saved". The
-     * envelope is validated by {@see BatchStoreRequest}.
+     * Delegates per-row validation and persistence to {@see SoaBatchImportService}.
+     * By default a failing row refuses the whole file — the response is either
+     * "nothing was saved, here is what to fix" or "all of it was saved" — but the
+     * request may opt in to skipping failing rows instead (`skip_errors`), in which
+     * case the response can also be "some of it was saved, here is what was skipped".
+     * The envelope is validated by {@see BatchStoreRequest}.
      *
      * Access control (RBAC): route-level permission middleware restricts this endpoint
      * to users authorized to batch-upload; {@see BatchStoreRequest} authorizes again at
@@ -496,22 +536,28 @@ class SoaController extends Controller
                 $validated['rows'],
                 $validated['attachments'] ?? [],
                 $request->user(),
+                $validated['skip_errors'] ?? false,
             );
 
+            $total = $result['total'];
             $created = $result['created'];
             $failed = $result['failed'];
 
-            $message = $failed === 0
-                ? ($created === 1
+            $message = match (true) {
+                $failed === 0 => $created === 1
                     ? '1 billing invoice uploaded successfully'
-                    : "{$created} billing invoices uploaded successfully")
-                : "Nothing was uploaded: {$failed} of {$result['total']} rows did not pass validation.";
+                    : "{$created} billing invoices uploaded successfully",
+                $created > 0 => "{$created} of {$total} billing invoices uploaded; {$failed} row(s) were skipped due to validation errors.",
+                default => "Nothing was uploaded: {$failed} of {$total} rows did not pass validation.",
+            };
 
+            // A row that was actually saved makes this a success response even when
+            // others were skipped; only a batch that saved nothing is an error.
             return response()->json([
-                'status' => $failed === 0 ? 'success' : 'error',
+                'status' => $created > 0 ? 'success' : 'error',
                 'message' => $message,
                 'result' => new SoaBatchImportResultResource($result),
-            ], $failed === 0 ? Response::HTTP_OK : Response::HTTP_UNPROCESSABLE_ENTITY);
+            ], $created > 0 ? Response::HTTP_OK : Response::HTTP_UNPROCESSABLE_ENTITY);
         } catch (\Exception $e) {
             return CustomResponse::serverError($e, 'SoaController::batchStore');
         }

@@ -630,13 +630,17 @@ export function useSoas() {
   };
 
   /**
-   * Open the batch billing-invoice upload in the top pane.
+   * Open the batch billing-invoice upload wizard in the top pane.
    *
-   * The pane's form parses the spreadsheet and matches the attachments; the request
-   * itself is made here, so `soas.ts` keeps owning the data-fetch and pane state. The
-   * upload is all-or-nothing server-side: a response carrying row errors has saved
-   * nothing, and is handed back to the form to display against the rows rather than
-   * flattened into a toast.
+   * A large manifest cannot travel as one request — PHP enforces its own
+   * `post_max_size` / `max_file_uploads` before Laravel ever sees the request, and
+   * those are typically far below what a real batch needs. The form therefore splits
+   * the manifest into several requests sized against the real server limits
+   * (`php_limits`, below) and calls `onSubmitChunk` once per request; `soas.ts` stays
+   * the one place a request is actually made, but no longer decides success/failure
+   * for the user — that only makes sense once every chunk has been tried, which
+   * `onComplete` is called with. A small manifest is just one chunk, so this collapses
+   * back to a single request with no visible difference for the common case.
    */
   const batchUploadSoas = async () => {
     try {
@@ -651,6 +655,7 @@ export function useSoas() {
         max_rows: number;
         max_attachments: number;
         max_file_size: number;
+        php_limits: { max_file_uploads: number; post_max_size: number; upload_max_filesize: number };
       }>(`/${slug.value}/batch_create`);
 
       if (!response.ok) {
@@ -661,7 +666,7 @@ export function useSoas() {
       if (!meta) return;
 
       openPane({
-        side: 'top',
+        side: 'right',
         title: 'Batch Upload Billing Invoices',
         component: BatchUploadForm,
         componentProps: {
@@ -675,41 +680,53 @@ export function useSoas() {
           maxRows: meta.max_rows,
           maxAttachments: meta.max_attachments,
           maxFileSize: meta.max_file_size,
-          onCancel: () => closePane('top'),
-          onSubmit: async (payload: FormData) => {
-            showLoader();
+          maxFileUploads: meta.php_limits?.max_file_uploads ?? 20,
+          postMaxSizeBytes: meta.php_limits?.post_max_size ?? 8 * 1024 * 1024,
+          onCancel: () => closePane('right'),
+          // One request for one chunk: post it, and hand the raw outcome back
+          // un-toasted — the form is the only one that knows whether more chunks
+          // are still to come, so it alone decides when the batch is actually done.
+          onSubmitChunk: async (payload: FormData) => {
             try {
               const res = await post(`/${slug.value}/batch_store`, payload);
               const data = res.data as {
                 message?: string;
-                result?: { total: number; created: number; failed: number; errors: unknown[] };
+                result?: { total: number; created: number; failed: number; partial: boolean; errors: unknown[] };
               };
 
-              if (!res.ok) {
-                dispatchNotification({
-                  title: 'Error',
-                  content: data?.message ?? 'Batch upload failed',
-                  type: 'error',
-                });
-
-                // The per-row detail belongs on the rows, so hand it back to the form.
-                return data?.result ?? null;
-              }
-
-              dispatchNotification({
-                title: 'Success',
-                content: data?.message ?? 'Billing invoices uploaded',
-                type: 'success',
-              });
-              closePane('top');
-              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
-
-              return data?.result ?? null;
+              return { ok: res.ok, message: data?.message, result: data?.result ?? null };
             } catch {
-              dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
-              return null;
-            } finally {
-              hideLoader();
+              return { ok: false, message: 'Network error', result: null };
+            }
+          },
+          // Called exactly once, after the last chunk the form decided to send —
+          // whether that is all of them, or it stopped early on a failing chunk.
+          onComplete: (summary: { created: number; failed: number; stoppedEarly: boolean }) => {
+            if (summary.created > 0) {
+              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+            }
+
+            if (summary.created === 0) {
+              dispatchNotification({
+                title: 'Error',
+                content: summary.stoppedEarly
+                  ? 'Nothing was uploaded — the batch stopped at the first row that failed validation.'
+                  : 'Nothing was uploaded: every row failed validation.',
+                type: 'error',
+              });
+              return;
+            }
+
+            const content = summary.failed === 0
+              ? (summary.created === 1 ? '1 billing invoice uploaded successfully' : `${summary.created} billing invoices uploaded successfully`)
+              : `${summary.created} billing invoice(s) uploaded; ${summary.failed} row(s) ${summary.stoppedEarly ? 'were not attempted after the batch stopped' : 'were skipped'} — review below.`;
+
+            dispatchNotification({ title: 'Success', content, type: 'success' });
+
+            // Nothing left to review once every row succeeded; otherwise the pane
+            // stays open so the uploader can see what was skipped or not attempted.
+            if (summary.failed === 0) {
+              closePane('right');
             }
           },
         },

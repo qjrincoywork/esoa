@@ -33,20 +33,36 @@ use Illuminate\Validation\Rules\Unique;
  * uploaded files first, so the `file` / `mimes` / `max` rules run against real uploads
  * just as they do on the form.
  *
- * The import is all-or-nothing: validation runs over the whole file first and a single
- * failing row stops it, so nothing is written and the user fixes one spreadsheet rather
- * than reconciling a partial import. Only once every row passes are the attachments
- * stored and the invoices saved, inside one transaction.
+ * This service only ever sees one request's worth of rows: a manifest too large for
+ * PHP's own `post_max_size` / `max_file_uploads` is split client-side into several
+ * requests to {@see \App\Http\Controllers\SoaController::batchStore()}, each handled
+ * by its own call to {@see import()}. "All-or-nothing" below is therefore scoped to
+ * one such request/chunk, not the manifest as a whole — the client is what decides
+ * whether a failed chunk stops the rest of the batch.
+ *
+ * The import is all-or-nothing by default: validation runs over the whole request
+ * first and a single failing row stops it, so nothing from that request is written.
+ * A caller may opt into skipping failing rows instead ({@see import()}'s
+ * `$skipErrors`), in which case the rows that pass are stored and the ones that fail
+ * are reported back rather than blocking the rest of the request. Either way, only
+ * rows that pass are ever persisted, inside one transaction.
  */
 class SoaBatchImportService
 {
-    /** @var array<string,UploadedFile> lower(file name) => uploaded attachment */
+    /**
+     * @var array<string,UploadedFile> "{pdf|xls}:{lower(base file name)}" => uploaded attachment
+     *
+     * Keyed by type plus base name rather than the full file name: a cell names an
+     * attachment without its extension ({@see resolveAttachments}), and a `.pdf` and a
+     * `.xlsx` sharing the same base name — the normal case for one invoice — must stay
+     * distinct rather than colliding on the same key.
+     */
     private array $attachments = [];
 
     /** @var array<string,int> lower(soa number) => the row that first used it */
     private array $seenSoaNumbers = [];
 
-    /** @var array<string,int> lower(file name) => the row that first claimed it */
+    /** @var array<string,int> same composite key as $attachments => the row that first claimed it */
     private array $claimedAttachments = [];
 
     /** @var array<string,\Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string> */
@@ -65,9 +81,11 @@ class SoaBatchImportService
      *
      * @param  array<int,array<string,mixed>>  $rows
      * @param  array<int,UploadedFile>  $attachments
+     * @param  bool  $skipErrors  When true, rows that pass are saved and rows that fail are
+     *                            reported back instead of the whole file being refused.
      * @return array{total:int,created:int,failed:int,errors:list<array{row:int,soa_number:?string,messages:list<string>}>}
      */
-    public function import(array $rows, array $attachments, User $user): array
+    public function import(array $rows, array $attachments, User $user, bool $skipErrors = false): array
     {
         // Read the single-upload contract once; it is the same for every row.
         $createRequest = new CreateRequest();
@@ -104,8 +122,9 @@ class SoaBatchImportService
             $prepared[] = $resolved;
         }
 
-        // All-or-nothing: one rejected row stops the whole file.
-        if ($errors !== []) {
+        // All-or-nothing unless the caller asked to skip failing rows: one rejected
+        // row then stops the whole file, so nothing is half-imported.
+        if ($errors !== [] && ! $skipErrors) {
             $this->recordRejection($normalized, $errors, count($attachments), $user);
 
             return [
@@ -118,17 +137,23 @@ class SoaBatchImportService
 
         $created = $this->persist($prepared);
 
-        $this->recordUpload($created, count($attachments), $user);
+        if ($created !== []) {
+            $this->recordUpload($created, count($attachments), $user);
 
-        // Notifications are sent only once the batch is committed, and one failure
-        // must not undo an import that already succeeded.
-        $this->notify($created, $user);
+            // Notifications are sent only once the batch is committed, and one
+            // failure must not undo an import that already succeeded.
+            $this->notify($created, $user);
+        }
+
+        if ($errors !== []) {
+            $this->recordSkipped($normalized, $errors, count($created), $user);
+        }
 
         return [
             'total' => count($normalized),
             'created' => count($created),
-            'failed' => 0,
-            'errors' => [],
+            'failed' => count($errors),
+            'errors' => $errors,
         ];
     }
 
@@ -219,6 +244,46 @@ class SoaBatchImportService
     }
 
     /**
+     * Record a batch upload where failing rows were skipped rather than blocking the rest.
+     *
+     * Unlike {@see recordRejection}, some rows here were actually saved — the message
+     * and properties reflect that instead of implying nothing was written.
+     *
+     * @param  list<array<string,?string>>  $rows
+     * @param  list<array{row:int,soa_number:?string,messages:list<string>}>  $errors
+     */
+    private function recordSkipped(array $rows, array $errors, int $createdCount, User $user): void
+    {
+        $properties = [
+            'rows_in_file' => count($rows),
+            'rows_uploaded' => $createdCount,
+            'rows_skipped' => count($errors),
+        ];
+
+        foreach (array_slice($errors, 0, self::AUDIT_ERROR_LIMIT) as $error) {
+            $label = 'row_'.$error['row'].($error['soa_number'] !== null ? ' ('.$error['soa_number'].')' : '');
+            $properties[$label] = implode(' ', $error['messages']);
+        }
+
+        if (count($errors) > self::AUDIT_ERROR_LIMIT) {
+            $properties['…'] = sprintf('and %d further skipped rows', count($errors) - self::AUDIT_ERROR_LIMIT);
+        }
+
+        $this->writeAudit(
+            AuditEvent::BATCH_PARTIAL,
+            sprintf(
+                'Billing invoice batch upload: %d of %d %s uploaded, %d skipped due to validation errors',
+                $createdCount,
+                count($rows),
+                count($rows) === 1 ? 'row' : 'rows',
+                count($errors),
+            ),
+            $properties,
+            $user,
+        );
+    }
+
+    /**
      * Write one batch-level entry to the billing-invoice audit channel.
      *
      * The summary goes under `attributes` because that is what the audit detail pane
@@ -268,11 +333,17 @@ class SoaBatchImportService
     }
 
     /**
-     * Index the uploaded attachments by their (lowercased) file name.
+     * Index the uploaded attachments by type plus their (lowercased) base file name.
      *
-     * The spreadsheet refers to an attachment by name, so the name is the key. A name
-     * used twice keeps the first upload; the duplicate is reported when a row asks for
-     * it only if the two genuinely differ, which the uploader cannot act on anyway.
+     * A cell names an attachment without its extension ({@see resolveAttachments}), so
+     * the extension can never be the thing a mismatch turns on. Keying by type as well
+     * as base name keeps a `.pdf` and an `.xlsx` that share a base name — the normal
+     * case, since one invoice's PDF and Excel usually differ only by extension —
+     * addressable independently instead of one silently shadowing the other.
+     *
+     * A name used twice within the same type keeps the first upload; the duplicate is
+     * reported when a row asks for it only if the two genuinely differ, which the
+     * uploader cannot act on anyway.
      *
      * @param  array<int,UploadedFile>  $attachments
      * @return array<string,UploadedFile>
@@ -286,9 +357,9 @@ class SoaBatchImportService
                 continue;
             }
 
-            $key = Str::lower(trim($file->getClientOriginalName()));
+            $key = $this->attachmentCompositeKey($file->getClientOriginalName());
 
-            if ($key === '' || isset($indexed[$key])) {
+            if ($key === null || isset($indexed[$key])) {
                 continue;
             }
 
@@ -296,6 +367,37 @@ class SoaBatchImportService
         }
 
         return $indexed;
+    }
+
+    /**
+     * The key an attachment is addressed by: its type plus its base file name.
+     *
+     * Null when the name's extension is neither a PDF nor an Excel file — such a file
+     * can never satisfy `file_pdf` or `file_xls`, so it is never indexed or matched.
+     */
+    private function attachmentCompositeKey(string $name): ?string
+    {
+        $category = $this->attachmentCategory(pathinfo($name, PATHINFO_EXTENSION));
+
+        if ($category === null) {
+            return null;
+        }
+
+        $baseName = Str::lower(trim(pathinfo($name, PATHINFO_FILENAME)));
+
+        return $baseName === '' ? null : "{$category}:{$baseName}";
+    }
+
+    /** Which family an extension belongs to, or null when it is neither PDF nor Excel. */
+    private function attachmentCategory(string $extension): ?string
+    {
+        $extension = Str::lower($extension);
+
+        return match (true) {
+            $extension === 'pdf' => 'pdf',
+            in_array($extension, ['xls', 'xlsx'], true) => 'xls',
+            default => null,
+        };
     }
 
     /**
@@ -618,15 +720,15 @@ class SoaBatchImportService
         }
 
         // Duplicate detection within the same file: the unique rule above only sees
-        // rows already persisted, and this batch is not written until every row passes.
-        if ($soaNumber !== null) {
-            $key = Str::lower($soaNumber);
+        // rows already persisted, and this batch is not written until every row passes
+        // — or, with `skip_errors`, until every row that passes is written. A number is
+        // only *claimed* below once this row is confirmed to have no other problems, so
+        // a row that fails for an unrelated reason never falsely marks a later, genuinely
+        // valid row as a duplicate of a row that was never actually going to be saved.
+        $soaNumberKey = $soaNumber !== null ? Str::lower($soaNumber) : null;
 
-            if (isset($this->seenSoaNumbers[$key])) {
-                $messages[] = "Duplicate SOA number '{$soaNumber}' — already used on row {$this->seenSoaNumbers[$key]}.";
-            } else {
-                $this->seenSoaNumbers[$key] = $line;
-            }
+        if ($soaNumberKey !== null && isset($this->seenSoaNumbers[$soaNumberKey])) {
+            $messages[] = "Duplicate SOA number '{$soaNumber}' — already used on row {$this->seenSoaNumbers[$soaNumberKey]}.";
         }
 
         // The account type is derived from the account code everywhere else in the
@@ -651,6 +753,10 @@ class SoaBatchImportService
             ], null];
         }
 
+        if ($soaNumberKey !== null) {
+            $this->seenSoaNumbers[$soaNumberKey] = $line;
+        }
+
         $attributes = $validator->validated();
 
         // Mirror CreateRequest::passedValidation(): the stored type is the derived one.
@@ -664,7 +770,12 @@ class SoaBatchImportService
     }
 
     /**
-     * Match a row's attachment columns to the uploaded files, by name.
+     * Match a row's attachment columns to the uploaded files, by type and base name.
+     *
+     * A cell names an attachment without its extension — {@see attachmentCompositeKey}
+     * is what turns that into the key {@see indexAttachments} filed the real upload
+     * under, so `file_pdf` can only ever resolve to a PDF and `file_xls` only ever to
+     * an Excel file, whatever extension the cell happens to also include.
      *
      * A named-but-missing attachment is reported here rather than left to the `required`
      * rule, so the message names the file the uploader has to go and add. An attachment
@@ -688,7 +799,9 @@ class SoaBatchImportService
                 continue;
             }
 
-            $key = Str::lower(basename($name));
+            $category = $column === Col::FILE_PDF ? 'pdf' : 'xls';
+            $baseName = Str::lower(trim(pathinfo(basename($name), PATHINFO_FILENAME)));
+            $key = "{$category}:{$baseName}";
             $file = $this->attachments[$key] ?? null;
 
             if ($file === null) {

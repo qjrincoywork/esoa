@@ -74,11 +74,20 @@ return [
     | Batch billing-invoice upload
     |--------------------------------------------------------------------------
     |
-    | Bounds for the spreadsheet-driven batch upload. Each row carries up to two
-    | attachments, so max_attachments is the real constraint: PHP refuses silently
-    | past its own max_file_uploads, and the importer would then report perfectly
-    | good rows as missing their files. The default is read from that ini setting
-    | so the two cannot disagree, and max_rows is derived to match.
+    | The ceiling on a whole manifest — how many rows/attachments one batch-upload
+    | wizard session may contain in total, across every request it takes to send it.
+    |
+    | This used to double as the per-request limit, back when a batch was always
+    | exactly one HTTP request; the default was read from max_file_uploads so the
+    | app and PHP could never disagree about it (a value above max_file_uploads
+    | would make PHP silently drop attachments past that count, and the importer
+    | would then report perfectly good rows as missing their files).
+    |
+    | The client now splits a large manifest into several requests sized to fit
+    | under the server's real max_file_uploads / post_max_size (see
+    | SoaController::batchCreate()'s `php_limits`), so this default no longer needs
+    | to track max_file_uploads — it stays here mainly as protection against an
+    | absurdly large upload rather than a value the client must not exceed in one go.
     |
     */
     'soa_batch' => [

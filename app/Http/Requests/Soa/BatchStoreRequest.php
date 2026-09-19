@@ -11,8 +11,12 @@ use Symfony\Component\HttpFoundation\Response;
  * Only the shape of the payload is enforced here (a bounded list of row objects plus
  * the attachments they reference). Per-row business validation is delegated to
  * {@see \App\Services\SoaBatchImportService}, which runs every row through the very
- * rules {@see CreateRequest} applies to a single upload and refuses the whole file
- * when any one row fails, so nothing is half-imported.
+ * rules {@see CreateRequest} applies to a single upload.
+ *
+ * `skip_errors` chooses how a failing row is handled: left off (the default), the
+ * whole file is refused when any one row fails, so nothing is half-imported; set, the
+ * passing rows are saved and the failing ones are reported back instead of blocking
+ * the rest of the file.
  */
 class BatchStoreRequest extends FormRequest
 {
@@ -37,6 +41,12 @@ class BatchStoreRequest extends FormRequest
      * which row — that mapping is by file name and is resolved per row by the importer;
      * here each upload only has to be a readable PDF/XLS within the size limit.
      *
+     * `attachments` is optional, not required: a large manifest arrives as several
+     * requests ({@see \App\Services\SoaBatchImportService}'s class docs), and a chunk
+     * made up entirely of rows that are missing their file legitimately carries none —
+     * that is a normal per-row validation failure, not a malformed request, and must
+     * not be rejected before the rows are even looked at.
+     *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
     public function rules(): array
@@ -44,12 +54,13 @@ class BatchStoreRequest extends FormRequest
         return [
             'rows' => ['required', 'array', 'min:1', 'max:' . config('vc.soa_batch.max_rows')],
             'rows.*' => ['array'],
-            'attachments' => ['required', 'array', 'min:1', 'max:' . config('vc.soa_batch.max_attachments')],
+            'attachments' => ['sometimes', 'array', 'max:' . config('vc.soa_batch.max_attachments')],
             'attachments.*' => [
                 'file',
                 'mimes:pdf,xls,xlsx',
                 'max:' . config('vc.max_file_size'), // 2MB (size is in KB)
             ],
+            'skip_errors' => ['sometimes', 'boolean'],
         ];
     }
 
@@ -65,7 +76,6 @@ class BatchStoreRequest extends FormRequest
             'rows.array' => 'The uploaded data is not in the expected format.',
             'rows.min' => 'The uploaded file must contain at least one row.',
             'rows.max' => 'You can upload at most :max billing invoices at a time.',
-            'attachments.required' => 'Upload the PDF and Excel attachments referenced by the rows.',
             'attachments.max' => 'You can attach at most :max files at a time.',
             'attachments.*.mimes' => 'Each attachment must be a PDF, XLS or XLSX file.',
             'attachments.*.max' => 'Each attachment may not be larger than :max kilobytes.',
@@ -89,6 +99,10 @@ class BatchStoreRequest extends FormRequest
 
             $this->merge(['rows' => is_array($decoded) ? $decoded : []]);
         }
+
+        // Travels as a string over multipart form data ("1"/"0", "true"/"false"), so it
+        // is normalised to a real boolean before the `boolean` rule sees it.
+        $this->merge(['skip_errors' => filter_var($this->input('skip_errors', false), FILTER_VALIDATE_BOOLEAN)]);
     }
 
     /**
