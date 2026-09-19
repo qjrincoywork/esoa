@@ -25,6 +25,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useModulePermissions } from '@/composables/useModulePermissions';
 import RightPane from '@/components/RightPane.vue';
 import { useUnmappedAccounts, type DirectoryRow, type DirectoryScope } from '@/composables/unmappedAccounts';
+import { badge, mappedStatusBadge } from '@/lib/directoryBadges';
 import { SlidersHorizontal, X } from 'lucide-vue-next';
 
 type DirectoryPagination = {
@@ -99,7 +100,15 @@ const FILTER_ALL = 'all'; // sentinel — means "no filter applied"
 
 const filters = ref({ code_prefix: '', account_type: '', is_active: '', members_min: '', members_max: '' });
 
-const filtersActive = computed(() => Object.values(filters.value).some((value) => value !== ''));
+/**
+ * Off by default, so the listing stays the coverage gap it's named for: only what
+ * nobody has. Switched on, the search widens to also match what is already mapped —
+ * from `user_accounts` — so a code that looks missing can be confirmed as taken rather
+ * than left ambiguous.
+ */
+const includeMapped = ref(false);
+
+const filtersActive = computed(() => Object.values(filters.value).some((value) => value !== '') || includeMapped.value);
 
 /** Selects bind to a sentinel rather than '' so "All" is a real, selectable option. */
 const asSelectModel = (key: 'code_prefix' | 'account_type' | 'is_active') => computed({
@@ -113,11 +122,8 @@ const statusModel = asSelectModel('is_active');
 
 const clearFilters = () => {
     filters.value = { code_prefix: '', account_type: '', is_active: '', members_min: '', members_max: '' };
+    includeMapped.value = false;
 };
-
-/** A small pill, so a row's class reads at a glance down the column. */
-const badge = (text: string, classes: string) =>
-    h('span', { class: ['inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', classes] }, text);
 
 const TYPE_CLASSES: Record<string, string> = {
     T: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300',
@@ -130,6 +136,12 @@ const memberCell = (value: unknown) =>
 
 const codeCell = (value: unknown) =>
     h('span', { class: 'font-mono text-xs' }, String(value ?? '—'));
+
+/** Appended only while `includeMapped` is on — otherwise every row would read "Unmapped". */
+const mappedColumn = columnHelper.accessor('mapped_users', {
+    header: 'Mapping',
+    cell: (info: any) => mappedStatusBadge(info.getValue()),
+});
 
 const accountColumns: any[] = [
     columnHelper.accessor('account_name', {
@@ -195,19 +207,29 @@ const branchColumns: any[] = [
     }),
 ];
 
-const columns = computed(() => (isBranchScope.value ? branchColumns : accountColumns));
+const columns = computed(() => {
+    const base = isBranchScope.value ? branchColumns : accountColumns;
+
+    return includeMapped.value ? [...base, mappedColumn] : base;
+});
 
 const searchPlaceholder = computed(() => isBranchScope.value
     ? 'Search branch, account or code...'
     : 'Search account name or code...');
 
-const emptyMessage = computed(() => isBranchScope.value
-    ? 'No unmapped branches found'
-    : 'No unmapped accounts found');
+const emptyMessage = computed(() => {
+    if (includeMapped.value) return isBranchScope.value ? 'No branches found' : 'No accounts found';
 
-const emptyDescription = computed(() => isBranchScope.value
-    ? 'Every branch matching these filters is already assigned to a user.'
-    : 'Every account matching these filters is already assigned to a user.');
+    return isBranchScope.value ? 'No unmapped branches found' : 'No unmapped accounts found';
+});
+
+const emptyDescription = computed(() => {
+    if (includeMapped.value) return 'Nothing in the HMS directory matches these filters.';
+
+    return isBranchScope.value
+        ? 'Every branch matching these filters is already assigned to a user.'
+        : 'Every account matching these filters is already assigned to a user.';
+});
 
 const exportFileName = computed(() => (isBranchScope.value ? 'unmapped_branches' : 'unmapped_accounts'));
 
@@ -233,6 +255,7 @@ const fetchDirectory = () => {
     // '' means "no bound"; 0 is a real bound, so the emptiness test cannot be falsy.
     if (filters.value.members_min !== '') params.members_min = filters.value.members_min;
     if (filters.value.members_max !== '') params.members_max = filters.value.members_max;
+    if (includeMapped.value) params.include_mapped = 1;
 
     router.get(`/${slug.value}`, params, {
         preserveState: true,
@@ -298,9 +321,10 @@ watch(
     },
 );
 
-// Debounced fetch when any filter changes
+// Debounced fetch when any filter changes — includeMapped rides the same channel so
+// toggling it and clearing filters in the same tick still fires one request, not two.
 const filterTimeout = ref<number | null>(null);
-watch(filters, () => {
+watch([filters, includeMapped], () => {
     if (filterTimeout.value) clearTimeout(filterTimeout.value);
 
     filterTimeout.value = window.setTimeout(() => {
@@ -446,6 +470,20 @@ const openRow = (row: DirectoryRow) => openDirectoryRow(row, renderedScope.value
                                 </SelectGroup>
                             </SelectContent>
                         </Select>
+
+                        <!--
+                            Off by default, so the listing stays the coverage gap it's
+                            named for. Switched on, the search also matches what is
+                            already mapped, and the Mapping column says who has it.
+                        -->
+                        <label class="flex h-8 items-center gap-1.5 px-1 text-xs text-[var(--color-text-muted)] cursor-pointer select-none">
+                            <input
+                                v-model="includeMapped"
+                                type="checkbox"
+                                class="h-3.5 w-3.5 rounded border-[var(--color-border-strong)]"
+                                :style="{ accentColor: 'var(--primary-color)' }" />
+                            Include mapped {{ isBranchScope ? 'branches' : 'accounts' }}
+                        </label>
 
                         <!-- Members held by the account or branch -->
                         <div class="flex items-end gap-1">

@@ -51,6 +51,11 @@ class UnmappedBranchResource extends JsonResource
             'account_type_label' => AccountType::label($accountType),
 
             'member_count' => (int) ($this->member_count ?? 0),
+
+            // Who, if anyone, already has this branch — populated only when the
+            // listing was asked to include mapped rows; otherwise always empty.
+            'mapped_users' => $this->mapped_users ?? [],
+            'is_mapped' => !empty($this->mapped_users),
         ];
     }
 }

@@ -144,6 +144,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 // are HMS codes from another system, not ids of ours.
                 Route::get('/details', 'details')->name('details');
                 Route::get('/members', 'members')->name('members');
+                Route::get('/branches', 'branches')->name('branches');
+                Route::get('/mapped_users', 'mappedUsers')->name('mapped_users');
         });
 
         //Navigations

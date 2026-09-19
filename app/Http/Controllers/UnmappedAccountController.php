@@ -11,13 +11,16 @@ use App\Enums\Server;
 use App\Helpers\CommonHelper;
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
+use App\Http\Requests\UnmappedAccount\BranchListRequest;
 use App\Http\Requests\UnmappedAccount\DetailRequest;
 use App\Http\Requests\UnmappedAccount\ListRequest;
+use App\Http\Requests\UnmappedAccount\MappedUserListRequest;
 use App\Http\Requests\UnmappedAccount\MemberListRequest;
 use App\Http\Resources\AccountDirectoryDetailResource;
 use App\Http\Resources\BranchDirectoryDetailResource;
 use App\Http\Resources\CommonResource;
 use App\Http\Resources\DirectoryMemberResource;
+use App\Http\Resources\MappedUserResource;
 use App\Http\Resources\UnmappedAccountResource;
 use App\Http\Resources\UnmappedBranchResource;
 use Inertia\Inertia;
@@ -155,6 +158,79 @@ class UnmappedAccountController extends Controller
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'members' => new CommonResource(DirectoryMemberResource::collection($members)),
+            ]);
+        }
+    }
+
+    /**
+     * Return one account's branches as JSON (AJAX only), for the "Branches" tab.
+     *
+     * Account-only: a branch has no branches of its own, and {@see BranchListRequest}
+     * carries no scope to mistake for one. Shaped through the same
+     * {@see UnmappedBranchResource} the main listing uses, so a branch reads the same
+     * way whether it arrived via the directory or via one account's own pane.
+     *
+     * @return \Illuminate\Http\JsonResponse|void
+     */
+    public function branches(BranchListRequest $request)
+    {
+        $hms = new $this->sqlDatabase(Server::HMS);
+        $code = $request->code();
+
+        if ($this->hasExcludedPrefix($code, $request->excludedPrefixes())) {
+            return CustomResponse::error('That directory record could not be found', Response::HTTP_NOT_FOUND);
+        }
+
+        // Every row shares this one account code, so priming it once is all the
+        // resource's account_name lookup ever needs.
+        CommonHelper::primeAccountNames([$code]);
+
+        $branches = $hms->getAccountBranchesByParams($code, $request->lookupParams());
+
+        // Return JSON for AJAX requests (no URL change)
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'branches' => new CommonResource(UnmappedBranchResource::collection($branches)),
+            ]);
+        }
+    }
+
+    /**
+     * Return the users mapped to one account or branch as JSON (AJAX only), for the
+     * "Mapped Users" tab.
+     *
+     * The question the main listing exists to leave unanswered, asked directly of one
+     * code: not "what has nobody got" but "who already has this one". A branch is
+     * resolved once, both to check it may be opened at all and to read the account it
+     * belongs to, which the mapped-in-full half of the lookup needs.
+     *
+     * @return \Illuminate\Http\JsonResponse|void
+     */
+    public function mappedUsers(MappedUserListRequest $request)
+    {
+        $hms = new $this->sqlDatabase(Server::HMS);
+        $code = $request->code();
+
+        if ($request->scope() === AccountDirectoryScope::BRANCH) {
+            $branch = $hms->getBranchDirectoryDetail($code);
+
+            if (!$branch || $this->hasExcludedPrefix((string) $branch->br_ac_code, $request->excludedPrefixes())) {
+                return CustomResponse::error('That directory record could not be found', Response::HTTP_NOT_FOUND);
+            }
+
+            $users = $hms->getBranchMappedUsersByParams((string) $branch->br_ac_code, $code, $request->lookupParams());
+        } else {
+            if ($this->hasExcludedPrefix($code, $request->excludedPrefixes())) {
+                return CustomResponse::error('That directory record could not be found', Response::HTTP_NOT_FOUND);
+            }
+
+            $users = $hms->getAccountMappedUsersByParams($code, $request->lookupParams());
+        }
+
+        // Return JSON for AJAX requests (no URL change)
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'mapped_users' => new CommonResource(MappedUserResource::collection($users)),
             ]);
         }
     }
