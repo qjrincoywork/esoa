@@ -9,6 +9,7 @@ use App\Enums\IsActive;
 use App\Enums\OrderType;
 use App\Enums\Server;
 use App\Enums\TenancyScope;
+use App\Models\UserAccount;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use Ramsey\Collection\Sort;
@@ -578,7 +579,7 @@ class SqlDatabase
      * visible rather than silently decided here.
      *
      * @param  array  $params  Supports per_page, search_string, code_prefix, account_type,
-     *                         members_min, members_max, exclude_prefixes and
+     *                         members_min, members_max, exclude_prefixes, include_mapped and
      *                         assigned_account_codes.
      * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
      */
@@ -605,7 +606,9 @@ class SqlDatabase
 
         $this->applyMemberCountRange($query, $params, 'ch_accountid', 'Accounts.ac_code');
 
-        return $this->attachAccountMemberCounts($query->orderBy('Accounts.ac_name')->paginate($perPage));
+        $page = $this->attachAccountMemberCounts($query->orderBy('Accounts.ac_name')->paginate($perPage));
+
+        return $this->attachAccountMappedUsers($page, (bool) ($params['include_mapped'] ?? false));
     }
 
     /**
@@ -620,7 +623,7 @@ class SqlDatabase
      * together.
      *
      * @param  array  $params  Supports per_page, search_string, code_prefix, account_type,
-     *                         members_min, members_max, exclude_prefixes,
+     *                         members_min, members_max, exclude_prefixes, include_mapped,
      *                         assigned_branch_codes and accounts_mapped_in_full.
      * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
      */
@@ -661,7 +664,101 @@ class SqlDatabase
 
         $this->applyMemberCountRange($query, $params, 'ch_branch_code', 'Branches.br_code');
 
-        return $this->attachBranchMemberCounts($query->orderBy('Branches.br_branch_name')->paginate($perPage));
+        $page = $this->attachBranchMemberCounts($query->orderBy('Branches.br_branch_name')->paginate($perPage));
+
+        return $this->attachBranchMappedUsers($page, (bool) ($params['include_mapped'] ?? false));
+    }
+
+    /**
+     * Retrieves a paginated list of one account's HMS branches, each carrying how many
+     * cardholders and which users it has — the "Branches" tab of the directory pane.
+     *
+     * Shaped exactly like {@see getUnassignedBranchesByParams()} (same columns, same
+     * member-count and mapped-user attachment) so both can be served through the same
+     * {@see \App\Http\Resources\UnmappedBranchResource}, but keyed on one account
+     * rather than subtracting what is assigned — every branch of the account is
+     * relevant here, mapped or not.
+     *
+     * @param  string  $accountCode
+     * @param  array  $params  Supports per_page, page and name.
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     */
+    public function getAccountBranchesByParams(string $accountCode, array $params)
+    {
+        $perPage = $params['per_page'] ?? config('vc.default_pages');
+        $search = trim((string) ($params['name'] ?? ''));
+
+        $query = $this->db
+            ->table('Branches')
+            ->select('Branches.br_code', 'Branches.br_branch_name', 'Branches.br_ac_code')
+            ->where('Branches.br_ac_code', $accountCode)
+            ->when($search !== '', function ($q) use ($search) {
+                $q->where(function ($sub) use ($search) {
+                    $sub->where('Branches.br_branch_name', 'like', '%'.$search.'%')
+                        ->orWhere('Branches.br_code', 'like', '%'.$search.'%');
+                });
+            });
+
+        $page = $this->attachBranchMemberCounts($query->orderBy('Branches.br_branch_name')->paginate($perPage));
+
+        return $this->attachBranchMappedUsers($page, true);
+    }
+
+    /**
+     * Retrieves a paginated list of the users mapped to one account — any mapping
+     * naming it, whole or by one of its branches ({@see \App\Models\UserAccount::queryForAccountCode()}).
+     *
+     * @param  string  $accountCode
+     * @param  array  $params  Supports per_page, page and search.
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     */
+    public function getAccountMappedUsersByParams(string $accountCode, array $params)
+    {
+        $perPage = $params['per_page'] ?? config('vc.default_pages');
+
+        return $this
+            ->applyMappedUserSearch(UserAccount::queryForAccountCode($accountCode), $params)
+            ->orderByDesc('created_at')
+            ->paginate($perPage);
+    }
+
+    /**
+     * Retrieves a paginated list of the users mapped to one branch — directly, or
+     * through its account being mapped in full ({@see \App\Models\UserAccount::queryForBranchCode()}).
+     *
+     * @param  string  $accountCode
+     * @param  string  $branchCode
+     * @param  array  $params  Supports per_page, page and search.
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     */
+    public function getBranchMappedUsersByParams(string $accountCode, string $branchCode, array $params)
+    {
+        $perPage = $params['per_page'] ?? config('vc.default_pages');
+
+        return $this
+            ->applyMappedUserSearch(UserAccount::queryForBranchCode($accountCode, $branchCode), $params)
+            ->orderByDesc('created_at')
+            ->paginate($perPage);
+    }
+
+    /**
+     * Narrow a mapped-users query to the reader's search term, matched against the
+     * mapped user's own username or email rather than anything on the mapping row.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder  $query
+     * @param  array  $params
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    private function applyMappedUserSearch($query, array $params)
+    {
+        $search = trim((string) ($params['search'] ?? ''));
+
+        return $query->when($search !== '', function ($q) use ($search) {
+            $q->whereHas('user', function ($userQuery) use ($search) {
+                $userQuery->where('username', 'like', '%'.$search.'%')
+                    ->orWhere('email', 'like', '%'.$search.'%');
+            });
+        });
     }
 
     /**
@@ -1030,6 +1127,83 @@ class SqlDatabase
 
         $rows->transform(function ($row) use ($counts) {
             $row->member_count = (int) ($counts[$row->br_code] ?? 0);
+
+            return $row;
+        });
+
+        return $page;
+    }
+
+    /**
+     * Fill in `mapped_users` for the accounts on one page — who, if anyone, already
+     * holds each one.
+     *
+     * Left as an empty list without a query when `$enabled` is false: the default
+     * listing already excludes every mapped account, so every row would resolve to
+     * "nobody" and the lookup would be wasted. It only runs when a search has widened
+     * the listing to include what is already mapped ({@see ListRequest::lookupParams()}),
+     * and even then it is scoped to the page's own codes rather than the whole table.
+     *
+     * @param  \Illuminate\Contracts\Pagination\LengthAwarePaginator  $page
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     */
+    private function attachAccountMappedUsers($page, bool $enabled)
+    {
+        $rows = $page->getCollection();
+
+        if (!$enabled) {
+            $rows->each(function ($row) {
+                $row->mapped_users = [];
+            });
+
+            return $page;
+        }
+
+        $accountCodes = $rows->pluck('ac_code')->filter()->unique()->values()->all();
+        $usernames = $accountCodes === [] ? [] : UserAccount::usernamesByAccountCodes($accountCodes);
+
+        $rows->transform(function ($row) use ($usernames) {
+            $row->mapped_users = $usernames[$row->ac_code] ?? [];
+
+            return $row;
+        });
+
+        return $page;
+    }
+
+    /**
+     * Fill in `mapped_users` for the branches on one page.
+     *
+     * A branch is held two ways, so both are looked up and merged: its own code mapped
+     * directly, or its account mapped in full ({@see \App\Models\UserAccount::mappingKey()}),
+     * the same two ways {@see getUnassignedBranchesByParams()} subtracts when this is off.
+     *
+     * @param  \Illuminate\Contracts\Pagination\LengthAwarePaginator  $page
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     */
+    private function attachBranchMappedUsers($page, bool $enabled)
+    {
+        $rows = $page->getCollection();
+
+        if (!$enabled) {
+            $rows->each(function ($row) {
+                $row->mapped_users = [];
+            });
+
+            return $page;
+        }
+
+        $branchCodes = $rows->pluck('br_code')->filter()->unique()->values()->all();
+        $accountCodes = $rows->pluck('br_ac_code')->filter()->unique()->values()->all();
+
+        $byBranch = $branchCodes === [] ? [] : UserAccount::usernamesByBranchCodes($branchCodes);
+        $byAccountInFull = $accountCodes === [] ? [] : UserAccount::usernamesByAccountCodesMappedInFull($accountCodes);
+
+        $rows->transform(function ($row) use ($byBranch, $byAccountInFull) {
+            $row->mapped_users = array_values(array_unique(array_merge(
+                $byBranch[$row->br_code] ?? [],
+                $byAccountInFull[$row->br_ac_code] ?? []
+            )));
 
             return $row;
         });

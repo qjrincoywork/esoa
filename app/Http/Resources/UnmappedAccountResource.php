@@ -17,9 +17,11 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * cardholders are sitting behind it — an account with thousands of members and no user
  * is a different problem from a cancelled one with none.
  *
- * `member_count` is filled in by {@see \App\Helpers\SqlDatabase::getUnassignedAccountsByParams()}
- * for the page being shown; it is not resolved here, because doing so per row would be
- * one query per account.
+ * `member_count` and `mapped_users` are filled in by
+ * {@see \App\Helpers\SqlDatabase::getUnassignedAccountsByParams()} for the page being
+ * shown; neither is resolved here, because doing so per row would be one query per
+ * account. `mapped_users` is an empty list unless the listing was asked to include what
+ * is already mapped, since the default listing excludes it and the lookup would be wasted.
  */
 class UnmappedAccountResource extends JsonResource
 {
@@ -56,6 +58,11 @@ class UnmappedAccountResource extends JsonResource
             'is_active' => AccountStatus::isActive($this->ac_status),
 
             'member_count' => (int) ($this->member_count ?? 0),
+
+            // Who, if anyone, already has this account — populated only when the
+            // listing was asked to include mapped rows; otherwise always empty.
+            'mapped_users' => $this->mapped_users ?? [],
+            'is_mapped' => !empty($this->mapped_users),
         ];
     }
 }

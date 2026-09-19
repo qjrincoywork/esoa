@@ -2,12 +2,14 @@
 /**
  * One unmapped account or branch, opened from the listing.
  *
- * Two tabs, because there are two questions a reader has about a coverage gap: what is
- * this thing, and who is sitting behind it. The record is handed in already fetched;
- * the members load when their tab is first opened, since an account here can hold ten
- * thousand cardholders and most readers came for the details.
+ * Four tabs, because there are four questions a reader has about a coverage gap: what
+ * is this thing, who is sitting behind it, what does it break down into, and — since
+ * a search can widen to include what is already mapped — who already has it. The
+ * record is handed in already fetched; everything else loads only when its own tab is
+ * first opened, since an account here can hold ten thousand cardholders and most
+ * readers came for one tab, not all four.
  */
-import { computed, h, ref, watch } from 'vue';
+import { computed, h, ref, watch, type Ref } from 'vue';
 import { createColumnHelper } from '@tanstack/vue-table';
 import Datatable from '@/components/Datatable.vue';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -20,9 +22,12 @@ import {
   type BranchDetail,
   type DirectoryDetail,
   type DirectoryMember,
+  type DirectoryPage,
   type DirectoryRow,
   type DirectoryScope,
+  type MappedUser,
 } from '@/composables/unmappedAccounts';
+import { badge, mappedStatusBadge } from '@/lib/directoryBadges';
 import { X } from 'lucide-vue-next';
 
 const props = defineProps<{
@@ -32,7 +37,7 @@ const props = defineProps<{
   detail: DirectoryDetail | null;
 }>();
 
-const { getDirectoryMembers } = useUnmappedAccounts();
+const { getDirectoryMembers, getAccountBranches, getMappedUsers } = useUnmappedAccounts();
 
 const isBranch = computed(() => props.scope === DIRECTORY_SCOPE.BRANCH);
 const account = computed(() => (isBranch.value ? null : (props.detail as AccountDetail | null)));
@@ -168,13 +173,6 @@ const fetchMembers = async () => {
   }
 };
 
-/** Load on first open only; afterwards the tab keeps whatever page it was left on. */
-watch(activeTab, (tab) => {
-  if (tab === 'members' && !membersLoaded.value && !membersLoading.value) {
-    void fetchMembers();
-  }
-});
-
 const searchTimeout = ref<number | null>(null);
 watch([searchField, searchText], () => {
   if (!membersLoaded.value) return;
@@ -204,6 +202,202 @@ const memberColumns = [
   }),
   columnHelper.accessor('expiry_date', { header: 'Coverage Until', cell: ({ getValue }) => getValue() || '—' }),
 ];
+
+/**
+ * One lazily-loaded, paginated tab — the "Branches" and "Mapped Users" tabs share this
+ * shape rather than each hand-rolling their own load/search/paginate plumbing. Fetched
+ * only when its tab is first opened, and under its own token so a stale response from
+ * a superseded search or page change can never overwrite a newer one.
+ */
+function useLazyTabList<T>(
+  fetchPage: (params: Record<string, string | number>) => Promise<DirectoryPage<T>>,
+  getSearchParams: () => Record<string, string | number>,
+) {
+  const data = ref([]) as Ref<T[]>;
+  const loaded = ref(false);
+  const loading = ref(false);
+  const error = ref('');
+  const pagination = ref({ current_page: 1, per_page: 10, total: 0 });
+  const token = ref(0);
+
+  const load = async () => {
+    const myToken = ++token.value;
+    loading.value = true;
+    error.value = '';
+
+    try {
+      const result = await fetchPage({
+        page: pagination.value.current_page,
+        per_page: pagination.value.per_page,
+        ...getSearchParams(),
+      });
+
+      if (myToken !== token.value) return;
+
+      data.value = result.data ?? [];
+      pagination.value = {
+        current_page: result.current_page,
+        per_page: Number(result.per_page),
+        total: result.total,
+      };
+      loaded.value = true;
+    } catch {
+      if (myToken !== token.value) return;
+      data.value = [];
+      error.value = 'Could not load this list.';
+    } finally {
+      if (myToken === token.value) loading.value = false;
+    }
+  };
+
+  const reload = () => {
+    pagination.value.current_page = 1;
+    void load();
+  };
+
+  return { data, loaded, loading, error, pagination, load, reload };
+}
+
+// ── Branches (accounts only — a branch has no branches of its own) ─────────
+const branchSearchText = ref('');
+const {
+  data: branches,
+  loaded: branchesLoaded,
+  loading: branchesLoading,
+  error: branchesError,
+  pagination: branchPagination,
+  load: loadBranches,
+  reload: reloadBranches,
+} = useLazyTabList<DirectoryRow>(
+  (params) => getAccountBranches(props.code, params),
+  () => {
+    const params: Record<string, string | number> = {};
+    const term = branchSearchText.value.trim();
+    if (term) params.name = term;
+
+    return params;
+  },
+);
+
+/** Known up front from the account detail, so the tab's count never waits on itself. */
+const branchesTabLabel = computed(() => {
+  const total = account.value?.branch_count;
+
+  return total !== undefined ? `Branches (${total.toLocaleString()})` : 'Branches';
+});
+
+const branchSearchTimeout = ref<number | null>(null);
+watch(branchSearchText, () => {
+  if (!branchesLoaded.value) return;
+  if (branchSearchTimeout.value) clearTimeout(branchSearchTimeout.value);
+
+  branchSearchTimeout.value = window.setTimeout(() => reloadBranches(), 500);
+});
+
+const clearBranchSearch = () => {
+  branchSearchText.value = '';
+};
+
+// Reuses the same shape the main directory listing renders a branch row with — the
+// "Branches" tab and the coverage-gap listing are answering the same question about
+// the same rows, just scoped to one account instead of the whole directory.
+const branchColumnHelper = createColumnHelper<DirectoryRow>();
+const branchColumns = [
+  branchColumnHelper.accessor('branch_name', { header: 'Branch', cell: (info: any) => info.getValue() || '—' }),
+  branchColumnHelper.accessor('branch_code', {
+    header: 'Branch Code',
+    cell: (info: any) => h('span', { class: 'font-mono text-xs' }, info.getValue() || '—'),
+  }),
+  branchColumnHelper.accessor('member_count', {
+    header: 'Members',
+    cell: (info: any) => h('div', { class: 'text-right tabular-nums' }, Number(info.getValue() ?? 0).toLocaleString()),
+  }),
+  branchColumnHelper.accessor('mapped_users', {
+    header: 'Mapping',
+    cell: (info: any) => mappedStatusBadge(info.getValue()),
+  }),
+];
+
+// ── Mapped Users (accounts and branches) ────────────────────────────────────
+const mappedUserSearchText = ref('');
+const {
+  data: mappedUsers,
+  loaded: mappedUsersLoaded,
+  loading: mappedUsersLoading,
+  error: mappedUsersError,
+  pagination: mappedUserPagination,
+  load: loadMappedUsers,
+  reload: reloadMappedUsers,
+} = useLazyTabList<MappedUser>(
+  (params) => getMappedUsers(props.scope, props.code, params),
+  () => {
+    const params: Record<string, string | number> = {};
+    const term = mappedUserSearchText.value.trim();
+    if (term) params.search = term;
+
+    return params;
+  },
+);
+
+/**
+ * The row already carries `mapped_users` when the listing's "Include mapped" search
+ * widened to it — shown as a hint before the tab has fetched its own, authoritative
+ * count.
+ */
+const mappedUsersTabLabel = computed(() => {
+  const total = mappedUsersLoaded.value
+    ? mappedUserPagination.value.total
+    : (props.row.mapped_users?.length ?? null);
+
+  return total !== null ? `Mapped Users (${total.toLocaleString()})` : 'Mapped Users';
+});
+
+const mappedUserSearchTimeout = ref<number | null>(null);
+watch(mappedUserSearchText, () => {
+  if (!mappedUsersLoaded.value) return;
+  if (mappedUserSearchTimeout.value) clearTimeout(mappedUserSearchTimeout.value);
+
+  mappedUserSearchTimeout.value = window.setTimeout(() => reloadMappedUsers(), 500);
+});
+
+const clearMappedUserSearch = () => {
+  mappedUserSearchText.value = '';
+};
+
+const mappedUserColumnHelper = createColumnHelper<MappedUser>();
+const mappedUserColumns = [
+  mappedUserColumnHelper.accessor('username', { header: 'User', cell: (info: any) => info.getValue() || '—' }),
+  mappedUserColumnHelper.accessor('email', { header: 'Email', cell: (info: any) => info.getValue() || '—' }),
+  mappedUserColumnHelper.accessor('is_active', {
+    header: 'Status',
+    cell: (info: any) => (info.getValue()
+      ? badge('Active', 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400')
+      : badge('Inactive', 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400')),
+  }),
+  mappedUserColumnHelper.accessor('mapped_in_full', {
+    // For a branch, whether the mapping names it directly or reaches it by covering
+    // the whole account; for an account, whether one mapping covers all its branches
+    // or just the one named here.
+    header: 'Coverage',
+    cell: (info: any) => (info.getValue()
+      ? badge('Whole account', 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300')
+      : h('span', { class: 'font-mono text-xs' }, info.row.original.branch_code || '—')),
+  }),
+  mappedUserColumnHelper.accessor('mapped_at', { header: 'Mapped', cell: (info: any) => info.getValue() || '—' }),
+];
+
+/** Load on first open only; afterwards each tab keeps whatever page it was left on. */
+watch(activeTab, (tab) => {
+  if (tab === 'members' && !membersLoaded.value && !membersLoading.value) {
+    void fetchMembers();
+  }
+  if (tab === 'branches' && !branchesLoaded.value && !branchesLoading.value) {
+    void loadBranches();
+  }
+  if (tab === 'mapped_users' && !mappedUsersLoaded.value && !mappedUsersLoading.value) {
+    void loadMappedUsers();
+  }
+});
 </script>
 
 <template>
@@ -231,6 +425,12 @@ const memberColumns = [
         </TabsTrigger>
         <TabsTrigger class="cursor-pointer" value="members">
           Members ({{ memberCount.toLocaleString() }})
+        </TabsTrigger>
+        <TabsTrigger v-if="!isBranch" class="cursor-pointer" value="branches">
+          {{ branchesTabLabel }}
+        </TabsTrigger>
+        <TabsTrigger class="cursor-pointer" value="mapped_users">
+          {{ mappedUsersTabLabel }}
         </TabsTrigger>
       </TabsList>
 
@@ -316,6 +516,102 @@ const memberColumns = [
           empty-description="Nobody is recorded against this record in the directory."
           :export-file-name="`members_${code}`"
           @update:pagination="(next: typeof memberPagination) => { memberPagination = next; fetchMembers() }" />
+      </TabsContent>
+
+      <!-- Branches (accounts only) -->
+      <TabsContent v-if="!isBranch" value="branches" class="mt-3 flex flex-col gap-3">
+        <p class="text-xs text-[var(--color-text-muted)]">
+          The HMS branches recorded under this account.
+        </p>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <div class="relative min-w-0 flex-1">
+            <label class="sr-only" for="branch-search">Search branches</label>
+            <input
+              id="branch-search"
+              v-model="branchSearchText"
+              type="text"
+              placeholder="Search branches..."
+              class="h-8 w-full rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 pr-8 text-xs text-[var(--color-text)] focus:border-transparent focus:ring-2 focus:ring-opacity-50"
+              :style="{ '--tw-ring-color': 'var(--primary-color)' }" />
+            <button
+              v-if="branchSearchText"
+              class="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] hover:text-[var(--color-text)] focus:outline-none"
+              aria-label="Clear branch search"
+              @click="clearBranchSearch">
+              <X class="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          <Button
+            v-if="branchSearchText"
+            variant="ghost"
+            size="sm"
+            class="h-8 px-2 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+            @click="clearBranchSearch">
+            Clear
+          </Button>
+        </div>
+
+        <Datatable
+          :data="branches"
+          :columns="branchColumns"
+          :pagination="branchPagination"
+          :loading="branchesLoading"
+          :error="branchesError"
+          :enable-search="false"
+          empty-message="No branches found"
+          empty-description="This account has no branches recorded in the directory."
+          :export-file-name="`branches_${code}`"
+          @update:pagination="(next: typeof branchPagination) => { branchPagination = next; loadBranches() }" />
+      </TabsContent>
+
+      <!-- Mapped Users -->
+      <TabsContent value="mapped_users" class="mt-3 flex flex-col gap-3">
+        <p class="text-xs text-[var(--color-text-muted)]">
+          The users already mapped to this {{ isBranch ? 'branch' : 'account' }}.
+        </p>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <div class="relative min-w-0 flex-1">
+            <label class="sr-only" for="mapped-user-search">Search mapped users</label>
+            <input
+              id="mapped-user-search"
+              v-model="mappedUserSearchText"
+              type="text"
+              placeholder="Search by username or email..."
+              class="h-8 w-full rounded-md border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-3 pr-8 text-xs text-[var(--color-text)] focus:border-transparent focus:ring-2 focus:ring-opacity-50"
+              :style="{ '--tw-ring-color': 'var(--primary-color)' }" />
+            <button
+              v-if="mappedUserSearchText"
+              class="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] hover:text-[var(--color-text)] focus:outline-none"
+              aria-label="Clear mapped user search"
+              @click="clearMappedUserSearch">
+              <X class="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          <Button
+            v-if="mappedUserSearchText"
+            variant="ghost"
+            size="sm"
+            class="h-8 px-2 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+            @click="clearMappedUserSearch">
+            Clear
+          </Button>
+        </div>
+
+        <Datatable
+          :data="mappedUsers"
+          :columns="mappedUserColumns"
+          :pagination="mappedUserPagination"
+          :loading="mappedUsersLoading"
+          :error="mappedUsersError"
+          :enable-search="false"
+          empty-message="No mapped users found"
+          empty-description="Nobody has been given this record yet."
+          :export-file-name="`mapped_users_${code}`"
+          @update:pagination="(next: typeof mappedUserPagination) => { mappedUserPagination = next; loadMappedUsers() }" />
       </TabsContent>
     </Tabs>
   </div>
