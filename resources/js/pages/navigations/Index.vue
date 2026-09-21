@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { createActionColumn } from '@/composables/datatable/datatableColumns';
 import { useNavigations } from '@/composables/navigations';
 import { useModulePermissions } from '@/composables/useModulePermissions';
+import { useNavigationDetails } from '@/composables/navigationDetails';
+import RightPane from '@/components/RightPane.vue';
 
 type NavigationsPagination = {
     current_page: number
@@ -32,6 +34,16 @@ const navigations = computed(() => {
     return propsNavigations;
 });
 const { createNavigation, editNavigation, deleteNavigation } = useNavigations();
+const {
+    openNavigationRow,
+    closePane,
+    rightPaneVisible,
+    rightPaneTitle,
+    rightPaneLoading,
+    rightPaneError,
+    rightPaneContentComponent,
+    rightPaneComponentProps,
+} = useNavigationDetails();
 const columnHelper = createColumnHelper();
 const pagination = ref({
 	current_page: navigations.value.current_page,
@@ -232,11 +244,22 @@ watch(
                 :pagination="pagination"
                 :search-fields="[]"
                 :enable-search="false"
+                :enable-row-click="true"
+                :row-click="openNavigationRow"
                 empty-message="No navigations found"
                 empty-description="System navigations will appear here. Use search, pagination, or change rows per page to load data."
                 export-file-name="navigations_list"
                 @update:pagination="(newPagination: typeof pagination) => { hasInitialized = true; pagination = newPagination }">
             </Datatable>
         </div>
+
+        <RightPane
+            :open="rightPaneVisible"
+            :title="rightPaneTitle"
+            :loading="rightPaneLoading"
+            :error="rightPaneError"
+            :content-component="rightPaneContentComponent"
+            :component-props="rightPaneComponentProps"
+            @update:open="(v) => { if (!v && !rightPaneLoading) closePane('right') }" />
     </AppLayout>
 </template>

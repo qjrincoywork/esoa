@@ -93,6 +93,12 @@ class NavigationModule extends Model
             ->when(isset($params['navigation_id']), fn ($q) =>
                 $q->where('navigation_id', $params['navigation_id'])
             )
+            // 0 means "top-level only" (ref_id IS NULL); a positive id filters to that module's children.
+            ->when(isset($params['ref_id']), fn ($q) =>
+                ((int) $params['ref_id']) === 0
+                    ? $q->whereNull('ref_id')
+                    : $q->where('ref_id', (int) $params['ref_id'])
+            )
             ->orderBy('navigation_id')
             ->orderBy('order_number')
             ->orderBy('id', 'desc');
