@@ -36,6 +36,11 @@ class NavigationModuleController extends Controller
     {
         $modules = $this->navigationModule->getNavigationModules($request->validated())->toArray();
 
+        // Return JSON for AJAX requests (e.g. the navigation details pane's Modules tab)
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json(['navigation_modules' => $modules]);
+        }
+
         return Inertia::render('navigation_modules/Index', [
             'navigation_modules' => $modules,
         ]);

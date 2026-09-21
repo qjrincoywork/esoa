@@ -35,12 +35,32 @@ function refreshPage() {
     router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
 }
 
-export function useNavigationModules() {
-    const { slug } = useModulePermissions();
+export interface UseNavigationModulesOptions {
+    /**
+     * Called instead of a full-page reload after a successful create/update/delete.
+     * Lets an embedded list (e.g. the navigation details pane's Modules tab) refresh
+     * itself in place rather than reloading the whole host page.
+     */
+    onMutated?: () => void;
+}
+
+export function useNavigationModules(options: UseNavigationModulesOptions = {}) {
+    // Explicit slug: this composable is also used from within the navigations details
+    // pane, where the host page's component name is "navigations/Index", not
+    // "navigation_modules/Index" — auto-derivation would point requests at the wrong module.
+    const { slug } = useModulePermissions({ slug: 'navigation_modules' });
     const { openModal, closeModal } = useModal();
     const { get, post } = useAjax();
 
-    const createNavigationModule = async () => {
+    const afterMutation = () => {
+        if (options.onMutated) {
+            options.onMutated();
+        } else {
+            refreshPage();
+        }
+    };
+
+    const createNavigationModule = async (defaultNavigationId?: number, defaultRefId?: number) => {
         try {
             const response = await get<{
                 navigations:    SelectOption[];
@@ -59,6 +79,9 @@ export function useNavigationModules() {
                 buttonText: 'Save',
                 component: SavingForm,
                 componentProps: {
+                    navigationModule: (defaultNavigationId || defaultRefId)
+                        ? { navigation_id: defaultNavigationId, ref_id: defaultRefId }
+                        : undefined,
                     navigations:   payload.navigations,
                     permissions:   payload.permissions,
                     parentModules: payload.parent_modules,
@@ -79,7 +102,7 @@ export function useNavigationModules() {
                         } else {
                             dispatchNotification({ title: 'Success', content: res.data.message, type: 'success' });
                             closeModal();
-                            refreshPage();
+                            afterMutation();
                         }
                     } catch {
                         dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
@@ -134,7 +157,7 @@ export function useNavigationModules() {
                         } else {
                             dispatchNotification({ title: 'Success', content: res.data.message, type: 'success' });
                             closeModal();
-                            refreshPage();
+                            afterMutation();
                         }
                     } catch {
                         dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
@@ -178,7 +201,7 @@ export function useNavigationModules() {
                     } else {
                         dispatchNotification({ title: 'Success', content: res.data.message, type: 'success' });
                         closeModal();
-                        refreshPage();
+                        afterMutation();
                     }
                 } catch {
                     dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
