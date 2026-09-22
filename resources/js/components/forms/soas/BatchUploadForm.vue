@@ -597,8 +597,61 @@ const clearAttachments = () => {
     result.value = null;
 };
 
+/** The number format stamped on the template's date columns. */
+const TEMPLATE_DATE_FORMAT = 'yyyy-mm-dd';
+
+/**
+ * How many blank rows of the template come pre-formatted as dates.
+ *
+ * A number format can only ride on a cell that actually exists: SheetJS drops a
+ * `!cols` style and an empty stub cell alike, so there is no way to format "the
+ * whole column" — the cells have to be written out one by one. Rows pasted past
+ * this point keep whatever format they arrive with, which is the same position
+ * every sheet starts from, so this only has to cover the ordinary batch.
+ */
+const TEMPLATE_PREFORMATTED_ROWS = 500;
+
+/**
+ * Build the blank manifest, with the date columns already typed as dates.
+ *
+ * The date columns are pre-formatted because a date typed into an unformatted
+ * cell is saved as *text*, and text dates are ambiguous: `05/10/2026` is read as
+ * 5 October by the person who typed it and as 10 May by the server, with nothing
+ * to signal the disagreement. A date-formatted cell makes Excel store a real date
+ * instead, which reaches the importer as an unambiguous calendar day — and shows
+ * the uploader, in the cell, exactly which day Excel understood.
+ *
+ * The pre-formatted cells hold an empty string rather than a stub or a null: a
+ * stub is dropped on write (taking the format with it), and a null reads back as
+ * a value, which would stop the blank rows being filtered out as empty.
+ */
 const downloadTemplate = () => {
     const worksheet = XLSX.utils.aoa_to_sheet([props.columns]);
+
+    props.columns.forEach((column, columnIndex) => {
+        if (!props.dateColumns.includes(column)) return;
+
+        for (let rowIndex = 1; rowIndex <= TEMPLATE_PREFORMATTED_ROWS; rowIndex += 1) {
+            worksheet[XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex })] = {
+                t: 's',
+                v: '',
+                z: TEMPLATE_DATE_FORMAT,
+            };
+        }
+    });
+
+    // The cells above only count as part of the sheet once the range covers them.
+    worksheet['!ref'] = XLSX.utils.encode_range({
+        s: { r: 0, c: 0 },
+        e: { r: TEMPLATE_PREFORMATTED_ROWS, c: Math.max(0, props.columns.length - 1) },
+    });
+
+    // A date column at the default width renders as ####, which would hide the
+    // very thing the formatting is there to show.
+    worksheet['!cols'] = props.columns.map((column) => ({
+        wch: props.dateColumns.includes(column) ? 14 : Math.max(12, column.length + 2),
+    }));
+
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Billing Invoices');
     XLSX.writeFile(workbook, 'billing_invoice_batch_template.xlsx');
@@ -973,8 +1026,8 @@ const formatSize = (bytes: number): string =>
                     <p><span class="font-medium text-[var(--color-text)]">account_type:</span> optional — derived from the account code. Fill it in only if you want it checked: {{ accountTypes.map(t => `${t.value} = ${t.name}`).join(', ') }}.</p>
                     <p><span class="font-medium text-[var(--color-text)]">status:</span> {{ statusTypes.map(s => `${s.value} = ${s.name}`).join(', ') }}</p>
                     <p><span class="font-medium text-[var(--color-text)]">bill_type:</span> {{ billTypes.map(b => `${b.value} = ${b.name}`).join(', ') }}</p>
-                    <p><span class="font-medium text-[var(--color-text)]">Dates ({{ dateColumns.join(', ') }}):</span> use YYYY-MM-DD, or format the cells as dates.</p>
-                    <p><span class="font-medium text-[var(--color-text)]">file_pdf / file_xls:</span> the attachment's file name <strong>without its extension</strong> (e.g. <code>SOA-000123</code>, not <code>SOA-000123.pdf</code>) — matched against whatever PDF/Excel file you attach in the next step. Leave blank to auto-match by SOA number instead. file_xls is not required when bill_type is ECU.</p>
+                    <p><span class="font-medium text-[var(--color-text)]">Dates ({{ dateColumns.join(', ') }}):</span> already formatted as YYYY-MM-DD in the downloaded template — just type the date. In a sheet of your own, use YYYY-MM-DD or format the cells as dates: a text date like <code>05/10/2026</code> is ambiguous and may be read as 10 May rather than 5 October.</p>
+                    <p><span class="font-medium text-[var(--color-text)]">file_pdf / file_xls:</span> the attachment's file name <strong>without its extension</strong> (e.g. <code>BI-0001234567</code>, not <code>BI-0001234567.pdf</code>) — matched against whatever PDF/Excel file you attach in the next step. Leave blank to auto-match by SOA number instead. file_xls is not required when bill_type is ECU.</p>
                     <p><span class="font-medium text-[var(--color-text)]">account_type, branch_code, contract_date_from, contract_date_to:</span> may be left empty.</p>
                     <p>Every row must pass validation unless "Skip rows with errors" is checked in the last step. Up to {{ maxRows }} rows per upload.</p>
                 </div>
@@ -1009,7 +1062,7 @@ const formatSize = (bytes: number): string =>
                     <Paperclip class="w-5 h-5 text-[var(--color-text-muted)]" />
                     <span class="text-sm"><span class="font-medium">Drop PDF and XLSX attachments here</span></span>
                     <span class="text-xs text-[var(--color-text-muted)]">
-                        Matched to rows by name (extension ignored) or by SOA number, e.g. {{ (rows.find(r => r.soa_number)?.soa_number) || 'SOA-000123' }}.pdf
+                      Matched to rows by name (extension ignored) or by SOA number, e.g. {{ (rows.find(r => r.soa_number)?.soa_number) || 'BI-0001234567' }}.pdf
                     </span>
                     <span class="text-xs text-[var(--color-text-muted)]">
                         {{ attachments.length }} selected — up to {{ maxAttachments }}, each {{ maxFileSize }} KB max

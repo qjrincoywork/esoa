@@ -20,6 +20,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Unique;
@@ -72,12 +73,25 @@ class SoaBatchImportService
     private array $ruleMessages = [];
 
     /**
+     * Attachments already written to the billing disk that a failed import removed again.
+     *
+     * Recorded so the failure entry can say whether anything reached the share, which is
+     * the first question asked when an upload dies part-way through.
+     */
+    private int $discardedAttachments = 0;
+
+    /**
      * @param  Soa  $soa  Prototype used to delegate invoice persistence.
      */
     public function __construct(protected Soa $soa) {}
 
     /**
      * Validate and import the given rows, returning a summary of the outcome.
+     *
+     * Every way this can end leaves an entry in the audit trail: uploaded, rejected,
+     * partially uploaded, or — here — failed outright. An upload that dies on an
+     * exception is the one a user is most likely to ask about afterwards, and without
+     * this it would be the only outcome that left no trace of having happened.
      *
      * @param  array<int,array<string,mixed>>  $rows
      * @param  array<int,UploadedFile>  $attachments
@@ -86,6 +100,27 @@ class SoaBatchImportService
      * @return array{total:int,created:int,failed:int,errors:list<array{row:int,soa_number:?string,messages:list<string>}>}
      */
     public function import(array $rows, array $attachments, User $user, bool $skipErrors = false): array
+    {
+        $this->discardedAttachments = 0;
+
+        try {
+            return $this->runImport($rows, $attachments, $user, $skipErrors);
+        } catch (\Throwable $e) {
+            $this->recordFailure(count($rows), count($attachments), $user, $e);
+
+            // The caller still decides what the failure means; this only records it.
+            throw $e;
+        }
+    }
+
+    /**
+     * The import itself. See {@see import()}, which wraps this to audit a failure.
+     *
+     * @param  array<int,array<string,mixed>>  $rows
+     * @param  array<int,UploadedFile>  $attachments
+     * @return array{total:int,created:int,failed:int,errors:list<array{row:int,soa_number:?string,messages:list<string>}>}
+     */
+    private function runImport(array $rows, array $attachments, User $user, bool $skipErrors): array
     {
         // Read the single-upload contract once; it is the same for every row.
         $createRequest = new CreateRequest();
@@ -279,6 +314,39 @@ class SoaBatchImportService
                 count($errors),
             ),
             $properties,
+            $user,
+        );
+    }
+
+    /**
+     * Record a batch upload that died on an exception rather than a validation verdict.
+     *
+     * The other three outcomes are decisions this service made and can describe in full.
+     * This one is a failure it did not expect, so the entry says what it can: how big the
+     * upload was, whether anything had already reached the billing disk before it was
+     * rolled back, and what the error actually was.
+     *
+     * The exception message is kept because it is what makes the entry worth reading —
+     * "deadlock victim", "connection reset" — but trimmed, since a query exception
+     * carries the whole statement and would otherwise dominate the record.
+     */
+    private function recordFailure(int $rowCount, int $attachmentCount, User $user, \Throwable $e): void
+    {
+        $this->writeAudit(
+            AuditEvent::BATCH_FAILED,
+            sprintf(
+                'Billing invoice batch upload failed: %d %s could not be processed',
+                $rowCount,
+                $rowCount === 1 ? 'row' : 'rows',
+            ),
+            [
+                'rows_in_file' => $rowCount,
+                'attachments_received' => $attachmentCount,
+                // Nothing was kept: the transaction rolled back and these were removed.
+                'attachments_discarded' => $this->discardedAttachments,
+                'error' => class_basename($e),
+                'error_message' => Str::limit($e->getMessage(), 500),
+            ],
             $user,
         );
     }
@@ -829,33 +897,91 @@ class SoaBatchImportService
     /**
      * Store every row's attachments and save its invoice, in one transaction.
      *
+     * Storing an attachment moves it onto the billing disk, which is not something the
+     * database transaction can undo. A batch that fails on its hundredth row therefore
+     * rolls back the ninety-nine invoices before it while their files stay on the
+     * share, referenced by nothing and indistinguishable from live ones. Every path
+     * written here is recorded as it is written, and swept up again if the transaction
+     * does not commit.
+     *
      * @param  list<array{attributes:array<string,mixed>,files:array<string,UploadedFile>}>  $rows
      * @return list<Soa>
      */
     private function persist(array $rows): array
     {
-        return DB::transaction(function () use ($rows) {
-            $created = [];
+        $storedPaths = [];
 
-            foreach ($rows as $row) {
-                $attributes = $row['attributes'];
+        try {
+            return DB::transaction(function () use ($rows, &$storedPaths) {
+                $created = [];
 
-                // CommonHelper owns the storage path and file-naming convention, and
-                // reads its files off a request; the row's uploads are wrapped in one
-                // so the batch and the single upload store files identically.
-                CommonHelper::storeUploadedFiles(
-                    $attributes[Col::SOA_NUMBER],
-                    $attributes[Col::ACCOUNT_CODE],
-                    $attributes[Col::BRANCH_CODE] ?? null,
-                    Request::create('/', 'POST', [], [], $row['files']),
-                    $attributes,
-                );
+                foreach ($rows as $row) {
+                    $attributes = $row['attributes'];
 
-                $created[] = $this->soa->saveSoa($attributes);
+                    // CommonHelper owns the storage path and file-naming convention, and
+                    // reads its files off a request; the row's uploads are wrapped in one
+                    // so the batch and the single upload store files identically.
+                    CommonHelper::storeUploadedFiles(
+                        $attributes[Col::SOA_NUMBER],
+                        $attributes[Col::ACCOUNT_CODE],
+                        $attributes[Col::BRANCH_CODE] ?? null,
+                        Request::create('/', 'POST', [], [], $row['files']),
+                        $attributes,
+                    );
+
+                    // storeUploadedFiles() replaces each attachment column with the path
+                    // it wrote to; that path is the only handle on the file from here.
+                    foreach (Col::attachments() as $column) {
+                        $path = $attributes[$column] ?? null;
+
+                        if (is_string($path) && $path !== '') {
+                            $storedPaths[] = $path;
+                        }
+                    }
+
+                    $created[] = $this->soa->saveSoa($attributes);
+                }
+
+                return $created;
+            });
+        } catch (\Throwable $e) {
+            $this->discardStoredFiles($storedPaths);
+
+            throw $e;
+        }
+    }
+
+    /**
+     * Delete the attachments written by a batch that then failed to commit.
+     *
+     * Best-effort, and never allowed to become the error the caller sees: it runs while
+     * an exception that matters more is already unwinding, and a file that will not
+     * delete is untidy rather than incorrect. Failures are logged with the path so the
+     * share can still be reconciled by hand.
+     *
+     * @param  list<string>  $paths
+     */
+    private function discardStoredFiles(array $paths): void
+    {
+        if ($paths === []) {
+            return;
+        }
+
+        try {
+            $disk = Storage::disk(config('vc.disks.billing'));
+
+            foreach ($paths as $path) {
+                $disk->delete($path);
             }
 
-            return $created;
-        });
+            // Reported by the failure entry {@see recordFailure()}.
+            $this->discardedAttachments = count($paths);
+        } catch (\Throwable $e) {
+            Log::error('SoaBatchImportService: attachments of a rolled-back batch could not be removed', [
+                'paths' => $paths,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

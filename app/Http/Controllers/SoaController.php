@@ -385,7 +385,9 @@ class SoaController extends Controller
             return response()->json([
                 'account_types' => AccountType::list(),
                 'bill_types' => BillType::list(),
-                'status_types' => SoaStatus::list(),
+                // Only the statuses this user may actually set — see
+                // {@see SoaStatus::assignableValues()}, which the validator reads too.
+                'status_types' => SoaStatus::assignableList($request->user()),
                 'billing_ref_from_types' => BillRefFrom::list(),
             ]);
         }
@@ -464,7 +466,11 @@ class SoaController extends Controller
                 'date_columns' => SoaImportColumn::dates(),
                 'account_types' => AccountType::list(),
                 'bill_types' => BillType::list(),
-                'status_types' => SoaStatus::list(),
+                // Only the statuses this user may actually set. The batch guide is what
+                // a template gets filled in from, so offering a status the validator
+                // will refuse ({@see SoaStatus::assignableValues()}, which that rule
+                // reads too) failed every row of the upload rather than just one field.
+                'status_types' => SoaStatus::assignableList($request->user()),
                 // The ceiling on the whole manifest: how many rows/attachments a batch
                 // may contain in total. A large manifest is sent to /batch_store as
                 // several smaller requests (see php_limits below), so this is no longer
@@ -880,7 +886,9 @@ class SoaController extends Controller
                 'soa' => $soa,
                 'account_types' => AccountType::list(),
                 'bill_types' => BillType::list(),
-                'status_types' => SoaStatus::list(),
+                // Only the statuses this user may actually set — see
+                // {@see SoaStatus::assignableValues()}, which the validator reads too.
+                'status_types' => SoaStatus::assignableList($request->user()),
                 'billing_ref_from_types' => BillRefFrom::list(),
             ]);
         }

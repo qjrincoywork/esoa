@@ -688,6 +688,7 @@ export function useSoas() {
           // are still to come, so it alone decides when the batch is actually done.
           onSubmitChunk: async (payload: FormData) => {
             try {
+              showLoader();
               const res = await post(`/${slug.value}/batch_store`, payload);
               const data = res.data as {
                 message?: string;
@@ -697,6 +698,8 @@ export function useSoas() {
               return { ok: res.ok, message: data?.message, result: data?.result ?? null };
             } catch {
               return { ok: false, message: 'Network error', result: null };
+            } finally {
+              hideLoader();
             }
           },
           // Called exactly once, after the last chunk the form decided to send —
