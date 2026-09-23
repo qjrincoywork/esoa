@@ -84,4 +84,30 @@ class ActivityLogController extends Controller
             ]);
         }
     }
+
+    /**
+     * Return one page of the rest of the batch an entry belongs to (AJAX only).
+     *
+     * The batch is the action an entry was part of, and a batch upload writes one
+     * entry per row of the file — so it is paged from here rather than carried by the
+     * detail, which would otherwise ship thousands of rows to show ten.
+     *
+     * The batch is taken from the entry itself, never from the request, so a reader
+     * can only ever page through the action they already have in front of them.
+     * Filters are validated by {@see ListRequest}, which also states the audience.
+     *
+     * @return \Illuminate\Http\JsonResponse|void
+     */
+    public function batchSiblings(int $id, ListRequest $request)
+    {
+        $log = $this->activityLog->findOrFail($id);
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'batch_siblings' => new CommonResource(
+                    ActivityLogListResource::collection($log->getBatchSiblings($request->validated()))
+                ),
+            ]);
+        }
+    }
 }

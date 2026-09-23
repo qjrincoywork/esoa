@@ -40,6 +40,7 @@ class RolePermissionSeeder extends Seeder
             // activity logs (superadmin only — granted via syncPermissions below)
             'activity_logs.index',
             'activity_logs.show',
+            'activity_logs.batch_siblings',
 
             // unmapped accounts & branches (superadmin only — granted via syncPermissions below)
             'unmapped_accounts.index',

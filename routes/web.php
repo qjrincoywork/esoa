@@ -133,6 +133,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->controller(ActivityLogController::class)->group(function () {
                 Route::get('/', 'index')->name('index');
                 Route::get('/{id}/show', 'show')->name('show');
+                // The rest of the action an entry belongs to, a page at a time.
+                Route::get('/{id}/batch_siblings', 'batchSiblings')->name('batch_siblings');
         });
 
         // Unmapped accounts & branches — the account-mapping coverage gap, read-only
