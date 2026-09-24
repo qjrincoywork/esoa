@@ -16,6 +16,7 @@ use App\Http\Controllers\{
     UserController,
 };
 use App\Models\{ AccountPayment, Concern, Soa };
+use App\Support\LandingRoute;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Laravel\Fortify\Features;
@@ -52,10 +53,6 @@ Route::get('/', function () {
 })->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    // Analytics dashboard: open to every authenticated user, the data is scoped to what
-    // the viewer may see (and, for staff roles, sliceable per user).
-    Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
-
     Route::get('home', function () {
         return Inertia::render('Home');
     })->name('home.index');
@@ -69,6 +66,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     })->name('faq');
     // Superadmin-only routes - only admins can access these
     Route::middleware(['role:superadmin'])->group(function () {
+        Route::get('dashboard', [DashboardController::class, 'index'])
+            ->middleware('deny_user_type:' . implode(',', LandingRoute::DASHBOARD_DENIED_TYPES))
+            ->name('dashboard');
         // Route::resource('admin', AdminController::class)->middleware('check_permissions');
         Route::prefix('admin')->name('admin.')->controller(AdminController::class)->group(function () {
             Route::get('/import_soa', 'importSoa')->name('import_soa');

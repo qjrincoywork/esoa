@@ -2,28 +2,22 @@
 
 namespace App\Http\Responses;
 
+use App\Support\LandingRoute;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
 
 /**
  * Post-login redirect for the application.
  *
  * Single responsibility: decide where an authenticated user lands after logging in.
- * Users are sent to the SOA dashboard when they may access it, otherwise to the
- * generic dashboard — mirroring the SOA dashboard route's permission gate so a
- * non-permitted user never bounces off a forbidden redirect. Any URL the user was
- * originally headed to (via {@see redirect()->intended()}) still takes precedence.
+ * The landing page is resolved by {@see LandingRoute}, which only ever picks a page
+ * the user may open, so a user never bounces off a forbidden redirect. Any URL the
+ * user was originally headed to (via {@see redirect()->intended()}) still takes
+ * precedence and is guarded by that route's own middleware.
  */
 class LoginResponse implements LoginResponseContract
 {
-    /** Preferred landing route once authenticated. */
-    private const HOME_ROUTE = 'soas.dashboard';
-
-    /** Fallback for users without access to the preferred route. */
-    private const FALLBACK_ROUTE = 'dashboard';
-
     /**
      * Build the post-login response: a 204 No Content for JSON callers, otherwise
      * a redirect to the user's intended URL or the resolved landing page.
@@ -34,18 +28,6 @@ class LoginResponse implements LoginResponseContract
             return new JsonResponse('', 204);
         }
 
-        return redirect()->intended($this->homeUrl($request));
-    }
-
-    /**
-     * Resolve the best landing URL for the authenticated user.
-     */
-    private function homeUrl(Request $request): string
-    {
-        $user = $request->user();
-
-        return $user && $user->can(self::HOME_ROUTE)
-            ? route(self::HOME_ROUTE)
-            : route(self::FALLBACK_ROUTE);
+        return redirect()->intended(LandingRoute::urlFor($request->user()));
     }
 }
