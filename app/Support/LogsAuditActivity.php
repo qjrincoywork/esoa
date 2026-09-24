@@ -4,7 +4,6 @@ namespace App\Support;
 
 use App\Enums\AuditLogName;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Models\Activity;
 use Spatie\Activitylog\Traits\LogsActivity;
@@ -124,18 +123,13 @@ trait LogsAuditActivity
      * The parts of a request worth keeping beside the change.
      *
      * Separate from {@see tapActivity()} so it can be exercised with any request
-     * rather than only inside a live one.
+     * rather than only inside a live one. The shape itself lives in
+     * {@see AuditContext}, which entries not tied to a model event share.
      *
      * @return array<string, string>
      */
     protected function auditRequestContext(Request $request): array
     {
-        return array_filter([
-            'ip' => $request->ip(),
-            // Bounded: some agents run to kilobytes, and the trail is not the place.
-            'user_agent' => Str::limit((string) $request->userAgent(), 255, ''),
-            'route' => $request->route()?->getName(),
-            'method' => $request->method(),
-        ], static fn ($value): bool => $value !== null && $value !== '');
+        return AuditContext::forRequest($request);
     }
 }

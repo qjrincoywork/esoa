@@ -7,6 +7,7 @@ import AccountBranchUpdateForm from '@/components/forms/soas/AccountBranchUpdate
 import ViewForm from '@/components/forms/soas/ViewForm.vue';
 import UntagForm from '@/components/forms/soas/UntagForm.vue';
 import ManageFileForm from '@/components/forms/soas/ManageFileForm.vue';
+import BatchUploadForm from '@/components/forms/soas/BatchUploadForm.vue';
 import { computed, ref, shallowRef, toRef, type Component, type Ref } from 'vue';
 import { Auth, Soa, User } from '@/types';
 let formApi: { getFormData: () => FormData | null } | null = null;
@@ -628,6 +629,116 @@ export function useSoas() {
     }
   };
 
+  /**
+   * Open the batch billing-invoice upload wizard in the top pane.
+   *
+   * A large manifest cannot travel as one request — PHP enforces its own
+   * `post_max_size` / `max_file_uploads` before Laravel ever sees the request, and
+   * those are typically far below what a real batch needs. The form therefore splits
+   * the manifest into several requests sized against the real server limits
+   * (`php_limits`, below) and calls `onSubmitChunk` once per request; `soas.ts` stays
+   * the one place a request is actually made, but no longer decides success/failure
+   * for the user — that only makes sense once every chunk has been tried, which
+   * `onComplete` is called with. A small manifest is just one chunk, so this collapses
+   * back to a single request with no visible difference for the common case.
+   */
+  const batchUploadSoas = async () => {
+    try {
+      const response = await get<{
+        columns: string[];
+        required_columns: string[];
+        attachment_columns: string[];
+        date_columns: string[];
+        account_types: Array<{ value: number | string; name: string }>;
+        bill_types: Array<{ value: number | string; name: string }>;
+        status_types: Array<{ value: number | string; name: string }>;
+        max_rows: number;
+        max_attachments: number;
+        max_file_size: number;
+        php_limits: { max_file_uploads: number; post_max_size: number; upload_max_filesize: number };
+      }>(`/${slug.value}/batch_create`);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch batch upload metadata');
+      }
+
+      const meta = response.data;
+      if (!meta) return;
+
+      openPane({
+        side: 'right',
+        title: 'Batch Upload Billing Invoices',
+        component: BatchUploadForm,
+        componentProps: {
+          columns: meta.columns,
+          requiredColumns: meta.required_columns,
+          attachmentColumns: meta.attachment_columns,
+          dateColumns: meta.date_columns,
+          accountTypes: meta.account_types ?? [],
+          billTypes: meta.bill_types ?? [],
+          statusTypes: meta.status_types ?? [],
+          maxRows: meta.max_rows,
+          maxAttachments: meta.max_attachments,
+          maxFileSize: meta.max_file_size,
+          maxFileUploads: meta.php_limits?.max_file_uploads ?? 20,
+          postMaxSizeBytes: meta.php_limits?.post_max_size ?? 8 * 1024 * 1024,
+          onCancel: () => closePane('right'),
+          // One request for one chunk: post it, and hand the raw outcome back
+          // un-toasted — the form is the only one that knows whether more chunks
+          // are still to come, so it alone decides when the batch is actually done.
+          onSubmitChunk: async (payload: FormData) => {
+            try {
+              showLoader();
+              const res = await post(`/${slug.value}/batch_store`, payload);
+              const data = res.data as {
+                message?: string;
+                result?: { total: number; created: number; failed: number; partial: boolean; errors: unknown[] };
+              };
+
+              return { ok: res.ok, message: data?.message, result: data?.result ?? null };
+            } catch {
+              return { ok: false, message: 'Network error', result: null };
+            } finally {
+              hideLoader();
+            }
+          },
+          // Called exactly once, after the last chunk the form decided to send —
+          // whether that is all of them, or it stopped early on a failing chunk.
+          onComplete: (summary: { created: number; failed: number; stoppedEarly: boolean }) => {
+            if (summary.created > 0) {
+              router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+            }
+
+            if (summary.created === 0) {
+              dispatchNotification({
+                title: 'Error',
+                content: summary.stoppedEarly
+                  ? 'Nothing was uploaded — the batch stopped at the first row that failed validation.'
+                  : 'Nothing was uploaded: every row failed validation.',
+                type: 'error',
+              });
+              return;
+            }
+
+            const content = summary.failed === 0
+              ? (summary.created === 1 ? '1 billing invoice uploaded successfully' : `${summary.created} billing invoices uploaded successfully`)
+              : `${summary.created} billing invoice(s) uploaded; ${summary.failed} row(s) ${summary.stoppedEarly ? 'were not attempted after the batch stopped' : 'were skipped'} — review below.`;
+
+            dispatchNotification({ title: 'Success', content, type: 'success' });
+
+            // Nothing left to review once every row succeeded; otherwise the pane
+            // stays open so the uploader can see what was skipped or not attempted.
+            if (summary.failed === 0) {
+              closePane('right');
+            }
+          },
+        },
+      });
+    } catch {
+      dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
+    }
+  };
+
   return {
     editSoa,
     viewSoa,
@@ -635,6 +746,7 @@ export function useSoas() {
     billingAttachments,
     openSoaFilesPane,
     newSoa,
+    batchUploadSoas,
     deleteSoa,
     manageFile,
     untagSoa,

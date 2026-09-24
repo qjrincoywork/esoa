@@ -491,17 +491,47 @@ class CommonHelper
     }
 
     /**
+     * Populate the display-only fields the billing-invoice emails render.
+     *
+     * `client_name` and `contact` are not columns — they are attached to the model in
+     * memory just before the mail is built. That matters for a queued mail: the job
+     * serializes only the model's key and re-fetches it when the worker runs, so
+     * anything set here is gone by render time. The mailables therefore call this
+     * again themselves, and it is a no-op when the values are already present so the
+     * synchronous path costs no extra HMS lookup.
+     *
+     * @param  object  $model
+     * @return void
+     */
+    public static function prepareBillingInvoiceForEmail($model): void
+    {
+        if (empty($model->client_name)) {
+            self::setClientName($model);
+        }
+
+        if (empty($model->contact)) {
+            $model->contact = config('vc.contact_email');
+        }
+    }
+
+    /**
      * Send billing invoice email and record activity.
+     *
+     * Pass $queue to hand the mail to the queue instead of sending it inline. Batch
+     * uploads use it so one request does not sit through dozens of SMTP round trips;
+     * the single-upload paths send inline as before. Note that when queued, the
+     * activity row records that the notification was dispatched, not that the SMTP
+     * server has accepted it — a worker must be running for it to actually go out.
      *
      * @param  object  $model
      * @param  object  $user
      * @param  string  $mailClass
+     * @param  bool  $queue
      * @return void
      */
-    public static function sendBillingInvoiceEmail($model, $user, string $mailClass): void
+    public static function sendBillingInvoiceEmail($model, $user, string $mailClass, bool $queue = false): void
     {
-        self::setClientName($model);
-        $model->contact = config('vc.contact_email');
+        self::prepareBillingInvoiceForEmail($model);
 
         $isAccountBranchAdmin = $user->hasAnyRole(['account_branch_admin', 'group_account_admin']);
         $billingNotificationEmail = config('vc.billing_notification_email', 'billing@example.com');
@@ -514,9 +544,10 @@ class CommonHelper
             ? $user->email
             : $billingNotificationEmail;
 
-        Mail::to($toEmail)
-            ->cc($ccEmail)
-            ->send(new $mailClass($model));
+        $pending = Mail::to($toEmail)->cc($ccEmail);
+        $mailable = new $mailClass($model);
+
+        $queue ? $pending->queue($mailable) : $pending->send($mailable);
 
         $model->recordActivity('billing_invoice_email_sent', [
             'to' => [

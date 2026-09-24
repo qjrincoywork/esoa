@@ -133,6 +133,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->controller(ActivityLogController::class)->group(function () {
                 Route::get('/', 'index')->name('index');
                 Route::get('/{id}/show', 'show')->name('show');
+                // The rest of the action an entry belongs to, a page at a time.
+                Route::get('/{id}/batch_siblings', 'batchSiblings')->name('batch_siblings');
         });
 
         // Unmapped accounts & branches — the account-mapping coverage gap, read-only
@@ -198,6 +200,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/{id}/view_billing_invoice', 'viewBillingInvoice')->name('view_billing_invoice');
             Route::get('/create', 'create')->name('create');
             Route::post('/store', 'store')->name('store');
+            Route::get('/batch_create', 'batchCreate')->name('batch_create');
+            Route::post('/batch_store', 'batchStore')->name('batch_store');
             Route::get('/{id}/edit', 'edit')->name('edit');
             Route::get('/{id}/attachment/{type}', 'streamBillingAttachment')
                 ->name('billing_attachments')

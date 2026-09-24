@@ -69,6 +69,32 @@ return [
         // chat_attachments directory (see LEGACY_CHAT_ATTACHMENTS_ROOT).
         'legacy_chat' => env('LEGACY_CHAT_DISK', 'legacy_chat'),
     ],
+    /*
+    |--------------------------------------------------------------------------
+    | Batch billing-invoice upload
+    |--------------------------------------------------------------------------
+    |
+    | The ceiling on a whole manifest — how many rows/attachments one batch-upload
+    | wizard session may contain in total, across every request it takes to send it.
+    |
+    | This used to double as the per-request limit, back when a batch was always
+    | exactly one HTTP request; the default was read from max_file_uploads so the
+    | app and PHP could never disagree about it (a value above max_file_uploads
+    | would make PHP silently drop attachments past that count, and the importer
+    | would then report perfectly good rows as missing their files).
+    |
+    | The client now splits a large manifest into several requests sized to fit
+    | under the server's real max_file_uploads / post_max_size (see
+    | SoaController::batchCreate()'s `php_limits`), so this default no longer needs
+    | to track max_file_uploads — it stays here mainly as protection against an
+    | absurdly large upload rather than a value the client must not exceed in one go.
+    |
+    */
+    'soa_batch' => [
+        'max_attachments' => (int) env('SOA_BATCH_MAX_ATTACHMENTS', (int) ini_get('max_file_uploads') ?: 20),
+        'max_rows' => (int) env('SOA_BATCH_MAX_ROWS', (int) floor(((int) ini_get('max_file_uploads') ?: 20) / 2)),
+    ],
+
     'soa_import' => [
         'chunk_size' => (int) env('SOA_IMPORT_CHUNK_SIZE', 2000),
         'limit' => ($limit = env('SOA_IMPORT_LIMIT')) !== null && $limit !== ''

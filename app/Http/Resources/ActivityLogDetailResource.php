@@ -13,8 +13,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *
  * Turns the stored `properties` blob into the two things a reader actually wants: a
  * field-by-field account of what changed, and the request the change arrived on. It
- * also carries the rest of the batch, because one action routinely writes several
- * entries and any one of them read alone is missing its own context.
+ * also says how much else the same action wrote, because one action routinely
+ * writes several entries and any one of them read alone is missing its own context.
  */
 class ActivityLogDetailResource extends JsonResource
 {
@@ -51,8 +51,9 @@ class ActivityLogDetailResource extends JsonResource
             'changes' => $this->changeRows($properties),
             'context' => $properties->get('context'),
 
-            // One extra query, and only ever for the single entry being opened.
-            'batch_siblings' => ActivityLogListResource::collection($this->resource->batchSiblings()),
+            // Only the size of the batch travels with the entry; the entries behind it
+            // are paged in on demand, since one batch upload writes thousands of them.
+            'batch_sibling_count' => $this->resource->batchSiblingCount(),
         ];
     }
 

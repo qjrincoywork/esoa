@@ -26,6 +26,19 @@ class IsDataExists implements ValidationRule
     }
 
     /**
+     * The table this rule looks the id up in.
+     *
+     * Exposed so a caller validating many rows at once can resolve the whole set in
+     * one query instead of letting this rule fire per row — see
+     * {@see \App\Services\SoaBatchImportService}. Read-only: the rule still decides
+     * what "exists" means, including failing closed on an unknown table.
+     */
+    public function table(): string
+    {
+        return $this->table;
+    }
+
+    /**
      * Pass only when a row with id equal to the value exists in the configured table.
      *
      * The list of real tables is resolved from the current connection (SHOW
