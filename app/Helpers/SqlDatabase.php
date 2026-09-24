@@ -699,7 +699,9 @@ class SqlDatabase
                 });
             });
 
-        $page = $this->attachBranchMemberCounts($query->orderBy('Branches.br_branch_name')->paginate($perPage));
+        $page = $this->attachBranchMemberCounts(
+            $query->orderBy('Branches.br_branch_name')->orderBy('Branches.br_code')->paginate($perPage)
+        );
 
         return $this->attachBranchMappedUsers($page, true);
     }
@@ -976,7 +978,10 @@ class SqlDatabase
                 });
             })
             ->when(!empty($params['policynum']), fn ($q) => $q->where('ch_policynum', 'like', '%'.$params['policynum'].'%'))
+            // `ch_id` breaks ties: many cardholders share a name, and SQL Server's
+            // OFFSET/FETCH over a non-unique order can repeat or skip rows between pages.
             ->orderBy('ch_name')
+            ->orderBy('ch_id')
             ->paginate($perPage);
     }
 
