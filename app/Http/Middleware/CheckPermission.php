@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\LandingRoute;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -14,8 +15,8 @@ class CheckPermission
      * Unauthenticated users are redirected to login; a nameless route is rejected
      * with 403; superadmins bypass the check. Otherwise the user must hold the
      * permission matching the route name, else the request is rejected with a 403
-     * JSON response (for API/JSON callers) or redirected to the dashboard with an
-     * error flash message.
+     * JSON response (for API/JSON callers) or redirected to the user's landing page
+     * ({@see LandingRoute}) with an error flash message.
      *
      * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
      */
@@ -47,9 +48,9 @@ class CheckPermission
                 );
             }
 
-            // Redirect to dashboard with error message for toast display
-            // return abort(Response::HTTP_FORBIDDEN, 'You do not have permission to access this resource.');
-            return redirect()->route('dashboard')->with('error', 'You do not have permission to access this resource');
+            // Redirect to the user's own landing page (never the route that just denied them) with a toast
+            return redirect()->to(LandingRoute::urlFor($user, $routeName))
+                ->with('error', 'You do not have permission to access this resource');
         }
 
         return $next($request);

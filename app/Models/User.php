@@ -125,6 +125,18 @@ class User extends Authenticatable implements AuthorizableContract, MustVerifyEm
     }
 
     /**
+     * Whether this user's type (user_details.type) is one of the given types.
+     *
+     * @param int|array<int, int> $types
+     */
+    public function hasUserType(int|array $types): bool
+    {
+        $type = $this->userDetail?->type;
+
+        return $type !== null && in_array((int) $type, (array) $types, true);
+    }
+
+    /**
      * The account/branch pairs whose billing invoices are attributed to this user.
      *
      * Mirrors the row-level rule in {@see \App\Models\Soa::applyUserAccountRestriction()}
