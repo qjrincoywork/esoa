@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\AccountType;
 use App\Enums\AuditLogName;
 use App\Enums\DataScope;
 use App\Enums\OrderType;
@@ -403,7 +404,9 @@ class Soa extends Model
         if (!empty($params['billing_ref'] ?? null)) {
             $query->where('billing_ref', $params['billing_ref']);
         }
-        if (!empty($params['account_type'] ?? null)) {
+        // Records are stamped with a single class ({@see AccountType::fromAccountCode()}),
+        // so TPA/HMO — "both" — narrows nothing rather than matching a value no row holds.
+        if (in_array($params['account_type'] ?? null, [AccountType::TPA, AccountType::HMO], true)) {
             $query->where('account_type', $params['account_type']);
         }
         if (array_key_exists('status', $params) && $params['status'] !== null && $params['status'] !== '') {

@@ -10,11 +10,11 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
 import { Select, SelectTrigger, SelectContent, SelectGroup, SelectLabel, SelectItem, SelectValue } from '@/components/ui/select';
-import { SearchableCombobox, type SearchableComboboxItem } from '@/components/ui/searchable-combobox';
+import { SearchableCombobox } from '@/components/ui/searchable-combobox';
 import { createActionColumn } from '@/composables/datatable/datatableColumns';
 import { useSoas } from '@/composables/soas';
+import { useLookupOptions } from '@/composables/useLookupOptions';
 import { useModulePermissions } from '@/composables/useModulePermissions';
-import { debounce } from '@/composables/utilities/helper';
 import RightPane from '@/components/RightPane.vue';
 import TopPane from '@/components/TopPane.vue';
 
@@ -58,7 +58,6 @@ const {
   openSoaFilesPane,
   getAccountsByParams,
   getBranchesByParams,
-  getBillingRefsByParams,
   exportBillingInvoices,
   openPane,
   closePane,
@@ -127,32 +126,58 @@ const pagination = ref({
   total: soas.value.total
 });
 
-const filters = ref<SoaListFilters>(soaListFiltersFromUrlQuery(page.url));
+/**
+ * Account / branch the user is pinned to by their mapping (shared for account-branch
+ * admins). A pinned value hides its picker and cannot be overridden from the URL.
+ */
+const lockedAccountCode = computed(() => userDetail.value?.account_code ?? '');
+const lockedBranchCode = computed(() => userDetail.value?.branch_code ?? '');
+const isAccountLocked = computed(() => lockedAccountCode.value !== '');
+const isBranchLocked = computed(() => lockedBranchCode.value !== '');
+
+const withLockedScope = (f: SoaListFilters): SoaListFilters => {
+  if (isAccountLocked.value) {
+    f.account_type = '';
+    f.account_code = lockedAccountCode.value;
+  }
+  if (isBranchLocked.value) {
+    f.branch_code = lockedBranchCode.value;
+  }
+  return f;
+};
+
+const filters = ref<SoaListFilters>(withLockedScope(soaListFiltersFromUrlQuery(page.url)));
 const hasInitialized = ref(false);
 const isFirstLoad = ref(true);
-const filtersBootstrapped = ref(false);
 
-const searchedAccountName = ref('');
-const searchedBranchName = ref('');
-const searchedBillingRef = ref('');
-const accounts = ref<SearchableComboboxItem[]>([]);
-const branches = ref<SearchableComboboxItem[]>([]);
-const accountPage = ref(1);
-const accountLastPage = ref(1);
-const branchPage = ref(1);
-const branchLastPage = ref(1);
-const billingRefPage = ref(1);
-const billingRefLastPage = ref(1);
-const accountsLoadingMore = ref(false);
-const branchesLoadingMore = ref(false);
-const billingRefsLoadingMore = ref(false);
-const hasMoreAccounts = computed(() => accountPage.value < accountLastPage.value);
-const hasMoreBranches = computed(() => branchPage.value < branchLastPage.value);
-const hasMoreBillingRefs = computed(() => billingRefPage.value < billingRefLastPage.value);
+/** Account whose branches are offered — read from the filter, never from the loaded options. */
+const selectedAccountCode = computed(() => filters.value.account_code);
 
-const selectedAccountFilter = computed(() =>
-  accounts.value?.find((a: SearchableComboboxItem) => String(a.value) === String(filters.value.account_code)),
+const accountLookup = useLookupOptions(
+  getAccountsByParams,
+  () => ({ type: filters.value.account_type, selected_code: filters.value.account_code }),
+  () => !isAccountLocked.value,
 );
+
+const branchLookup = useLookupOptions(
+  getBranchesByParams,
+  () => ({ account_code: selectedAccountCode.value, selected_code: filters.value.branch_code }),
+  () => selectedAccountCode.value !== '' && !isBranchLocked.value,
+);
+
+// Top-level refs so the template unwraps them.
+const {
+  items: accounts,
+  search: accountSearch,
+  hasMore: hasMoreAccounts,
+  loadingMore: accountsLoadingMore,
+} = accountLookup;
+const {
+  items: branches,
+  search: branchSearch,
+  hasMore: hasMoreBranches,
+  loadingMore: branchesLoadingMore,
+} = branchLookup;
 
 const listFetchPath = computed(() => {
   const raw = (page.url ?? '').split('?')[0] || '';
@@ -161,18 +186,11 @@ const listFetchPath = computed(() => {
 
 const partialReloadKey = computed(() => slug.value || 'soas');
 
-const accountTypeModel = computed({
-  get: () => (filters.value.account_type === '' ? undefined : filters.value.account_type),
-  set: (v: string | undefined) => {
-    filters.value.account_type = v ?? '';
-  },
-});
-
 /** Sentinel for the "All …" option (reka-ui Select disallows empty-string item values). */
 const ALL_FILTER_VALUE = 'all';
 
 /** Build a Select v-model that maps the empty filter ('') to the "All" sentinel and back. */
-const createAllableFilterModel = (key: 'status' | 'bill_type') =>
+const createAllableFilterModel = (key: 'account_type' | 'status' | 'bill_type') =>
   computed<string>({
     get: () => (filters.value[key] === '' ? ALL_FILTER_VALUE : filters.value[key]),
     set: (v: string) => {
@@ -180,6 +198,7 @@ const createAllableFilterModel = (key: 'status' | 'bill_type') =>
     },
   });
 
+const accountTypeFilterModel = createAllableFilterModel('account_type');
 const statusFilterModel = createAllableFilterModel('status');
 const billTypeFilterModel = createAllableFilterModel('bill_type');
 
@@ -300,34 +319,15 @@ const markInteracted = () => {
 
 const suppressFilterWatch = ref(false);
 
-const resetDependentLists = () => {
-  accounts.value = [];
-  branches.value = [];
-  accountPage.value = 1;
-  accountLastPage.value = 1;
-  branchPage.value = 1;
-  branchLastPage.value = 1;
-  billingRefPage.value = 1;
-  billingRefLastPage.value = 1;
-};
-
 const clearFilters = () => {
   if (filterWatchTimeout.value) {
     clearTimeout(filterWatchTimeout.value);
     filterWatchTimeout.value = null;
   }
   suppressFilterWatch.value = true;
-  filters.value = emptySoaListFilters();
-  if (isAccountBranchAdmin.value) {
-    filters.value.account_code = userDetail.value?.account_code ?? '';
-    if (filters.value.account_code) {
-      searchBranchesByParams();
-    }
-  }
-  searchedAccountName.value = '';
-  searchedBranchName.value = '';
-  searchedBillingRef.value = '';
-  resetDependentLists();
+  filters.value = withLockedScope(emptySoaListFilters());
+  accountLookup.refresh();
+  branchLookup.refresh();
   markInteracted();
   pagination.value.current_page = 1;
   fetchSoas();
@@ -336,14 +336,13 @@ const clearFilters = () => {
   });
 };
 
-const filtersActive = computed(() => soaListFiltersActive(filters.value));
-const isAccountBranchAdmin = computed(() => userDetail.value?.type === 2);
+/** Pinned account / branch are part of the user's scope, not filters they can clear. */
+const filtersActive = computed(() => soaListFiltersActive({
+  ...filters.value,
+  account_code: isAccountLocked.value ? '' : filters.value.account_code,
+  branch_code: isBranchLocked.value ? '' : filters.value.branch_code,
+}));
 
-const selectedAccountCode = computed(() =>
-  isAccountBranchAdmin.value
-    ? (userDetail.value?.account_code ?? '')
-    : (selectedAccountFilter.value?.value ?? '')
-);
 const exportList = () => {
   void exportBillingInvoices(soaListFiltersToParams(filters.value));
 };
@@ -367,145 +366,29 @@ watch(
   { deep: true }
 );
 
+// Cascade: account type → account → branch. A parent change drops the now-stale child
+// selection and reloads the child's options. Not immediate, so values restored from the
+// URL survive the first render.
 watch(
   () => filters.value.account_type,
   () => {
-    if (!filtersBootstrapped.value || suppressFilterWatch.value) return;
+    if (suppressFilterWatch.value || isAccountLocked.value) return;
     filters.value.account_code = '';
-    filters.value.branch_code = '';
-    searchedAccountName.value = '';
-    searchedBranchName.value = '';
-    searchedBillingRef.value = '';
-    resetDependentLists();
+    accountLookup.refresh();
   },
 );
 
-watch(
-  () => filters.value.account_code,
-  () => {
-    if (!filtersBootstrapped.value || suppressFilterWatch.value) return;
+watch(selectedAccountCode, () => {
+  if (suppressFilterWatch.value) return;
+  if (!isBranchLocked.value) {
     filters.value.branch_code = '';
-    searchedBranchName.value = '';
-    searchedBillingRef.value = '';
-    branches.value = [];
-    branchPage.value = 1;
-    branchLastPage.value = 1;
-    billingRefPage.value = 1;
-    billingRefLastPage.value = 1;
-  },
-);
-
-const searchAccountsByParams = async (name = '', pageNum = 1, append = false) => {
-  if (!filters.value.account_type) {
-    accounts.value = [];
-    return;
   }
-  if (append) {
-    accountsLoadingMore.value = true;
-  }
-  const result = await getAccountsByParams({
-    type: filters.value.account_type,
-    name,
-    page: pageNum,
-  });
-  if (append) {
-    accounts.value = [...(accounts.value ?? []), ...(result?.data ?? [])];
-  } else {
-    accounts.value = result?.data ?? [];
-  }
-  accountPage.value = result?.current_page ?? 1;
-  accountLastPage.value = result?.last_page ?? 1;
-  accountsLoadingMore.value = false;
-};
-
-const searchBranchesByParams = async (name = '', pageNum = 1, append = false) => {
-  if (!selectedAccountCode.value) {
-    branches.value = [];
-    return;
-  }
-  if (append) {
-    branchesLoadingMore.value = true;
-  }
-  const result = await getBranchesByParams({
-    account_code: selectedAccountCode.value,
-    name,
-    page: pageNum,
-  });
-  if (append) {
-    branches.value = [...(branches.value ?? []), ...(result?.data ?? [])];
-  } else {
-    branches.value = result?.data ?? [];
-  }
-  branchPage.value = result?.current_page ?? 1;
-  branchLastPage.value = result?.last_page ?? 1;
-  branchesLoadingMore.value = false;
-};
-
-const debouncedGetAccounts: (...args: unknown[]) => void = debounce((evOrName?: unknown) => {
-  const name = typeof evOrName === 'string' ? evOrName : ((evOrName as { target?: { value?: string } })?.target?.value ?? '');
-  void searchAccountsByParams(name, 1, false);
+  branchLookup.refresh();
 });
 
-const debouncedGetBranches: (...args: unknown[]) => void = debounce((evOrName?: unknown) => {
-  const name = typeof evOrName === 'string' ? evOrName : ((evOrName as { target?: { value?: string } })?.target?.value ?? '');
-  void searchBranchesByParams(name, 1, false);
-});
-
-function loadMoreData(kind: 'accounts' | 'branches' | 'billingRefs') {
-  switch (kind) {
-    case 'accounts':
-      if (!hasMoreAccounts.value || accountsLoadingMore.value) return;
-      void searchAccountsByParams(searchedAccountName.value, accountPage.value + 1, true);
-      break;
-    case 'branches':
-      if (!hasMoreBranches.value || branchesLoadingMore.value) return;
-      void searchBranchesByParams(searchedBranchName.value, branchPage.value + 1, true);
-      break;
-  }
-}
-
-watch([() => filters.value.account_type, searchedAccountName], async () => {
-  accounts.value = [];
-  if (filters.value.account_type) {
-    if (searchedAccountName.value.length > 0) {
-      debouncedGetAccounts(searchedAccountName.value);
-    } else {
-      await searchAccountsByParams();
-    }
-  }
-}, { immediate: true });
-
-watch([selectedAccountCode, searchedBranchName, searchedBillingRef], async () => {
-  if (!filtersBootstrapped.value) return;
-  if (selectedAccountCode.value) {
-    if (searchedBranchName.value.length > 0) {
-      debouncedGetBranches(searchedBranchName.value);
-    } else {
-      await searchBranchesByParams();
-    }
-  } else {
-    branches.value = [];
-  }
-}, { immediate: true });
-
-onMounted(async () => {
-  if (isAccountBranchAdmin.value) {
-    filters.value.account_code = userDetail.value?.account_code ?? '';
-    if (filters.value.account_code) {
-      await searchBranchesByParams();
-    }
-    await nextTick();
-    filtersBootstrapped.value = true;
-  } else {
-    if (filters.value.account_type) {
-      await searchAccountsByParams(searchedAccountName.value, 1, false);
-      if (filters.value.account_code) {
-        await searchBranchesByParams();
-      }
-    }
-    await nextTick();
-    filtersBootstrapped.value = true;
-  }
+onMounted(() => {
+  void accountLookup.load();
+  void branchLookup.load();
 });
 
 const isUpdatingFromServer = ref(false)
@@ -576,15 +459,16 @@ watch(
                       <div class="flex flex-row lg:flex-row justify-between items-stretch lg:items-start gap-4">
                           <div class="flex flex-1 flex-col gap-3 min-w-0">
                               <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                  <div v-if="!isAccountBranchAdmin" class="grid gap-2 md:col-span-1">
+                                  <div v-if="!isAccountLocked" class="grid gap-2 md:col-span-1">
                                       <Label for="soa-filter-account-type">Account Type</Label>
-                                      <Select v-model="accountTypeModel">
+                                      <Select v-model="accountTypeFilterModel">
                                           <SelectTrigger id="soa-filter-account-type" class="w-full">
                                               <SelectValue placeholder="All account types" />
                                           </SelectTrigger>
                                           <SelectContent class="w-full">
                                               <SelectGroup>
                                                   <SelectLabel>Account Type</SelectLabel>
+                                                  <SelectItem :value="ALL_FILTER_VALUE">All Account Types</SelectItem>
                                                   <SelectItem
                                                       v-for="opt in accountTypeOptions"
                                                       :key="String(opt.value)"
@@ -596,39 +480,38 @@ watch(
                                       </Select>
                                   </div>
 
-                                  <div v-if="!isAccountBranchAdmin" class="md:col-span-1">
+                                  <div v-if="!isAccountLocked" class="md:col-span-1">
                                       <SearchableCombobox
                                           id="soa-filter-account"
                                           label="Account"
                                           :model-value="filters.account_code || null"
                                           @update:model-value="(v) => { filters.account_code = v != null ? String(v) : '' }"
-                                          v-model:search="searchedAccountName"
+                                          v-model:search="accountSearch"
                                           :items="accounts"
-                                          placeholder="Select account…"
+                                          placeholder="All accounts"
                                           search-placeholder="Search account…"
                                           empty-text="No account found."
-                                          :disabled="!filters.account_type"
                                           :has-more="hasMoreAccounts"
                                           :loading-more="accountsLoadingMore"
-                                          @load-more="loadMoreData('accounts')"
+                                          @load-more="accountLookup.loadMore"
                                       />
                                   </div>
 
-                                  <div v-if="!userDetail.branch_code" class="md:col-span-1">
+                                  <div v-if="!isBranchLocked" class="md:col-span-1">
                                       <SearchableCombobox
                                           id="soa-filter-branch"
                                           label="Branch"
                                           :model-value="filters.branch_code || null"
                                           @update:model-value="(v) => { filters.branch_code = v != null ? String(v) : '' }"
-                                          v-model:search="searchedBranchName"
+                                          v-model:search="branchSearch"
                                           :items="branches"
-                                          placeholder="Select branch…"
+                                          :placeholder="selectedAccountCode ? 'All branches' : 'Select an account first'"
                                           search-placeholder="Search branch…"
                                           empty-text="No branch found."
                                           :disabled="!selectedAccountCode"
                                           :has-more="hasMoreBranches"
                                           :loading-more="branchesLoadingMore"
-                                          @load-more="loadMoreData('branches')"
+                                          @load-more="branchLookup.loadMore"
                                       />
                                   </div>
 

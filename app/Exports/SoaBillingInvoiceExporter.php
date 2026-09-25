@@ -4,11 +4,11 @@ namespace App\Exports;
 
 use App\Enums\AccountType;
 use App\Enums\Server;
+use App\Enums\SoaAging;
 use App\Enums\SoaStatus;
 use App\Helpers\CommonHelper;
 use App\Helpers\SqlDatabase;
 use App\Models\Soa;
-use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\{Response, StreamedResponse};
@@ -93,7 +93,7 @@ class SoaBillingInvoiceExporter
             CommonHelper::formatDate($soa->billing_date),
             CommonHelper::formatDate($soa->created_at),
             CommonHelper::formatDate($soa->due_date),
-            $this->formatDaysDue($soa->due_date),
+            $this->formatDaysDue($soa),
             number_format((float) $soa->amount, 2, '.', ''),
             SoaStatus::label((int) $soa->status),
             CommonHelper::formatDate($soa->period_date_from),
@@ -195,28 +195,15 @@ class SoaBillingInvoiceExporter
     }
 
     /**
-     * Produce a human-readable due-status label for a due date: 'Past Due',
-     * 'Due Today', 'Due Tomorrow', or 'Due in N days'. Returns '' when no date.
+     * The aging-bucket label shown in the list's "Due In" column
+     * ({@see SoaAging::classifyInvoice()}), so the export matches the screen.
+     * Blank when there is no due date or the invoice is settled (e.g. paid).
      */
-    protected function formatDaysDue(mixed $date): string
+    protected function formatDaysDue(Soa $soa): string
     {
-        if (!$date) {
-            return '';
-        }
+        $aging = SoaAging::classifyInvoice($soa->due_date, $soa->status);
 
-        $parsed = Carbon::parse($date);
-
-        if ($parsed->isPast()) {
-            return 'Past Due';
-        }
-
-        $days = (int) now()->diffInDays($parsed, true);
-
-        return match ($days) {
-            0 => 'Due Today',
-            1 => 'Due Tomorrow',
-            default => "Due in {$days} days",
-        };
+        return $aging !== null ? SoaAging::label($aging) : '';
     }
 
     /**

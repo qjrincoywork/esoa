@@ -371,6 +371,7 @@ class SqlDatabase
                     }
                 });
             })
+            ->tap(fn ($query) => $this->orderSelectedFirst($query, 'ac_code', $selectedCode))
             ->orderBy('ac_name');
 
         return $result->paginate($perPage);
@@ -452,6 +453,68 @@ class SqlDatabase
                 // Any other role, or none, has no directory access.
                 $query->whereRaw('1 = 0');
         }
+    }
+
+    /**
+     * Narrow a branch directory query to the account/branch pairs an assigned-account
+     * user is mapped to.
+     *
+     * {@see applyAccountDirectoryFilter()} confines by account only, which would still
+     * offer every branch of an account whose mapping names one branch — a branch whose
+     * invoices the user can never see. The pairs come from
+     * {@see \App\Models\User::scopedAccountPairs()}, the same rule the SOA row scope uses,
+     * so the picker offers exactly the branches that can return rows. A pair with no
+     * branch covers every branch of its account. Other scopes are left untouched.
+     *
+     * @param  \Illuminate\Database\Query\Builder  $query
+     * @param  \App\Models\User|null  $authUser
+     * @return void
+     */
+    private function applyAssignedBranchFilter($query, $authUser): void
+    {
+        if (TenancyScope::forUser($authUser) !== TenancyScope::ASSIGNED_ACCOUNTS) {
+            return;
+        }
+
+        $pairs = $authUser->scopedAccountPairs();
+
+        if (empty($pairs)) {
+            $query->whereRaw('1 = 0');
+
+            return;
+        }
+
+        $query->where(function ($pairQuery) use ($pairs) {
+            foreach ($pairs as $pair) {
+                $pairQuery->orWhere(function ($sub) use ($pair) {
+                    $sub->where('br_ac_code', $pair['account_code']);
+                    if ($pair['branch_code'] !== null) {
+                        $sub->where('br_code', $pair['branch_code']);
+                    }
+                });
+            }
+        });
+    }
+
+    /**
+     * Sort the currently selected code to the top of a picker page.
+     *
+     * Lets a picker restored from a URL (or scrolled past its first page) still show the
+     * selected row's name without a separate lookup. Ordering only — it never adds a row
+     * the other filters exclude.
+     *
+     * @param  \Illuminate\Database\Query\Builder  $query
+     * @param  string  $codeColumn
+     * @param  string|null  $selectedCode
+     * @return void
+     */
+    private function orderSelectedFirst($query, string $codeColumn, $selectedCode): void
+    {
+        if (empty($selectedCode)) {
+            return;
+        }
+
+        $query->orderByRaw("CASE WHEN {$codeColumn} = ? THEN 0 ELSE 1 END", [(string) $selectedCode]);
     }
 
     /**
@@ -1939,6 +2002,7 @@ class SqlDatabase
             ->table('Branches')
             ->select('br_branch_name', 'br_ac_code', 'br_code')
             ->tap(fn ($query) => $this->applyAccountDirectoryFilter($query, auth()->user(), 'br_ac_code'))
+            ->tap(fn ($query) => $this->applyAssignedBranchFilter($query, auth()->user()))
             ->tap(fn ($query) => $this->applyExcludedAccountPrefixes($query, 'br_ac_code', $params['exclude_prefixes'] ?? []))
             ->when(isset($params['account_code']), function ($query) use ($params) {
                 $query->where('br_ac_code', $params['account_code']);
@@ -1951,6 +2015,7 @@ class SqlDatabase
                     }
                 });
             })
+            ->tap(fn ($query) => $this->orderSelectedFirst($query, 'br_code', $selectedCode))
             ->orderBy('br_branch_name');
 
         return $result->paginate($perPage);
