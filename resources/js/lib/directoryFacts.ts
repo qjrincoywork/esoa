@@ -37,6 +37,7 @@ export const branchFacts = (b: BranchDetail): Fact[] => [
   { label: 'Main Account', value: b.main_account_code, mono: true },
   { label: 'Code Prefix', value: b.code_prefix, mono: true },
   { label: 'Type', value: b.account_type_label },
+  { label: 'Account Expiry Date', value: b.account_expiry_date },
   { label: 'TIN', value: b.tin, mono: true },
   { label: 'Address', value: b.address },
   { label: 'Attention', value: b.attention },

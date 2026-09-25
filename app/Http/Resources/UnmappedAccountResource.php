@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Enums\AccountCodePrefix;
+use App\Enums\AccountStanding;
 use App\Enums\AccountStatus;
 use App\Enums\AccountType;
 use App\Helpers\CommonHelper;
@@ -56,6 +57,10 @@ class UnmappedAccountResource extends JsonResource
             // mappable — so the row says which it is rather than leaving the reader
             // to guess why a long-dead account has no user.
             'is_active' => AccountStatus::isActive($this->ac_status),
+            // HMS often leaves an account marked active past its expiry, so standing
+            // reads the date too ({@see AccountStanding::resolve()}).
+            'standing' => AccountStanding::present(AccountStanding::resolve($this->ac_status, $this->ac_expiry)),
+            'expiry_date' => CommonHelper::formatDate($this->ac_expiry),
 
             'member_count' => (int) ($this->member_count ?? 0),
 

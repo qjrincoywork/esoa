@@ -653,7 +653,7 @@ class SqlDatabase
 
         $query = $this->db
             ->table('Accounts')
-            ->select('Accounts.ac_code', 'Accounts.ac_name', 'Accounts.ac_ma_code', 'Accounts.ac_status')
+            ->select('Accounts.ac_code', 'Accounts.ac_name', 'Accounts.ac_ma_code', 'Accounts.ac_status', 'Accounts.ac_expiry')
             ->tap(fn ($q) => $this->applyAccountDirectoryFilter($q, auth()->user(), 'Accounts.ac_code'))
             ->tap(fn ($q) => $this->applyExcludedAccountPrefixes($q, 'Accounts.ac_code', $params['exclude_prefixes'] ?? []))
             ->tap(fn ($q) => $this->applyAccountCodePrefixFilter($q, 'Accounts.ac_code', $params['code_prefix'] ?? null))
@@ -727,7 +727,9 @@ class SqlDatabase
 
         $this->applyMemberCountRange($query, $params, 'ch_branch_code', 'Branches.br_code');
 
-        $page = $this->attachBranchMemberCounts($query->orderBy('Branches.br_branch_name')->paginate($perPage));
+        $page = $this->attachBranchAccountStanding(
+            $this->attachBranchMemberCounts($query->orderBy('Branches.br_branch_name')->paginate($perPage))
+        );
 
         return $this->attachBranchMappedUsers($page, (bool) ($params['include_mapped'] ?? false));
     }
@@ -762,9 +764,9 @@ class SqlDatabase
                 });
             });
 
-        $page = $this->attachBranchMemberCounts(
+        $page = $this->attachBranchAccountStanding($this->attachBranchMemberCounts(
             $query->orderBy('Branches.br_branch_name')->orderBy('Branches.br_code')->paginate($perPage)
-        );
+        ));
 
         return $this->attachBranchMappedUsers($page, true);
     }
@@ -1160,6 +1162,48 @@ class SqlDatabase
 
         $rows->transform(function ($row) use ($counts) {
             $row->member_count = (int) ($counts[$row->ac_code] ?? 0);
+
+            return $row;
+        });
+
+        return $page;
+    }
+
+    /**
+     * Fill in each branch's account standing — whether the account is in force and when
+     * it expires — for the branches on one page, in one grouped query.
+     *
+     * A branch has neither of its own. Resolved per page rather than joined into the
+     * listing, because joining Accounts would duplicate and drop branch rows (ac_code
+     * is not unique, and some branches point at an account HMS no longer has).
+     *
+     * @param  \Illuminate\Contracts\Pagination\LengthAwarePaginator  $page
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     */
+    private function attachBranchAccountStanding($page)
+    {
+        $rows = $page->getCollection();
+        $accountCodes = $rows->pluck('br_ac_code')->filter()->unique()->values()->all();
+
+        // ac_code is not unique in HMS, so each code is folded to one row: active when
+        // any of its rows is (the reading applyBranchAccountStatusFilter() filters by),
+        // and running until the latest expiry recorded against it.
+        $standing = $accountCodes === []
+            ? collect()
+            : $this->db->table('Accounts')
+                ->selectRaw(
+                    'ac_code, MAX(CASE WHEN ac_status = ? THEN 1 ELSE 0 END) AS is_active, MAX(ac_expiry) AS ac_expiry',
+                    [AccountStatus::ACTIVE]
+                )
+                ->whereIn('ac_code', $accountCodes)
+                ->groupBy('ac_code')
+                ->get()
+                ->keyBy('ac_code');
+
+        $rows->transform(function ($row) use ($standing) {
+            $account = $standing[$row->br_ac_code] ?? null;
+            $row->account_is_active = (bool) ($account->is_active ?? false);
+            $row->account_expiry = $account->ac_expiry ?? null;
 
             return $row;
         });

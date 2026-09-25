@@ -29,7 +29,7 @@ import {
   type DirectoryScope,
   type MappedUser,
 } from '@/composables/unmappedAccounts';
-import { badge, mappedStatusBadge } from '@/lib/directoryBadges';
+import { badge, mappedStatusBadge, standingText } from '@/lib/directoryBadges';
 import {
   accountFacts,
   branchFacts,
@@ -70,18 +70,12 @@ const facts = computed<Fact[]>(() => {
 });
 
 /**
- * Whether the thing is still in force. A branch has no status of its own — it is in
- * force exactly when its account is, which is what the listing filters on too.
+ * The heading badge: the standing the server decided (`App\Enums\AccountStanding`),
+ * falling back to the listing row's until the record arrives. A branch shows its
+ * account's, so the badge says whose it is.
  */
-const isActive = computed<boolean>(() =>
-  isBranch.value ? (branch.value?.account_is_active ?? false) : (account.value?.is_active ?? false),
-);
-
-const activeLabel = computed(() =>
-  isBranch.value
-    ? (isActive.value ? 'Account active' : 'Account inactive')
-    : (isActive.value ? 'Active' : 'Inactive'),
-);
+const standing = computed(() => props.detail?.standing ?? props.row.standing ?? null);
+const standingLabel = computed(() => standingText(standing.value, isBranch.value ? 'Account' : ''));
 
 const activeTab = ref('details');
 
@@ -104,6 +98,7 @@ function useLazyTabList<T>(
   const error = ref('');
   const pagination = ref<Pagination>({ current_page: 1, per_page: 10, total: 0 });
   const token = ref(0);
+  let searchTimer: number | undefined;
 
   const load = async () => {
     const myToken = ++token.value;
@@ -147,17 +142,33 @@ function useLazyTabList<T>(
   };
 
   /** Re-fetches from page 1 once typing has settled, and only once the tab has been opened. */
-  const debounceReload = (delay = 500) => {
-    let timer: number | undefined;
-
-    return () => {
-      if (!loaded.value) return;
-      window.clearTimeout(timer);
-      timer = window.setTimeout(reload, delay);
-    };
+  const debounceReload = (delay = 500) => () => {
+    if (!loaded.value) return;
+    window.clearTimeout(searchTimer);
+    searchTimer = window.setTimeout(reload, delay);
   };
 
-  return { data, loaded, loading, error, pagination, load, reload, changePage, debounceReload };
+  /**
+   * Forget everything fetched for the previous record: pending search, in-flight
+   * response (its token no longer matches), rows and page. The tab then loads afresh
+   * the next time it is shown.
+   */
+  const reset = () => {
+    window.clearTimeout(searchTimer);
+    token.value++;
+    data.value = [];
+    loaded.value = false;
+    loading.value = false;
+    error.value = '';
+    pagination.value = { ...pagination.value, current_page: 1, total: 0 };
+  };
+
+  /** Load unless this tab already holds (or is fetching) the current record's rows. */
+  const ensureLoaded = () => {
+    if (!loaded.value && !loading.value) void load();
+  };
+
+  return { data, loaded, loading, error, pagination, load, reload, reset, ensureLoaded, changePage, debounceReload };
 }
 
 // ── Members ───────────────────────────────────────────────────────────────
@@ -172,16 +183,7 @@ const searchField = ref<MemberSearchField>('name');
 const searchText = ref('');
 const searchActive = computed(() => searchText.value.trim() !== '');
 
-const {
-  data: members,
-  loaded: membersLoaded,
-  loading: membersLoading,
-  error: membersError,
-  pagination: memberPagination,
-  load: loadMembers,
-  changePage: changeMemberPage,
-  debounceReload: debounceMemberReload,
-} = useLazyTabList<DirectoryMember>(
+const membersList = useLazyTabList<DirectoryMember>(
   (params) => getDirectoryMembers(props.scope, props.code, params),
   () => {
     const term = searchText.value.trim();
@@ -190,8 +192,15 @@ const {
   },
   'Could not load the members for this record.',
 );
+const {
+  data: members,
+  loading: membersLoading,
+  error: membersError,
+  pagination: memberPagination,
+  changePage: changeMemberPage,
+} = membersList;
 
-watch([searchField, searchText], debounceMemberReload());
+watch([searchField, searchText], membersList.debounceReload());
 
 const clearMemberSearch = () => {
   searchText.value = '';
@@ -214,16 +223,7 @@ const memberColumns = [
 
 // ── Branches (accounts only — a branch has no branches of its own) ─────────
 const branchSearchText = ref('');
-const {
-  data: branches,
-  loaded: branchesLoaded,
-  loading: branchesLoading,
-  error: branchesError,
-  pagination: branchPagination,
-  load: loadBranches,
-  changePage: changeBranchPage,
-  debounceReload: debounceBranchReload,
-} = useLazyTabList<DirectoryRow>(
+const branchesList = useLazyTabList<DirectoryRow>(
   (params) => getAccountBranches(props.code, params),
   () => {
     const params: Record<string, string | number> = {};
@@ -233,6 +233,13 @@ const {
     return params;
   },
 );
+const {
+  data: branches,
+  loading: branchesLoading,
+  error: branchesError,
+  pagination: branchPagination,
+  changePage: changeBranchPage,
+} = branchesList;
 
 /** Known up front from the account detail, so the tab's count never waits on itself. */
 const branchesTabLabel = computed(() => {
@@ -241,7 +248,7 @@ const branchesTabLabel = computed(() => {
   return total !== undefined ? `Branches (${total.toLocaleString()})` : 'Branches';
 });
 
-watch(branchSearchText, debounceBranchReload());
+watch(branchSearchText, branchesList.debounceReload());
 
 const clearBranchSearch = () => {
   branchSearchText.value = '';
@@ -269,16 +276,7 @@ const branchColumns = [
 
 // ── Mapped Users (accounts and branches) ────────────────────────────────────
 const mappedUserSearchText = ref('');
-const {
-  data: mappedUsers,
-  loaded: mappedUsersLoaded,
-  loading: mappedUsersLoading,
-  error: mappedUsersError,
-  pagination: mappedUserPagination,
-  load: loadMappedUsers,
-  changePage: changeMappedUserPage,
-  debounceReload: debounceMappedUserReload,
-} = useLazyTabList<MappedUser>(
+const mappedUsersList = useLazyTabList<MappedUser>(
   (params) => getMappedUsers(props.scope, props.code, params),
   () => {
     const params: Record<string, string | number> = {};
@@ -287,7 +285,16 @@ const {
 
     return params;
   },
+  'Could not load the users mapped to this record.',
 );
+const {
+  data: mappedUsers,
+  loaded: mappedUsersLoaded,
+  loading: mappedUsersLoading,
+  error: mappedUsersError,
+  pagination: mappedUserPagination,
+  changePage: changeMappedUserPage,
+} = mappedUsersList;
 
 /**
  * The row already carries `mapped_users` when the listing's "Include mapped" search
@@ -302,7 +309,7 @@ const mappedUsersTabLabel = computed(() => {
   return total !== null ? `Mapped Users (${total.toLocaleString()})` : 'Mapped Users';
 });
 
-watch(mappedUserSearchText, debounceMappedUserReload());
+watch(mappedUserSearchText, mappedUsersList.debounceReload());
 
 const clearMappedUserSearch = () => {
   mappedUserSearchText.value = '';
@@ -399,18 +406,41 @@ onBeforeUnmount(() => {
   if (topPane.open) closePane('top');
 });
 
+/** Each lazily-loaded tab, by its tab value. Adding a list tab means adding it here. */
+const lazyTabs: Record<string, ReturnType<typeof useLazyTabList<any>>> = {
+  members: membersList,
+  branches: branchesList,
+  mapped_users: mappedUsersList,
+};
+
 /** Load on first open only; afterwards each tab keeps whatever page it was left on. */
-watch(activeTab, (tab) => {
-  if (tab === 'members' && !membersLoaded.value && !membersLoading.value) {
-    void loadMembers();
-  }
-  if (tab === 'branches' && !branchesLoaded.value && !branchesLoading.value) {
-    void loadBranches();
-  }
-  if (tab === 'mapped_users' && !mappedUsersLoaded.value && !mappedUsersLoading.value) {
-    void loadMappedUsers();
-  }
-});
+watch(activeTab, (tab) => lazyTabs[tab]?.ensureLoaded());
+
+/**
+ * The pane host reuses this component when another row is opened while it is still
+ * showing — only the props change, so nothing would refetch and every tab would keep
+ * the previous record's rows (most visibly an empty "Mapped Users" carried over from an
+ * unmapped row). Starting over on a new record, and reloading the tab the reader is on,
+ * keeps each tab about the row actually opened.
+ */
+watch(
+  () => [props.scope, props.code] as const,
+  () => {
+    Object.values(lazyTabs).forEach((list) => list.reset());
+    searchText.value = '';
+    branchSearchText.value = '';
+    mappedUserSearchText.value = '';
+    branchDetails.clear();
+    if (topPane.open) closePane('top');
+
+    // A branch has no "Branches" tab, so a reader left on it goes back to the details.
+    if (!(activeTab.value in lazyTabs) || (isBranch.value && activeTab.value === 'branches')) {
+      activeTab.value = 'details';
+      return;
+    }
+    lazyTabs[activeTab.value].ensureLoaded();
+  },
+);
 </script>
 
 <template>
@@ -418,11 +448,10 @@ watch(activeTab, (tab) => {
     <!-- The heading facts, so the pane says what it is before any tab is chosen. -->
     <div class="flex flex-wrap items-center gap-2">
       <span
+        v-if="standing"
         class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
-        :class="isActive
-          ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-          : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'">
-        {{ activeLabel }}
+        :class="standing.color">
+        {{ standingLabel }}
       </span>
       <span
         class="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-300">

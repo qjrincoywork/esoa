@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Enums\AccountCodePrefix;
+use App\Enums\AccountStanding;
 use App\Enums\AccountType;
 use App\Helpers\CommonHelper;
 use Illuminate\Http\Request;
@@ -49,6 +50,14 @@ class UnmappedBranchResource extends JsonResource
             'code_prefix' => AccountCodePrefix::of($accountCode),
             'account_type' => $accountType,
             'account_type_label' => AccountType::label($accountType),
+
+            // A branch has no standing of its own: these are its account's, attached
+            // per page by SqlDatabase::attachBranchAccountStanding().
+            'is_active' => (bool) ($this->account_is_active ?? false),
+            'standing' => AccountStanding::present(
+                AccountStanding::resolveFrom((bool) ($this->account_is_active ?? false), $this->account_expiry ?? null)
+            ),
+            'expiry_date' => CommonHelper::formatDate($this->account_expiry ?? null),
 
             'member_count' => (int) ($this->member_count ?? 0),
 
