@@ -3,7 +3,6 @@
 namespace App\Jobs;
 
 use App\Models\Soa;
-use App\Enums\SoaStatus;
 use App\Enums\SoaAging;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -16,11 +15,6 @@ use Illuminate\Support\Facades\DB;
 class SendBillingInvoiceDueReminders implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
-
-    /**
-     * Statuses to exclude from reminders
-     */
-    private const EXCLUDE_STATUSES = [SoaStatus::PAID];
 
     /**
      * Create the job and configure its queue, retry count, and timeout.
@@ -81,9 +75,9 @@ class SendBillingInvoiceDueReminders implements ShouldQueue
 
         foreach ($agingBuckets as $agingValue) {
             // Build query for this aging bucket
+            // Paid invoices are excluded by the aging predicate itself (SoaAging::excludedStatuses()).
             $query = Soa::query()
                 ->select('user_id', DB::raw('COUNT(*) as soa_count'))
-                ->where('status', '!=', SoaStatus::PAID)
                 ->groupBy('user_id');
 
             $this->applyAgingFilter($query, $agingValue);
