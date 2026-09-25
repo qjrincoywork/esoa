@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\AccountCodePrefix;
 use App\Enums\AccountDirectoryScope;
+use App\Enums\AccountStanding;
 use App\Enums\AccountStatus;
 use App\Enums\AccountType;
 use App\Enums\IsActive;
@@ -281,6 +282,11 @@ class UnmappedAccountController extends Controller
             ? CommonHelper::convertStringEncoding(trim((string) $account->ac_name))
             : null;
         $branch->account_is_active = $account ? AccountStatus::isActive($account->ac_status) : false;
+        // A branch has no standing or expiry of its own; it runs out with its account.
+        $branch->account_standing = $account
+            ? AccountStanding::resolve($account->ac_status, $account->ac_expiry)
+            : AccountStanding::INACTIVE;
+        $branch->account_expiry_date = $account ? CommonHelper::formatDate($account->ac_expiry) : null;
         $branch->member_count = $hms->countMembersBy('ch_branch_code', $code);
 
         return new BranchDirectoryDetailResource($branch);

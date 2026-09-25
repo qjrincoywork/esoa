@@ -25,7 +25,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useModulePermissions } from '@/composables/useModulePermissions';
 import RightPane from '@/components/RightPane.vue';
 import { useUnmappedAccounts, type DirectoryRow, type DirectoryScope } from '@/composables/unmappedAccounts';
-import { badge, mappedStatusBadge } from '@/lib/directoryBadges';
+import { badge, mappedStatusBadge, standingBadge } from '@/lib/directoryBadges';
 import { SlidersHorizontal, X } from 'lucide-vue-next';
 
 type DirectoryPagination = {
@@ -137,6 +137,25 @@ const memberCell = (value: unknown) =>
 const codeCell = (value: unknown) =>
     h('span', { class: 'font-mono text-xs' }, String(value ?? '—'));
 
+/**
+ * Standing and expiry. For a branch both are its account's — a branch has neither of
+ * its own — so the columns say so in their headers rather than on every row.
+ */
+const standingColumns = (owner: 'account' | 'branch'): any[] => [
+    columnHelper.accessor('standing', {
+        header: owner === 'branch' ? 'Account Status' : 'Status',
+        cell: (info: any) => standingBadge(info.getValue()),
+    }),
+    columnHelper.accessor('expiry_date', {
+        header: owner === 'branch' ? 'Account Expiry' : 'Expiry Date',
+        cell: (info: any) => h(
+            'span',
+            { class: ['whitespace-nowrap', info.row.original?.standing?.text_color ?? ''] },
+            info.getValue() || '—',
+        ),
+    }),
+];
+
 /** Appended only while `includeMapped` is on — otherwise every row would read "Unmapped". */
 const mappedColumn = columnHelper.accessor('mapped_users', {
     header: 'Mapping',
@@ -165,12 +184,7 @@ const accountColumns: any[] = [
             TYPE_CLASSES[info.row.original?.account_type ?? ''] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300',
         ),
     }),
-    columnHelper.accessor('is_active', {
-        header: 'Status',
-        cell: (info: any) => info.getValue()
-            ? badge('Active', 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400')
-            : badge('Inactive', 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'),
-    }),
+    ...standingColumns('account'),
     columnHelper.accessor('member_count', {
         header: 'Members',
         cell: (info: any) => memberCell(info.getValue()),
@@ -201,6 +215,7 @@ const branchColumns: any[] = [
             TYPE_CLASSES[info.row.original?.account_type ?? ''] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300',
         ),
     }),
+    ...standingColumns('branch'),
     columnHelper.accessor('member_count', {
         header: 'Members',
         cell: (info: any) => memberCell(info.getValue()),

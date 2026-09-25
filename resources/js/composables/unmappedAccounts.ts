@@ -11,6 +11,19 @@ export const DIRECTORY_SCOPE = { ACCOUNT: 'account', BRANCH: 'branch' } as const
 
 export type DirectoryScope = (typeof DIRECTORY_SCOPE)[keyof typeof DIRECTORY_SCOPE];
 
+/**
+ * Whether an account is in force, decided and presented by `App\Enums\AccountStanding`
+ * (expiry outranks the HMS status letter). Rendered as sent — never re-derived here.
+ */
+export interface AccountStanding {
+  value: 'active' | 'inactive' | 'expired';
+  label: string;
+  /** Badge classes (background + text). */
+  color: string;
+  /** Text-only classes for inline facts tied to the standing, e.g. the expiry date; may be empty. */
+  text_color: string;
+}
+
 /** One row of the unmapped listing, as the two Unmapped*Resource classes shape it. */
 export interface DirectoryRow {
   account_code: string;
@@ -21,7 +34,11 @@ export interface DirectoryRow {
   code_prefix: string | null;
   account_type: string;
   account_type_label: string;
+  /** For a branch row, its account's standing — a branch has none of its own. */
   is_active?: boolean;
+  /** For a branch row, its account's standing. */
+  standing?: AccountStanding;
+  expiry_date?: string | null;
   member_count: number;
   /** Who already has this row — empty unless the listing was asked to include mapped rows. */
   mapped_users?: string[];
@@ -37,6 +54,7 @@ export interface AccountDetail {
   account_type: string;
   account_type_label: string;
   is_active: boolean;
+  standing: AccountStanding;
   hms_account_type: string | null;
   address: string | null;
   tin: string | null;
@@ -59,6 +77,9 @@ export interface BranchDetail {
   account_code: string;
   account_name: string;
   account_is_active: boolean;
+  /** The account's standing — a branch has no standing or expiry of its own. */
+  standing: AccountStanding;
+  account_expiry_date: string | null;
   main_account_code: string | null;
   code_prefix: string | null;
   account_type: string;

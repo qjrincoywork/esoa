@@ -1,4 +1,5 @@
 import { h, type VNode } from 'vue';
+import type { AccountStanding } from '@/composables/unmappedAccounts';
 
 /**
  * A small pill, so a row's class reads at a glance down a column.
@@ -8,6 +9,20 @@ import { h, type VNode } from 'vue';
  */
 export const badge = (text: string, classes: string): VNode =>
   h('span', { class: ['inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', classes] }, text);
+
+/**
+ * The text of an account standing, as sent by the server (`App\Enums\AccountStanding::present()`)
+ * — the rule, labels and colors all live there. `prefix` says whose standing it is when it is not the row's
+ * own, e.g. "Account" reads "Account expired" on a branch.
+ */
+export const standingText = (standing?: AccountStanding | null, prefix = ''): string => {
+  const label = standing?.label ?? '—';
+
+  return prefix && standing ? `${prefix} ${label.toLowerCase()}` : label;
+};
+
+export const standingBadge = (standing?: AccountStanding | null, prefix = ''): VNode =>
+  badge(standingText(standing, prefix), standing?.color ?? '');
 
 /** Who, if anyone, already has a row — an account/branch code mapped to zero or more users. */
 export const mappedStatusBadge = (users: unknown): VNode => {
