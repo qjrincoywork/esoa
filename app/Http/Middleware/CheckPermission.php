@@ -37,8 +37,10 @@ class CheckPermission
             return $next($request);
         }
 
-        // Check if user has the required permission
-        $hasPermission = $user->hasPermissionTo($routeName);
+        // Check the permission, held through a role or directly. checkPermissionTo() answers
+        // false for a permission that was never created, where hasPermissionTo() would throw
+        // PermissionDoesNotExist and turn an unregistered route into a 500 instead of a 403.
+        $hasPermission = $user->checkPermissionTo($routeName);
 
         if (!$hasPermission) {
             if ($request->expectsJson() || $request->wantsJson()) {

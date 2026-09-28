@@ -64,8 +64,10 @@ class UnmappedAccountController extends Controller
      * thousands of rows on a remote database, so answering the tab nobody is looking at
      * would double the cost of every page.
      *
-     * Access control (RBAC): the route sits behind the superadmin role group, and
-     * {@see ListRequest::authorize()} states the same audience independently.
+     * Access control: permission-based, not role-based. The route's `check_permissions`
+     * middleware and {@see ListRequest::authorize()} both require the permission named
+     * after the route, granted through a role or directly to the user; superadmin
+     * bypasses both.
      *
      * @return \Inertia\Response
      */

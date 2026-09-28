@@ -3,6 +3,7 @@
 namespace App\Http\Requests\User;
 
 use App\Enums\AccountCodePrefix;
+use App\Http\Requests\Concerns\AuthorizesRoutePermission;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
@@ -15,13 +16,7 @@ use Illuminate\Foundation\Http\FormRequest;
  */
 class BranchLookupRequest extends FormRequest
 {
-    /**
-     * Authorize only users holding the "superadmin" role.
-     */
-    public function authorize(): bool
-    {
-        return $this->user()?->hasRole('superadmin') ?? false;
-    }
+    use AuthorizesRoutePermission;
 
     /**
      * Validate the optional branch lookup filters: the owning account, a name to

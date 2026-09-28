@@ -7,20 +7,23 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import Datatable from '@/components/Datatable.vue';
 import { Button } from '@/components/ui/button';
 import { createActionColumn } from '@/composables/datatable/datatableColumns';
-import { useNavigationModules } from '@/composables/navigationModules';
+import {
+    useNavigationModules,
+    moduleStatusBadge,
+    deleteActionProps,
+    type NavigationModule,
+} from '@/composables/navigationModules';
 import { useModulePermissions } from '@/composables/useModulePermissions';
 
 type Pagination = {
     current_page: number;
     per_page: number;
     total: number;
-    data: unknown[];
+    data: NavigationModule[];
 };
 
 const page = usePage();
-const auth = computed(() => page.props.auth);
-const user = computed(() => auth.value?.user);
-const userDetail = computed(() => user.value?.user_detail);
+const isSuperadmin = computed(() => Boolean((page.props.auth as any)?.is_superadmin));
 const { slug, hasPermission, canCreate } = useModulePermissions();
 
 const navigationModules = computed<Pagination>(() => {
@@ -29,7 +32,7 @@ const navigationModules = computed<Pagination>(() => {
 });
 
 const { createNavigationModule, editNavigationModule, deleteNavigationModule } = useNavigationModules();
-const columnHelper = createColumnHelper<any>();
+const columnHelper = createColumnHelper<NavigationModule>();
 
 const pagination = ref({
     current_page: navigationModules.value.current_page,
@@ -45,17 +48,17 @@ const baseColumns = [
     columnHelper.accessor('id', { header: 'ID' }),
     columnHelper.accessor('name', { header: 'Name' }),
     columnHelper.accessor('slug', { header: 'Slug' }),
-    columnHelper.accessor((row: any) => row.navigation?.name ?? '—', {
+    columnHelper.accessor((row) => row.navigation?.name ?? '—', {
         id: 'navigation',
         header: 'Navigation',
     }),
     columnHelper.accessor('status', {
         header: 'Status',
-        cell: ({ getValue }) => (getValue() === 1 ? 'Active' : 'Inactive'),
+        cell: ({ row }) => moduleStatusBadge(row.original),
     }),
 ];
 
-const handlerMap: Record<string, (item: any) => void> = {
+const handlerMap: Record<string, (item: NavigationModule) => void> = {
     edit:    editNavigationModule,
     update:  editNavigationModule,
     delete:  deleteNavigationModule,
@@ -63,9 +66,15 @@ const handlerMap: Record<string, (item: any) => void> = {
 };
 
 const columns = computed(() => {
-    const subModules = (page.props.sub_modules as any[])
+    const subModules = ((page.props.sub_modules as any[]) ?? [])
         .filter((m) => hasPermission(m.slug) && m.slug.split('.')[1] !== 'create')
-        .map((m) => ({ ...m, handler: handlerMap[m.slug.split('.')[1]] }));
+        .map((m) => {
+            const key = m.slug.split('.')[1];
+            const entry: any = { ...m, handler: handlerMap[key] };
+            if (key === 'destroy' || key === 'delete') entry.dynamicProps = deleteActionProps;
+            return entry;
+        })
+        .filter((m) => m.handler);
 
     return subModules.length
         ? [...baseColumns, createActionColumn(subModules)]
@@ -138,7 +147,7 @@ watch(
         <Head title="Navigation Modules" />
         <div class="bg-[var(--color-surface)] shadow-sm border border-[var(--color-border)] p-6">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-                <Button v-if="canCreate || auth.is_superadmin" :onClick="createNavigationModule">Create</Button>
+                <Button v-if="canCreate || isSuperadmin" :onClick="() => createNavigationModule()">Create</Button>
                 <div class="relative w-full sm:w-64">
                     <label class="sr-only" for="nm-search">Search modules</label>
                     <input

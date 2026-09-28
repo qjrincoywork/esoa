@@ -7,28 +7,20 @@ use App\Enums\UserType;
 use App\Models\User;
 use App\Models\UserAccount;
 use Illuminate\Contracts\Validation\Validator;
+use App\Http\Requests\Concerns\AuthorizesRoutePermission;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class UpdateAccountMappingRequest extends FormRequest
 {
+    use AuthorizesRoutePermission;
+
     /**
      * The user being mapped, resolved once per request.
      *
      * @var User|null
      */
     private ?User $target = null;
-
-    /**
-     * Authorize only users holding the "superadmin" role.
-     *
-     * Runs before the controller opens its transaction, matching the other
-     * user-administration requests.
-     */
-    public function authorize(): bool
-    {
-        return $this->user()?->hasRole('superadmin') ?? false;
-    }
 
     /**
      * Validate the target user and the submitted account/branch mapping set.

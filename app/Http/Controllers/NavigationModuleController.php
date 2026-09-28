@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\Status;
 use App\Helpers\CustomResponse;
 use App\Http\Requests\NavigationModule\{CreateRequest, DeleteRequest, ListRequest, UpdateRequest};
+use App\Http\Resources\{CommonResource, NavigationModuleResource};
 use App\Models\{Navigation, NavigationModule};
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -34,10 +35,14 @@ class NavigationModuleController extends Controller
      */
     public function index(ListRequest $request)
     {
-        $modules = $this->navigationModule->getNavigationModules($request->validated())->toArray();
+        $modules = new CommonResource(NavigationModuleResource::collection(
+            $this->navigationModule->getNavigationModules($request->validated())
+        ));
 
-        // Return JSON for AJAX requests (e.g. the navigation details pane's Modules tab)
-        if ($request->wantsJson() || $request->ajax()) {
+        // Plain AJAX callers (the navigation details pane's Modules tab) get JSON. Inertia
+        // visits — the page's own search and pagination — also send X-Requested-With, so
+        // they must be told apart by the X-Inertia header or they would receive JSON too.
+        if (!$request->inertia() && ($request->wantsJson() || $request->ajax())) {
             return response()->json(['navigation_modules' => $modules]);
         }
 
@@ -94,7 +99,7 @@ class NavigationModuleController extends Controller
 
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json(array_merge(
-                ['navigation_module' => $module],
+                ['navigation_module' => new NavigationModuleResource($module)],
                 $this->formPayload(excludeModuleId: $id)
             ));
         }

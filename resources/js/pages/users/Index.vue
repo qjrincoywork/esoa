@@ -11,7 +11,7 @@ import { Select, SelectTrigger, SelectContent, SelectGroup, SelectItem, SelectVa
 import { createActionColumn } from '@/composables/datatable/datatableColumns';
 import { useUsers } from '@/composables/users';
 import { useModulePermissions } from '@/composables/useModulePermissions';
-import { UserRoundCog, ToggleLeft, ToggleRight, Trash2, RotateCcw, SlidersHorizontal, X, MailCheck, Upload } from 'lucide-vue-next';
+import { UserRoundCog, KeyRound, ToggleLeft, ToggleRight, Trash2, RotateCcw, SlidersHorizontal, X, MailCheck, Upload } from 'lucide-vue-next';
 
 type UsersPagination = {
     current_page: number
@@ -41,6 +41,8 @@ const {
     deleteUser,
     manageUserRoles,
     bulkManageUserRoles,
+    manageUserPermissions,
+    bulkManageUserPermissions,
     bulkToggleActiveUsers,
     bulkDeleteUsers,
     verifyUsers,
@@ -168,6 +170,7 @@ const handlerMap: Record<string, Function> = {
   delete: deleteUser,
   destroy: deleteUser,
   edit_roles: (user: any) => manageUserRoles(user),
+  edit_permissions: (user: any) => manageUserPermissions(user),
   verify: (user: any) => verifyUsers([user]),
   toggle_active: (user: any) => toggleActiveUser(user),
   // The action opens the same pane a row click does, straight onto the mapping tab.
@@ -468,6 +471,13 @@ watch(
                         size="sm"
                         @click="bulkManageUserRoles(selectedRows.map((r: any) => r.original))">
                         Manage Roles <UserRoundCog class="w-4 h-4 ml-1" />
+                    </Button>
+                    <Button
+                        class="cursor-pointer"
+                        v-if="hasPermission(`${slug}.edit_permissions`)"
+                        size="sm"
+                        @click="bulkManageUserPermissions(selectedRows.map((r: any) => r.original))">
+                        Manage Permissions <KeyRound class="w-4 h-4 ml-1" />
                     </Button>
                     <Button
                         class="cursor-pointer bg-green-600 hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600"

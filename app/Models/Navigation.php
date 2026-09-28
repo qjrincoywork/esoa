@@ -68,11 +68,13 @@ class Navigation extends Model
         if ($user) {
             $permissionIds = $user->getAllPermissions()->pluck('id')->toArray();
 
-            return $query->where(function ($q) use ($permissionIds) {
-                $q->whereNull('permission_id') // Modules without permission requirement
-                  ->orWhereIn('permission_id', $permissionIds) // Modules user has permission for
-                  ->whereNull('ref_id');
-            })->get();
+            // Top-level only, like the superadmin branch: the permission test is grouped so
+            // an unpermissioned sub-module can never surface as a top-level entry.
+            return $query->whereNull('ref_id')
+                ->where(function ($q) use ($permissionIds) {
+                    $q->whereNull('permission_id') // Modules without permission requirement
+                      ->orWhereIn('permission_id', $permissionIds); // Held through a role or directly
+                })->get();
         }
 
         // If no user, return only modules without permission requirement

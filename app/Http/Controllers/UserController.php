@@ -6,6 +6,7 @@ use App\Enums\{
     AccountStatus,
     AccountType,
     Gender,
+    PermissionAssignmentMode,
     Server,
     UserImportColumn,
     UserType
@@ -19,6 +20,7 @@ use App\Http\Requests\User\BranchLookupRequest;
 use App\Http\Requests\User\BulkDestroyRequest;
 use App\Http\Requests\User\BulkStoreRequest;
 use App\Http\Requests\User\BulkToggleActiveRequest;
+use App\Http\Requests\User\BulkUpdatePermissionRequest;
 use App\Http\Requests\User\BulkUpdateRoleRequest;
 use App\Http\Requests\User\BulkUserVerificationRequest;
 use App\Http\Requests\User\CreateRequest;
@@ -26,17 +28,20 @@ use App\Http\Requests\User\DeleteRequest;
 use App\Http\Requests\User\ListRequest;
 use App\Http\Requests\User\ToggleActiveRequest;
 use App\Http\Requests\User\UpdateAccountMappingRequest;
+use App\Http\Requests\User\UpdatePermissionRequest;
 use App\Http\Requests\User\UpdateRequest;
 use App\Http\Requests\User\UpdateRoleRequest;
 use App\Http\Requests\User\VerifyRequest;
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
+use App\Http\Resources\PermissionOptionResource;
 use App\Http\Resources\UserAccessResource;
 use App\Http\Resources\UserAccountMappingResource;
 use App\Http\Resources\UserBulkImportResultResource;
 use App\Http\Resources\UserDetailsResource;
 use App\Http\Resources\UserListResource;
+use App\Http\Resources\UserPermissionsResource;
 use App\Mail\UserWelcome;
 use App\Models\Account;
 use App\Models\Citizenship;
@@ -48,10 +53,13 @@ use App\Models\User;
 use App\Models\UserAccount;
 use App\Services\UserBulkImportService;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 use Symfony\Component\HttpFoundation\Response;
@@ -475,6 +483,46 @@ class UserController extends Controller
     }
 
     /**
+     * Return a user's direct and role-inherited permissions plus every permission,
+     * for the single-user permission modal (AJAX only).
+     *
+     * Non-AJAX requests fall through and receive no content.
+     *
+     * @return \Illuminate\Http\JsonResponse|void
+     */
+    public function editPermissions(int $id, Request $request)
+    {
+        $user = $this->user
+            ->with(['permissions:id,name', 'roles:id,name', 'roles.permissions:id,name'])
+            ->findOrFail($id);
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'user' => new UserPermissionsResource($user),
+                'all_permissions' => $this->permissionOptions(),
+            ]);
+        }
+    }
+
+    /**
+     * Return every permission and the assignment modes, for the bulk permission
+     * modal (AJAX only).
+     *
+     * Non-AJAX requests fall through and receive no content.
+     *
+     * @return \Illuminate\Http\JsonResponse|void
+     */
+    public function allPermissions(Request $request)
+    {
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'all_permissions' => $this->permissionOptions(),
+                'modes' => PermissionAssignmentMode::list(),
+            ]);
+        }
+    }
+
+    /**
      * Return a user's details and current account/branch mappings for the right pane.
      *
      * Serves both pane tabs in one request — the details tab reads the user, the
@@ -877,5 +925,104 @@ class UserController extends Controller
 
             return CustomResponse::serverError($e, 'UserController');
         }
+    }
+
+    /**
+     * Replace a single user's direct permissions with the submitted set.
+     *
+     * An empty set clears every direct grant; permissions inherited through the
+     * user's roles are unaffected. Input is validated by {@see UpdatePermissionRequest}.
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function updatePermissions(UpdatePermissionRequest $request)
+    {
+        $validated = $request->validated();
+
+        DB::beginTransaction();
+
+        try {
+            $user = $this->user->findOrFail($validated['user_id']);
+            $user->applyDirectPermissions($this->resolvePermissions($validated['permissions'] ?? []));
+
+            DB::commit();
+
+            return CustomResponse::ok('User permissions updated successfully', Response::HTTP_OK);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return CustomResponse::serverError($e, 'UserController::updatePermissions');
+        }
+    }
+
+    /**
+     * Apply one set of direct permissions to many users at once.
+     *
+     * The mode decides whether the set replaces, adds to, or is removed from each
+     * user's direct grants ({@see PermissionAssignmentMode}). The permissions are
+     * resolved once and reused for every user. Input is validated by
+     * {@see BulkUpdatePermissionRequest}.
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function bulkUpdatePermissions(BulkUpdatePermissionRequest $request)
+    {
+        $validated = $request->validated();
+        $permissions = $this->resolvePermissions($validated['permissions'] ?? []);
+
+        DB::beginTransaction();
+
+        try {
+            $users = $this->user->whereIn('id', $validated['user_ids'])->with('permissions')->get();
+
+            foreach ($users as $user) {
+                $user->applyDirectPermissions($permissions, $validated['mode']);
+            }
+
+            DB::commit();
+
+            $count = $users->count();
+            $message = $count === 1
+                ? 'Permissions updated for 1 user successfully'
+                : "Permissions updated for {$count} users successfully";
+
+            return CustomResponse::ok($message, Response::HTTP_OK);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return CustomResponse::serverError($e, 'UserController::bulkUpdatePermissions');
+        }
+    }
+
+    /**
+     * Every web-guard permission as a picker option, ordered by name so each
+     * module's permissions arrive together.
+     */
+    private function permissionOptions(): AnonymousResourceCollection
+    {
+        return PermissionOptionResource::collection(
+            Permission::query()
+                ->where('guard_name', 'web')
+                ->orderBy('name')
+                ->get(['id', 'name'])
+        );
+    }
+
+    /**
+     * Resolve validated permission IDs to their models in one query.
+     *
+     * @param  array<int, int|string>  $permissionIds
+     * @return \Illuminate\Support\Collection<int, Permission>
+     */
+    private function resolvePermissions(array $permissionIds): Collection
+    {
+        if ($permissionIds === []) {
+            return collect();
+        }
+
+        return Permission::query()
+            ->where('guard_name', 'web')
+            ->whereIn('id', $permissionIds)
+            ->get();
     }
 }

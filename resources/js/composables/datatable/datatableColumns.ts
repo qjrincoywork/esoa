@@ -69,7 +69,8 @@ export function createActionColumn(customActions: ActionColumnOptions['customAct
     cell: ({ row }) => {
       const item = row.original as {
         id?: number | string;
-        status?: string;
+        // A label on some modules ("Paid", "Closed"), a numeric flag on others (Status::ACTIVE).
+        status?: string | number | null;
         is_active?: number | boolean;
         deleted_at?: string | null;
         file_pdf?: string | null;
@@ -77,6 +78,8 @@ export function createActionColumn(customActions: ActionColumnOptions['customAct
         remittance_advice?: string | null;
       };
       const actions = [];
+      // Only textual statuses drive the skip rules below; a numeric one never matches them.
+      const status = typeof item.status === 'string' ? item.status.toLowerCase() : '';
 
       // Utility to wrap a button with tooltip
       const withTooltip = (buttonVNode: any, tooltipText: string) => {
@@ -106,10 +109,10 @@ export function createActionColumn(customActions: ActionColumnOptions['customAct
           }
 
           if (
-            (item.status?.toLowerCase() == 'paid' && action.slug == 'soas.edit')
+            (status === 'paid' && action.slug == 'soas.edit')
             || (
               !userDetail.value?.has_employee_no
-              && item.status?.toLowerCase() == 'endorsed'
+              && status === 'endorsed'
               && action.slug == 'soas.edit'
             )
           ) {
@@ -124,7 +127,7 @@ export function createActionColumn(customActions: ActionColumnOptions['customAct
           if ((item.remittance_advice == '' || item.remittance_advice == null) && action.slug === 'account_payments.preview_file') {
             continue; // Skip without remittance_advice
           }
-          if (item.status?.toLowerCase() == 'closed' && action.slug === 'concerns.edit') {
+          if (status === 'closed' && action.slug === 'concerns.edit') {
             continue; // Skip actions for closed items
           }
 

@@ -3,6 +3,7 @@
 namespace App\Http\Requests\UnmappedAccount;
 
 use App\Enums\AccountCodePrefix;
+use App\Http\Requests\Concerns\AuthorizesRoutePermission;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
@@ -13,13 +14,7 @@ use Illuminate\Foundation\Http\FormRequest;
  */
 class BranchListRequest extends FormRequest
 {
-    /**
-     * Authorize only users holding the "superadmin" role.
-     */
-    public function authorize(): bool
-    {
-        return $this->user()?->hasRole('superadmin') ?? false;
-    }
+    use AuthorizesRoutePermission;
 
     /**
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>

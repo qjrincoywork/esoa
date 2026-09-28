@@ -5,6 +5,8 @@ import SavingForm from '@/components/forms/users/SavingForm.vue';
 import BulkImportForm from '@/components/forms/users/BulkImportForm.vue';
 import UserRolesForm from '@/components/forms/users/UserRolesForm.vue';
 import BulkUserRolesForm from '@/components/forms/users/BulkUserRolesForm.vue';
+import UserPermissionsForm from '@/components/forms/users/UserPermissionsForm.vue';
+import BulkUserPermissionsForm from '@/components/forms/users/BulkUserPermissionsForm.vue';
 import BulkToggleActiveForm from '@/components/forms/users/BulkToggleActiveForm.vue';
 import BulkDeleteForm from '@/components/forms/users/BulkDeleteForm.vue';
 import VerifyForm from '@/components/forms/users/VerifyForm.vue';
@@ -37,6 +39,34 @@ export interface Role {
   name?: string
   guard_name?: string
   [key: string]: any
+}
+
+/** A permission as the picker lists it, as `PermissionOptionResource` shapes it. */
+export interface PermissionOption {
+  id: number
+  name: string
+  /** Module segment of the name (`users` in `users.edit`); the picker sections by it. */
+  group: string
+  group_label: string
+  label: string
+}
+
+/** A user's permission state, as `UserPermissionsResource` shapes it. */
+export interface UserPermissionState {
+  id: number
+  username?: string
+  email?: string
+  roles: string[]
+  direct_permission_ids: number[]
+  /** Permission id → names of the roles that grant it. */
+  inherited_permissions: Record<string, string[]>
+}
+
+/** One bulk assignment mode, as `PermissionAssignmentMode::list()` shapes it. */
+export interface PermissionAssignmentModeOption {
+  value: string
+  name: string
+  description: string
 }
 
 /**
@@ -484,6 +514,102 @@ export function useUsers() {
     }
   }
 
+  /**
+   * Post the open modal's form and, on success, close it and reload the list.
+   * Failures keep the modal open so the selection is not lost.
+   */
+  const submitModalForm = async (url: string) => {
+    const formData = formApi?.getFormData()
+    if (!formData) return
+
+    showLoader()
+    try {
+      const response = await post(url, formData)
+
+      if (!response.ok) {
+        dispatchNotification({ title: 'Error', content: response.data?.message, type: 'error' })
+        return
+      }
+
+      dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' })
+      closeModal()
+      router.get(window.location.href, {}, { preserveState: false, preserveScroll: true, replace: true })
+    } catch {
+      dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' })
+    } finally {
+      hideLoader()
+    }
+  }
+
+  const manageUserPermissions = async (user: User) => {
+    try {
+      const response = await get<{
+        user: UserPermissionState
+        all_permissions: PermissionOption[]
+      }>(`/${slug.value}/${user.id}/edit_permissions`)
+
+      if (!response.ok || !response.data) {
+        throw new Error('Failed to fetch user permissions')
+      }
+
+      const payload = response.data
+
+      openModal({
+        modalTitle: `Assign Permissions: ${user.username || user.id}`,
+        buttonText: 'Save',
+        component: UserPermissionsForm,
+        componentProps: {
+          user: payload.user,
+          all_permissions: payload.all_permissions ?? [],
+          onReady: (api: { getFormData: () => FormData | null }) => {
+            formApi = api
+          },
+        },
+        size: 'xl2',
+        onSubmit: () => submitModalForm(`/${slug.value}/update_permissions`),
+      })
+    } catch {
+      dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' })
+    }
+  }
+
+  const bulkManageUserPermissions = async (users: User[]) => {
+    if (!users.length) return
+
+    try {
+      const response = await get<{
+        all_permissions: PermissionOption[]
+        modes: PermissionAssignmentModeOption[]
+      }>(`/${slug.value}/all_permissions`)
+
+      if (!response.ok || !response.data) {
+        throw new Error('Failed to fetch permissions')
+      }
+
+      const payload = response.data
+
+      openModal({
+        modalTitle: users.length === 1
+          ? `Manage Permissions: ${users[0]?.username || users[0]?.id}`
+          : `Manage Permissions for ${users.length} Users`,
+        buttonText: 'Save',
+        component: BulkUserPermissionsForm,
+        componentProps: {
+          users,
+          all_permissions: payload.all_permissions ?? [],
+          modes: payload.modes ?? [],
+          onReady: (api: { getFormData: () => FormData | null }) => {
+            formApi = api
+          },
+        },
+        size: 'xl2',
+        onSubmit: () => submitModalForm(`/${slug.value}/bulk_update_permissions`),
+      })
+    } catch {
+      dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' })
+    }
+  }
+
   const verifyUsers = async (users: User[]) => {
     if (!users.length) return;
 
@@ -922,6 +1048,8 @@ export function useUsers() {
     openUserPane,
     manageUserRoles,
     bulkManageUserRoles,
+    manageUserPermissions,
+    bulkManageUserPermissions,
     bulkToggleActiveUsers,
     bulkDeleteUsers,
     verifyUsers,

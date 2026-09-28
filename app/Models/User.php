@@ -10,9 +10,11 @@ use Illuminate\Foundation\Auth\Access\Authorizable;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Fortify\TwoFactorAuthenticatable;
-use App\Enums\UserType;
+use App\Enums\{PermissionAssignmentMode, UserType};
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable implements AuthorizableContract, MustVerifyEmail
@@ -268,6 +270,26 @@ class User extends Authenticatable implements AuthorizableContract, MustVerifyEm
         );
 
         return $plainPassword;
+    }
+
+    /**
+     * Apply a set of permissions to this user's direct grants in the given mode.
+     *
+     * Only direct grants (model_has_permissions) are touched; what the user inherits
+     * through a role stays with the role. The permissions are resolved by the caller
+     * once, so a bulk run applies the same models to every user without re-querying.
+     * No cache flush is needed: Spatie caches permissions and their roles, while a
+     * user's direct grants are read through the relation on each request.
+     *
+     * @param  Collection<int, Permission>  $permissions
+     */
+    public function applyDirectPermissions(Collection $permissions, string $mode = PermissionAssignmentMode::SYNC): void
+    {
+        match ($mode) {
+            PermissionAssignmentMode::GIVE => $this->givePermissionTo($permissions),
+            PermissionAssignmentMode::REVOKE => $this->revokePermissionTo($permissions),
+            default => $this->syncPermissions($permissions),
+        };
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace App\Http\Requests\NavigationModule;
 
 use App\Enums\Status;
+use App\Rules\ValidParentModule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -23,7 +24,7 @@ class CreateRequest extends FormRequest
             'navigation_id' => ['required', 'integer', 'exists:navigations,id'],
             'permission_id' => ['nullable', 'integer', 'exists:permissions,id'],
             'color'         => ['nullable', 'string', 'max:100'],
-            'ref_id'        => ['nullable', 'integer', 'exists:navigation_modules,id'],
+            'ref_id'        => ['nullable', 'integer', new ValidParentModule()],
             'order_number'  => ['nullable', 'integer', 'min:0'],
             'status'        => ['nullable', 'integer', Rule::in(Status::getValues())],
         ];
@@ -43,7 +44,6 @@ class CreateRequest extends FormRequest
             'navigation_id.required' => 'A navigation must be selected.',
             'navigation_id.exists'   => 'The selected navigation does not exist.',
             'permission_id.exists'   => 'The selected permission does not exist.',
-            'ref_id.exists'          => 'The selected parent module does not exist.',
         ];
     }
 }

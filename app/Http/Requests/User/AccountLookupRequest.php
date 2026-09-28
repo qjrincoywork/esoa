@@ -4,6 +4,7 @@ namespace App\Http\Requests\User;
 
 use App\Enums\AccountCodePrefix;
 use App\Enums\AccountType;
+use App\Http\Requests\Concerns\AuthorizesRoutePermission;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -17,13 +18,7 @@ use Illuminate\Validation\Rule;
  */
 class AccountLookupRequest extends FormRequest
 {
-    /**
-     * Authorize only users holding the "superadmin" role.
-     */
-    public function authorize(): bool
-    {
-        return $this->user()?->hasRole('superadmin') ?? false;
-    }
+    use AuthorizesRoutePermission;
 
     /**
      * Validate the optional account lookup filters: a name to search on, the account

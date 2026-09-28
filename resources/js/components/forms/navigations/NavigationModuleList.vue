@@ -13,8 +13,12 @@ import { Button } from '@/components/ui/button';
 import { createActionColumn } from '@/composables/datatable/datatableColumns';
 import { useAjax } from '@/composables/useAjax';
 import { useModulePermissions } from '@/composables/useModulePermissions';
-import { useNavigationModules, type NavigationModule } from '@/composables/navigationModules';
-import { badge } from '@/lib/directoryBadges';
+import {
+  useNavigationModules,
+  moduleStatusBadge,
+  deleteActionProps,
+  type NavigationModule,
+} from '@/composables/navigationModules';
 import { X } from 'lucide-vue-next';
 
 const props = withDefaults(defineProps<{
@@ -125,9 +129,7 @@ const baseColumns = [
   columnHelper.accessor('url', { header: 'URL', cell: ({ getValue }) => getValue() || '—' }),
   columnHelper.accessor('status', {
     header: 'Status',
-    cell: ({ getValue }) => (Number(getValue()) === 1
-      ? badge('Active', 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300')
-      : badge('Inactive', 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400')),
+    cell: ({ row }) => moduleStatusBadge(row.original),
   }),
 ];
 
@@ -151,9 +153,7 @@ const moduleActions = computed(() => {
       icon: 'Trash2',
       color: 'red',
       handler: (item: NavigationModule) => deleteNavigationModule(item),
-      dynamicProps: (item: NavigationModule) => (item.deleted_at
-        ? { name: 'Restore', icon: 'RotateCcw', color: 'green' }
-        : {}),
+      dynamicProps: deleteActionProps,
     });
   }
 
