@@ -4,6 +4,7 @@ namespace App\Http\Requests\UnmappedAccount;
 
 use App\Enums\AccountCodePrefix;
 use App\Enums\AccountDirectoryScope;
+use App\Http\Requests\Concerns\AuthorizesRoutePermission;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -17,16 +18,7 @@ use Illuminate\Validation\Rule;
  */
 class MemberListRequest extends FormRequest
 {
-    /**
-     * Authorize only users holding the "superadmin" role.
-     *
-     * This lists cardholders — people — for any account in the directory, so it states
-     * its audience rather than relying on the route group it happens to sit in.
-     */
-    public function authorize(): bool
-    {
-        return $this->user()?->hasRole('superadmin') ?? false;
-    }
+    use AuthorizesRoutePermission;
 
     /**
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>

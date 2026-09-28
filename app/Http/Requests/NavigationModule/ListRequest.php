@@ -15,10 +15,11 @@ class ListRequest extends FormRequest
     {
         return [
             'search_string' => ['nullable', 'string', 'max:191'],
-            'navigation_id' => ['nullable', 'integer'],
+            'navigation_id' => ['nullable', 'integer', 'min:1'],
             // 0 means "top-level only" (ref_id IS NULL); a positive id filters to that module's children.
             'ref_id'        => ['nullable', 'integer', 'min:0'],
-            'per_page'      => ['nullable', 'integer'],
+            'page'          => ['nullable', 'integer', 'min:1'],
+            'per_page'      => ['nullable', 'integer', 'min:1', 'max:100'],
         ];
     }
 }

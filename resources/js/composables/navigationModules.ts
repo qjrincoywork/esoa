@@ -6,6 +6,8 @@ import { dispatchNotification } from '@/components/notification';
 import { showLoader, hideLoader } from '@/composables/useLoader';
 import { useModulePermissions } from '@/composables/useModulePermissions';
 import { router } from '@inertiajs/vue3';
+import type { VNode } from 'vue';
+import { badge } from '@/lib/directoryBadges';
 
 let formApi: { getFormData: () => FormData | null } | null = null;
 
@@ -21,6 +23,8 @@ export interface NavigationModule {
     ref_id?: number | null;
     order_number?: number | null;
     status?: number;
+    /** Server-side label for `status` (`App\Enums\Status::label()`). */
+    status_label?: string | null;
     deleted_at?: string | null;
     navigation?: { id: number; name: string };
     permission?: { id: number; name: string };
@@ -31,8 +35,41 @@ type SelectOption   = { id: number; name: string };
 type StatusOption   = { value: number; name: string };
 type ParentModule   = SelectOption & { navigation_id: number; navigation?: SelectOption };
 
+const STATUS_ACTIVE = 1; // App\Enums\Status::ACTIVE
+
+/**
+ * Status pill for a module row. A soft-deleted module reads "Deleted" whatever its
+ * status, since that is what decides whether it renders anywhere.
+ */
+export function moduleStatusBadge(module: NavigationModule): VNode {
+    if (module.deleted_at) {
+        return badge('Deleted', 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300');
+    }
+
+    const active = Number(module.status) === STATUS_ACTIVE;
+
+    return badge(
+        module.status_label ?? (active ? 'Active' : 'Inactive'),
+        active
+            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+            : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+    );
+}
+
+/** Action-column overrides that turn Delete into Restore on a soft-deleted row. */
+export function deleteActionProps(module: NavigationModule) {
+    return module.deleted_at
+        ? { name: 'Restore', icon: 'RotateCcw', color: 'green' }
+        : { name: 'Delete', icon: 'Trash2', color: 'red' };
+}
+
+/**
+ * Re-read the current page after a mutation. A reload keeps the URL — and with it the
+ * active search and page — keeps scroll and component state, and refreshes the shared
+ * props so the sidebar picks up the change.
+ */
 function refreshPage() {
-    router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+    router.reload();
 }
 
 export interface UseNavigationModulesOptions {

@@ -7,6 +7,7 @@ use App\Enums\AccountDirectoryScope;
 use App\Enums\AccountType;
 use App\Enums\IsActive;
 use App\Models\UserAccount;
+use App\Http\Requests\Concerns\AuthorizesRoutePermission;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -21,17 +22,7 @@ use Illuminate\Validation\Rule;
  */
 class ListRequest extends FormRequest
 {
-    /**
-     * Authorize only users holding the "superadmin" role.
-     *
-     * The route group already restricts this, but the listing enumerates the whole
-     * client directory — every account nobody has been given yet — so it states its
-     * own audience rather than relying on where it happens to be mounted.
-     */
-    public function authorize(): bool
-    {
-        return $this->user()?->hasRole('superadmin') ?? false;
-    }
+    use AuthorizesRoutePermission;
 
     /**
      * Validate the listing filters.

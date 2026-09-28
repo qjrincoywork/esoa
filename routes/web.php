@@ -77,20 +77,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::prefix('users')->name('users.')
             ->middleware('check_permissions')
             ->controller(UserController::class)->group(function () {
-                Route::get('/', 'index')->name('index');
                 Route::get('/{id}/edit', 'edit')->name('edit');
                 Route::get('/create', 'create')->name('create');
                 Route::get('/bulk_create', 'bulkCreate')->name('bulk_create');
                 Route::post('/bulk_store', 'bulkStore')->name('bulk_store');
-                Route::get('/get_accounts', 'getAccounts')->name('get_accounts');
-                Route::get('/get_branches', 'getBranches')->name('get_branches');
                 Route::get('/account_access_users', 'accountAccessUsers')->name('account_access_users');
                 Route::get('/{id}/edit_roles', 'editRoles')->name('edit_roles');
-                Route::get('/{id}/account_mapping', 'accountMapping')->name('account_mapping');
-                Route::post('/update_account_mapping', 'updateAccountMapping')->name('update_account_mapping');
                 Route::get('/all_roles', 'allRoles')->name('all_roles');
                 Route::post('/update_roles', 'updateRoles')->name('update_roles');
                 Route::post('/bulk_update_roles', 'bulkUpdateRoles')->name('bulk_update_roles');
+                Route::get('/{id}/edit_permissions', 'editPermissions')->whereNumber('id')->name('edit_permissions');
+                Route::get('/all_permissions', 'allPermissions')->name('all_permissions');
+                Route::post('/update_permissions', 'updatePermissions')->name('update_permissions');
+                Route::post('/bulk_update_permissions', 'bulkUpdatePermissions')->name('bulk_update_permissions');
                 Route::post('/update', 'update')->name('update');
                 Route::post('/store', 'store')->name('store');
                 Route::post('/destroy', 'destroy')->name('destroy');
@@ -135,19 +134,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::get('/{id}/show', 'show')->name('show');
         });
 
-        // Unmapped accounts & branches — the account-mapping coverage gap, read-only
-        Route::prefix('unmapped_accounts')->name('unmapped_accounts.')
-            ->middleware('check_permissions')
-            ->controller(UnmappedAccountController::class)->group(function () {
-                Route::get('/', 'index')->name('index');
-                // Scope and code travel as query parameters, not path segments: they
-                // are HMS codes from another system, not ids of ours.
-                Route::get('/details', 'details')->name('details');
-                Route::get('/members', 'members')->name('members');
-                Route::get('/branches', 'branches')->name('branches');
-                Route::get('/mapped_users', 'mappedUsers')->name('mapped_users');
-        });
-
         //Navigations
         Route::prefix('navigations')->name('navigations.')
             ->middleware('check_permissions')
@@ -176,6 +162,28 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // User routes - admins can access these too, but regular users can only access their own routes
     // Using allow_admin_or_role middleware: admin can access everything, users can only access their specific routes
     Route::middleware(['check_permissions'])->group(function () {
+        // Unmapped accounts & branches — the account-mapping coverage gap, read-only.
+        // Gated by permission rather than role, so it can be granted to any role or user.
+        Route::prefix('unmapped_accounts')->name('unmapped_accounts.')
+            ->controller(UnmappedAccountController::class)->group(function () {
+                Route::get('/', 'index')->name('index');
+                // Scope and code travel as query parameters, not path segments: they
+                // are HMS codes from another system, not ids of ours.
+                Route::get('/details', 'details')->name('details');
+                Route::get('/members', 'members')->name('members');
+                Route::get('/branches', 'branches')->name('branches');
+                Route::get('/mapped_users', 'mappedUsers')->name('mapped_users');
+        });
+        // Gated by permission rather than role, so it can be granted to any role or user.
+        Route::prefix('users')->name('users.')
+            ->controller(UserController::class)->group(function () {
+                Route::get('/', 'index')->name('index');
+                Route::get('/get_accounts', 'getAccounts')->name('get_accounts');
+                Route::get('/get_branches', 'getBranches')->name('get_branches');
+                Route::get('/{id}/account_mapping', 'accountMapping')->name('account_mapping');
+                Route::post('/update_account_mapping', 'updateAccountMapping')->name('update_account_mapping');
+        });
+
         //user_dashboard
         Route::prefix('soas')->name('soas.')->controller(SoaController::class)->group(function () {
             Route::get('/dashboard', 'dashboard')->name('dashboard');
