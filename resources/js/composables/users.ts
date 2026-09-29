@@ -109,6 +109,22 @@ export interface UserAccountMapping {
   branch_name: string
 }
 
+/** One access row of a copy source, as `UserAccessResource` shapes it (codes plus labels). */
+export interface CopiedUserAccess {
+  account_type?: string | number | null
+  account_code?: string | number | null
+  account_name?: string | null
+  branch_code?: string | number | null
+  branch_name?: string | null
+}
+
+/** What a host did with a copied set: added, already present, or refused by a limit. */
+export interface CopyAccessResult {
+  added: number
+  skipped: number
+  overLimit?: number
+}
+
 /** The user a pane tab renders, as `UserDetailsResource` shapes it. */
 export interface UserPaneDetails {
   id?: number | string

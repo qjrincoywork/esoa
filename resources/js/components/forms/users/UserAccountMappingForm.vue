@@ -19,7 +19,8 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import DragDropTransfer from '@/components/DragDropTransfer.vue';
-import { useUsers, type UserAccountMapping } from '@/composables/users';
+import CopyUserAccessPicker from '@/components/forms/users/CopyUserAccessPicker.vue';
+import { useUsers, type CopiedUserAccess, type CopyAccessResult, type UserAccountMapping } from '@/composables/users';
 import { debounce } from '@/composables/utilities/helper';
 import { ArrowLeft, Building2, ChevronRight, Info, RotateCcw, Save, Search, X } from 'lucide-vue-next';
 import FormField from '@/components/FormField.vue';
@@ -450,6 +451,44 @@ const clearAll = () => {
 
 const reset = () => syncFromProps();
 
+/**
+ * Pull another user's access into the assigned set — the "Copy Access" picker's `apply`.
+ *
+ * Goes through the same normalisation and key as a dragged row, so a copied pair that
+ * is already mapped is skipped, and the type's limit is honoured: rows past it are
+ * counted and left out rather than silently dropped. Nothing is saved; the copy lands
+ * as unsaved changes to review, exactly like a drag.
+ */
+const copyAccess = (rows: CopiedUserAccess[]): CopyAccessResult => {
+  const next = [...assigned.value];
+  const keys = new Set(next.map((mapping) => mapping.key));
+  const result: Required<CopyAccessResult> = { added: 0, skipped: 0, overLimit: 0 };
+
+  for (const row of rows) {
+    const mapping = toMapping({
+      account_type: String(row.account_type ?? ''),
+      account_code: String(row.account_code ?? ''),
+      account_name: row.account_name ?? '',
+      branch_code: String(row.branch_code ?? ''),
+      branch_name: row.branch_name ?? '',
+    });
+
+    if (keys.has(mapping.key)) {
+      result.skipped++;
+    } else if (props.limit !== null && next.length >= props.limit) {
+      result.overLimit++;
+    } else {
+      keys.add(mapping.key);
+      next.push(mapping);
+      result.added++;
+    }
+  }
+
+  assigned.value = next;
+
+  return result;
+};
+
 // ─── Save ─────────────────────────────────────────────────────────────────
 const saving = ref(false);
 
@@ -502,6 +541,14 @@ const accountTypeName = computed(
         Remove the current mapping to assign a different one.
       </span>
     </div>
+
+    <!-- Seed the mapping from someone who already has the right access -->
+    <CopyUserAccessPicker
+      v-if="allowsMapping"
+      id-prefix="mapping_copy"
+      :exclude-user-id="userId"
+      :apply="copyAccess"
+      :disabled="saving || limitReached" />
 
     <!--
       The transfer panel is the field: a rejected mapping is rejected as a set, or on a

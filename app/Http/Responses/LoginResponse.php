@@ -6,6 +6,7 @@ use App\Support\LandingRoute;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
+use Laravel\Fortify\Contracts\TwoFactorLoginResponse as TwoFactorLoginResponseContract;
 
 /**
  * Post-login redirect for the application.
@@ -15,8 +16,11 @@ use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
  * the user may open, so a user never bounces off a forbidden redirect. Any URL the
  * user was originally headed to (via {@see redirect()->intended()}) still takes
  * precedence and is guarded by that route's own middleware.
+ *
+ * Serves the two-factor sign-in as well, which otherwise falls back to the static
+ * `fortify.home` — one landing rule however the user signed in.
  */
-class LoginResponse implements LoginResponseContract
+class LoginResponse implements LoginResponseContract, TwoFactorLoginResponseContract
 {
     /**
      * Build the post-login response: a 204 No Content for JSON callers, otherwise

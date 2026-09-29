@@ -15,6 +15,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
+use Laravel\Fortify\Contracts\TwoFactorLoginResponse as TwoFactorLoginResponseContract;
 use Laravel\Fortify\Features;
 use Laravel\Fortify\Fortify;
 
@@ -28,13 +29,14 @@ class FortifyServiceProvider extends ServiceProvider
     private const DUMMY_PASSWORD_HASH = '$2y$12$7mx7x8LRedVRhDbZMdxEw.R3Qn64wNvwCtEkB3.P4VPksi1hnXEWK';
 
     /**
-     * Bind the custom Fortify login response so users are redirected to the SOA
-     * dashboard after authenticating (see App\Http\Responses\LoginResponse).
+     * Bind the custom Fortify login responses so users land on the page LandingRoute
+     * resolves for them after authenticating, by password or by two-factor challenge
+     * (see App\Http\Responses\LoginResponse).
      */
     public function register(): void
     {
-        // Redirect users to the SOA dashboard after login (see App\Http\Responses\LoginResponse).
         $this->app->singleton(LoginResponseContract::class, LoginResponse::class);
+        $this->app->singleton(TwoFactorLoginResponseContract::class, LoginResponse::class);
     }
 
     /**

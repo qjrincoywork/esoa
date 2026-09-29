@@ -5,6 +5,8 @@ export interface Auth {
     user: User;
     is_superadmin: boolean;
     permissions: Permissions;
+    /** This user's landing page path (`App\Support\LandingRoute`); null for guests. */
+    landing_url: string | null;
 }
 
 export interface BreadcrumbItem {

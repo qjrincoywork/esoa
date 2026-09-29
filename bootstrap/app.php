@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Support\LandingRoute;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -22,6 +23,11 @@ return Application::configure(basePath: dirname(__DIR__))
             'appearance',
             'sidebar_state',
         ]);
+
+        // A signed-in user opening a guest page (e.g. /login) goes to their own landing
+        // page. Laravel's default is the `dashboard` route whenever one exists, which is
+        // superadmin-only here and would turn everyone else away.
+        $middleware->redirectUsersTo(fn (Request $request) => LandingRoute::urlFor($request->user()));
 
         $middleware->alias([
             'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
