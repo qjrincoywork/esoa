@@ -30,8 +30,8 @@ import {
 } from '@/components/ui/tooltip';
 import UserMenuContent from '@/components/UserMenuContent.vue';
 import { getInitials } from '@/composables/useInitials';
+import { useLandingUrl } from '@/composables/useLandingUrl';
 import { toUrl, urlIsActive } from '@/lib/utils';
-import { dashboard } from '@/routes';
 import type { BreadcrumbItem, NavItem } from '@/types';
 import { InertiaLinkProps, Link, usePage } from '@inertiajs/vue3';
 import { BookOpen, Folder, LayoutGrid, Menu, Search } from 'lucide-vue-next';
@@ -60,13 +60,16 @@ const activeItemStyles = computed(
             : '',
 );
 
-const mainNavItems: NavItem[] = [
+// The user's own landing page (LandingRoute), not the superadmin-only admin dashboard.
+const landingUrl = useLandingUrl();
+
+const mainNavItems = computed<NavItem[]>(() => [
     {
         title: 'Dashboard',
-        href: dashboard(),
+        href: landingUrl.value,
         icon: LayoutGrid,
     },
-];
+]);
 
 const rightNavItems: NavItem[] = [
     {
@@ -148,7 +151,7 @@ const rightNavItems: NavItem[] = [
                     </Sheet>
                 </div>
 
-                <Link :href="dashboard()" class="flex items-center gap-x-2">
+                <Link :href="landingUrl" class="flex items-center gap-x-2">
                     <AppLogo />
                 </Link>
 

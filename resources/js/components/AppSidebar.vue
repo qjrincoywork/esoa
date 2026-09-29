@@ -11,7 +11,7 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { dashboard } from '@/routes';
+import { useLandingUrl } from '@/composables/useLandingUrl';
 import type { NavItem, Navigation } from '@/types';
 import { Link, usePage } from '@inertiajs/vue3';
 import { ref, computed } from 'vue';
@@ -34,6 +34,8 @@ const footerNavItems: NavItem[] = [
 const page = usePage();
 const isSuperadmin = (page.props as any).auth.is_superadmin as unknown;
 const navigations = computed(() => (page.props as any).navigations as Navigation[] || []);
+// The logo leads to the user's own landing page (LandingRoute), not the admin dashboard.
+const landingUrl = useLandingUrl();
 
 </script>
 
@@ -43,7 +45,7 @@ const navigations = computed(() => (page.props as any).navigations as Navigation
             <SidebarMenu>
                 <SidebarMenuItem>
                     <SidebarMenuButton size="lg" as-child>
-                        <Link :href="dashboard()">
+                        <Link :href="landingUrl">
                             <AppLogo />
                         </Link>
                     </SidebarMenuButton>

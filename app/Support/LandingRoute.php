@@ -47,10 +47,13 @@ final class LandingRoute
 
     /**
      * Resolve the landing URL for the user.
+     *
+     * @param bool $absolute False for a path (e.g. "/soas/dashboard") — what the client's
+     *                       links need, since their active-state check compares paths.
      */
-    public static function urlFor(?User $user, ?string $except = null): string
+    public static function urlFor(?User $user, ?string $except = null, bool $absolute = true): string
     {
-        return route(self::for($user, $except));
+        return route(self::for($user, $except), [], $absolute);
     }
 
     /**

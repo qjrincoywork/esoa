@@ -81,7 +81,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::get('/create', 'create')->name('create');
                 Route::get('/bulk_create', 'bulkCreate')->name('bulk_create');
                 Route::post('/bulk_store', 'bulkStore')->name('bulk_store');
-                Route::get('/account_access_users', 'accountAccessUsers')->name('account_access_users');
                 Route::get('/{id}/edit_roles', 'editRoles')->name('edit_roles');
                 Route::get('/all_roles', 'allRoles')->name('all_roles');
                 Route::post('/update_roles', 'updateRoles')->name('update_roles');
@@ -161,7 +160,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // User routes - admins can access these too, but regular users can only access their own routes
     // Using allow_admin_or_role middleware: admin can access everything, users can only access their specific routes
-    Route::middleware(['role:superadmin', 'check_permissions'])->group(function () {
+    Route::middleware(['check_permissions'])->group(function () {
         // Unmapped accounts & branches — the account-mapping coverage gap, read-only.
         // Gated by permission rather than role, so it can be granted to any role or user.
         Route::prefix('unmapped_accounts')->name('unmapped_accounts.')
@@ -184,6 +183,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::get('/get_branches', 'getBranches')->name('get_branches');
                 Route::get('/{id}/account_mapping', 'accountMapping')->name('account_mapping');
                 Route::post('/update_account_mapping', 'updateAccountMapping')->name('update_account_mapping');
+                // "Copy access from another user" source list — the edit form and the mapping pane.
+                Route::get('/account_access_users', 'accountAccessUsers')->name('account_access_users');
         });
 
         //user_dashboard
