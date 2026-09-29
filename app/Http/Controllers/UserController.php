@@ -5,12 +5,16 @@ namespace App\Http\Controllers;
 use App\Enums\{
     AccountStatus,
     AccountType,
+    CredentialAccess,
+    CredentialStatus,
     Gender,
     PermissionAssignmentMode,
     Server,
+    UserCredentialReport,
     UserImportColumn,
     UserType
 };
+use App\Exports\UserCredentialReportExporter;
 use App\Helpers\CommonHelper;
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
@@ -25,6 +29,7 @@ use App\Http\Requests\User\BulkUpdateRoleRequest;
 use App\Http\Requests\User\BulkUserVerificationRequest;
 use App\Http\Requests\User\CreateRequest;
 use App\Http\Requests\User\DeleteRequest;
+use App\Http\Requests\User\ExportCredentialReportRequest;
 use App\Http\Requests\User\ListRequest;
 use App\Http\Requests\User\ToggleActiveRequest;
 use App\Http\Requests\User\UpdateAccountMappingRequest;
@@ -112,8 +117,42 @@ class UserController extends Controller
             'filter_options' => [
                 'user_types' => UserType::list(),
                 'departments' => Department::select(['id', 'name'])->get()->toArray(),
+                'credential_statuses' => CredentialStatus::list(),
+                'credential_accesses' => CredentialAccess::list(),
             ],
+            'credential_reports' => UserCredentialReport::list(),
         ]);
+    }
+
+    /**
+     * Download a credential report over the list's current filters.
+     *
+     * The report is chosen from {@see UserCredentialReport} and written by
+     * {@see UserCredentialReportExporter}; the filters are the list's own, so the file
+     * holds what the filtered list shows. Refuses an empty or oversized result with a
+     * JSON message rather than an empty or truncated file. Input is validated — and
+     * authorized by the `users.export` permission — in {@see ExportCredentialReportRequest}.
+     *
+     * @return \Symfony\Component\HttpFoundation\StreamedResponse|\Illuminate\Http\JsonResponse
+     */
+    public function export(ExportCredentialReportRequest $request, UserCredentialReportExporter $exporter)
+    {
+        $query = $this->user->listQuery($request->filters());
+        $total = (clone $query)->count();
+        $maxRows = (int) config('vc.user_export_max_rows');
+
+        if ($total === 0) {
+            return CustomResponse::error('No users match the selected filters.', Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        if ($total > $maxRows) {
+            return CustomResponse::error(
+                "Too many users to export ({$total}). Please narrow your filters (maximum {$maxRows}).",
+                Response::HTTP_UNPROCESSABLE_ENTITY
+            );
+        }
+
+        return $exporter->download($request->report(), $query);
     }
 
     /**
@@ -691,6 +730,8 @@ class UserController extends Controller
         try {
             foreach ($users as $user) {
                 $plainPassword = $user->withTemporaryPassword();
+                // Restarts the credential lifecycle: access is judged against this send.
+                $user->credentials_sent_at = now();
 
                 if ($markVerified) {
                     $user->email_verified_at = now();

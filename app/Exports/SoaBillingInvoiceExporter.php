@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\{Response, StreamedResponse};
 
-class SoaBillingInvoiceExporter
+class SoaBillingInvoiceExporter extends HtmlSpreadsheetExporter
 {
     /** @var array<string, string> */
     protected array $accountNameCache = [];
@@ -32,40 +32,12 @@ class SoaBillingInvoiceExporter
      */
     public function download(Builder $query, string $filename): StreamedResponse
     {
-        return response()->streamDownload(function () use ($query) {
-            echo $this->spreadsheetOpen();
+        // Header labels come from config('vc.billing_invoice_export_headers').
+        return $this->stream($filename, 'Billing Invoices', config('vc.billing_invoice_export_headers'), function () use ($query) {
             foreach ($query->cursor() as $soa) {
                 echo $this->rowHtml($soa);
             }
-            echo '</table></body></html>';
-        }, $filename, [
-            'Content-Type' => 'application/vnd.ms-excel; charset=UTF-8',
-            'Cache-Control' => 'max-age=0, no-cache, must-revalidate',
-            'Pragma' => 'public',
-        ]);
-    }
-
-    /**
-     * Build the opening HTML/Excel markup, including the header row derived from
-     * the config('vc.billing_invoice_export_headers') column labels.
-     */
-    protected function spreadsheetOpen(): string
-    {
-        $headers = config('vc.billing_invoice_export_headers');
-
-        $headerCells = '';
-        foreach ($headers as $header) {
-            $headerCells .= '<th>' . $this->escape($header) . '</th>';
-        }
-
-        return '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">'
-            . '<head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">'
-            . '<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>'
-            . '<x:Name>Billing Invoices</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>'
-            . '</x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>'
-            . '<body><table border="1"><thead><tr>'
-            . $headerCells
-            . '</tr></thead><tbody>';
+        });
     }
 
     /**
@@ -102,12 +74,7 @@ class SoaBillingInvoiceExporter
             CommonHelper::formatDate($this->contractEndDate($soa->account_code)),
         ];
 
-        $row = '<tr>';
-        foreach ($cells as $cell) {
-            $row .= '<td>' . $this->escape((string) $cell) . '</td>';
-        }
-
-        return $row . '</tr>';
+        return $this->row($cells);
     }
 
     /**
@@ -204,19 +171,5 @@ class SoaBillingInvoiceExporter
         $aging = SoaAging::classifyInvoice($soa->due_date, $soa->status);
 
         return $aging !== null ? SoaAging::label($aging) : '';
-    }
-
-    /**
-     * HTML-escape a cell value, first neutralizing CSV/Excel formula-injection
-     * prefixes (=, +, -, @, tab, CR, LF) by prepending a single quote.
-     */
-    protected function escape(string $value): string
-    {
-        // Neutralize formula-injection prefixes before HTML-escaping
-        if ($value !== '' && in_array($value[0], ['=', '+', '-', '@', "\t", "\r", "\n"], true)) {
-            $value = "'" . $value;
-        }
-
-        return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 }

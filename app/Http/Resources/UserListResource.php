@@ -34,6 +34,7 @@ class UserListResource extends JsonResource
             'allows_account_mapping' => UserType::allowsAccountMapping($detail?->type),
             'department_id' => $detail?->department_id,
             'department'    => $detail?->department?->name,
+            'credentials'   => new UserCredentialResource($this->resource),
         ];
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\{Model, SoftDeletes};
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\{ BelongsTo, HasOne };
@@ -81,5 +82,21 @@ class UserDetail extends Model
     public function position(): BelongsTo
     {
         return $this->belongsTo(Position::class, 'position_id');
+    }
+
+    /**
+     * "First Middle Last, Suffix" from whichever name parts are stored; null when none are.
+     */
+    protected function fullName(): Attribute
+    {
+        return Attribute::get(function (): ?string {
+            $name = trim(implode(' ', array_filter([$this->first_name, $this->middle_name, $this->last_name])));
+
+            if ($name === '') {
+                return null;
+            }
+
+            return $this->suffix ? "{$name}, {$this->suffix}" : $name;
+        });
     }
 }

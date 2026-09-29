@@ -161,7 +161,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // User routes - admins can access these too, but regular users can only access their own routes
     // Using allow_admin_or_role middleware: admin can access everything, users can only access their specific routes
-    Route::middleware(['check_permissions'])->group(function () {
+    Route::middleware(['role:superadmin', 'check_permissions'])->group(function () {
         // Unmapped accounts & branches — the account-mapping coverage gap, read-only.
         // Gated by permission rather than role, so it can be granted to any role or user.
         Route::prefix('unmapped_accounts')->name('unmapped_accounts.')
@@ -178,6 +178,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::prefix('users')->name('users.')
             ->controller(UserController::class)->group(function () {
                 Route::get('/', 'index')->name('index');
+                // Credential reports (UserCredentialReport) over the list's own filters.
+                Route::get('/export', 'export')->name('export');
                 Route::get('/get_accounts', 'getAccounts')->name('get_accounts');
                 Route::get('/get_branches', 'getBranches')->name('get_branches');
                 Route::get('/{id}/account_mapping', 'accountMapping')->name('account_mapping');

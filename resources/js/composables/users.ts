@@ -19,6 +19,7 @@ import { showLoader, hideLoader } from '@/composables/useLoader';
 import { useModulePermissions } from '@/composables/useModulePermissions';
 import { usePane } from '@/composables/usePane';
 import { router } from '@inertiajs/vue3';
+import { downloadExport } from '@/lib/downloadExport';
 
 export interface User {
   id?: number | string;
@@ -39,6 +40,27 @@ export interface Role {
   name?: string
   guard_name?: string
   [key: string]: any
+}
+
+/** A user's credential lifecycle, as `UserCredentialResource` shapes it. */
+export interface UserCredentials {
+  /** `App\Enums\CredentialStatus` value. */
+  status: number
+  status_label: string
+  /** Badge classes, decided server-side (`CredentialStatus::color()`). */
+  status_color: string
+  accessed: boolean
+  sent_at: string | null
+  temporary_expires_at: string | null
+  password_changed_at: string | null
+  last_login_at: string | null
+}
+
+/** One exportable report, as `UserCredentialReport::list()` shapes it. */
+export interface CredentialReportOption {
+  value: string
+  name: string
+  description: string
 }
 
 /** A permission as the picker lists it, as `PermissionOptionResource` shapes it. */
@@ -511,6 +533,26 @@ export function useUsers() {
       })
     } catch (error) {
       dispatchNotification({ title: 'Error', content: 'Internal Server Error', type: 'error' })
+    }
+  }
+
+  /**
+   * Download a credential report over the list's current filters. The server refuses
+   * an empty or oversized result with a message, which is shown as-is.
+   */
+  const exportCredentialReport = async (report: CredentialReportOption, filters: Record<string, string | number>) => {
+    showLoader()
+    try {
+      await downloadExport(`/${slug.value}/export`, { ...filters, report: report.value }, `${report.value}_report.xls`)
+      dispatchNotification({ title: 'Success', content: `${report.name} report downloaded.`, type: 'success' })
+    } catch (error) {
+      dispatchNotification({
+        title: 'Error',
+        content: error instanceof Error ? error.message : 'Export failed.',
+        type: 'error',
+      })
+    } finally {
+      hideLoader()
     }
   }
 
@@ -1050,6 +1092,7 @@ export function useUsers() {
     bulkManageUserRoles,
     manageUserPermissions,
     bulkManageUserPermissions,
+    exportCredentialReport,
     bulkToggleActiveUsers,
     bulkDeleteUsers,
     verifyUsers,

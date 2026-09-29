@@ -8,10 +8,12 @@ import Datatable from '@/components/Datatable.vue';
 import RightPane from '@/components/RightPane.vue';
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectContent, SelectGroup, SelectItem, SelectValue } from '@/components/ui/select';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { createActionColumn } from '@/composables/datatable/datatableColumns';
-import { useUsers } from '@/composables/users';
+import { useUsers, type CredentialReportOption, type UserCredentials } from '@/composables/users';
 import { useModulePermissions } from '@/composables/useModulePermissions';
-import { UserRoundCog, KeyRound, ToggleLeft, ToggleRight, Trash2, RotateCcw, SlidersHorizontal, X, MailCheck, Upload } from 'lucide-vue-next';
+import { badge } from '@/lib/directoryBadges';
+import { UserRoundCog, KeyRound, ToggleLeft, ToggleRight, Trash2, RotateCcw, SlidersHorizontal, X, MailCheck, Upload, FileDown } from 'lucide-vue-next';
 
 type UsersPagination = {
     current_page: number
@@ -43,6 +45,7 @@ const {
     bulkManageUserRoles,
     manageUserPermissions,
     bulkManageUserPermissions,
+    exportCredentialReport,
     bulkToggleActiveUsers,
     bulkDeleteUsers,
     verifyUsers,
@@ -68,29 +71,38 @@ const hasInitialized = ref(false)
 const isFirstLoad = ref(true)
 
 // --- Filters ---
+type Option = { value: number; name: string }
 type FilterOptions = {
-    user_types: { value: number; name: string }[]
+    user_types: Option[]
     departments: { id: number; name: string }[]
+    credential_statuses: Option[]
+    credential_accesses: Option[]
 }
 
 const filterOptions = computed<FilterOptions>(() => {
-    const opts = (page.props as any).filter_options as FilterOptions | undefined
+    const opts = (page.props as any).filter_options as Partial<FilterOptions> | undefined
     return {
         user_types: opts?.user_types ?? [],
         departments: opts?.departments ?? [],
+        credential_statuses: opts?.credential_statuses ?? [],
+        credential_accesses: opts?.credential_accesses ?? [],
     }
 })
+
+/** The reports the export menu offers — the server's list (`UserCredentialReport`). */
+const credentialReports = computed<CredentialReportOption[]>(
+    () => ((page.props as any).credential_reports as CredentialReportOption[] | undefined) ?? [],
+)
 
 const VC_EMPLOYEE_TYPE = '1' // UserType::VC_EMPLOYEE
 const FILTER_ALL = 'all'     // sentinel value — means "no filter applied"
 
-const filters = ref({ type: '', department_id: '', status: '' })
+const emptyFilters = () => ({ type: '', department_id: '', status: '', credential_status: '', credential_access: '' })
+const filters = ref(emptyFilters())
 
 const isDepartmentFilterEnabled = computed(() => filters.value.type === VC_EMPLOYEE_TYPE)
 
-const filtersActive = computed(() =>
-    filters.value.type !== '' || filters.value.department_id !== '' || filters.value.status !== ''
-)
+const filtersActive = computed(() => Object.values(filters.value).some((value) => value !== ''))
 
 const typeModel = computed({
     get: () => filters.value.type || FILTER_ALL,
@@ -104,13 +116,17 @@ const departmentModel = computed({
     get: () => filters.value.department_id || FILTER_ALL,
     set: (v: string | undefined) => { filters.value.department_id = v === FILTER_ALL ? '' : (v ?? '') },
 })
-const statusModel = computed({
-    get: () => filters.value.status !== '' ? filters.value.status : FILTER_ALL,
-    set: (v: string | undefined) => { filters.value.status = v === FILTER_ALL ? '' : (v ?? '') },
+/** Selects bind to a sentinel rather than '' so "All" is a real option; '0' is a real value. */
+const asSelectModel = (key: 'status' | 'credential_status' | 'credential_access') => computed({
+    get: () => filters.value[key] !== '' ? filters.value[key] : FILTER_ALL,
+    set: (v: string | undefined) => { filters.value[key] = v === FILTER_ALL ? '' : (v ?? '') },
 })
+const statusModel = asSelectModel('status')
+const credentialStatusModel = asSelectModel('credential_status')
+const credentialAccessModel = asSelectModel('credential_access')
 
 const clearFilters = () => {
-    filters.value = { type: '', department_id: '', status: '' }
+    filters.value = emptyFilters()
 }
 
 const statusOptions = [
@@ -153,6 +169,25 @@ const baseColumns: any[] = [
         },
         active ? 'Active' : 'Inactive',
       );
+    },
+  }),
+  columnHelper.accessor((row: any) => (row.credentials as UserCredentials | undefined)?.status_label ?? '—', {
+    id: 'credentials',
+    header: 'Password',
+    // Label and colour come from the server (CredentialStatus); the dates behind them
+    // ride along as a hover title so the column stays one badge wide.
+    cell: (info: any) => {
+      const credentials = info.row.original?.credentials as UserCredentials | undefined
+      if (!credentials) return '—'
+
+      const details = [
+        credentials.sent_at && `Sent: ${credentials.sent_at}`,
+        credentials.temporary_expires_at && `Temporary expires: ${credentials.temporary_expires_at}`,
+        credentials.password_changed_at && `Updated: ${credentials.password_changed_at}`,
+        `Last login: ${credentials.last_login_at ?? 'never'}`,
+      ].filter(Boolean).join('\n')
+
+      return h('span', { title: details }, [badge(credentials.status_label, credentials.status_color)])
     },
   }),
   columnHelper.accessor('created_at', {
@@ -214,17 +249,33 @@ const breadcrumbItems: BreadcrumbItem[] = [
   },
 ];
 
+/**
+ * The active search and filters as request params — shared by the list fetch and the
+ * report export, so an export always holds what the filtered list shows.
+ */
+const filterParams = (): Record<string, string> => {
+  const params: Record<string, string> = {}
+
+  if (searchQuery.value.trim())               params.search_string     = searchQuery.value.trim()
+  if (filters.value.type)                     params.type              = filters.value.type
+  if (filters.value.department_id)            params.department_id     = filters.value.department_id
+  // '' means "no filter"; '0' is a real choice, so these cannot be falsy tests.
+  if (filters.value.status !== '')            params.is_active         = filters.value.status
+  if (filters.value.credential_status !== '') params.credential_status = filters.value.credential_status
+  if (filters.value.credential_access !== '') params.credential_access = filters.value.credential_access
+
+  return params
+}
+
+const exportReport = (report: CredentialReportOption) => exportCredentialReport(report, filterParams())
+
 // Function to fetch data from server
 const fetchUsers = () => {
   const params: Record<string, any> = {
     page: pagination.value.current_page,
     per_page: pagination.value.per_page,
+    ...filterParams(),
   }
-
-  if (searchQuery.value.trim())      params.search_string  = searchQuery.value.trim()
-  if (filters.value.type)            params.type           = filters.value.type
-  if (filters.value.department_id)   params.department_id  = filters.value.department_id
-  if (filters.value.status !== '')   params.is_active      = filters.value.status
 
   router.get(
     `/${slug.value}`,
@@ -346,6 +397,27 @@ watch(
                         <Button class="cursor-pointer" v-if="canCreate" variant="outline" :onClick="bulkImportUsers">
                             <Upload class="w-4 h-4 mr-1" /> Bulk Import
                         </Button>
+                        <!-- Credential reports over the current filters (UserCredentialReport) -->
+                        <DropdownMenu v-if="hasPermission(`${slug}.export`) && credentialReports.length">
+                            <DropdownMenuTrigger as-child>
+                                <Button class="cursor-pointer" variant="outline">
+                                    <FileDown class="w-4 h-4 mr-1" /> Export
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start" class="w-72">
+                                <DropdownMenuLabel class="text-xs text-[var(--color-text-muted)]">
+                                    Reports use the current search and filters
+                                </DropdownMenuLabel>
+                                <DropdownMenuItem
+                                    v-for="report in credentialReports"
+                                    :key="report.value"
+                                    class="cursor-pointer flex-col items-start gap-0.5"
+                                    @select="exportReport(report)">
+                                    <span class="text-sm font-medium">{{ report.name }}</span>
+                                    <span class="text-xs text-[var(--color-text-muted)]">{{ report.description }}</span>
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
                     </div>
                     <div class="relative w-full sm:w-64">
                         <label class="sr-only" for="user-search">Search users</label>
@@ -435,6 +507,48 @@ watch(
                                     :value="opt.value"
                                     class="text-xs">
                                     {{ opt.label }}
+                                </SelectItem>
+                            </SelectGroup>
+                        </SelectContent>
+                    </Select>
+
+                    <!-- Password / credential status -->
+                    <Select v-model="credentialStatusModel">
+                        <SelectTrigger class="h-8 w-44 text-xs">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectGroup>
+                                <SelectItem :value="FILTER_ALL" class="text-xs text-[var(--color-text-muted)]">
+                                    Any password status
+                                </SelectItem>
+                                <SelectItem
+                                    v-for="opt in filterOptions.credential_statuses"
+                                    :key="String(opt.value)"
+                                    :value="String(opt.value)"
+                                    class="text-xs">
+                                    {{ opt.name }}
+                                </SelectItem>
+                            </SelectGroup>
+                        </SelectContent>
+                    </Select>
+
+                    <!-- Whether sent credentials have been used -->
+                    <Select v-model="credentialAccessModel">
+                        <SelectTrigger class="h-8 w-44 text-xs">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectGroup>
+                                <SelectItem :value="FILTER_ALL" class="text-xs text-[var(--color-text-muted)]">
+                                    Any credential access
+                                </SelectItem>
+                                <SelectItem
+                                    v-for="opt in filterOptions.credential_accesses"
+                                    :key="String(opt.value)"
+                                    :value="String(opt.value)"
+                                    class="text-xs">
+                                    {{ opt.name }}
                                 </SelectItem>
                             </SelectGroup>
                         </SelectContent>
