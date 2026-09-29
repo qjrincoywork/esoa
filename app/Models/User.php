@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Contracts\Auth\Access\Authorizable as AuthorizableContract;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Illuminate\Database\Eloquent\{Model, SoftDeletes, Relations\HasMany, Relations\HasOne, Relations\BelongsTo};
+use Illuminate\Database\Eloquent\{Builder, Model, SoftDeletes, Relations\HasMany, Relations\HasOne, Relations\BelongsTo};
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\Access\Authorizable;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Fortify\TwoFactorAuthenticatable;
-use App\Enums\{PermissionAssignmentMode, UserType};
+use App\Enums\{CredentialAccess, CredentialStatus, PermissionAssignmentMode, UserType};
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Traits\HasRoles;
 
@@ -60,9 +60,101 @@ class User extends Authenticatable implements AuthorizableContract, MustVerifyEm
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
             'temporary_password_expires_at' => 'datetime',
+            'credentials_sent_at' => 'datetime',
+            'password_changed_at' => 'datetime',
+            'last_login_at' => 'datetime',
             'is_active' => 'boolean',
             'is_approved' => 'boolean',
         ];
+    }
+
+    /**
+     * Stamp password_changed_at whenever an existing user's password is replaced by one
+     * of their own.
+     *
+     * Every self-service path (settings, forgot-password reset) clears the temporary
+     * expiry alongside the new password, while issuing a temporary password sets one —
+     * so "password changed and no temporary expiry" is exactly "the user chose it",
+     * wherever the change came from.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (self $user): void {
+            if ($user->exists && $user->isDirty('password') && $user->temporary_password_expires_at === null) {
+                $user->password_changed_at = now();
+            }
+        });
+    }
+
+    /**
+     * Where this user's credentials stand ({@see CredentialStatus}).
+     */
+    public function credentialStatus(): int
+    {
+        return CredentialStatus::resolve($this->credentials_sent_at, $this->temporary_password_expires_at);
+    }
+
+    /**
+     * Whether the user has used the credentials they were sent ({@see CredentialAccess}):
+     * signed in since they were sent, or already replaced the temporary password.
+     */
+    public function hasAccessedCredentials(): bool
+    {
+        if ($this->credentials_sent_at === null) {
+            return false;
+        }
+
+        return $this->credentialStatus() === CredentialStatus::UPDATED
+            || ($this->last_login_at !== null && $this->last_login_at->gte($this->credentials_sent_at));
+    }
+
+    /**
+     * Record a sign-in without touching updated_at or firing model events — a login is
+     * not an edit of the user, and must not show up as one in the audit trail.
+     */
+    public function recordLogin(): void
+    {
+        static::withoutTimestamps(fn () => $this->forceFill(['last_login_at' => now()])->saveQuietly());
+    }
+
+    /**
+     * Constrain to users in the given {@see CredentialStatus} — the query form of
+     * {@see CredentialStatus::resolve()}.
+     */
+    public function scopeCredentialStatus(Builder $query, int $status): Builder
+    {
+        return match ($status) {
+            CredentialStatus::NOT_SENT => $query->whereNull('credentials_sent_at'),
+            CredentialStatus::UPDATED => $query->whereNotNull('credentials_sent_at')->whereNull('temporary_password_expires_at'),
+            CredentialStatus::EXPIRED => $query->whereNotNull('credentials_sent_at')->where('temporary_password_expires_at', '<=', now()),
+            CredentialStatus::TEMPORARY => $query->whereNotNull('credentials_sent_at')->where('temporary_password_expires_at', '>', now()),
+            default => $query,
+        };
+    }
+
+    /**
+     * Constrain to users who have (or have not) accessed the credentials they were sent
+     * — the query form of {@see hasAccessedCredentials()}. Users never sent credentials
+     * match neither state.
+     */
+    public function scopeCredentialAccess(Builder $query, int $access): Builder
+    {
+        $query->whereNotNull('credentials_sent_at');
+
+        if ($access === CredentialAccess::ACCESSED) {
+            return $query->where(fn (Builder $q) => $q
+                ->whereNull('temporary_password_expires_at')
+                ->orWhereColumn('last_login_at', '>=', 'credentials_sent_at'));
+        }
+
+        // Spelled out rather than NOT(accessed): a never-signed-in user has a NULL
+        // last_login_at, the comparison is UNKNOWN, and NOT UNKNOWN would drop them from
+        // both states instead of counting them here.
+        return $query
+            ->whereNotNull('temporary_password_expires_at')
+            ->where(fn (Builder $q) => $q
+                ->whereNull('last_login_at')
+                ->orWhereColumn('last_login_at', '<', 'credentials_sent_at'));
     }
 
     /**
@@ -183,13 +275,26 @@ class User extends Authenticatable implements AuthorizableContract, MustVerifyEm
      */
     public function getUsers(array $params)
     {
-        // Pagination
-        $perPage = $params['per_page'] ?? config('vc.default_pages');
+        return $this->listQuery($params)->paginate($params['per_page'] ?? config('vc.default_pages'));
+    }
+
+    /**
+     * The filtered user query behind the list, shared with the credential reports so an
+     * export contains exactly what the filtered list shows.
+     *
+     * The search is grouped so an email-or-username match can never escape the other
+     * filters. Callers add their own eager loads beyond the user detail.
+     */
+    public function listQuery(array $params): Builder
+    {
         $result = self::query()
             ->when(isset($params['search_string']), function ($query) use ($params) {
-                $query->where('email', 'LIKE', '%' . $params['search_string'] . '%')
-                    ->orWhere('username', 'LIKE', '%' . $params['search_string'] . '%');
+                $query->where(fn ($q) => $q
+                    ->where('email', 'LIKE', '%' . $params['search_string'] . '%')
+                    ->orWhere('username', 'LIKE', '%' . $params['search_string'] . '%'));
             })
+            ->when(isset($params['credential_status']), fn ($query) => $query->credentialStatus((int) $params['credential_status']))
+            ->when(isset($params['credential_access']), fn ($query) => $query->credentialAccess((int) $params['credential_access']))
             ->when(isset($params['is_active']), function ($query) use ($params) {
                 $query->where('is_active', $params['is_active']);
             })
@@ -211,7 +316,7 @@ class User extends Authenticatable implements AuthorizableContract, MustVerifyEm
             $result->withTrashed();
         }
 
-        return $result->paginate($perPage);
+        return $result;
     }
 
     /**
