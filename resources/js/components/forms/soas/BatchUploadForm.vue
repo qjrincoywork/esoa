@@ -33,6 +33,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import BatchUploadRowsTable, { type DisplayRow, type RowStatus } from './BatchUploadRowsTable.vue';
+import BatchUploadGuide from './BatchUploadGuide.vue';
 import {
     UploadCloud,
     Paperclip,
@@ -1019,19 +1020,16 @@ const formatSize = (bytes: number): string =>
                 <span>The file has {{ rowCount }} rows; at most <strong>{{ maxRows }}</strong> can be uploaded at a time. Split it into smaller files.</span>
             </div>
 
-            <details class="rounded-md border border-[var(--color-border)] px-3 py-2 text-xs">
-                <summary class="cursor-pointer font-medium text-[var(--color-text)]">Accepted values &amp; rules</summary>
-                <div class="mt-2 space-y-1.5 text-[var(--color-text-muted)]">
-                    <p><span class="font-medium text-[var(--color-text)]">Required columns:</span> {{ requiredColumns.join(', ') }}</p>
-                    <p><span class="font-medium text-[var(--color-text)]">account_type:</span> optional — derived from the account code. Fill it in only if you want it checked: {{ accountTypes.map(t => `${t.value} = ${t.name}`).join(', ') }}.</p>
-                    <p><span class="font-medium text-[var(--color-text)]">status:</span> {{ statusTypes.map(s => `${s.value} = ${s.name}`).join(', ') }}</p>
-                    <p><span class="font-medium text-[var(--color-text)]">bill_type:</span> {{ billTypes.map(b => `${b.value} = ${b.name}`).join(', ') }}</p>
-                    <p><span class="font-medium text-[var(--color-text)]">Dates ({{ dateColumns.join(', ') }}):</span> already formatted as YYYY-MM-DD in the downloaded template — just type the date. In a sheet of your own, use YYYY-MM-DD or format the cells as dates: a text date like <code>05/10/2026</code> is ambiguous and may be read as 10 May rather than 5 October.</p>
-                    <p><span class="font-medium text-[var(--color-text)]">file_pdf / file_xls:</span> the attachment's file name <strong>without its extension</strong> (e.g. <code>BI-0001234567</code>, not <code>BI-0001234567.pdf</code>) — matched against whatever PDF/Excel file you attach in the next step. Leave blank to auto-match by SOA number instead. file_xls is not required when bill_type is ECU.</p>
-                    <p><span class="font-medium text-[var(--color-text)]">account_type, branch_code, contract_date_from, contract_date_to:</span> may be left empty.</p>
-                    <p>Every row must pass validation unless "Skip rows with errors" is checked in the last step. Up to {{ maxRows }} rows per upload.</p>
-                </div>
-            </details>
+            <BatchUploadGuide
+                :columns="columns"
+                :required-columns="requiredColumns"
+                :attachment-columns="attachmentColumns"
+                :date-columns="dateColumns"
+                :account-types="accountTypes"
+                :bill-types="billTypes"
+                :status-types="statusTypes"
+                :max-rows="maxRows"
+                :sample-soa-number="rows.find((r) => r.soa_number)?.soa_number" />
         </div>
 
         <!-- Step 2: Attach files -->

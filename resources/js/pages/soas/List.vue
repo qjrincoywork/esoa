@@ -571,7 +571,7 @@ watch(
                     v-if="hasPermission(slug + '.batch_create')"
                     class="cursor-pointer"
                     :onClick="batchUploadSoas">
-                    <Upload class="w-4 h-4 mr-1" /> Batch Upload
+                      Batch Upload
                   </Button>
                 </div>
               </div>
