@@ -362,9 +362,11 @@ class UserController extends Controller
             ->orderBy('username')
             ->paginate($perPage);
 
-        // Resolve every code on the page up front so each resource labels its rows
-        // from the memo instead of hitting HMS per user.
-        CommonHelper::primeAccountBranchNames($users->getCollection()->flatMap->userAccounts);
+        // Resolve every code on the page up front so each resource labels and badges its
+        // rows from the memo instead of hitting HMS per user.
+        $userAccounts = $users->getCollection()->flatMap->userAccounts;
+        CommonHelper::primeAccountBranchNames($userAccounts);
+        CommonHelper::primeMappingBadges($userAccounts);
 
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
@@ -585,8 +587,9 @@ class UserController extends Controller
             ->findOrFail($id);
 
         // Resolve every mapped code in one lookup per directory so the resource labels
-        // its rows from the memo instead of querying HMS per row.
+        // and badges its rows from the memo instead of querying HMS per row.
         CommonHelper::primeAccountBranchNames($user->userAccounts);
+        CommonHelper::primeMappingBadges($user->userAccounts);
 
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
@@ -622,6 +625,7 @@ class UserController extends Controller
 
             $mappings = $target->userAccounts()->get();
             CommonHelper::primeAccountBranchNames($mappings);
+            CommonHelper::primeMappingBadges($mappings);
 
             $message = $count === 0
                 ? 'Account & branch mapping cleared successfully'

@@ -295,6 +295,66 @@ class SqlDatabase
     }
 
     /**
+     * Retrieve the expiry date of many accounts in one round trip.
+     *
+     * ac_code is not unique in HMS, so each code is folded to the latest expiry
+     * recorded against it — the same reading {@see attachBranchAccountStanding()} gives
+     * a branch's account, so an account and its branches never disagree on it.
+     *
+     * @param  array<int, string>  $accountCodes
+     * @return \Illuminate\Support\Collection<string, string|null> Expiry keyed by code.
+     */
+    public function getAccountExpiriesByCodes(array $accountCodes)
+    {
+        $accountCodes = array_values(array_unique(array_filter($accountCodes)));
+        $expiries = collect();
+
+        // Batched for the same reason as {@see getAccountNamesByCodes()}.
+        foreach (SqlServerBinding::chunkValues($accountCodes) as $batch) {
+            $expiries = $expiries->union(
+                $this->db
+                    ->table('Accounts')
+                    ->selectRaw('ac_code, MAX(ac_expiry) AS ac_expiry')
+                    ->whereIn('ac_code', $batch)
+                    ->groupBy('ac_code')
+                    ->pluck('ac_expiry', 'ac_code')
+            );
+        }
+
+        return $expiries;
+    }
+
+    /**
+     * Count the cardholders of many accounts or branches in one round trip.
+     *
+     * Codes HMS records no cardholder against are simply absent from the result, so
+     * callers read a miss as zero.
+     *
+     * @param  string  $memberColumn  `ch_accountid` for accounts, `ch_branch_code` for branches.
+     * @param  array<int, string>  $codes
+     * @return \Illuminate\Support\Collection<string, int> Member count keyed by code.
+     */
+    public function getMemberCountsByCodes(string $memberColumn, array $codes)
+    {
+        $codes = array_values(array_unique(array_filter($codes)));
+        $counts = collect();
+
+        // Batched for the same reason as {@see getAccountNamesByCodes()}.
+        foreach (SqlServerBinding::chunkValues($codes) as $batch) {
+            $counts = $counts->union(
+                $this->db
+                    ->table('cholders')
+                    ->selectRaw("{$memberColumn}, COUNT(*) AS member_count")
+                    ->whereIn($memberColumn, $batch)
+                    ->groupBy($memberColumn)
+                    ->pluck('member_count', $memberColumn)
+            );
+        }
+
+        return $counts;
+    }
+
+    /**
      * Retrieve the display names of many HMS system users in one round trip.
      *
      * Legacy remarks record their author as an HMS login; resolving each one on its own
@@ -349,7 +409,11 @@ class SqlDatabase
      * (TPA = codes starting with "TP", HMO = codes not starting with "TP") and by
      * a name substring, keeping any explicitly selected code in the results.
      *
-     * @param array $params Supports per_page, selected_code, type, and name.
+     * With `with_badges`, each row also carries `account_expiry` and `member_count`
+     * for {@see \App\Enums\AccountMappingBadge}. It is opt-in so the pickers that only
+     * need a name and a code are not charged the two extra page-sized lookups.
+     *
+     * @param array $params Supports per_page, selected_code, type, name and with_badges.
      * @return \Illuminate\Pagination\Paginator
      */
     public function getAccountsByParams($params)
@@ -374,7 +438,11 @@ class SqlDatabase
             ->tap(fn ($query) => $this->orderSelectedFirst($query, 'ac_code', $selectedCode))
             ->orderBy('ac_name');
 
-        return $result->paginate($perPage);
+        $page = $result->paginate($perPage);
+
+        return empty($params['with_badges'])
+            ? $page
+            : $this->attachAccountExpiry($this->attachAccountMemberCounts($page));
     }
 
     /**
@@ -1150,18 +1218,33 @@ class SqlDatabase
     private function attachAccountMemberCounts($page)
     {
         $rows = $page->getCollection();
-        $accountCodes = $rows->pluck('ac_code')->filter()->unique()->values()->all();
-
-        $counts = $accountCodes === []
-            ? collect()
-            : $this->db->table('cholders')
-                ->selectRaw('ch_accountid, COUNT(*) AS member_count')
-                ->whereIn('ch_accountid', $accountCodes)
-                ->groupBy('ch_accountid')
-                ->pluck('member_count', 'ch_accountid');
+        $counts = $this->getMemberCountsByCodes('ch_accountid', $rows->pluck('ac_code')->all());
 
         $rows->transform(function ($row) use ($counts) {
             $row->member_count = (int) ($counts[$row->ac_code] ?? 0);
+
+            return $row;
+        });
+
+        return $page;
+    }
+
+    /**
+     * Fill in `account_expiry` for the accounts on one page, in one grouped query.
+     *
+     * Folded per code by {@see getAccountExpiriesByCodes()} rather than read off each
+     * row, so a duplicated ac_code carries one expiry — the one its branches carry too.
+     *
+     * @param  \Illuminate\Contracts\Pagination\LengthAwarePaginator  $page
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     */
+    private function attachAccountExpiry($page)
+    {
+        $rows = $page->getCollection();
+        $expiries = $this->getAccountExpiriesByCodes($rows->pluck('ac_code')->all());
+
+        $rows->transform(function ($row) use ($expiries) {
+            $row->account_expiry = $expiries[$row->ac_code] ?? null;
 
             return $row;
         });
@@ -1227,15 +1310,7 @@ class SqlDatabase
     private function attachBranchMemberCounts($page)
     {
         $rows = $page->getCollection();
-        $branchCodes = $rows->pluck('br_code')->filter()->unique()->values()->all();
-
-        $counts = $branchCodes === []
-            ? collect()
-            : $this->db->table('cholders')
-                ->selectRaw('ch_branch_code, COUNT(*) AS member_count')
-                ->whereIn('ch_branch_code', $branchCodes)
-                ->groupBy('ch_branch_code')
-                ->pluck('member_count', 'ch_branch_code');
+        $counts = $this->getMemberCountsByCodes('ch_branch_code', $rows->pluck('br_code')->all());
 
         $rows->transform(function ($row) use ($counts) {
             $row->member_count = (int) ($counts[$row->br_code] ?? 0);
@@ -2034,7 +2109,11 @@ class SqlDatabase
      * code and a name substring, keeping and prioritizing any explicitly selected
      * branch code, ordered by branch name.
      *
-     * @param array $params Supports per_page, selected_code, account_code, and name.
+     * With `with_badges`, each row also carries `member_count` and its account's
+     * standing (`account_expiry` among it) for {@see \App\Enums\AccountMappingBadge} —
+     * opt-in for the same reason as {@see getAccountsByParams()}.
+     *
+     * @param array $params Supports per_page, selected_code, account_code, name and with_badges.
      * @return \Illuminate\Pagination\Paginator
      */
     public function getBranchesByParams($params)
@@ -2062,7 +2141,11 @@ class SqlDatabase
             ->tap(fn ($query) => $this->orderSelectedFirst($query, 'br_code', $selectedCode))
             ->orderBy('br_branch_name');
 
-        return $result->paginate($perPage);
+        $page = $result->paginate($perPage);
+
+        return empty($params['with_badges'])
+            ? $page
+            : $this->attachBranchAccountStanding($this->attachBranchMemberCounts($page));
     }
 
     /**

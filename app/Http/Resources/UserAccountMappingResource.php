@@ -13,8 +13,11 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *
  * Rows store codes only, so each is labelled with the account and branch names the
  * pickers display, letting a saved mapping and a freshly dragged one read alike.
- * Prime the name memo with {@see CommonHelper::primeAccountBranchNames()} before
- * serialising a collection — otherwise every row resolves its own codes against HMS.
+ * Each also carries its mapping badges ({@see CommonHelper::mappingBadges()}) — kind,
+ * expired, no members — exactly as the picker rows do.
+ * Prime both memos with {@see CommonHelper::primeAccountBranchNames()} and
+ * {@see CommonHelper::primeMappingBadges()} before serialising a collection —
+ * otherwise every row resolves its own codes against HMS.
  */
 class UserAccountMappingResource extends JsonResource
 {
@@ -44,6 +47,7 @@ class UserAccountMappingResource extends JsonResource
             'account_name' => $row['account_name'] ?? $accountCode,
             'branch_code' => $branchCode,
             'branch_name' => $row['branch_name'] ?? $branchCode,
+            ...CommonHelper::mappingBadges($accountCode, $branchCode),
         ];
     }
 }

@@ -91,6 +91,22 @@ export interface PermissionAssignmentModeOption {
   description: string
 }
 
+/** One badge as `App\Enums\AccountMappingBadge::present()` sends it — rendered as sent. */
+export interface MappingBadge {
+  value: string
+  label: string
+  color: string
+}
+
+/**
+ * The badges an account/branch row carries on the mapping screen, decided server-side
+ * by `AccountMappingBadge::forRow()`: always its kind, plus any status (expired, no members).
+ */
+export interface MappingBadges {
+  kind_badge?: MappingBadge | null
+  status_badges?: MappingBadge[]
+}
+
 /**
  * One account/branch mapping row, as `UserAccountMappingResource` shapes it.
  *
@@ -98,7 +114,7 @@ export interface PermissionAssignmentModeOption {
  * identically server-side, so unsaved rows (which have no `id` yet) still compare.
  * A blank `branch_code` covers every branch of the account.
  */
-export interface UserAccountMapping {
+export interface UserAccountMapping extends MappingBadges {
   id?: number | null
   key: string
   account_type: string
@@ -109,8 +125,8 @@ export interface UserAccountMapping {
   branch_name: string
 }
 
-/** One access row of a copy source, as `UserAccessResource` shapes it (codes plus labels). */
-export interface CopiedUserAccess {
+/** One access row of a copy source, as `UserAccessResource` shapes it (codes, labels and badges). */
+export interface CopiedUserAccess extends MappingBadges {
   account_type?: string | number | null
   account_code?: string | number | null
   account_name?: string | null
