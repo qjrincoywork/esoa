@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Enums\AccountMappingBadge;
 use App\Helpers\CommonHelper;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -18,6 +19,10 @@ class BranchResource extends JsonResource
      * memo, so prime it with {@see CommonHelper::primeAccountNames()} for the whole
      * page first or each row resolves its own.
      *
+     * The mapping badges are merged in only when the lookup attached what they are
+     * decided from (`with_badges`, {@see \App\Helpers\SqlDatabase::getBranchesByParams()}).
+     * A branch has no expiry of its own, so it carries its account's.
+     *
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array
@@ -33,6 +38,11 @@ class BranchResource extends JsonResource
             // Falls back to the code: 20-odd branches reference an account HMS no
             // longer has, and they still need to read as something.
             'account_name' => CommonHelper::accountName($accountCode) ?: $accountCode,
+            $this->mergeWhen(isset($this->resource->member_count), fn () => AccountMappingBadge::forRow(
+                AccountMappingBadge::BRANCH,
+                $this->account_expiry,
+                $this->member_count
+            )),
         ];
     }
 }

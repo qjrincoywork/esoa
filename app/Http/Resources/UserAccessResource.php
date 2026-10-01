@@ -16,8 +16,10 @@ class UserAccessResource extends JsonResource
     /**
      * Transform the user into a combobox option, composing a "username (email)" display
      * name and embedding the user's account/branch access — codes plus their display
-     * names, so copied rows read the same as freshly picked ones — allowing the copy to
-     * happen without a second request.
+     * names and mapping badges, so copied rows read the same as freshly picked ones —
+     * allowing the copy to happen without a second request. Prime both memos for the
+     * page ({@see CommonHelper::primeAccountBranchNames()},
+     * {@see CommonHelper::primeMappingBadges()}) or each user resolves its own.
      *
      * @return array<string, mixed>
      */
@@ -33,6 +35,7 @@ class UserAccessResource extends JsonResource
                     'account_name' => $account['account_name'],
                     'branch_code'  => $account['branch_code'],
                     'branch_name'  => $account['branch_name'],
+                    ...CommonHelper::mappingBadges($account['account_code'], $account['branch_code']),
                 ])->values(),
         ];
     }

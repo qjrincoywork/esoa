@@ -22,7 +22,8 @@ class AccountLookupRequest extends FormRequest
 
     /**
      * Validate the optional account lookup filters: a name to search on, the account
-     * type, a code to keep visible even when it falls outside the search, and paging.
+     * type, a code to keep visible even when it falls outside the search, paging, and
+     * whether to attach the mapping badges ({@see \App\Enums\AccountMappingBadge}).
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
@@ -53,6 +54,10 @@ class AccountLookupRequest extends FormRequest
                 'nullable',
                 'integer',
                 'min:1',
+            ],
+            'with_badges' => [
+                'nullable',
+                'boolean',
             ],
         ];
     }

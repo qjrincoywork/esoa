@@ -20,8 +20,8 @@ class BranchLookupRequest extends FormRequest
 
     /**
      * Validate the optional branch lookup filters: the owning account, a name to
-     * search on, a code to keep visible even when it falls outside the search, and
-     * paging.
+     * search on, a code to keep visible even when it falls outside the search, paging,
+     * and whether to attach the mapping badges ({@see \App\Enums\AccountMappingBadge}).
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
@@ -52,6 +52,10 @@ class BranchLookupRequest extends FormRequest
                 'nullable',
                 'integer',
                 'min:1',
+            ],
+            'with_badges' => [
+                'nullable',
+                'boolean',
             ],
         ];
     }
