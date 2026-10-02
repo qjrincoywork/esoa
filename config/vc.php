@@ -28,7 +28,7 @@ return [
     'file_preview_token_ttl_minutes' => 10,//FILE_PREVIEW_TOKEN_TTL_MINUTES
     'min_username_string_limit' => 3,
     'max_string_limit' => 191,
-    'max_file_size' => 2048, // 2MB in KB
+    'max_file_size' => 10000, // 10MB in KB
     'max_text_limit' => 800,
     'default_password' => null, // Deprecated — new users receive a randomly generated password
     'temp_password_expires_hours' => (int) env('TEMP_PASSWORD_EXPIRES_HOURS', 72),
