@@ -283,15 +283,30 @@ class User extends Authenticatable implements AuthorizableContract, MustVerifyEm
      * export contains exactly what the filtered list shows.
      *
      * The search is grouped so an email-or-username match can never escape the other
-     * filters. Callers add their own eager loads beyond the user detail.
+     * filters. A bulk lookup (`search_terms`) lists the users matching any of its
+     * entries — or only `search_term_focus`, when one entry is singled out — each
+     * matched the way {@see searchTermCondition()} says. Callers add their own eager
+     * loads beyond the user detail.
      */
     public function listQuery(array $params): Builder
     {
+        $exactMatch = !empty($params['exact_match']);
+        $searchTerms = isset($params['search_term_focus'])
+            ? [$params['search_term_focus']]
+            : ($params['search_terms'] ?? []);
+
         $result = self::query()
             ->when(isset($params['search_string']), function ($query) use ($params) {
                 $query->where(fn ($q) => $q
                     ->where('email', 'LIKE', '%' . $params['search_string'] . '%')
                     ->orWhere('username', 'LIKE', '%' . $params['search_string'] . '%'));
+            })
+            ->when($searchTerms !== [], function ($query) use ($searchTerms, $exactMatch) {
+                $query->where(function ($q) use ($searchTerms, $exactMatch) {
+                    foreach ($searchTerms as $term) {
+                        $q->orWhereRaw(...$this->searchTermCondition($term, $exactMatch));
+                    }
+                });
             })
             ->when(isset($params['credential_status']), fn ($query) => $query->credentialStatus((int) $params['credential_status']))
             ->when(isset($params['credential_access']), fn ($query) => $query->credentialAccess((int) $params['credential_access']))
@@ -317,6 +332,66 @@ class User extends Authenticatable implements AuthorizableContract, MustVerifyEm
         }
 
         return $result;
+    }
+
+    /**
+     * How many users each entry of a bulk lookup matches, in the order it was entered.
+     *
+     * Counted under every other list filter — so a count is what the list would show
+     * for that entry — and in a single pass: one conditional SUM per entry rather than
+     * a query each. Empty when no bulk lookup was asked for.
+     *
+     * @param  array<string, mixed>  $params  The validated list filters.
+     * @return array<int, array{term: string, count: int}>
+     */
+    public function searchTermMatches(array $params): array
+    {
+        $terms = $params['search_terms'] ?? [];
+
+        if ($terms === []) {
+            return [];
+        }
+
+        $exactMatch = !empty($params['exact_match']);
+        $columns = [];
+        $bindings = [];
+
+        foreach ($terms as $index => $term) {
+            [$condition, $termBindings] = $this->searchTermCondition($term, $exactMatch);
+            $columns[] = "SUM(CASE WHEN {$condition} THEN 1 ELSE 0 END) AS match_{$index}";
+            array_push($bindings, ...$termBindings);
+        }
+
+        // Counted across the whole lookup, not just the entry singled out on the list.
+        $counts = $this->listQuery(array_diff_key($params, array_flip(['search_terms', 'search_term_focus'])))
+            ->toBase()
+            ->reorder()
+            ->selectRaw(implode(', ', $columns), $bindings)
+            ->first();
+
+        return array_map(
+            fn (string $term, int $index) => ['term' => $term, 'count' => (int) ($counts->{"match_{$index}"} ?? 0)],
+            $terms,
+            array_keys($terms)
+        );
+    }
+
+    /**
+     * The SQL deciding whether a user matches one bulk-lookup entry, with its bindings:
+     * the username or email equal to the entry when matching exactly, containing it
+     * otherwise. The list filter and the per-entry counts share it, so a count never
+     * disagrees with the rows the list then shows for that entry.
+     *
+     * @return array{0: string, 1: array<int, string>}
+     */
+    protected function searchTermCondition(string $term, bool $exactMatch): array
+    {
+        $email = $this->qualifyColumn('email');
+        $username = $this->qualifyColumn('username');
+
+        return $exactMatch
+            ? ["({$email} = ? OR {$username} = ?)", [$term, $term]]
+            : ["({$email} LIKE ? OR {$username} LIKE ?)", ["%{$term}%", "%{$term}%"]];
     }
 
     /**
