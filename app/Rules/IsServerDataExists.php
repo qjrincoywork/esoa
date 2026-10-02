@@ -45,6 +45,35 @@ class IsServerDataExists implements ValidationRule
     }
 
     /**
+     * The connection this rule looks the value up on.
+     *
+     * Exposed so a caller validating many rows at once can resolve the whole set in
+     * one query instead of letting this rule fire per row — see
+     * {@see \App\Services\SoaBatchImportService}. Read-only: the rule still decides
+     * what "exists" means.
+     */
+    public function server(): string
+    {
+        return $this->server;
+    }
+
+    /**
+     * The table this rule looks the value up in.
+     */
+    public function table(): string
+    {
+        return $this->table;
+    }
+
+    /**
+     * The column this rule matches on, or null to use the attribute's own name.
+     */
+    public function column(): ?string
+    {
+        return $this->column;
+    }
+
+    /**
      * Pass only when the value exists in the configured table/column on the
      * given connection; fails with "The {column} is invalid." otherwise.
      *

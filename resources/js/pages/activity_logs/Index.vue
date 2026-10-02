@@ -13,10 +13,11 @@ import { type BreadcrumbItem } from '@/types';
 import AppLayout from '@/layouts/AppLayout.vue';
 import Datatable from '@/components/Datatable.vue';
 import RightPane from '@/components/RightPane.vue';
+import TopPane from '@/components/TopPane.vue';
 import { Button } from '@/components/ui/button';
 import { Select, SelectTrigger, SelectContent, SelectGroup, SelectItem, SelectValue } from '@/components/ui/select';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
-import { useActivityLogs, type ActivityLogRow } from '@/composables/activityLogs';
+import { eventClass, useActivityLogs, type ActivityLogRow } from '@/composables/activityLogs';
 import { useModulePermissions } from '@/composables/useModulePermissions';
 import { SlidersHorizontal, X } from 'lucide-vue-next';
 
@@ -41,6 +42,12 @@ const {
     rightPaneError,
     rightPaneContentComponent,
     rightPaneComponentProps,
+    topPaneVisible,
+    topPaneTitle,
+    topPaneLoading,
+    topPaneError,
+    topPaneContentComponent,
+    topPaneComponentProps,
 } = useActivityLogs();
 
 const logs = computed<LogsPagination>(() => {
@@ -92,13 +99,6 @@ const clearFilters = () => {
     filters.value = { log_name: '', event: '', causer_id: '', date_from: '', date_to: '' };
 };
 
-const EVENT_CLASSES: Record<string, string> = {
-    created: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-    updated: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-    deleted: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-    restored: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
-};
-
 /** A small pill, so the kind of change is readable at a glance down the column. */
 const badge = (text: string, classes: string) =>
     h('span', { class: ['inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', classes] }, text);
@@ -117,10 +117,7 @@ const columns: any[] = [
     }),
     columnHelper.accessor('event_label', {
         header: 'Event',
-        cell: (info: any) => badge(
-            info.getValue() ?? '—',
-            EVENT_CLASSES[info.row.original?.event ?? ''] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300',
-        ),
+        cell: (info: any) => badge(info.getValue() ?? '—', eventClass(info.row.original?.event)),
     }),
     columnHelper.accessor('description', {
         header: 'Activity',
@@ -357,5 +354,15 @@ const openEntry = (row: ActivityLogRow) => openActivityLog(row);
             :content-component="rightPaneContentComponent"
             :component-props="rightPaneComponentProps"
             @update:open="(v) => { if (!v && !rightPaneLoading) closePane('right') }" />
+
+        <!-- Top pane: one entry of the batch, opened from the detail pane over it -->
+        <TopPane
+            :open="topPaneVisible"
+            :title="topPaneTitle"
+            :loading="topPaneLoading"
+            :error="topPaneError"
+            :content-component="topPaneContentComponent"
+            :component-props="topPaneComponentProps"
+            @update:open="(v) => { if (!v && !topPaneLoading) closePane('top') }" />
     </AppLayout>
 </template>
