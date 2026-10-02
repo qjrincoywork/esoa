@@ -24,6 +24,7 @@ return [
     'bulk_import_max_rows' => (int) env('BULK_IMPORT_MAX_ROWS', 1000),
     'soa_export_max_rows' => 7000,
     'user_export_max_rows' => (int) env('USER_EXPORT_MAX_ROWS', 10000),
+    'max_search_terms' => 100, // Entries one bulk user lookup may hold (users list "Search multiple users")
     'file_preview_token_ttl_minutes' => 10,//FILE_PREVIEW_TOKEN_TTL_MINUTES
     'min_username_string_limit' => 3,
     'max_string_limit' => 191,

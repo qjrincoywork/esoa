@@ -9,11 +9,18 @@ import RightPane from '@/components/RightPane.vue';
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectContent, SelectGroup, SelectItem, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import BulkUserSearch from '@/components/forms/users/BulkUserSearch.vue';
 import { createActionColumn } from '@/composables/datatable/datatableColumns';
-import { useUsers, type CredentialReportOption, type UserCredentials } from '@/composables/users';
+import {
+    useUsers,
+    type BulkUserLookup,
+    type CredentialReportOption,
+    type SearchTermMatch,
+    type UserCredentials,
+} from '@/composables/users';
 import { useModulePermissions } from '@/composables/useModulePermissions';
 import { badge } from '@/lib/directoryBadges';
-import { UserRoundCog, KeyRound, ToggleLeft, ToggleRight, Trash2, RotateCcw, SlidersHorizontal, X, MailCheck, Upload, FileDown } from 'lucide-vue-next';
+import { UserRoundCog, KeyRound, ToggleLeft, ToggleRight, Trash2, RotateCcw, SlidersHorizontal, X, MailCheck, Upload, FileDown, TextSearch } from 'lucide-vue-next';
 
 type UsersPagination = {
     current_page: number
@@ -69,6 +76,22 @@ const pagination = ref({
 const searchQuery = ref('')
 const hasInitialized = ref(false)
 const isFirstLoad = ref(true)
+
+// --- Bulk lookup ("Search multiple users") ---
+/** The applied lookup, plus the one entry the list is narrowed to (null: every entry's matches). */
+const bulkLookup = ref<(BulkUserLookup & { focus: string | null }) | null>(null)
+const bulkSearchOpen = ref(false)
+/**
+ * Whether the per-entry counts must be reloaded with the list. They depend on the entries
+ * and the other filters, not on paging or on which entry is singled out — so those
+ * reloads leave the server's lazy `search_term_matches` prop, and its aggregate, out.
+ */
+const matchesStale = ref(false)
+
+const searchTermMatches = computed<SearchTermMatch[]>(
+    () => ((page.props as any).search_term_matches as SearchTermMatch[] | undefined) ?? [],
+)
+const maxSearchTerms = computed(() => Number((page.props as any).max_search_terms) || 100)
 
 // --- Filters ---
 type Option = { value: number; name: string }
@@ -257,6 +280,13 @@ const filterParams = (): Record<string, string> => {
   const params: Record<string, string> = {}
 
   if (searchQuery.value.trim())               params.search_string     = searchQuery.value.trim()
+  if (bulkLookup.value) {
+    // One delimited string rather than an array, so it rides in the export's query string
+    // as well; the server splits it on the same separators (ListRequest).
+    params.search_terms = bulkLookup.value.terms.join('\n')
+    if (bulkLookup.value.exact)               params.exact_match       = '1'
+    if (bulkLookup.value.focus)               params.search_term_focus = bulkLookup.value.focus
+  }
   if (filters.value.type)                     params.type              = filters.value.type
   if (filters.value.department_id)            params.department_id     = filters.value.department_id
   // '' means "no filter"; '0' is a real choice, so these cannot be falsy tests.
@@ -276,6 +306,7 @@ const fetchUsers = () => {
     per_page: pagination.value.per_page,
     ...filterParams(),
   }
+  const reloadMatches = bulkLookup.value !== null && matchesStale.value
 
   router.get(
     `/${slug.value}`,
@@ -284,9 +315,48 @@ const fetchUsers = () => {
       preserveState: true,
       preserveScroll: true,
       replace: true,
-      only: [slug.value],
+      only: reloadMatches ? [slug.value, 'search_term_matches'] : [slug.value],
+      // A superseded visit never succeeds, so the counts stay stale until one that carried them lands.
+      onSuccess: () => { if (reloadMatches) matchesStale.value = false },
     }
   )
+}
+
+/** Apply a bulk lookup from page one, listing every entry's matches. */
+const runBulkLookup = (lookup: BulkUserLookup) => {
+  bulkLookup.value = { ...lookup, focus: null }
+  matchesStale.value = true
+  hasInitialized.value = true
+  pagination.value.current_page = 1
+  fetchUsers()
+}
+
+/** Narrow the list to one entry's matches, or back to all of them; the counts are unchanged. */
+const focusBulkTerm = (term: string | null) => {
+  if (!bulkLookup.value || bulkLookup.value.focus === term) return
+  bulkLookup.value.focus = term
+  pagination.value.current_page = 1
+  fetchUsers()
+}
+
+const clearBulkLookup = () => {
+  if (!bulkLookup.value) return
+  bulkLookup.value = null
+  pagination.value.current_page = 1
+  fetchUsers()
+}
+
+/**
+ * The bulk lookup replaces the single search while open — two searches over the same
+ * columns would only narrow each other — and closing it drops whatever it applied.
+ */
+const toggleBulkSearch = () => {
+  bulkSearchOpen.value = !bulkSearchOpen.value
+  if (bulkSearchOpen.value) {
+    searchQuery.value = ''
+  } else {
+    clearBulkLookup()
+  }
 }
 
 // Debounced data fetching for search query changes
@@ -378,6 +448,8 @@ watch(
         filterTimeout.value = window.setTimeout(() => {
             pagination.value.current_page = 1
             hasInitialized.value = true
+            // Per-entry counts are taken under the other filters, so they move with them.
+            matchesStale.value = true
             fetchUsers()
         }, 300)
     },
@@ -419,28 +491,52 @@ watch(
                             </DropdownMenuContent>
                         </DropdownMenu>
                     </div>
-                    <div class="relative w-full sm:w-64">
-                        <label class="sr-only" for="user-search">Search users</label>
-                        <input
-                            id="user-search"
-                            v-model="searchQuery"
-                            type="text"
-                            placeholder="Search username or email..."
-                            class="border border-[var(--color-border-strong)] rounded-md text-sm bg-[var(--color-surface)] text-[var(--color-text)] focus:ring-2 focus:ring-opacity-50 focus:border-transparent w-full px-4 py-2 pr-8"
-                            :style="{ '--tw-ring-color': 'var(--primary-color)' }"
-                            @input="hasInitialized = true" />
-                        <button
-                            v-if="searchQuery"
-                            class="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] hover:text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-opacity-50"
-                            :style="{ '--tw-ring-color': 'var(--primary-color)' }"
-                            aria-label="Clear search"
-                            @click="searchQuery = ''">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        </button>
+                    <div class="flex w-full sm:w-auto items-center gap-2">
+                        <div v-if="!bulkSearchOpen" class="relative w-full sm:w-64">
+                            <label class="sr-only" for="user-search">Search users</label>
+                            <input
+                                id="user-search"
+                                v-model="searchQuery"
+                                type="text"
+                                placeholder="Search username or email..."
+                                class="border border-[var(--color-border-strong)] rounded-md text-sm bg-[var(--color-surface)] text-[var(--color-text)] focus:ring-2 focus:ring-opacity-50 focus:border-transparent w-full px-4 py-2 pr-8"
+                                :style="{ '--tw-ring-color': 'var(--primary-color)' }"
+                                @input="hasInitialized = true" />
+                            <button
+                                v-if="searchQuery"
+                                class="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] hover:text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-opacity-50"
+                                :style="{ '--tw-ring-color': 'var(--primary-color)' }"
+                                aria-label="Clear search"
+                                @click="searchQuery = ''">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                        <!-- Many usernames/emails at once: opens "Search multiple users" in place of the single search -->
+                        <Button
+                            type="button"
+                            class="cursor-pointer shrink-0"
+                            :variant="bulkSearchOpen ? 'default' : 'outline'"
+                            :aria-expanded="bulkSearchOpen"
+                            aria-controls="bulk-user-search"
+                            @click="toggleBulkSearch">
+                            <TextSearch class="w-4 h-4 mr-1" /> Bulk search
+                        </Button>
                     </div>
                 </div>
+
+                <BulkUserSearch
+                    v-if="bulkSearchOpen"
+                    id="bulk-user-search"
+                    :matches="searchTermMatches"
+                    :applied="bulkLookup !== null"
+                    :max-terms="maxSearchTerms"
+                    :focus="bulkLookup?.focus ?? null"
+                    @update:focus="focusBulkTerm"
+                    @search="runBulkLookup"
+                    @clear="clearBulkLookup"
+                    @close="toggleBulkSearch" />
 
                 <!-- Filter row -->
                 <div class="flex flex-wrap items-center gap-2">
@@ -574,7 +670,7 @@ watch(
                 :enable-search="false"
                 :enable-row-click="true"
                 :row-click="openUserDetails"
-                empty-message="No users found"
+                :empty-message="bulkLookup ? 'No users match these entries' : 'No users found'"
                 empty-description="System users will appear here. Use search, pagination, or change rows per page to load data."
                 export-file-name="users_list"
                 @update:pagination="(newPagination: typeof pagination) => { hasInitialized = true; pagination = newPagination }">

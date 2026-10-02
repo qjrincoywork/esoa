@@ -103,17 +103,22 @@ class UserController extends Controller
     /**
      * Render the Inertia "users/Index" page with a filtered user list and filter options.
      *
-     * Also passes the user-type and department option lists used by the filter UI.
-     * Filters are validated by {@see ListRequest}.
+     * Also passes the user-type and department option lists used by the filter UI, and —
+     * for a bulk lookup — how many users each entry matched. Those counts are a closure
+     * so a partial reload that only pages the list (or singles out one entry) can leave
+     * them out and skip the aggregate. Filters are validated by {@see ListRequest}.
      *
      * @return \Inertia\Response
      */
     public function index(ListRequest $request)
     {
-        $users = $this->user->getUsers($request->validated());
+        $params = $request->validated();
+        $users = $this->user->getUsers($params);
 
         return Inertia::render('users/Index', [
             'users' => new CommonResource(UserListResource::collection($users)),
+            'search_term_matches' => fn () => $this->user->searchTermMatches($params),
+            'max_search_terms' => config('vc.max_search_terms'),
             'filter_options' => [
                 'user_types' => UserType::list(),
                 'departments' => Department::select(['id', 'name'])->get()->toArray(),

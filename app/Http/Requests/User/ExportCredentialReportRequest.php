@@ -33,6 +33,7 @@ class ExportCredentialReportRequest extends ListRequest
     public function messages(): array
     {
         return [
+            ...parent::messages(),
             'report.required' => 'Please choose a report to export.',
             'report.in' => 'The selected report does not exist.',
         ];
