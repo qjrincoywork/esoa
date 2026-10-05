@@ -6,6 +6,7 @@ use App\Enums\AccountType;
 use App\Enums\BillType;
 use App\Enums\SoaStatus;
 use App\Helpers\CommonHelper;
+use App\Models\Soa;
 use App\Models\SoaActivity;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -34,8 +35,48 @@ class SoaActivityListResource extends JsonResource
             'event_label' => $this->resolveEventLabel(),
             'from' => $this->describeFrom(),
             'to' => $this->describeTo(),
+            'from_attachments' => $this->attachmentLinks('from'),
+            'to_attachments' => $this->attachmentLinks('to'),
             'created_at' => CommonHelper::formatDate($this->created_at, true),
         ];
+    }
+
+    /**
+     * Links to the billing attachments recorded in one side of the snapshot, so the
+     * activity log can open each file as it was at that point — including ones a later
+     * update replaced. Streamed by
+     * {@see \App\Http\Controllers\SoaController::streamBillingAttachment()}.
+     *
+     * @param  'from'|'to'  $snapshot
+     * @return list<array{label: string, name: string, url: string}>
+     */
+    protected function attachmentLinks(string $snapshot): array
+    {
+        $data = $this->{$snapshot};
+        if (! is_array($data)) {
+            return [];
+        }
+
+        $links = [];
+        foreach (Soa::BILLING_ATTACHMENTS as $type => $column) {
+            $path = $data[$column] ?? null;
+            if (! is_string($path) || $path === '') {
+                continue;
+            }
+
+            $links[] = [
+                'label' => $this->attributeLabel($column),
+                'name' => $this->formatAttributeValue($column, $path),
+                'url' => route('soas.billing_attachments', [
+                    'id' => $this->soa_id,
+                    'type' => $type,
+                    'activity' => $this->id,
+                    'snapshot' => $snapshot,
+                ], false),
+            ];
+        }
+
+        return $links;
     }
 
     /**

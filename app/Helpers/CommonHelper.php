@@ -3,6 +3,7 @@
 namespace App\Helpers;
 
 use App\Enums\Server;
+use App\Models\Soa;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Mail;
@@ -655,6 +656,35 @@ class CommonHelper
         }
 
         abort(Response::HTTP_FORBIDDEN);
+    }
+
+    /**
+     * Authorize the authenticated user against the account/branch a billing
+     * attachment was filed under.
+     *
+     * Needed for files reached through an SOA's activity history: an SOA can be
+     * reassigned to another account after a file was uploaded, and that earlier
+     * file is still the previous account's document, so owning the SOA today is
+     * not enough to read it. {@see storeUploadedFiles()} files every attachment
+     * under "{account}/{branch?}/", so the owner is read back from the path and
+     * checked through {@see assertUserMayAccessModel()} on a transient (never
+     * saved) SOA — full-access roles and tenant scoping behave exactly as they do
+     * for the SOA itself.
+     *
+     * @param  object  $request
+     * @param  string  $path  Path of the file on the billing disk.
+     * @throws \Symfony\Component\HttpKernel\Exception\HttpException
+     * @return void
+     */
+    public static function assertUserMayAccessBillingFile($request, string $path): void
+    {
+        $directory = trim(dirname(str_replace('\\', '/', $path)), '/');
+        [$accountCode, $branchCode] = array_pad(explode('/', $directory, 2), 2, null);
+
+        self::assertUserMayAccessModel($request, (new Soa())->forceFill([
+            'account_code' => $accountCode,
+            'branch_code' => $branchCode,
+        ]));
     }
 
     /**

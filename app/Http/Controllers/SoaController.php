@@ -14,7 +14,7 @@ use App\Helpers\CommonHelper;
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Soa\{AccountBranchMembersRequest, AdjustAmountRequest, BatchStoreRequest, BillRefsRequest, CreateRequest, DestroyRequest, FileListRequest, FileProxyRequest, FindMemberRequest, ListRequest, MemberFilesRequest, OldRemarksRequest, RecordViewedRequest, RecomputeTaxRequest, UpdateRequest, UpdateTagRequest };
+use App\Http\Requests\Soa\{AccountBranchMembersRequest, AdjustAmountRequest, BatchStoreRequest, BillingAttachmentRequest, BillRefsRequest, CreateRequest, DestroyRequest, FileListRequest, FileProxyRequest, FindMemberRequest, ListRequest, MemberFilesRequest, OldRemarksRequest, RecordViewedRequest, RecomputeTaxRequest, UpdateRequest, UpdateTagRequest };
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
@@ -308,18 +308,48 @@ class SoaController extends Controller
 
     /**
      * Stream a PDF or Excel file stored on the billing disk for this SOA.
+     *
+     * By default the SOA's current attachment is streamed. With `activity` and
+     * `snapshot` in the query string, the attachment recorded in that activity's
+     * "from"/"to" snapshot is streamed instead, so the activity log can open the
+     * files an update replaced (uploads are stored under timestamped names, so a
+     * replaced file is still on the disk). Input is validated by
+     * {@see BillingAttachmentRequest}.
+     *
+     * Access control (RBAC): {@see CommonHelper::assertUserMayAccessModel()} is
+     * enforced on the SOA before anything is read or recorded; a historical file
+     * is additionally authorised against the account it was filed under via
+     * {@see CommonHelper::assertUserMayAccessBillingFile()}.
+     *
+     * @param BillingAttachmentRequest $request
+     * @param int $id
+     * @param string $type
+     * @return \Symfony\Component\HttpFoundation\StreamedResponse
      */
-    public function streamBillingAttachment(int $id, string $type)
+    public function streamBillingAttachment(BillingAttachmentRequest $request, int $id, string $type)
     {
         $soa = $this->soa->findOrFail($id);
-        $this->recordBillingInvoiceViewedIfEligible($soa, request()->user());
-        CommonHelper::assertUserMayAccessModel(request(), $soa);
+        CommonHelper::assertUserMayAccessModel($request, $soa);
 
-        $path = match ($type) {
-            'pdf' => $soa->file_pdf,
-            'excel' => $soa->file_xls,
-            default => null,
-        };
+        $column = Soa::BILLING_ATTACHMENTS[$type] ?? abort(Response::HTTP_NOT_FOUND);
+        $activityId = $request->validated('activity');
+
+        if ($activityId === null) {
+            // Only opening the current invoice counts as the client having viewed it.
+            $this->recordBillingInvoiceViewedIfEligible($soa, $request->user());
+            $path = $soa->{$column};
+        } else {
+            $path = $this->billingAttachmentPathFromActivity(
+                $soa,
+                (int) $activityId,
+                $request->validated('snapshot'),
+                $column
+            );
+
+            if ($path !== null) {
+                CommonHelper::assertUserMayAccessBillingFile($request, $path);
+            }
+        }
 
         if ($path === null || $path === '') {
             abort(Response::HTTP_NOT_FOUND);
@@ -360,6 +390,27 @@ class SoaController extends Controller
             'Content-Disposition' => sprintf('inline; filename="%s"', $fileName),
             'Content-Length' => $fileSize,
         ]));
+    }
+
+    /**
+     * Resolve the billing attachment path recorded in one side of an activity's snapshot.
+     *
+     * The activity must belong to this SOA, and the path is read from what was stored
+     * when the activity was recorded — never from the request — so only files this SOA
+     * has actually had can be reached.
+     *
+     * @param Soa $soa
+     * @param int $activityId
+     * @param string $snapshot "from" or "to".
+     * @param string $column One of {@see Soa::BILLING_ATTACHMENTS}.
+     * @return string|null
+     */
+    private function billingAttachmentPathFromActivity(Soa $soa, int $activityId, string $snapshot, string $column): ?string
+    {
+        $data = $soa->soaActivity()->findOrFail($activityId)->{$snapshot};
+        $path = is_array($data) ? ($data[$column] ?? null) : null;
+
+        return is_string($path) && $path !== '' ? $path : null;
     }
 
     /**

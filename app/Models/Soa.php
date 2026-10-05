@@ -30,6 +30,17 @@ class Soa extends Model
     use HasFactory, SoftDeletes, LogsAuditActivity;
 
     /**
+     * Billing attachment columns, keyed by the {type} segment of the
+     * soas.billing_attachments route that streams them.
+     *
+     * @var array<string, string>
+     */
+    public const BILLING_ATTACHMENTS = [
+        'pdf' => 'file_pdf',
+        'excel' => 'file_xls',
+    ];
+
+    /**
      * Write this model's audit trail to the billing-invoice channel.
      *
      * Separate from {@see soaActivity()}: that is the change feed the details pane
