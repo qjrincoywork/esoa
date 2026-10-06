@@ -39,6 +39,25 @@ class ActivityLog extends SpatieActivity
     }
 
     /**
+     * One person's trail: everything they did, newest first, a page at a time.
+     *
+     * The same listing as the audit-trail screen, pinned to one causer — so a user's
+     * history reads exactly like the trail it is a slice of, and the remaining filters
+     * (module, event, dates, search) still narrow it. The causer is taken from the user
+     * passed in, never from the params, so the slice cannot be widened to someone else.
+     *
+     * @param  array<string, mixed>  $params
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     */
+    public function getUserActivityLogs(User $user, array $params)
+    {
+        return $this->getActivityLogs(array_merge($params, [
+            'causer_type' => $user->getMorphClass(),
+            'causer_id' => $user->getKey(),
+        ]));
+    }
+
+    /**
      * The other entries written by the same action, oldest first, a page at a time.
      *
      * One action often changes more than one thing; the batch is what ties those
@@ -141,6 +160,7 @@ class ActivityLog extends SpatieActivity
             ->with('causer:id,username,email')
             ->when(!empty($params['log_name']), fn (Builder $q) => $q->where('log_name', $params['log_name']))
             ->when(!empty($params['event']), fn (Builder $q) => $q->where('event', $params['event']))
+            ->when(!empty($params['causer_type']), fn (Builder $q) => $q->where('causer_type', $params['causer_type']))
             ->when(!empty($params['causer_id']), fn (Builder $q) => $q->where('causer_id', $params['causer_id']))
             ->when(!empty($params['batch_uuid']), fn (Builder $q) => $q->where('batch_uuid', $params['batch_uuid']))
             ->when(!empty($params['subject_type']), fn (Builder $q) => $q->where('subject_type', $params['subject_type']))

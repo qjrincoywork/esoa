@@ -13,7 +13,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Fortify\TwoFactorAuthenticatable;
-use App\Enums\{CredentialAccess, CredentialStatus, PermissionAssignmentMode, UserType};
+use App\Enums\{AuditEvent, CredentialAccess, CredentialStatus, PermissionAssignmentMode, UserType};
+use App\Support\AuthenticationAudit;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Traits\HasRoles;
 
@@ -75,13 +76,20 @@ class User extends Authenticatable implements AuthorizableContract, MustVerifyEm
      * Every self-service path (settings, forgot-password reset) clears the temporary
      * expiry alongside the new password, while issuing a temporary password sets one —
      * so "password changed and no temporary expiry" is exactly "the user chose it",
-     * wherever the change came from.
+     * wherever the change came from. The same moment goes on the user's audit trail
+     * ({@see AuthenticationAudit}), once the change has actually been saved.
      */
     protected static function booted(): void
     {
         static::saving(function (self $user): void {
             if ($user->exists && $user->isDirty('password') && $user->temporary_password_expires_at === null) {
                 $user->password_changed_at = now();
+            }
+        });
+
+        static::updated(function (self $user): void {
+            if ($user->wasChanged('password_changed_at')) {
+                AuthenticationAudit::record($user, AuditEvent::PASSWORD_CHANGED);
             }
         });
     }

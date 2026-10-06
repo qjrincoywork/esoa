@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Enums\{
     AccountStatus,
     AccountType,
+    AuditEvent,
+    AuditLogName,
     CredentialAccess,
     CredentialStatus,
     Gender,
@@ -19,6 +21,7 @@ use App\Helpers\CommonHelper;
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
 use App\Http\Requests\User\AccountAccessUsersRequest;
+use App\Http\Requests\User\ActivityLogRequest;
 use App\Http\Requests\User\AccountLookupRequest;
 use App\Http\Requests\User\BranchLookupRequest;
 use App\Http\Requests\User\BulkDestroyRequest;
@@ -38,6 +41,7 @@ use App\Http\Requests\User\UpdateRequest;
 use App\Http\Requests\User\UpdateRoleRequest;
 use App\Http\Requests\User\VerifyRequest;
 use App\Http\Resources\AccountResource;
+use App\Http\Resources\ActivityLogListResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
 use App\Http\Resources\PermissionOptionResource;
@@ -49,6 +53,7 @@ use App\Http\Resources\UserListResource;
 use App\Http\Resources\UserPermissionsResource;
 use App\Mail\UserWelcome;
 use App\Models\Account;
+use App\Models\ActivityLog;
 use App\Models\Citizenship;
 use App\Models\CivilStatus;
 use App\Models\Department;
@@ -602,6 +607,36 @@ class UserController extends Controller
                 'user' => new UserDetailsResource($user),
                 'user_accounts' => UserAccountMappingResource::collection($user->userAccounts),
                 'account_types' => AccountType::list(),
+            ]);
+        }
+    }
+
+    /**
+     * Return one page of what a user has done, newest first (AJAX only).
+     *
+     * Feeds the user pane's Activity tab: the audit trail pinned to this user as the
+     * causer ({@see ActivityLog::getUserActivityLogs()}), shaped exactly like the
+     * audit-trail listing so an entry opens in the same detail view. The filter options
+     * travel with every page — they are two enum lists, cheaper to send than to cache.
+     * Deleted users are included, since a removed account's history is exactly what
+     * someone may need to look up. Filters and audience are validated by
+     * {@see ActivityLogRequest}. Non-AJAX requests fall through and receive no content.
+     *
+     * @return \Illuminate\Http\JsonResponse|void
+     */
+    public function activityLogs(int $id, ActivityLogRequest $request, ActivityLog $activityLog)
+    {
+        $user = $this->user->withTrashed()->findOrFail($id);
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'activity_logs' => new CommonResource(
+                    ActivityLogListResource::collection($activityLog->getUserActivityLogs($user, $request->validated()))
+                ),
+                'filter_options' => [
+                    'modules' => AuditLogName::list(),
+                    'events' => AuditEvent::list(),
+                ],
             ]);
         }
     }

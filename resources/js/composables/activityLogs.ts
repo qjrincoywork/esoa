@@ -67,6 +67,9 @@ export interface ActivityLogPageParams {
   per_page?: number;
 }
 
+/** Fetches one page of entries for a paged list ({@link ActivityLogFeed}); null when it failed. */
+export type ActivityLogPageFetcher = (params: ActivityLogPageParams) => Promise<ActivityLogPage | null>;
+
 /**
  * Event colours, kept beside the rows that use them rather than in the enum: which
  * hue reads as "deleted" is a presentation decision, not a property of the event.
@@ -76,6 +79,8 @@ const EVENT_CLASSES: Record<string, string> = {
   updated: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
   deleted: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
   restored: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+  logged_in: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400',
+  password_changed: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400',
 };
 
 /** The badge classes for an event, wherever one is shown — table, pane or batch list. */
@@ -83,7 +88,9 @@ export const eventClass = (event: string | null | undefined): string =>
   EVENT_CLASSES[event ?? ''] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
 
 export function useActivityLogs() {
-  const { slug } = useModulePermissions();
+  // Pinned rather than derived from the page: an entry is also opened from other
+  // modules (the user pane's Activity tab), and its endpoints live here regardless.
+  const { slug } = useModulePermissions({ slug: 'activity_logs' });
   const { get } = useAjax();
   const {
     openPane,

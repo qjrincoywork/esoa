@@ -16,6 +16,7 @@ import Datatable from '@/components/Datatable.vue';
 import FilterSelect from '@/components/FilterSelect.vue';
 import ListSearch from '@/components/ListSearch.vue';
 import RightPane from '@/components/RightPane.vue';
+import TopPane from '@/components/TopPane.vue';
 import { Button, type ButtonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import {
@@ -127,6 +128,12 @@ const {
     rightPaneError,
     rightPaneContentComponent,
     rightPaneComponentProps,
+    topPaneVisible,
+    topPaneTitle,
+    topPaneLoading,
+    topPaneError,
+    topPaneContentComponent,
+    topPaneComponentProps,
 } = useUsers();
 
 const EMPTY_PAGE: UsersPagination = { current_page: 1, per_page: 10, total: 0, data: [] };
@@ -724,5 +731,15 @@ watch(
             :content-component="rightPaneContentComponent"
             :component-props="rightPaneComponentProps"
             @update:open="(v) => { if (!v && !rightPaneLoading) closePane('right') }" />
+
+        <!-- Top pane: one entry of a user's activity, opened over the user pane -->
+        <TopPane
+            :open="topPaneVisible"
+            :title="topPaneTitle"
+            :loading="topPaneLoading"
+            :error="topPaneError"
+            :content-component="topPaneContentComponent"
+            :component-props="topPaneComponentProps"
+            @update:open="(v) => { if (!v && !topPaneLoading) closePane('top') }" />
     </AppLayout>
 </template>
