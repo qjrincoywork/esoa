@@ -54,6 +54,8 @@ export interface UserCredentials {
   temporary_expires_at: string | null
   password_changed_at: string | null
   last_login_at: string | null
+  /** The same moment as ISO 8601, for relative times ("3 days ago"). */
+  last_login_at_value: string | null
 }
 
 /** One exportable report, as `UserCredentialReport::list()` shapes it. */

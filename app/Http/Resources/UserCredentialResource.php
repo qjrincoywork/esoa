@@ -32,6 +32,8 @@ class UserCredentialResource extends JsonResource
             'temporary_expires_at' => CommonHelper::formatDate($this->temporary_password_expires_at, true),
             'password_changed_at' => CommonHelper::formatDate($this->password_changed_at, true),
             'last_login_at' => CommonHelper::formatDate($this->last_login_at, true),
+            // The label above is for reading; this is for working out "3 days ago".
+            'last_login_at_value' => $this->last_login_at?->toIso8601String(),
         ];
     }
 }

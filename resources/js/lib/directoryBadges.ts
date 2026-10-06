@@ -5,10 +5,11 @@ import type { AccountStanding } from '@/composables/unmappedAccounts';
  * A small pill, so a row's class reads at a glance down a column.
  *
  * Shared by the unmapped-accounts listing and its directory pane so both render the
- * same badge for the same fact rather than keeping two copies in sync by hand.
+ * same badge for the same fact rather than keeping two copies in sync by hand. It never
+ * wraps: a narrow column would otherwise fold a two-word label into a two-line pill.
  */
 export const badge = (text: string, classes: string): VNode =>
-  h('span', { class: ['inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', classes] }, text);
+  h('span', { class: ['inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium', classes] }, text);
 
 /**
  * The text of an account standing, as sent by the server (`App\Enums\AccountStanding::present()`)
