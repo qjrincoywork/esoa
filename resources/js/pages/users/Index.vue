@@ -7,17 +7,17 @@
  * filter, a page click, a bulk lookup — goes through one debounced reload (`queueFetch`),
  * so changes made in quick succession make one request rather than one each.
  */
-import { computed, h, onBeforeUnmount, ref, watch, type Component } from 'vue';
-import { Head, router, usePage } from '@inertiajs/vue3';
+import { computed, h, ref, watch, type Component } from 'vue';
+import { Head, usePage } from '@inertiajs/vue3';
 import { createColumnHelper, type ColumnDef } from '@tanstack/vue-table';
 import { type BreadcrumbItem } from '@/types';
 import AppLayout from '@/layouts/AppLayout.vue';
 import Datatable from '@/components/Datatable.vue';
+import FilterSelect from '@/components/FilterSelect.vue';
+import ListSearch from '@/components/ListSearch.vue';
 import RightPane from '@/components/RightPane.vue';
 import { Button, type ButtonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Select, SelectTrigger, SelectContent, SelectGroup, SelectItem, SelectValue } from '@/components/ui/select';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -29,7 +29,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import BulkUserSearch from '@/components/forms/users/BulkUserSearch.vue';
 import { createRowActionsColumn, type RowAction } from '@/composables/datatable/rowActions';
-import { getInitials } from '@/composables/useInitials';
+import { useServerListing, type ListingPage } from '@/composables/datatable/useServerListing';
 import { useModulePermissions } from '@/composables/useModulePermissions';
 import {
     useUsers,
@@ -39,14 +39,15 @@ import {
     type User,
     type UserCredentials,
 } from '@/composables/users';
+import { avatar } from '@/lib/avatar';
 import { badge } from '@/lib/directoryBadges';
+import { timeAgo } from '@/lib/relativeTime';
 import {
     ChevronDown,
     FileDown,
     KeyRound,
     MailCheck,
     RotateCcw,
-    Search,
     SlidersHorizontal,
     TextSearch,
     ToggleLeft,
@@ -76,14 +77,7 @@ interface UserRow extends User {
     credentials?: UserCredentials
 }
 
-type UsersPagination = {
-    current_page: number
-    per_page: number
-    total: number
-    data: UserRow[]
-}
-
-type Pagination = Omit<UsersPagination, 'data'>
+type UsersPagination = ListingPage & { data: UserRow[] }
 
 type Option = { value: number | string; name: string }
 
@@ -139,10 +133,6 @@ const EMPTY_PAGE: UsersPagination = { current_page: 1, per_page: 10, total: 0, d
 
 const users = computed(() => pageProps.value.users ?? EMPTY_PAGE);
 
-const toPagination = ({ current_page, per_page, total }: UsersPagination): Pagination =>
-    ({ current_page, per_page: Number(per_page), total });
-
-const pagination = ref<Pagination>(toPagination(users.value));
 const searchQuery = ref('');
 
 /** The reports the export menu offers — the server's list (`UserCredentialReport`). */
@@ -165,7 +155,6 @@ const maxSearchTerms = computed(() => Number(pageProps.value.max_search_terms) |
 
 // --- Filters ---
 const VC_EMPLOYEE_TYPE = '1'; // UserType::VC_EMPLOYEE
-const FILTER_ALL = 'all';     // a Select cannot hold '' — this stands for "no filter applied"
 
 type FilterKey = 'type' | 'department_id' | 'status' | 'credential_status' | 'credential_access'
 
@@ -204,23 +193,20 @@ const filterDefs = computed<FilterDef[]>(() => {
             label: 'Department',
             allLabel: 'All departments',
             options: (options?.departments ?? []).map(({ id, name }) => ({ value: String(id), label: name })),
-            width: 'w-48',
+            width: 'w-52',
         },
         { key: 'status', label: 'Status', allLabel: 'All statuses', options: STATUS_OPTIONS, width: 'w-36' },
-        { key: 'credential_status', label: 'Password status', allLabel: 'Any password status', options: toSelectOptions(options?.credential_statuses), width: 'w-44' },
-        { key: 'credential_access', label: 'Credential access', allLabel: 'Any credential access', options: toSelectOptions(options?.credential_accesses), width: 'w-48' },
+        { key: 'credential_status', label: 'Password status', allLabel: 'Any password status', options: toSelectOptions(options?.credential_statuses), width: 'w-52' },
+        { key: 'credential_access', label: 'Credential access', allLabel: 'Any credential access', options: toSelectOptions(options?.credential_accesses), width: 'w-52' },
     ];
 
     return defs.filter((def) => def.key !== 'department_id' || filters.value.type === VC_EMPLOYEE_TYPE);
 });
 
-/** Set one filter from its dropdown; leaving the VC employee type drops the department with it. */
-const setFilter = (key: FilterKey, value: unknown) => {
-    const next = value == null || value === FILTER_ALL ? '' : String(value);
-
-    filters.value[key] = next;
-    if (key === 'type' && next !== VC_EMPLOYEE_TYPE) filters.value.department_id = '';
-};
+// Departments belong to VC employees only, so leaving that type drops the department with it.
+watch(() => filters.value.type, (type) => {
+    if (type !== VC_EMPLOYEE_TYPE) filters.value.department_id = '';
+});
 
 const clearFilters = () => {
     filters.value = emptyFilters();
@@ -270,37 +256,9 @@ const awaitsCredentials = (user: UserRow) =>
 
 const canVerify = computed(() => hasPermission(`${slug.value}.verify`));
 
-/** Initials, an avatar's worth: "maria.santos" reads as MS, not M. */
-const initialsOf = (username?: string | null) => getInitials((username ?? '').replace(/[._-]+/g, ' '));
-
-const RELATIVE_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
-    ['year', 31_536_000],
-    ['month', 2_592_000],
-    ['week', 604_800],
-    ['day', 86_400],
-    ['hour', 3_600],
-    ['minute', 60],
-];
-const relativeTime = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
-
-/** "3 days ago" — the time since `iso`, in the largest unit it amounts to. */
-const timeAgo = (iso: string) => {
-    const seconds = (Date.parse(iso) - Date.now()) / 1000;
-    const [unit, size] = RELATIVE_UNITS.find(([, length]) => Math.abs(seconds) >= length) ?? RELATIVE_UNITS[RELATIVE_UNITS.length - 1];
-
-    return relativeTime.format(Math.round(seconds / size), unit);
-};
-
 /** Who the user is at a glance — avatar, username, id and email — flagged when soft-deleted. */
 const userCell = (user: UserRow) => h('div', { class: 'flex items-center gap-2.5' }, [
-    h(
-        'span',
-        {
-            class: 'flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-muted-foreground',
-            'aria-hidden': 'true',
-        },
-        initialsOf(user.username),
-    ),
+    avatar(user.username),
     h('div', { class: 'min-w-0 max-w-72' }, [
         h('div', { class: 'flex items-center gap-1.5' }, [
             h('span', { class: 'truncate font-medium' }, user.username),
@@ -541,64 +499,20 @@ const filterParams = (): Record<string, string> => {
 
 const exportReport = (report: CredentialReportOption) => exportCredentialReport(report, filterParams());
 
-const isFetching = ref(false);
-let latestVisit = 0;
+const { pagination, isFetching, queueFetch, onPaginationChange } = useServerListing({
+    listing: () => users.value,
+    url: () => `/${slug.value}`,
+    params: filterParams,
+    visit: () => {
+        const reloadMatches = bulkLookup.value !== null && matchesStale.value;
 
-const fetchUsers = () => {
-    const reloadMatches = bulkLookup.value !== null && matchesStale.value;
-    const visit = ++latestVisit;
-
-    router.get(
-        `/${slug.value}`,
-        {
-            page: pagination.value.current_page,
-            per_page: pagination.value.per_page,
-            ...filterParams(),
-        },
-        {
-            preserveState: true,
-            preserveScroll: true,
-            replace: true,
+        return {
             only: reloadMatches ? [slug.value, 'search_term_matches'] : [slug.value],
-            onStart: () => { isFetching.value = true; },
             // A superseded visit never succeeds, so the counts stay stale until one that carried them lands.
             onSuccess: () => { if (reloadMatches) matchesStale.value = false; },
-            // A superseded visit finishes as it is cancelled; only the latest one settles the list.
-            onFinish: () => { if (visit === latestVisit) isFetching.value = false; },
-        },
-    );
-};
-
-let fetchTimer: ReturnType<typeof setTimeout> | undefined;
-let restartPaging = false;
-
-/**
- * Reload the list after `delay` ms, folding in any reload already waiting. `fromFirstPage`
- * restarts paging, as any change to what is listed must; it holds until the reload goes
- * out, so a page click cannot undo the restart a pending filter change asked for.
- */
-const queueFetch = (delay: number, fromFirstPage = true) => {
-    restartPaging ||= fromFirstPage;
-    clearTimeout(fetchTimer);
-
-    fetchTimer = setTimeout(() => {
-        if (restartPaging) pagination.value.current_page = 1;
-        restartPaging = false;
-        fetchUsers();
-    }, delay);
-};
-
-// A reload still waiting when the page is left would navigate straight back to it.
-onBeforeUnmount(() => clearTimeout(fetchTimer));
-
-/** Page or page-size change from the table. */
-const onPaginationChange = (next: Pagination) => {
-    const current = pagination.value;
-    if (next.current_page === current.current_page && Number(next.per_page) === current.per_page) return;
-
-    pagination.value = { ...next, per_page: Number(next.per_page) };
-    queueFetch(50, false);
-};
+        };
+    },
+});
 
 /** Apply a bulk lookup from page one, listing every entry's matches. */
 const runBulkLookup = (lookup: BulkUserLookup) => {
@@ -645,11 +559,6 @@ watch(
     },
     { deep: true },
 );
-
-// Keep local paging in step with what the server returned.
-watch(users, (next) => {
-    pagination.value = toPagination(next);
-});
 </script>
 
 <template>
@@ -711,28 +620,12 @@ watch(users, (next) => {
                 <!-- Search, bulk lookup and filters -->
                 <CardContent class="flex flex-col gap-3 border-b px-4 py-4 sm:px-6">
                     <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-                        <div v-if="!bulkSearchOpen" class="relative w-full sm:max-w-sm">
-                            <Search
-                                class="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
-                                aria-hidden="true" />
-                            <Input
-                                id="user-search"
-                                v-model="searchQuery"
-                                type="text"
-                                autocomplete="off"
-                                aria-label="Search users"
-                                placeholder="Search username or email..."
-                                class="h-9 pr-8 pl-8"
-                                @keydown.esc="searchQuery = ''" />
-                            <button
-                                v-if="searchQuery"
-                                type="button"
-                                class="absolute top-1/2 right-2 -translate-y-1/2 cursor-pointer rounded-sm text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
-                                aria-label="Clear search"
-                                @click="searchQuery = ''">
-                                <X class="size-4" />
-                            </button>
-                        </div>
+                        <ListSearch
+                            v-if="!bulkSearchOpen"
+                            id="user-search"
+                            v-model="searchQuery"
+                            label="Search users"
+                            placeholder="Search username or email..." />
                         <!-- Many usernames/emails at once: opens "Search multiple users" in place of the single search -->
                         <Button
                             type="button"
@@ -762,39 +655,20 @@ watch(users, (next) => {
                             <SlidersHorizontal class="size-3.5" aria-hidden="true" /> Filters
                         </span>
 
-                        <Select
+                        <FilterSelect
                             v-for="def in filterDefs"
                             :key="def.key"
-                            :model-value="filters[def.key] || FILTER_ALL"
-                            @update:model-value="(value) => setFilter(def.key, value)">
-                            <SelectTrigger
-                                class="h-8 text-xs"
-                                :class="[def.width, filters[def.key] && 'border-primary/40 bg-primary/5 font-medium']"
-                                :aria-label="def.label"
-                                :title="def.label">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectGroup>
-                                    <SelectItem :value="FILTER_ALL" class="text-xs text-muted-foreground">
-                                        {{ def.allLabel }}
-                                    </SelectItem>
-                                    <SelectItem
-                                        v-for="option in def.options"
-                                        :key="option.value"
-                                        :value="option.value"
-                                        class="text-xs">
-                                        {{ option.label }}
-                                    </SelectItem>
-                                </SelectGroup>
-                            </SelectContent>
-                        </Select>
+                            v-model="filters[def.key]"
+                            :label="def.label"
+                            :all-label="def.allLabel"
+                            :options="def.options"
+                            :class="def.width" />
 
                         <Button
                             v-if="activeFilterCount"
                             variant="ghost"
                             size="sm"
-                            class="h-8 cursor-pointer px-2 text-xs text-muted-foreground hover:text-foreground"
+                            class="h-9 cursor-pointer px-2 text-muted-foreground hover:text-foreground"
                             @click="clearFilters">
                             <X class="size-3.5" /> Clear filters ({{ activeFilterCount }})
                         </Button>
