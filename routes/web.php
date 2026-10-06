@@ -97,6 +97,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::post('/toggle_active', 'toggleActive')->name('toggle_active');
                 Route::post('/bulk_toggle_active', 'bulkToggleActive')->name('bulk_toggle_active');
                 Route::post('/bulk_destroy', 'bulkDestroy')->name('bulk_destroy');
+                // The user pane's Activity tab — the audit trail pinned to one user.
+                Route::get('/{id}/activity_logs', 'activityLogs')->whereNumber('id')->name('activity_logs');
         });
 
         //Roles

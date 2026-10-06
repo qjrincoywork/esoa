@@ -20,6 +20,7 @@ import { useModulePermissions } from '@/composables/useModulePermissions';
 import { usePane } from '@/composables/usePane';
 import { router } from '@inertiajs/vue3';
 import { downloadExport } from '@/lib/downloadExport';
+import type { ActivityLogPage, ActivityLogPageParams } from '@/composables/activityLogs';
 
 export interface User {
   id?: number | string;
@@ -178,7 +179,25 @@ export interface SearchTermMatch {
 }
 
 /** The tabs the user right pane offers. */
-export type UserPaneTab = 'details' | 'account_mapping';
+export type UserPaneTab = 'details' | 'account_mapping' | 'activity_logs';
+
+/** The filters the Activity tab narrows a user's trail by. Matches `User\ActivityLogRequest`. */
+export interface UserActivityLogParams extends ActivityLogPageParams {
+  search_string?: string
+  log_name?: string
+  event?: string
+  date_from?: string
+  date_to?: string
+}
+
+/** Everything `users.activity_logs` returns — one page of the trail and its filter choices. */
+export interface UserActivityLogPayload {
+  activity_logs: ActivityLogPage
+  filter_options: {
+    modules: Array<{ value: string; name: string }>
+    events: Array<{ value: string; name: string }>
+  }
+}
 
 export function useUsers() {
   const { slug } = useModulePermissions();
@@ -191,6 +210,7 @@ export function useUsers() {
     setPaneError,
     setPaneContent,
     rightPane,
+    topPane,
   } = usePane();
 
   const rightPaneVisible = toRef(rightPane, 'open');
@@ -199,6 +219,14 @@ export function useUsers() {
   const rightPaneError = toRef(rightPane, 'error');
   const rightPaneContentComponent = toRef(rightPane, 'contentComponent');
   const rightPaneComponentProps = toRef(rightPane, 'componentProps');
+
+  // The Activity tab opens an entry over the user pane, so the page hosts a top pane too.
+  const topPaneVisible = toRef(topPane, 'open');
+  const topPaneTitle = toRef(topPane, 'title');
+  const topPaneLoading = toRef(topPane, 'loading');
+  const topPaneError = toRef(topPane, 'error');
+  const topPaneContentComponent = toRef(topPane, 'contentComponent');
+  const topPaneComponentProps = toRef(topPane, 'componentProps');
 
   const editUser = async (user: User) => {
     try {
@@ -1038,6 +1066,35 @@ export function useUsers() {
   };
 
   /**
+   * Fetch one page of what a user has done, narrowed by the Activity tab's filters.
+   *
+   * Blank filters are left off the query rather than sent empty, so "no filter" and
+   * "filter by nothing" cannot be confused. Returns null when the request fails.
+   */
+  const getUserActivityLogs = async (
+    userId: number | string,
+    params: UserActivityLogParams = {},
+  ): Promise<UserActivityLogPayload | null> => {
+    const query = Object.fromEntries(
+      Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== ''),
+    ) as Record<string, string | number>;
+
+    try {
+      const response = await get<UserActivityLogPayload>(`/${slug.value}/${userId}/activity_logs`, query);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch the user activity');
+      }
+
+      return response.data ?? null;
+    } catch {
+      dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
+
+      return null;
+    }
+  };
+
+  /**
    * Persist a user's account/branch mappings.
    *
    * The full set is posted because the endpoint treats it as the complete intended
@@ -1133,6 +1190,7 @@ export function useUsers() {
     getUsersWithAccounts,
     getUserAccountMapping,
     saveUserAccountMapping,
+    getUserActivityLogs,
     openUserPane,
     manageUserRoles,
     bulkManageUserRoles,
@@ -1151,6 +1209,12 @@ export function useUsers() {
     rightPaneError,
     rightPaneContentComponent,
     rightPaneComponentProps,
+    topPaneVisible,
+    topPaneTitle,
+    topPaneLoading,
+    topPaneError,
+    topPaneContentComponent,
+    topPaneComponentProps,
   };
 }
 

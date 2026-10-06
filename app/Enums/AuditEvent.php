@@ -11,7 +11,8 @@ use BenSampo\Enum\Enum;
  * model events, plus the batch-upload outcomes, which are recorded by hand because
  * they are not model events at all. A rejected batch in particular changes nothing —
  * that is exactly why it is worth a trail, since otherwise an attempt that failed
- * validation leaves no trace of having been made.
+ * validation leaves no trace of having been made. The authentication events are written
+ * by hand for the same reason: signing in changes no record anyone edits.
  *
  * They are listed here so the filter offers exactly what can occur — reading them back
  * out of the table would mean a query per page load, and would silently drop an event
@@ -27,6 +28,9 @@ final class AuditEvent extends Enum
     public const BATCH_REJECTED = 'batch_rejected';
     public const BATCH_PARTIAL = 'batch_partial';
     public const BATCH_FAILED = 'batch_failed';
+    public const LOGGED_IN = 'logged_in';
+    public const LOGGED_OUT = 'logged_out';
+    public const PASSWORD_CHANGED = 'password_changed';
 
     /**
      * Map an event to how it is described in the interface.
@@ -44,6 +48,9 @@ final class AuditEvent extends Enum
             self::BATCH_REJECTED => 'Batch rejected',
             self::BATCH_PARTIAL => 'Batch partially uploaded',
             self::BATCH_FAILED => 'Batch failed',
+            self::LOGGED_IN => 'Signed in',
+            self::LOGGED_OUT => 'Signed out',
+            self::PASSWORD_CHANGED => 'Password changed',
             default => ucfirst((string) $value),
         };
     }

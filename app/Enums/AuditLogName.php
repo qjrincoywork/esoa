@@ -14,12 +14,17 @@ use BenSampo\Enum\Enum;
  * The value is what lands in the database; the label is how the module is spoken about
  * in the interface, which is not always the model's name (a Soa is a billing invoice,
  * an AccountPayment is a remittance advice).
+ *
+ * Authentication is the one channel that is not a module's records: it holds what a
+ * person does with their own session and credentials ({@see \App\Support\AuthenticationAudit}),
+ * so a user's trail shows when they were here, not only what they changed.
  */
 final class AuditLogName extends Enum
 {
     public const BILLING_INVOICE = 'billing_invoice';
     public const CONCERN = 'concern';
     public const REMITTANCE_ADVICE = 'remittance_advice';
+    public const AUTHENTICATION = 'authentication';
 
     /**
      * Map an audit channel to the module name people know it by.
@@ -32,6 +37,7 @@ final class AuditLogName extends Enum
             self::BILLING_INVOICE => 'Billing invoice',
             self::CONCERN => 'Concern',
             self::REMITTANCE_ADVICE => 'Remittance advice',
+            self::AUTHENTICATION => 'Authentication',
             default => 'Record',
         };
     }

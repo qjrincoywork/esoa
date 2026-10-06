@@ -41,6 +41,7 @@ class RolePermissionSeeder extends Seeder
             'users.all_permissions',
             'users.update_permissions',
             'users.bulk_update_permissions',
+            'users.activity_logs',
 
             // activity logs (superadmin only — granted via syncPermissions below)
             'activity_logs.index',

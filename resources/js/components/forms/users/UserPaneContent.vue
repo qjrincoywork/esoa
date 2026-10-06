@@ -1,18 +1,21 @@
 <script setup lang="ts">
 /**
- * Right-pane body for a user: their details, and their account/branch mapping.
+ * Right-pane body for a user: their details, their account/branch mapping, and what
+ * they have done.
  *
  * The pane is reached two ways and opens on a different tab for each — a row click
  * lands on the details tab, the mapping action lands on the mapping tab — but it is
- * one pane either way, so an administrator can read who a user is and change what they
- * can see without leaving the screen. The mapping tab appears only for a role that
- * holds the mapping permission, and only mounts its panels once it is on screen, so a
- * pane opened to read details never queries the account directory.
+ * one pane either way, so an administrator can read who a user is, change what they
+ * can see and look back over what they did without leaving the screen. The mapping and
+ * activity tabs each appear only for a role holding their permission, and only mount
+ * their panels once they are on screen, so a pane opened to read details never queries
+ * the account directory or the audit trail.
  */
 import { computed, ref, watch } from 'vue';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import UserAccountMappingForm from '@/components/forms/users/UserAccountMappingForm.vue';
+import UserActivityLogList from '@/components/forms/users/UserActivityLogList.vue';
 import { useModulePermissions } from '@/composables/useModulePermissions';
 import type { User, UserAccountMapping, UserPaneDetails, UserPaneTab } from '@/composables/users';
 
@@ -49,9 +52,19 @@ const canMap = computed(() =>
   hasPermission(`${slug.value}.account_mapping`) && user.value?.allows_account_mapping === true,
 );
 
+/** The user's audit trail is the trail's own audience (superadmin), granted as a permission. */
+const canViewActivity = computed(() => hasPermission(`${slug.value}.activity_logs`));
+
+/** Which tabs are on offer for this user; details always are. */
+const availableTabs = computed<Record<UserPaneTab, boolean>>(() => ({
+  details: true,
+  account_mapping: canMap.value,
+  activity_logs: canViewActivity.value,
+}));
+
 /** The requested tab, unless it is not on offer for this user. */
 const resolveInitialTab = (): UserPaneTab =>
-  props.initialTab === 'account_mapping' && canMap.value ? 'account_mapping' : 'details';
+  availableTabs.value[props.initialTab] ? props.initialTab : 'details';
 
 const activeTab = ref<UserPaneTab>(resolveInitialTab());
 
@@ -125,6 +138,9 @@ const onMappingSaved = (saved: UserAccountMapping[]) => {
         <TabsTrigger v-if="canMap" class="cursor-pointer" value="account_mapping">
           Accounts &amp; Branches
         </TabsTrigger>
+        <TabsTrigger v-if="canViewActivity" class="cursor-pointer" value="activity_logs">
+          Activity
+        </TabsTrigger>
       </TabsList>
 
       <TabsContent value="details">
@@ -168,6 +184,13 @@ const onMappingSaved = (saved: UserAccountMapping[]) => {
             :limit="user?.account_mapping_limit ?? null"
             :type-label="user?.type_label ?? null"
             @saved="onMappingSaved" />
+        </div>
+      </TabsContent>
+
+      <TabsContent v-if="canViewActivity" value="activity_logs">
+        <!-- Mounted only while this tab is open, so the trail is queried on demand -->
+        <div v-if="activeTab === 'activity_logs'" class="pt-2">
+          <UserActivityLogList :user-id="user?.id ?? props.user?.id ?? ''" />
         </div>
       </TabsContent>
     </Tabs>
