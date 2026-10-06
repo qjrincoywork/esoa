@@ -10,6 +10,7 @@ import ManageFileForm from '@/components/forms/soas/ManageFileForm.vue';
 import BatchUploadForm from '@/components/forms/soas/BatchUploadForm.vue';
 import { computed, ref, shallowRef, toRef, type Component, type Ref } from 'vue';
 import { Auth, Soa, User } from '@/types';
+import { downloadExport } from '@/lib/downloadExport';
 let formApi: { getFormData: () => FormData | null } | null = null;
 
 /** Client-side overlays for list rows until the next Inertia `soas` refresh (module singleton). */
@@ -533,48 +534,11 @@ export function useSoas() {
   const exportBillingInvoices = async (params: Record<string, string | number>) => {
     showLoader();
     try {
-      const qs = new URLSearchParams();
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== '' && value !== undefined && value !== null) {
-          qs.set(key, String(value));
-        }
-      });
-
-      const response = await fetch(`/${slug.value}/export?${qs.toString()}`, {
-        method: 'GET',
-        credentials: 'same-origin',
-        headers: {
-          Accept: 'application/vnd.ms-excel, application/json',
-          'X-Requested-With': 'XMLHttpRequest',
-        },
-      });
-
-      const contentType = response.headers.get('Content-Type') ?? '';
-
-      if (!response.ok) {
-        let message = 'Export failed.';
-        if (contentType.includes('application/json')) {
-          const body = (await response.json()) as { message?: string };
-          message = body?.message ?? message;
-        }
-        throw new Error(message);
-      }
-
-      const blob = await response.blob();
-      const disposition = response.headers.get('Content-Disposition') ?? '';
-      const match = disposition.match(/filename[^;=\n]*=["']?([^"';\n]+)["']?/i);
-      const filename =
-        match?.[1]?.trim() ??
-        `billing_invoices_${new Date().toISOString().slice(0, 10)}.xls`;
-
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
+      await downloadExport(
+        `/${slug.value}/export`,
+        params,
+        `billing_invoices_${new Date().toISOString().slice(0, 10)}.xls`,
+      );
 
       dispatchNotification({
         title: 'Success',

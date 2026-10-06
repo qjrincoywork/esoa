@@ -30,8 +30,9 @@ class ActivityLogListResource extends JsonResource
         return [
             'id' => $this->id,
             'logged_at' => CommonHelper::formatDate($this->created_at, true),
-            // The orderable value, since the label sorts alphabetically.
-            'logged_at_value' => $this->created_at?->toDateTimeString(),
+            // The machine-readable value, since the label sorts alphabetically and does not
+            // parse: ISO 8601 still orders as text, and reads back as "2 hours ago".
+            'logged_at_value' => $this->created_at?->toIso8601String(),
 
             'log_name' => $this->log_name,
             'module' => AuditLogName::label($this->log_name),

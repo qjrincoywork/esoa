@@ -9,6 +9,7 @@ use App\Enums\IsActive;
 use App\Enums\OrderType;
 use App\Enums\Server;
 use App\Enums\TenancyScope;
+use App\Models\UserAccount;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use Ramsey\Collection\Sort;
@@ -294,6 +295,66 @@ class SqlDatabase
     }
 
     /**
+     * Retrieve the expiry date of many accounts in one round trip.
+     *
+     * ac_code is not unique in HMS, so each code is folded to the latest expiry
+     * recorded against it — the same reading {@see attachBranchAccountStanding()} gives
+     * a branch's account, so an account and its branches never disagree on it.
+     *
+     * @param  array<int, string>  $accountCodes
+     * @return \Illuminate\Support\Collection<string, string|null> Expiry keyed by code.
+     */
+    public function getAccountExpiriesByCodes(array $accountCodes)
+    {
+        $accountCodes = array_values(array_unique(array_filter($accountCodes)));
+        $expiries = collect();
+
+        // Batched for the same reason as {@see getAccountNamesByCodes()}.
+        foreach (SqlServerBinding::chunkValues($accountCodes) as $batch) {
+            $expiries = $expiries->union(
+                $this->db
+                    ->table('Accounts')
+                    ->selectRaw('ac_code, MAX(ac_expiry) AS ac_expiry')
+                    ->whereIn('ac_code', $batch)
+                    ->groupBy('ac_code')
+                    ->pluck('ac_expiry', 'ac_code')
+            );
+        }
+
+        return $expiries;
+    }
+
+    /**
+     * Count the cardholders of many accounts or branches in one round trip.
+     *
+     * Codes HMS records no cardholder against are simply absent from the result, so
+     * callers read a miss as zero.
+     *
+     * @param  string  $memberColumn  `ch_accountid` for accounts, `ch_branch_code` for branches.
+     * @param  array<int, string>  $codes
+     * @return \Illuminate\Support\Collection<string, int> Member count keyed by code.
+     */
+    public function getMemberCountsByCodes(string $memberColumn, array $codes)
+    {
+        $codes = array_values(array_unique(array_filter($codes)));
+        $counts = collect();
+
+        // Batched for the same reason as {@see getAccountNamesByCodes()}.
+        foreach (SqlServerBinding::chunkValues($codes) as $batch) {
+            $counts = $counts->union(
+                $this->db
+                    ->table('cholders')
+                    ->selectRaw("{$memberColumn}, COUNT(*) AS member_count")
+                    ->whereIn($memberColumn, $batch)
+                    ->groupBy($memberColumn)
+                    ->pluck('member_count', $memberColumn)
+            );
+        }
+
+        return $counts;
+    }
+
+    /**
      * Retrieve the display names of many HMS system users in one round trip.
      *
      * Legacy remarks record their author as an HMS login; resolving each one on its own
@@ -348,7 +409,11 @@ class SqlDatabase
      * (TPA = codes starting with "TP", HMO = codes not starting with "TP") and by
      * a name substring, keeping any explicitly selected code in the results.
      *
-     * @param array $params Supports per_page, selected_code, type, and name.
+     * With `with_badges`, each row also carries `account_expiry` and `member_count`
+     * for {@see \App\Enums\AccountMappingBadge}. It is opt-in so the pickers that only
+     * need a name and a code are not charged the two extra page-sized lookups.
+     *
+     * @param array $params Supports per_page, selected_code, type, name and with_badges.
      * @return \Illuminate\Pagination\Paginator
      */
     public function getAccountsByParams($params)
@@ -370,9 +435,14 @@ class SqlDatabase
                     }
                 });
             })
+            ->tap(fn ($query) => $this->orderSelectedFirst($query, 'ac_code', $selectedCode))
             ->orderBy('ac_name');
 
-        return $result->paginate($perPage);
+        $page = $result->paginate($perPage);
+
+        return empty($params['with_badges'])
+            ? $page
+            : $this->attachAccountExpiry($this->attachAccountMemberCounts($page));
     }
 
     /**
@@ -451,6 +521,68 @@ class SqlDatabase
                 // Any other role, or none, has no directory access.
                 $query->whereRaw('1 = 0');
         }
+    }
+
+    /**
+     * Narrow a branch directory query to the account/branch pairs an assigned-account
+     * user is mapped to.
+     *
+     * {@see applyAccountDirectoryFilter()} confines by account only, which would still
+     * offer every branch of an account whose mapping names one branch — a branch whose
+     * invoices the user can never see. The pairs come from
+     * {@see \App\Models\User::scopedAccountPairs()}, the same rule the SOA row scope uses,
+     * so the picker offers exactly the branches that can return rows. A pair with no
+     * branch covers every branch of its account. Other scopes are left untouched.
+     *
+     * @param  \Illuminate\Database\Query\Builder  $query
+     * @param  \App\Models\User|null  $authUser
+     * @return void
+     */
+    private function applyAssignedBranchFilter($query, $authUser): void
+    {
+        if (TenancyScope::forUser($authUser) !== TenancyScope::ASSIGNED_ACCOUNTS) {
+            return;
+        }
+
+        $pairs = $authUser->scopedAccountPairs();
+
+        if (empty($pairs)) {
+            $query->whereRaw('1 = 0');
+
+            return;
+        }
+
+        $query->where(function ($pairQuery) use ($pairs) {
+            foreach ($pairs as $pair) {
+                $pairQuery->orWhere(function ($sub) use ($pair) {
+                    $sub->where('br_ac_code', $pair['account_code']);
+                    if ($pair['branch_code'] !== null) {
+                        $sub->where('br_code', $pair['branch_code']);
+                    }
+                });
+            }
+        });
+    }
+
+    /**
+     * Sort the currently selected code to the top of a picker page.
+     *
+     * Lets a picker restored from a URL (or scrolled past its first page) still show the
+     * selected row's name without a separate lookup. Ordering only — it never adds a row
+     * the other filters exclude.
+     *
+     * @param  \Illuminate\Database\Query\Builder  $query
+     * @param  string  $codeColumn
+     * @param  string|null  $selectedCode
+     * @return void
+     */
+    private function orderSelectedFirst($query, string $codeColumn, $selectedCode): void
+    {
+        if (empty($selectedCode)) {
+            return;
+        }
+
+        $query->orderByRaw("CASE WHEN {$codeColumn} = ? THEN 0 ELSE 1 END", [(string) $selectedCode]);
     }
 
     /**
@@ -578,7 +710,7 @@ class SqlDatabase
      * visible rather than silently decided here.
      *
      * @param  array  $params  Supports per_page, search_string, code_prefix, account_type,
-     *                         members_min, members_max, exclude_prefixes and
+     *                         members_min, members_max, exclude_prefixes, include_mapped and
      *                         assigned_account_codes.
      * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
      */
@@ -589,7 +721,7 @@ class SqlDatabase
 
         $query = $this->db
             ->table('Accounts')
-            ->select('Accounts.ac_code', 'Accounts.ac_name', 'Accounts.ac_ma_code', 'Accounts.ac_status')
+            ->select('Accounts.ac_code', 'Accounts.ac_name', 'Accounts.ac_ma_code', 'Accounts.ac_status', 'Accounts.ac_expiry')
             ->tap(fn ($q) => $this->applyAccountDirectoryFilter($q, auth()->user(), 'Accounts.ac_code'))
             ->tap(fn ($q) => $this->applyExcludedAccountPrefixes($q, 'Accounts.ac_code', $params['exclude_prefixes'] ?? []))
             ->tap(fn ($q) => $this->applyAccountCodePrefixFilter($q, 'Accounts.ac_code', $params['code_prefix'] ?? null))
@@ -605,7 +737,9 @@ class SqlDatabase
 
         $this->applyMemberCountRange($query, $params, 'ch_accountid', 'Accounts.ac_code');
 
-        return $this->attachAccountMemberCounts($query->orderBy('Accounts.ac_name')->paginate($perPage));
+        $page = $this->attachAccountMemberCounts($query->orderBy('Accounts.ac_name')->paginate($perPage));
+
+        return $this->attachAccountMappedUsers($page, (bool) ($params['include_mapped'] ?? false));
     }
 
     /**
@@ -620,7 +754,7 @@ class SqlDatabase
      * together.
      *
      * @param  array  $params  Supports per_page, search_string, code_prefix, account_type,
-     *                         members_min, members_max, exclude_prefixes,
+     *                         members_min, members_max, exclude_prefixes, include_mapped,
      *                         assigned_branch_codes and accounts_mapped_in_full.
      * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
      */
@@ -661,7 +795,105 @@ class SqlDatabase
 
         $this->applyMemberCountRange($query, $params, 'ch_branch_code', 'Branches.br_code');
 
-        return $this->attachBranchMemberCounts($query->orderBy('Branches.br_branch_name')->paginate($perPage));
+        $page = $this->attachBranchAccountStanding(
+            $this->attachBranchMemberCounts($query->orderBy('Branches.br_branch_name')->paginate($perPage))
+        );
+
+        return $this->attachBranchMappedUsers($page, (bool) ($params['include_mapped'] ?? false));
+    }
+
+    /**
+     * Retrieves a paginated list of one account's HMS branches, each carrying how many
+     * cardholders and which users it has — the "Branches" tab of the directory pane.
+     *
+     * Shaped exactly like {@see getUnassignedBranchesByParams()} (same columns, same
+     * member-count and mapped-user attachment) so both can be served through the same
+     * {@see \App\Http\Resources\UnmappedBranchResource}, but keyed on one account
+     * rather than subtracting what is assigned — every branch of the account is
+     * relevant here, mapped or not.
+     *
+     * @param  string  $accountCode
+     * @param  array  $params  Supports per_page, page and name.
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     */
+    public function getAccountBranchesByParams(string $accountCode, array $params)
+    {
+        $perPage = $params['per_page'] ?? config('vc.default_pages');
+        $search = trim((string) ($params['name'] ?? ''));
+
+        $query = $this->db
+            ->table('Branches')
+            ->select('Branches.br_code', 'Branches.br_branch_name', 'Branches.br_ac_code')
+            ->where('Branches.br_ac_code', $accountCode)
+            ->when($search !== '', function ($q) use ($search) {
+                $q->where(function ($sub) use ($search) {
+                    $sub->where('Branches.br_branch_name', 'like', '%'.$search.'%')
+                        ->orWhere('Branches.br_code', 'like', '%'.$search.'%');
+                });
+            });
+
+        $page = $this->attachBranchAccountStanding($this->attachBranchMemberCounts(
+            $query->orderBy('Branches.br_branch_name')->orderBy('Branches.br_code')->paginate($perPage)
+        ));
+
+        return $this->attachBranchMappedUsers($page, true);
+    }
+
+    /**
+     * Retrieves a paginated list of the users mapped to one account — any mapping
+     * naming it, whole or by one of its branches ({@see \App\Models\UserAccount::queryForAccountCode()}).
+     *
+     * @param  string  $accountCode
+     * @param  array  $params  Supports per_page, page and search.
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     */
+    public function getAccountMappedUsersByParams(string $accountCode, array $params)
+    {
+        $perPage = $params['per_page'] ?? config('vc.default_pages');
+
+        return $this
+            ->applyMappedUserSearch(UserAccount::queryForAccountCode($accountCode), $params)
+            ->orderByDesc('created_at')
+            ->paginate($perPage);
+    }
+
+    /**
+     * Retrieves a paginated list of the users mapped to one branch — directly, or
+     * through its account being mapped in full ({@see \App\Models\UserAccount::queryForBranchCode()}).
+     *
+     * @param  string  $accountCode
+     * @param  string  $branchCode
+     * @param  array  $params  Supports per_page, page and search.
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     */
+    public function getBranchMappedUsersByParams(string $accountCode, string $branchCode, array $params)
+    {
+        $perPage = $params['per_page'] ?? config('vc.default_pages');
+
+        return $this
+            ->applyMappedUserSearch(UserAccount::queryForBranchCode($accountCode, $branchCode), $params)
+            ->orderByDesc('created_at')
+            ->paginate($perPage);
+    }
+
+    /**
+     * Narrow a mapped-users query to the reader's search term, matched against the
+     * mapped user's own username or email rather than anything on the mapping row.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder  $query
+     * @param  array  $params
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    private function applyMappedUserSearch($query, array $params)
+    {
+        $search = trim((string) ($params['search'] ?? ''));
+
+        return $query->when($search !== '', function ($q) use ($search) {
+            $q->whereHas('user', function ($userQuery) use ($search) {
+                $userQuery->where('username', 'like', '%'.$search.'%')
+                    ->orWhere('email', 'like', '%'.$search.'%');
+            });
+        });
     }
 
     /**
@@ -879,7 +1111,10 @@ class SqlDatabase
                 });
             })
             ->when(!empty($params['policynum']), fn ($q) => $q->where('ch_policynum', 'like', '%'.$params['policynum'].'%'))
+            // `ch_id` breaks ties: many cardholders share a name, and SQL Server's
+            // OFFSET/FETCH over a non-unique order can repeat or skip rows between pages.
             ->orderBy('ch_name')
+            ->orderBy('ch_id')
             ->paginate($perPage);
     }
 
@@ -983,18 +1218,75 @@ class SqlDatabase
     private function attachAccountMemberCounts($page)
     {
         $rows = $page->getCollection();
-        $accountCodes = $rows->pluck('ac_code')->filter()->unique()->values()->all();
-
-        $counts = $accountCodes === []
-            ? collect()
-            : $this->db->table('cholders')
-                ->selectRaw('ch_accountid, COUNT(*) AS member_count')
-                ->whereIn('ch_accountid', $accountCodes)
-                ->groupBy('ch_accountid')
-                ->pluck('member_count', 'ch_accountid');
+        $counts = $this->getMemberCountsByCodes('ch_accountid', $rows->pluck('ac_code')->all());
 
         $rows->transform(function ($row) use ($counts) {
             $row->member_count = (int) ($counts[$row->ac_code] ?? 0);
+
+            return $row;
+        });
+
+        return $page;
+    }
+
+    /**
+     * Fill in `account_expiry` for the accounts on one page, in one grouped query.
+     *
+     * Folded per code by {@see getAccountExpiriesByCodes()} rather than read off each
+     * row, so a duplicated ac_code carries one expiry — the one its branches carry too.
+     *
+     * @param  \Illuminate\Contracts\Pagination\LengthAwarePaginator  $page
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     */
+    private function attachAccountExpiry($page)
+    {
+        $rows = $page->getCollection();
+        $expiries = $this->getAccountExpiriesByCodes($rows->pluck('ac_code')->all());
+
+        $rows->transform(function ($row) use ($expiries) {
+            $row->account_expiry = $expiries[$row->ac_code] ?? null;
+
+            return $row;
+        });
+
+        return $page;
+    }
+
+    /**
+     * Fill in each branch's account standing — whether the account is in force and when
+     * it expires — for the branches on one page, in one grouped query.
+     *
+     * A branch has neither of its own. Resolved per page rather than joined into the
+     * listing, because joining Accounts would duplicate and drop branch rows (ac_code
+     * is not unique, and some branches point at an account HMS no longer has).
+     *
+     * @param  \Illuminate\Contracts\Pagination\LengthAwarePaginator  $page
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     */
+    private function attachBranchAccountStanding($page)
+    {
+        $rows = $page->getCollection();
+        $accountCodes = $rows->pluck('br_ac_code')->filter()->unique()->values()->all();
+
+        // ac_code is not unique in HMS, so each code is folded to one row: active when
+        // any of its rows is (the reading applyBranchAccountStatusFilter() filters by),
+        // and running until the latest expiry recorded against it.
+        $standing = $accountCodes === []
+            ? collect()
+            : $this->db->table('Accounts')
+                ->selectRaw(
+                    'ac_code, MAX(CASE WHEN ac_status = ? THEN 1 ELSE 0 END) AS is_active, MAX(ac_expiry) AS ac_expiry',
+                    [AccountStatus::ACTIVE]
+                )
+                ->whereIn('ac_code', $accountCodes)
+                ->groupBy('ac_code')
+                ->get()
+                ->keyBy('ac_code');
+
+        $rows->transform(function ($row) use ($standing) {
+            $account = $standing[$row->br_ac_code] ?? null;
+            $row->account_is_active = (bool) ($account->is_active ?? false);
+            $row->account_expiry = $account->ac_expiry ?? null;
 
             return $row;
         });
@@ -1018,18 +1310,87 @@ class SqlDatabase
     private function attachBranchMemberCounts($page)
     {
         $rows = $page->getCollection();
-        $branchCodes = $rows->pluck('br_code')->filter()->unique()->values()->all();
-
-        $counts = $branchCodes === []
-            ? collect()
-            : $this->db->table('cholders')
-                ->selectRaw('ch_branch_code, COUNT(*) AS member_count')
-                ->whereIn('ch_branch_code', $branchCodes)
-                ->groupBy('ch_branch_code')
-                ->pluck('member_count', 'ch_branch_code');
+        $counts = $this->getMemberCountsByCodes('ch_branch_code', $rows->pluck('br_code')->all());
 
         $rows->transform(function ($row) use ($counts) {
             $row->member_count = (int) ($counts[$row->br_code] ?? 0);
+
+            return $row;
+        });
+
+        return $page;
+    }
+
+    /**
+     * Fill in `mapped_users` for the accounts on one page — who, if anyone, already
+     * holds each one.
+     *
+     * Left as an empty list without a query when `$enabled` is false: the default
+     * listing already excludes every mapped account, so every row would resolve to
+     * "nobody" and the lookup would be wasted. It only runs when a search has widened
+     * the listing to include what is already mapped ({@see ListRequest::lookupParams()}),
+     * and even then it is scoped to the page's own codes rather than the whole table.
+     *
+     * @param  \Illuminate\Contracts\Pagination\LengthAwarePaginator  $page
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     */
+    private function attachAccountMappedUsers($page, bool $enabled)
+    {
+        $rows = $page->getCollection();
+
+        if (!$enabled) {
+            $rows->each(function ($row) {
+                $row->mapped_users = [];
+            });
+
+            return $page;
+        }
+
+        $accountCodes = $rows->pluck('ac_code')->filter()->unique()->values()->all();
+        $usernames = $accountCodes === [] ? [] : UserAccount::usernamesByAccountCodes($accountCodes);
+
+        $rows->transform(function ($row) use ($usernames) {
+            $row->mapped_users = $usernames[$row->ac_code] ?? [];
+
+            return $row;
+        });
+
+        return $page;
+    }
+
+    /**
+     * Fill in `mapped_users` for the branches on one page.
+     *
+     * A branch is held two ways, so both are looked up and merged: its own code mapped
+     * directly, or its account mapped in full ({@see \App\Models\UserAccount::mappingKey()}),
+     * the same two ways {@see getUnassignedBranchesByParams()} subtracts when this is off.
+     *
+     * @param  \Illuminate\Contracts\Pagination\LengthAwarePaginator  $page
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     */
+    private function attachBranchMappedUsers($page, bool $enabled)
+    {
+        $rows = $page->getCollection();
+
+        if (!$enabled) {
+            $rows->each(function ($row) {
+                $row->mapped_users = [];
+            });
+
+            return $page;
+        }
+
+        $branchCodes = $rows->pluck('br_code')->filter()->unique()->values()->all();
+        $accountCodes = $rows->pluck('br_ac_code')->filter()->unique()->values()->all();
+
+        $byBranch = $branchCodes === [] ? [] : UserAccount::usernamesByBranchCodes($branchCodes);
+        $byAccountInFull = $accountCodes === [] ? [] : UserAccount::usernamesByAccountCodesMappedInFull($accountCodes);
+
+        $rows->transform(function ($row) use ($byBranch, $byAccountInFull) {
+            $row->mapped_users = array_values(array_unique(array_merge(
+                $byBranch[$row->br_code] ?? [],
+                $byAccountInFull[$row->br_ac_code] ?? []
+            )));
 
             return $row;
         });
@@ -1748,7 +2109,11 @@ class SqlDatabase
      * code and a name substring, keeping and prioritizing any explicitly selected
      * branch code, ordered by branch name.
      *
-     * @param array $params Supports per_page, selected_code, account_code, and name.
+     * With `with_badges`, each row also carries `member_count` and its account's
+     * standing (`account_expiry` among it) for {@see \App\Enums\AccountMappingBadge} —
+     * opt-in for the same reason as {@see getAccountsByParams()}.
+     *
+     * @param array $params Supports per_page, selected_code, account_code, name and with_badges.
      * @return \Illuminate\Pagination\Paginator
      */
     public function getBranchesByParams($params)
@@ -1760,6 +2125,7 @@ class SqlDatabase
             ->table('Branches')
             ->select('br_branch_name', 'br_ac_code', 'br_code')
             ->tap(fn ($query) => $this->applyAccountDirectoryFilter($query, auth()->user(), 'br_ac_code'))
+            ->tap(fn ($query) => $this->applyAssignedBranchFilter($query, auth()->user()))
             ->tap(fn ($query) => $this->applyExcludedAccountPrefixes($query, 'br_ac_code', $params['exclude_prefixes'] ?? []))
             ->when(isset($params['account_code']), function ($query) use ($params) {
                 $query->where('br_ac_code', $params['account_code']);
@@ -1772,9 +2138,14 @@ class SqlDatabase
                     }
                 });
             })
+            ->tap(fn ($query) => $this->orderSelectedFirst($query, 'br_code', $selectedCode))
             ->orderBy('br_branch_name');
 
-        return $result->paginate($perPage);
+        $page = $result->paginate($perPage);
+
+        return empty($params['with_badges'])
+            ? $page
+            : $this->attachBranchAccountStanding($this->attachBranchMemberCounts($page));
     }
 
     /**

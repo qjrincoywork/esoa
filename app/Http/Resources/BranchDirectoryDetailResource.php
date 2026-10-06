@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Enums\AccountCodePrefix;
+use App\Enums\AccountStanding;
 use App\Enums\AccountType;
 use App\Helpers\CommonHelper;
 use Illuminate\Http\Request;
@@ -44,6 +45,9 @@ class BranchDirectoryDetailResource extends JsonResource
             // longer has, and they still need to read as something.
             'account_name' => $this->account_name ?: $accountCode,
             'account_is_active' => (bool) ($this->account_is_active ?? false),
+            // The account's standing — a branch has none of its own.
+            'standing' => AccountStanding::present($this->account_standing ?? AccountStanding::INACTIVE),
+            'account_expiry_date' => $this->account_expiry_date ?? null,
             'main_account_code' => $this->br_ma_code,
 
             // A branch is classified by the account it belongs to, not by its own code.

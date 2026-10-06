@@ -13,30 +13,45 @@
  * panel only ever offers something that would actually change the mapping. Saving posts
  * the whole assigned set, since that endpoint treats the payload as the complete
  * intended state — it grants and revokes at once.
+ *
+ * Every row on either panel carries its badges — account or branch, plus expired and
+ * no members where they apply — decided and styled server-side by
+ * `App\Enums\AccountMappingBadge`, so this component only renders what it is sent.
  */
 import { computed, onMounted, ref, watch } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import DragDropTransfer from '@/components/DragDropTransfer.vue';
-import { useUsers, type UserAccountMapping } from '@/composables/users';
+import CopyUserAccessPicker from '@/components/forms/users/CopyUserAccessPicker.vue';
+import MappingBadge from '@/components/forms/users/MappingBadge.vue';
+import {
+  useUsers,
+  type CopiedUserAccess,
+  type CopyAccessResult,
+  type MappingBadges,
+  type UserAccountMapping,
+} from '@/composables/users';
 import { debounce } from '@/composables/utilities/helper';
 import { ArrowLeft, Building2, ChevronRight, Info, RotateCcw, Save, Search, X } from 'lucide-vue-next';
 import FormField from '@/components/FormField.vue';
 
 type Option = { value: string | number; name: string };
 
+/** An account option, carrying the badges the lookup was asked to attach. */
+type AccountOption = Option & MappingBadges;
+
 /**
  * A branch option carries the account it belongs to, because a branch found by a
  * directory-wide search has no other way to say which account it maps under.
  */
-type BranchOption = Option & {
+type BranchOption = Option & MappingBadges & {
   account_code?: string | number;
   account_name?: string;
 };
 
 /** One row of the available panel, whichever directory it came from. */
-type SourceItem = {
+type SourceItem = Required<MappingBadges> & {
   key: string;
   kind: 'account' | 'branch';
   account_type: string;
@@ -47,6 +62,16 @@ type SourceItem = {
   title: string;
   subtitle: string;
 };
+
+/**
+ * A row's badges, normalised. They are decided server-side (`AccountMappingBadge`) and
+ * travel with the row from wherever it came — a picker page, a saved mapping or a
+ * copied one — so a dropped row is never re-derived here and reads like a saved one.
+ */
+const badgesOf = (row: MappingBadges): Required<MappingBadges> => ({
+  kind_badge: row.kind_badge ?? null,
+  status_badges: row.status_badges ?? [],
+});
 
 const props = withDefaults(
   defineProps<{
@@ -105,6 +130,7 @@ const toMapping = (row: Partial<UserAccountMapping>): UserAccountMapping => {
     account_name: String(row.account_name ?? '') || accountCode,
     branch_code: branchCode,
     branch_name: String(row.branch_name ?? '') || branchCode,
+    ...badgesOf(row),
   };
 };
 
@@ -136,7 +162,7 @@ const mode = ref<'accounts' | 'branches'>('accounts');
 /** Account whose branches are listed, kept so branch rows know what they belong to. */
 const focusedAccount = ref<{ code: string; name: string } | null>(null);
 
-const accounts = ref<Option[]>([]);
+const accounts = ref<AccountOption[]>([]);
 const branches = ref<BranchOption[]>([]);
 const search = ref('');
 const loading = ref(false);
@@ -179,7 +205,7 @@ const hasMore = computed(() => {
   return hasNextPage(accountCursor.value);
 });
 
-const toAccountItem = (account: Option): SourceItem => {
+const toAccountItem = (account: AccountOption): SourceItem => {
   const accountCode = String(account.value ?? '');
   const accountName = bareAccountName(account.name, accountCode);
 
@@ -193,6 +219,7 @@ const toAccountItem = (account: Option): SourceItem => {
     branch_name: '',
     title: accountName || accountCode,
     subtitle: `${accountCode} · all branches`,
+    ...badgesOf(account),
   };
 };
 
@@ -217,6 +244,7 @@ const toBranchItem = (branch: BranchOption): SourceItem => {
     branch_name: branch.name,
     title: branch.name || branchCode,
     subtitle: `${accountName} · branch ${branchCode}`,
+    ...badgesOf(branch),
   };
 };
 
@@ -295,8 +323,15 @@ const showSourceSpinner = computed(
   () => loading.value || (loadingMore.value && availableItems.value.length === 0),
 );
 
+/**
+ * Asks the lookups to attach each row's badges (kind, expired, no members). Opt-in
+ * server-side, so the other pickers sharing these endpoints are not charged for them.
+ */
+const WITH_BADGES = { with_badges: 1 } as const;
+
 const fetchAccountPage = async (nextPage: number, append: boolean) => {
   const result = await getAccountsByParams({
+    ...WITH_BADGES,
     type: accountType.value,
     name: searchTerm.value,
     page: nextPage,
@@ -311,7 +346,12 @@ const fetchBranchPage = async (nextPage: number, append: boolean) => {
   // which is what lets a search reach branches of accounts not on screen.
   const scope = focusedAccount.value ? { account_code: focusedAccount.value.code } : {};
 
-  const result = await getBranchesByParams({ ...scope, name: searchTerm.value, page: nextPage });
+  const result = await getBranchesByParams({
+    ...WITH_BADGES,
+    ...scope,
+    name: searchTerm.value,
+    page: nextPage,
+  });
 
   branches.value = append ? [...branches.value, ...(result?.data ?? [])] : (result?.data ?? []);
   branchCursor.value = { page: result?.current_page ?? 1, lastPage: result?.last_page ?? 1 };
@@ -432,6 +472,7 @@ const assign = (item: SourceItem) => {
       account_name: item.account_name,
       branch_code: item.branch_code,
       branch_name: item.branch_name,
+      ...badgesOf(item),
     }),
   ];
 };
@@ -449,6 +490,45 @@ const clearAll = () => {
 };
 
 const reset = () => syncFromProps();
+
+/**
+ * Pull another user's access into the assigned set — the "Copy Access" picker's `apply`.
+ *
+ * Goes through the same normalisation and key as a dragged row, so a copied pair that
+ * is already mapped is skipped, and the type's limit is honoured: rows past it are
+ * counted and left out rather than silently dropped. Nothing is saved; the copy lands
+ * as unsaved changes to review, exactly like a drag.
+ */
+const copyAccess = (rows: CopiedUserAccess[]): CopyAccessResult => {
+  const next = [...assigned.value];
+  const keys = new Set(next.map((mapping) => mapping.key));
+  const result: Required<CopyAccessResult> = { added: 0, skipped: 0, overLimit: 0 };
+
+  for (const row of rows) {
+    const mapping = toMapping({
+      account_type: String(row.account_type ?? ''),
+      account_code: String(row.account_code ?? ''),
+      account_name: row.account_name ?? '',
+      branch_code: String(row.branch_code ?? ''),
+      branch_name: row.branch_name ?? '',
+      ...badgesOf(row),
+    });
+
+    if (keys.has(mapping.key)) {
+      result.skipped++;
+    } else if (props.limit !== null && next.length >= props.limit) {
+      result.overLimit++;
+    } else {
+      keys.add(mapping.key);
+      next.push(mapping);
+      result.added++;
+    }
+  }
+
+  assigned.value = next;
+
+  return result;
+};
 
 // ─── Save ─────────────────────────────────────────────────────────────────
 const saving = ref(false);
@@ -503,6 +583,14 @@ const accountTypeName = computed(
       </span>
     </div>
 
+    <!-- Seed the mapping from someone who already has the right access -->
+    <CopyUserAccessPicker
+      v-if="allowsMapping"
+      id-prefix="mapping_copy"
+      :exclude-user-id="userId"
+      :apply="copyAccess"
+      :disabled="saving || limitReached" />
+
     <!--
       The transfer panel is the field: a rejected mapping is rejected as a set, or on a
       row that only exists inside it, so there is no single control to mark instead.
@@ -521,7 +609,7 @@ const accountTypeName = computed(
         :disabled="!allowsMapping"
         :max="limit"
         reorderable
-        list-class="max-h-80"
+        list-class="max-h-100"
         @add="assign"
         @remove="unassign"
         @reorder="reorder">
@@ -594,20 +682,16 @@ const accountTypeName = computed(
           <div class="flex items-start justify-between gap-2">
             <div class="min-w-0">
               <p class="flex items-center gap-1.5 truncate font-medium" :title="item.title">
-                <!-- One list, two directories: say which a row came from -->
-                <span
-                  v-if="isUnifiedSearch"
-                  class="shrink-0 rounded px-1 py-px text-[10px] font-semibold uppercase"
-                  :class="item.kind === 'branch'
-                    ? 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-300'
-                    : 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300'">
-                  {{ item.kind }}
-                </span>
+                <!-- Always say what a drop would map: the whole account, or one branch -->
+                <MappingBadge v-if="item.kind_badge" :badge="item.kind_badge" />
                 <span class="truncate">{{ item.title }}</span>
               </p>
               <p class="truncate text-xs text-[var(--color-text-muted)]" :title="item.subtitle">
                 {{ item.subtitle }}
               </p>
+              <div v-if="item.status_badges.length" class="mt-1 flex flex-wrap gap-1">
+                <MappingBadge v-for="badge in item.status_badges" :key="badge.value" :badge="badge" />
+              </div>
             </div>
             <!-- Drill into an account's branches without assigning the account itself -->
             <Button
@@ -659,10 +743,14 @@ const accountTypeName = computed(
 
         <template #target-item="{ item }">
           <div class="min-w-0">
-            <p class="truncate font-medium" :title="item.account_name">
-              {{ item.account_name }}
-              <span class="text-xs font-normal text-[var(--color-text-muted)]">
-                ({{ item.account_code }})
+            <p class="flex items-center gap-1.5 font-medium" :title="item.account_name">
+              <!-- Same badges as the row it was dropped from, so the two panels read alike -->
+              <MappingBadge v-if="item.kind_badge" :badge="item.kind_badge" />
+              <span class="truncate">
+                {{ item.account_name }}
+                <span class="text-xs font-normal text-[var(--color-text-muted)]">
+                  ({{ item.account_code }})
+                </span>
               </span>
             </p>
             <p class="truncate text-xs text-[var(--color-text-muted)]">
@@ -672,6 +760,9 @@ const accountTypeName = computed(
               <template v-else>All branches</template>
               <template v-if="item.account_type_label"> · {{ item.account_type_label }}</template>
             </p>
+            <div v-if="item.status_badges?.length" class="mt-1 flex flex-wrap gap-1">
+              <MappingBadge v-for="badge in item.status_badges" :key="badge.value" :badge="badge" />
+            </div>
           </div>
         </template>
       </DragDropTransfer>

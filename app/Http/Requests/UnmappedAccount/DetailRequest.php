@@ -4,6 +4,7 @@ namespace App\Http\Requests\UnmappedAccount;
 
 use App\Enums\AccountCodePrefix;
 use App\Enums\AccountDirectoryScope;
+use App\Http\Requests\Concerns\AuthorizesRoutePermission;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -16,17 +17,7 @@ use Illuminate\Validation\Rule;
  */
 class DetailRequest extends FormRequest
 {
-    /**
-     * Authorize only users holding the "superadmin" role.
-     *
-     * Same audience as the listing that opens this, stated here rather than inherited:
-     * a detail endpoint reaches any account in the directory by code, whether or not it
-     * ever appeared on a listing the caller was allowed to see.
-     */
-    public function authorize(): bool
-    {
-        return $this->user()?->hasRole('superadmin') ?? false;
-    }
+    use AuthorizesRoutePermission;
 
     /**
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>

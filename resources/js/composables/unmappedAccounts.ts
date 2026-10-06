@@ -11,6 +11,19 @@ export const DIRECTORY_SCOPE = { ACCOUNT: 'account', BRANCH: 'branch' } as const
 
 export type DirectoryScope = (typeof DIRECTORY_SCOPE)[keyof typeof DIRECTORY_SCOPE];
 
+/**
+ * Whether an account is in force, decided and presented by `App\Enums\AccountStanding`
+ * (expiry outranks the HMS status letter). Rendered as sent — never re-derived here.
+ */
+export interface AccountStanding {
+  value: 'active' | 'inactive' | 'expired';
+  label: string;
+  /** Badge classes (background + text). */
+  color: string;
+  /** Text-only classes for inline facts tied to the standing, e.g. the expiry date; may be empty. */
+  text_color: string;
+}
+
 /** One row of the unmapped listing, as the two Unmapped*Resource classes shape it. */
 export interface DirectoryRow {
   account_code: string;
@@ -21,8 +34,15 @@ export interface DirectoryRow {
   code_prefix: string | null;
   account_type: string;
   account_type_label: string;
+  /** For a branch row, its account's standing — a branch has none of its own. */
   is_active?: boolean;
+  /** For a branch row, its account's standing. */
+  standing?: AccountStanding;
+  expiry_date?: string | null;
   member_count: number;
+  /** Who already has this row — empty unless the listing was asked to include mapped rows. */
+  mapped_users?: string[];
+  is_mapped?: boolean;
 }
 
 /** An account opened up, as `AccountDirectoryDetailResource` shapes it. */
@@ -34,6 +54,7 @@ export interface AccountDetail {
   account_type: string;
   account_type_label: string;
   is_active: boolean;
+  standing: AccountStanding;
   hms_account_type: string | null;
   address: string | null;
   tin: string | null;
@@ -56,6 +77,9 @@ export interface BranchDetail {
   account_code: string;
   account_name: string;
   account_is_active: boolean;
+  /** The account's standing — a branch has no standing or expiry of its own. */
+  standing: AccountStanding;
+  account_expiry_date: string | null;
   main_account_code: string | null;
   code_prefix: string | null;
   account_type: string;
@@ -87,12 +111,36 @@ export interface DirectoryMember {
   branch_name: string | null;
 }
 
-export interface MemberPage {
-  data: DirectoryMember[];
+/** A server-paginated page of rows, shaped as `CommonResource` wraps a paginator. */
+export interface DirectoryPage<T> {
+  data: T[];
   current_page: number;
   per_page: number;
   total: number;
 }
+
+export type MemberPage = DirectoryPage<DirectoryMember>;
+
+/** One branch of an account, as `UnmappedBranchResource` shapes it — the "Branches" tab reuses that resource, so it reuses `DirectoryRow` too. */
+export type BranchPage = DirectoryPage<DirectoryRow>;
+
+/** One user mapped to an account or branch, as `MappedUserResource` shapes it. */
+export interface MappedUser {
+  user_id: number;
+  username: string | null;
+  email: string | null;
+  is_active: boolean;
+  account_type: string | null;
+  account_code: string;
+  branch_code: string | null;
+  /** Whether this mapping grants the whole account rather than one specific branch of it. */
+  mapped_in_full: boolean;
+  mapped_at: string | null;
+}
+
+export type MappedUserPage = DirectoryPage<MappedUser>;
+
+const EMPTY_PAGE = { data: [], current_page: 1, per_page: 10, total: 0 };
 
 /**
  * Opening one row of the unmapped listing.
@@ -160,7 +208,52 @@ export function useUnmappedAccounts() {
       throw new Error('Failed to fetch members');
     }
 
-    return response.data?.members ?? { data: [], current_page: 1, per_page: 10, total: 0 };
+    return response.data?.members ?? EMPTY_PAGE;
+  };
+
+  /**
+   * Fetch a page of one account's branches, for the pane's "Branches" tab.
+   *
+   * Reuses the `UnmappedBranchResource` shape the main directory listing already
+   * returns, so the tab's columns and row type are shared with it too.
+   */
+  const getAccountBranches = async (
+    accountCode: string,
+    params: Record<string, string | number> = {},
+  ): Promise<BranchPage> => {
+    const response = await get<{ branches: BranchPage }>(`/${slug.value}/branches`, {
+      code: accountCode,
+      ...params,
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch branches');
+    }
+
+    return response.data?.branches ?? EMPTY_PAGE;
+  };
+
+  /**
+   * Fetch a page of the users mapped to one account or branch, for the pane's
+   * "Mapped Users" tab — the question the main listing exists to leave unanswered,
+   * asked directly of the one row a reader opened.
+   */
+  const getMappedUsers = async (
+    scope: DirectoryScope,
+    code: string,
+    params: Record<string, string | number> = {},
+  ): Promise<MappedUserPage> => {
+    const response = await get<{ mapped_users: MappedUserPage }>(`/${slug.value}/mapped_users`, {
+      scope,
+      code,
+      ...params,
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch mapped users');
+    }
+
+    return response.data?.mapped_users ?? EMPTY_PAGE;
   };
 
   /**
@@ -201,6 +294,8 @@ export function useUnmappedAccounts() {
   return {
     getDirectoryDetail,
     getDirectoryMembers,
+    getAccountBranches,
+    getMappedUsers,
     openDirectoryRow,
     closePane,
     rightPaneVisible,

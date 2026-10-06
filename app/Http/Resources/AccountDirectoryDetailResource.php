@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Enums\AccountCodePrefix;
+use App\Enums\AccountStanding;
 use App\Enums\AccountStatus;
 use App\Enums\AccountType;
 use App\Helpers\CommonHelper;
@@ -38,6 +39,7 @@ class AccountDirectoryDetailResource extends JsonResource
             'account_type' => $accountType,
             'account_type_label' => AccountType::label($accountType),
             'is_active' => AccountStatus::isActive($this->ac_status),
+            'standing' => AccountStanding::present(AccountStanding::resolve($this->ac_status, $this->ac_expiry)),
 
             // HMS's own account-class letter. Shown as stored: it is a different thing
             // from the TPA/HMO split above, which this application derives from the code.
