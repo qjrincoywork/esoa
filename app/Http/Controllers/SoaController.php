@@ -7,19 +7,22 @@ use App\Enums\BillRefFrom;
 use App\Enums\BillType;
 use App\Enums\Server;
 use App\Enums\SoaAmountOperation;
+use App\Enums\SoaImportColumn;
 use App\Enums\SoaStatus;
 use App\Exports\SoaBillingInvoiceExporter;
 use App\Helpers\CommonHelper;
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Soa\{AccountBranchMembersRequest, AdjustAmountRequest, BillRefsRequest, CreateRequest, DestroyRequest, FileListRequest, FileProxyRequest, FindMemberRequest, ListRequest, MemberFilesRequest, OldRemarksRequest, RecordViewedRequest, RecomputeTaxRequest, UpdateRequest, UpdateTagRequest };
+use App\Http\Requests\Soa\{AccountBranchMembersRequest, AdjustAmountRequest, BatchStoreRequest, BillingAttachmentRequest, BillRefsRequest, CreateRequest, DestroyRequest, FileListRequest, FileProxyRequest, FindMemberRequest, ListRequest, MemberFilesRequest, OldRemarksRequest, RecordViewedRequest, RecomputeTaxRequest, UpdateRequest, UpdateTagRequest };
 use App\Http\Resources\AccountResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
+use App\Http\Resources\SoaBatchImportResultResource;
 use App\Http\Resources\{AccountBranchMemberResource, AccountPaymentResource, BillingRefResource, ConcernResource, MemberResource, OldRemarkResource, OldSoaResource, SoaActivityListResource, SoaAgingCountResource, SoaResource };
 use App\Mail\{ BillingInvoiceStatusChanged, NewBillingInvoiceUploaded };
 use App\Models\Soa;
+use App\Services\SoaBatchImportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\{ DB, Http, Storage };
 use Inertia\Inertia;
@@ -305,18 +308,48 @@ class SoaController extends Controller
 
     /**
      * Stream a PDF or Excel file stored on the billing disk for this SOA.
+     *
+     * By default the SOA's current attachment is streamed. With `activity` and
+     * `snapshot` in the query string, the attachment recorded in that activity's
+     * "from"/"to" snapshot is streamed instead, so the activity log can open the
+     * files an update replaced (uploads are stored under timestamped names, so a
+     * replaced file is still on the disk). Input is validated by
+     * {@see BillingAttachmentRequest}.
+     *
+     * Access control (RBAC): {@see CommonHelper::assertUserMayAccessModel()} is
+     * enforced on the SOA before anything is read or recorded; a historical file
+     * is additionally authorised against the account it was filed under via
+     * {@see CommonHelper::assertUserMayAccessBillingFile()}.
+     *
+     * @param BillingAttachmentRequest $request
+     * @param int $id
+     * @param string $type
+     * @return \Symfony\Component\HttpFoundation\StreamedResponse
      */
-    public function streamBillingAttachment(int $id, string $type)
+    public function streamBillingAttachment(BillingAttachmentRequest $request, int $id, string $type)
     {
         $soa = $this->soa->findOrFail($id);
-        $this->recordBillingInvoiceViewedIfEligible($soa, request()->user());
-        CommonHelper::assertUserMayAccessModel(request(), $soa);
+        CommonHelper::assertUserMayAccessModel($request, $soa);
 
-        $path = match ($type) {
-            'pdf' => $soa->file_pdf,
-            'excel' => $soa->file_xls,
-            default => null,
-        };
+        $column = Soa::BILLING_ATTACHMENTS[$type] ?? abort(Response::HTTP_NOT_FOUND);
+        $activityId = $request->validated('activity');
+
+        if ($activityId === null) {
+            // Only opening the current invoice counts as the client having viewed it.
+            $this->recordBillingInvoiceViewedIfEligible($soa, $request->user());
+            $path = $soa->{$column};
+        } else {
+            $path = $this->billingAttachmentPathFromActivity(
+                $soa,
+                (int) $activityId,
+                $request->validated('snapshot'),
+                $column
+            );
+
+            if ($path !== null) {
+                CommonHelper::assertUserMayAccessBillingFile($request, $path);
+            }
+        }
 
         if ($path === null || $path === '') {
             abort(Response::HTTP_NOT_FOUND);
@@ -360,6 +393,27 @@ class SoaController extends Controller
     }
 
     /**
+     * Resolve the billing attachment path recorded in one side of an activity's snapshot.
+     *
+     * The activity must belong to this SOA, and the path is read from what was stored
+     * when the activity was recorded — never from the request — so only files this SOA
+     * has actually had can be reached.
+     *
+     * @param Soa $soa
+     * @param int $activityId
+     * @param string $snapshot "from" or "to".
+     * @param string $column One of {@see Soa::BILLING_ATTACHMENTS}.
+     * @return string|null
+     */
+    private function billingAttachmentPathFromActivity(Soa $soa, int $activityId, string $snapshot, string $column): ?string
+    {
+        $data = $soa->soaActivity()->findOrFail($activityId)->{$snapshot};
+        $path = is_array($data) ? ($data[$column] ?? null) : null;
+
+        return is_string($path) && $path !== '' ? $path : null;
+    }
+
+    /**
      * Return the lookup lists required to build the "Create SOA" form.
      *
      * Responds only to AJAX/JSON requests so the form's select options
@@ -382,7 +436,9 @@ class SoaController extends Controller
             return response()->json([
                 'account_types' => AccountType::list(),
                 'bill_types' => BillType::list(),
-                'status_types' => SoaStatus::list(),
+                // Only the statuses this user may actually set — see
+                // {@see SoaStatus::assignableValues()}, which the validator reads too.
+                'status_types' => SoaStatus::assignableList($request->user()),
                 'billing_ref_from_types' => BillRefFrom::list(),
             ]);
         }
@@ -434,6 +490,133 @@ class SoaController extends Controller
             if ($request->wantsJson() || $request->ajax()) {
                 return CustomResponse::serverError($e, 'SoaController');
             }
+        }
+    }
+
+    /**
+     * Return the metadata needed to drive the batch-upload pane (AJAX only).
+     *
+     * Surfaces the canonical template columns plus the accepted values for the coded
+     * columns (account types, bill types, statuses) so the client can build a template
+     * and check headers before uploading, and the upload bounds so it can warn about a
+     * file too large for the server to accept before the user waits on the request.
+     *
+     * Access control (RBAC): route-level permission middleware gates the endpoint.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse|void
+     */
+    public function batchCreate(Request $request)
+    {
+        // Return JSON for AJAX requests (no URL change)
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'columns' => SoaImportColumn::ordered(),
+                'required_columns' => SoaImportColumn::required(),
+                'attachment_columns' => SoaImportColumn::attachments(),
+                'date_columns' => SoaImportColumn::dates(),
+                'account_types' => AccountType::list(),
+                'bill_types' => BillType::list(),
+                // Only the statuses this user may actually set. The batch guide is what
+                // a template gets filled in from, so offering a status the validator
+                // will refuse ({@see SoaStatus::assignableValues()}, which that rule
+                // reads too) failed every row of the upload rather than just one field.
+                'status_types' => SoaStatus::assignableList($request->user()),
+                // The ceiling on the whole manifest: how many rows/attachments a batch
+                // may contain in total. A large manifest is sent to /batch_store as
+                // several smaller requests (see php_limits below), so this is no longer
+                // a single request's size — just a sanity bound on the batch as a whole.
+                'max_rows' => config('vc.soa_batch.max_rows'),
+                'max_attachments' => config('vc.soa_batch.max_attachments'),
+                'max_file_size' => config('vc.max_file_size'),
+                // What any *one* request to /batch_store may actually carry. PHP enforces
+                // these before Laravel ever sees the request, so the client needs the
+                // real values to split a large manifest into requests that will not be
+                // silently truncated (max_file_uploads) or outright rejected
+                // (post_max_size), rather than guessing at safe numbers.
+                'php_limits' => [
+                    'max_file_uploads' => (int) ini_get('max_file_uploads'),
+                    'post_max_size' => $this->parseIniBytes(ini_get('post_max_size')),
+                    'upload_max_filesize' => $this->parseIniBytes(ini_get('upload_max_filesize')),
+                ],
+            ]);
+        }
+    }
+
+    /**
+     * Parse a php.ini size shorthand (e.g. "8M", "1G", "512K") into bytes.
+     *
+     * ini_get() returns these settings as the raw string from php.ini, not a number —
+     * this is the one place that needs the byte value, to size batch-upload chunks
+     * against the server's real limits instead of a guessed constant.
+     */
+    private function parseIniBytes(string|false $value): int
+    {
+        if ($value === false || trim($value) === '') {
+            return 0;
+        }
+
+        $value = trim($value);
+        $unit = strtolower(substr($value, -1));
+        $number = (int) $value;
+
+        return match ($unit) {
+            'g' => $number * 1024 * 1024 * 1024,
+            'm' => $number * 1024 * 1024,
+            'k' => $number * 1024,
+            default => (int) $value,
+        };
+    }
+
+    /**
+     * Upload many billing invoices at once from parsed spreadsheet rows.
+     *
+     * Delegates per-row validation and persistence to {@see SoaBatchImportService}.
+     * By default a failing row refuses the whole file — the response is either
+     * "nothing was saved, here is what to fix" or "all of it was saved" — but the
+     * request may opt in to skipping failing rows instead (`skip_errors`), in which
+     * case the response can also be "some of it was saved, here is what was skipped".
+     * The envelope is validated by {@see BatchStoreRequest}.
+     *
+     * Access control (RBAC): route-level permission middleware restricts this endpoint
+     * to users authorized to batch-upload; {@see BatchStoreRequest} authorizes again at
+     * the request layer as defense-in-depth.
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function batchStore(BatchStoreRequest $request, SoaBatchImportService $service)
+    {
+        try {
+            $validated = $request->validated();
+
+            $result = $service->import(
+                $validated['rows'],
+                $validated['attachments'] ?? [],
+                $request->user(),
+                $validated['skip_errors'] ?? false,
+            );
+
+            $total = $result['total'];
+            $created = $result['created'];
+            $failed = $result['failed'];
+
+            $message = match (true) {
+                $failed === 0 => $created === 1
+                    ? '1 billing invoice uploaded successfully'
+                    : "{$created} billing invoices uploaded successfully",
+                $created > 0 => "{$created} of {$total} billing invoices uploaded; {$failed} row(s) were skipped due to validation errors.",
+                default => "Nothing was uploaded: {$failed} of {$total} rows did not pass validation.",
+            };
+
+            // A row that was actually saved makes this a success response even when
+            // others were skipped; only a batch that saved nothing is an error.
+            return response()->json([
+                'status' => $created > 0 ? 'success' : 'error',
+                'message' => $message,
+                'result' => new SoaBatchImportResultResource($result),
+            ], $created > 0 ? Response::HTTP_OK : Response::HTTP_UNPROCESSABLE_ENTITY);
+        } catch (\Exception $e) {
+            return CustomResponse::serverError($e, 'SoaController::batchStore');
         }
     }
 
@@ -754,7 +937,9 @@ class SoaController extends Controller
                 'soa' => $soa,
                 'account_types' => AccountType::list(),
                 'bill_types' => BillType::list(),
-                'status_types' => SoaStatus::list(),
+                // Only the statuses this user may actually set — see
+                // {@see SoaStatus::assignableValues()}, which the validator reads too.
+                'status_types' => SoaStatus::assignableList($request->user()),
                 'billing_ref_from_types' => BillRefFrom::list(),
             ]);
         }

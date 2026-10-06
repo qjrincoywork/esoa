@@ -4,6 +4,7 @@ namespace App\Helpers;
 
 use App\Enums\AccountMappingBadge;
 use App\Enums\Server;
+use App\Models\Soa;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Mail;
@@ -628,17 +629,47 @@ class CommonHelper
     }
 
     /**
+     * Populate the display-only fields the billing-invoice emails render.
+     *
+     * `client_name` and `contact` are not columns — they are attached to the model in
+     * memory just before the mail is built. That matters for a queued mail: the job
+     * serializes only the model's key and re-fetches it when the worker runs, so
+     * anything set here is gone by render time. The mailables therefore call this
+     * again themselves, and it is a no-op when the values are already present so the
+     * synchronous path costs no extra HMS lookup.
+     *
+     * @param  object  $model
+     * @return void
+     */
+    public static function prepareBillingInvoiceForEmail($model): void
+    {
+        if (empty($model->client_name)) {
+            self::setClientName($model);
+        }
+
+        if (empty($model->contact)) {
+            $model->contact = config('vc.contact_email');
+        }
+    }
+
+    /**
      * Send billing invoice email and record activity.
+     *
+     * Pass $queue to hand the mail to the queue instead of sending it inline. Batch
+     * uploads use it so one request does not sit through dozens of SMTP round trips;
+     * the single-upload paths send inline as before. Note that when queued, the
+     * activity row records that the notification was dispatched, not that the SMTP
+     * server has accepted it — a worker must be running for it to actually go out.
      *
      * @param  object  $model
      * @param  object  $user
      * @param  string  $mailClass
+     * @param  bool  $queue
      * @return void
      */
-    public static function sendBillingInvoiceEmail($model, $user, string $mailClass): void
+    public static function sendBillingInvoiceEmail($model, $user, string $mailClass, bool $queue = false): void
     {
-        self::setClientName($model);
-        $model->contact = config('vc.contact_email');
+        self::prepareBillingInvoiceForEmail($model);
 
         $isAccountBranchAdmin = $user->hasAnyRole(['account_branch_admin', 'group_account_admin']);
         $billingNotificationEmail = config('vc.billing_notification_email', 'billing@example.com');
@@ -651,9 +682,10 @@ class CommonHelper
             ? $user->email
             : $billingNotificationEmail;
 
-        Mail::to($toEmail)
-            ->cc($ccEmail)
-            ->send(new $mailClass($model));
+        $pending = Mail::to($toEmail)->cc($ccEmail);
+        $mailable = new $mailClass($model);
+
+        $queue ? $pending->queue($mailable) : $pending->send($mailable);
 
         $model->recordActivity('billing_invoice_email_sent', [
             'to' => [
@@ -761,6 +793,35 @@ class CommonHelper
         }
 
         abort(Response::HTTP_FORBIDDEN);
+    }
+
+    /**
+     * Authorize the authenticated user against the account/branch a billing
+     * attachment was filed under.
+     *
+     * Needed for files reached through an SOA's activity history: an SOA can be
+     * reassigned to another account after a file was uploaded, and that earlier
+     * file is still the previous account's document, so owning the SOA today is
+     * not enough to read it. {@see storeUploadedFiles()} files every attachment
+     * under "{account}/{branch?}/", so the owner is read back from the path and
+     * checked through {@see assertUserMayAccessModel()} on a transient (never
+     * saved) SOA — full-access roles and tenant scoping behave exactly as they do
+     * for the SOA itself.
+     *
+     * @param  object  $request
+     * @param  string  $path  Path of the file on the billing disk.
+     * @throws \Symfony\Component\HttpKernel\Exception\HttpException
+     * @return void
+     */
+    public static function assertUserMayAccessBillingFile($request, string $path): void
+    {
+        $directory = trim(dirname(str_replace('\\', '/', $path)), '/');
+        [$accountCode, $branchCode] = array_pad(explode('/', $directory, 2), 2, null);
+
+        self::assertUserMayAccessModel($request, (new Soa())->forceFill([
+            'account_code' => $accountCode,
+            'branch_code' => $branchCode,
+        ]));
     }
 
     /**

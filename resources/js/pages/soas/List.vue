@@ -17,6 +17,7 @@ import { useLookupOptions } from '@/composables/useLookupOptions';
 import { useModulePermissions } from '@/composables/useModulePermissions';
 import RightPane from '@/components/RightPane.vue';
 import TopPane from '@/components/TopPane.vue';
+import { Upload } from 'lucide-vue-next';
 
 import {
   emptySoaListFilters,
@@ -48,6 +49,7 @@ const { canCreate, slug, hasPermission } = useModulePermissions();
 
 const {
   newSoa,
+  batchUploadSoas,
   fileList,
   billingAttachments,
   editSoa,
@@ -447,6 +449,12 @@ watch(
                     class="cursor-pointer"
                     :onClick="exportList">
                     Export Excel
+                  </Button>
+                  <Button
+                    v-if="hasPermission(slug + '.batch_create')"
+                    class="cursor-pointer"
+                    :onClick="batchUploadSoas">
+                      Batch Upload
                   </Button>
                 </div>
               </div>

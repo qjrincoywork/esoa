@@ -15,6 +15,7 @@ import Datatable from '@/components/Datatable.vue';
 import FilterSelect from '@/components/FilterSelect.vue';
 import ListSearch from '@/components/ListSearch.vue';
 import RightPane from '@/components/RightPane.vue';
+import TopPane from '@/components/TopPane.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
@@ -49,6 +50,12 @@ const {
     rightPaneError,
     rightPaneContentComponent,
     rightPaneComponentProps,
+    topPaneVisible,
+    topPaneTitle,
+    topPaneLoading,
+    topPaneError,
+    topPaneContentComponent,
+    topPaneComponentProps,
 } = useActivityLogs();
 
 const EMPTY_PAGE: LogsPagination = { current_page: 1, per_page: 10, total: 0, data: [] };
@@ -359,5 +366,15 @@ const openEntry = (row: ActivityLogRow) => openActivityLog(row);
             :content-component="rightPaneContentComponent"
             :component-props="rightPaneComponentProps"
             @update:open="(v) => { if (!v && !rightPaneLoading) closePane('right') }" />
+
+        <!-- Top pane: one entry of the batch, opened from the detail pane over it -->
+        <TopPane
+            :open="topPaneVisible"
+            :title="topPaneTitle"
+            :loading="topPaneLoading"
+            :error="topPaneError"
+            :content-component="topPaneContentComponent"
+            :component-props="topPaneComponentProps"
+            @update:open="(v) => { if (!v && !topPaneLoading) closePane('top') }" />
     </AppLayout>
 </template>
