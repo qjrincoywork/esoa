@@ -1,4 +1,18 @@
-import { toRef } from 'vue';
+import { toRef, type Component } from 'vue';
+import {
+  Activity,
+  Ban,
+  CircleAlert,
+  KeyRound,
+  LogIn,
+  LogOut,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Trash2,
+  TriangleAlert,
+  Upload,
+} from 'lucide-vue-next';
 import { dispatchNotification } from '@/components/notification';
 import { useAjax } from '@/composables/useAjax';
 import { showLoader, hideLoader } from '@/composables/useLoader';
@@ -41,11 +55,27 @@ export interface ActivityLogContext {
   method?: string;
 }
 
+/** The device behind a request, read off its user agent by `App\Support\UserAgent`. */
+export interface ActivityLogDevice {
+  platform: 'windows' | 'macos' | 'ios' | 'android' | 'chrome_os' | 'linux' | 'unknown';
+  platform_label: string;
+  /** Only where the agent still carries a real one — Windows 10/11 and macOS are frozen. */
+  platform_version: string | null;
+  vendor: string | null;
+  device_type: 'desktop' | 'mobile' | 'tablet' | 'bot' | 'unknown';
+  device_label: string;
+  browser: string | null;
+  browser_version: string | null;
+}
+
 /** A single entry opened up, as `ActivityLogDetailResource` shapes it. */
 export interface ActivityLogDetail extends ActivityLogRow {
   causer_email: string | null;
+  /** Whether this kind of entry changes fields at all — a sign-in never does. */
+  records_changes: boolean;
   changes: ActivityLogChange[];
   context: ActivityLogContext | null;
+  device: ActivityLogDevice | null;
   /** How many other entries the same action wrote; the entries themselves are paged. */
   batch_sibling_count: number;
 }
@@ -81,11 +111,33 @@ const EVENT_CLASSES: Record<string, string> = {
   restored: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
   logged_in: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400',
   password_changed: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400',
+  batch_uploaded: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+  batch_partial: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+  batch_rejected: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+  batch_failed: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
 };
 
 /** The badge classes for an event, wherever one is shown — table, pane or batch list. */
 export const eventClass = (event: string | null | undefined): string =>
   EVENT_CLASSES[event ?? ''] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
+
+/** Event icons, for the same reason the colours live here: they are presentation. */
+const EVENT_ICONS: Record<string, Component> = {
+  created: Plus,
+  updated: Pencil,
+  deleted: Trash2,
+  restored: RotateCcw,
+  logged_in: LogIn,
+  logged_out: LogOut,
+  password_changed: KeyRound,
+  batch_uploaded: Upload,
+  batch_partial: TriangleAlert,
+  batch_rejected: Ban,
+  batch_failed: CircleAlert,
+};
+
+/** The icon for an event, so the kind of change reads before its label does. */
+export const eventIcon = (event: string | null | undefined): Component => EVENT_ICONS[event ?? ''] ?? Activity;
 
 export function useActivityLogs() {
   // Pinned rather than derived from the page: an entry is also opened from other

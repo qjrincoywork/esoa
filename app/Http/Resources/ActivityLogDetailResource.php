@@ -5,6 +5,7 @@ namespace App\Http\Resources;
 use App\Enums\AuditEvent;
 use App\Enums\AuditLogName;
 use App\Helpers\CommonHelper;
+use App\Support\UserAgent;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -12,7 +13,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * A single audit entry, opened up.
  *
  * Turns the stored `properties` blob into the two things a reader actually wants: a
- * field-by-field account of what changed, and the request the change arrived on. It
+ * field-by-field account of what changed, and the request the change arrived on —
+ * including the device it came from, read off the stored user agent. It
  * also says how much else the same action wrote, because one action routinely
  * writes several entries and any one of them read alone is missing its own context.
  */
@@ -26,13 +28,17 @@ class ActivityLogDetailResource extends JsonResource
     public function toArray(Request $request): array
     {
         $properties = collect($this->properties ?? []);
+        $context = (array) $properties->get('context', []);
 
         return [
             'id' => $this->id,
             'logged_at' => CommonHelper::formatDate($this->created_at, true),
+            // Machine-readable, so the pane can also say how long ago it was.
+            'logged_at_value' => $this->created_at?->toIso8601String(),
 
             'log_name' => $this->log_name,
             'module' => AuditLogName::label($this->log_name),
+            'records_changes' => AuditLogName::recordsChanges($this->log_name),
 
             'event' => $this->event,
             'event_label' => $this->event ? AuditEvent::label($this->event) : null,
@@ -50,6 +56,9 @@ class ActivityLogDetailResource extends JsonResource
 
             'changes' => $this->changeRows($properties),
             'context' => $properties->get('context'),
+            // The stored agent read back as OS, browser and kind of device; null when
+            // the entry came from no request (console or queue) and so has no agent.
+            'device' => UserAgent::parse($context['user_agent'] ?? null)?->toArray(),
 
             // Only the size of the batch travels with the entry; the entries behind it
             // are paged in on demand, since one batch upload writes thousands of them.
