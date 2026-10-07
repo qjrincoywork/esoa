@@ -2,6 +2,7 @@
 
 namespace Database\Seeders\Master;
 
+use App\Services\RoutePermissionService;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
@@ -36,13 +37,23 @@ class RolePermissionSeeder extends Seeder
             'users.verify',
             'users.toggle_active',
             'users.account_mapping',
+            'users.edit_permissions',
+            'users.all_permissions',
+            'users.update_permissions',
+            'users.bulk_update_permissions',
+            'users.activity_logs',
 
             // activity logs (superadmin only — granted via syncPermissions below)
             'activity_logs.index',
             'activity_logs.show',
+            'activity_logs.batch_siblings',
 
             // unmapped accounts & branches (superadmin only — granted via syncPermissions below)
             'unmapped_accounts.index',
+            'unmapped_accounts.details',
+            'unmapped_accounts.members',
+            'unmapped_accounts.branches',
+            'unmapped_accounts.mapped_users',
 
             // roles
             'roles.index',
@@ -73,6 +84,8 @@ class RolePermissionSeeder extends Seeder
             // soas
             'soas.index',
             'soas.create',
+            'soas.batch_create',
+            'soas.batch_store',
             'soas.edit',
             'soas.destroy',
             'soas.manage_file',
@@ -87,6 +100,10 @@ class RolePermissionSeeder extends Seeder
         foreach ($permissions as $permission) {
             Permission::firstOrCreate(['name' => $permission, 'guard_name' => 'web']);
         }
+
+        // Every guarded route not listed above still gets its permission, so a fresh
+        // install is never missing one the route files require.
+        app(RoutePermissionService::class)->sync();
 
         Role::findByName('superadmin')->syncPermissions(Permission::all());
 

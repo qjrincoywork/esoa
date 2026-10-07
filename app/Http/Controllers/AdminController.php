@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Jobs\{ ImportAccountsJob, ImportBranchesJob, ImportMainAccountsJob };
 use App\Services\SoaImportService;
+use App\Support\LandingRoute;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\{ DB, Log };
 use Inertia\Inertia;
@@ -166,14 +167,14 @@ class AdminController extends Controller
     }
 
     /**
-     * Redirect the admin landing route to the dashboard.
+     * Redirect the admin landing route to the user's landing page.
      *
      * @param Request $request
      * @return \Illuminate\Http\RedirectResponse
      */
     public function index(Request $request)
     {
-        return redirect()->route('dashboard');
+        return redirect()->to(LandingRoute::urlFor($request->user()));
     }
 
     /**

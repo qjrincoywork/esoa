@@ -2,17 +2,16 @@
 
 namespace App\Http\Requests\User;
 
+use App\Http\Requests\Concerns\AuthorizesRoutePermission;
 use Illuminate\Foundation\Http\FormRequest;
 
+/**
+ * Users with account/branch access to copy from — the source list behind "Copy Access
+ * From Another User", used by both the user edit form and the mapping pane.
+ */
 class AccountAccessUsersRequest extends FormRequest
 {
-    /**
-     * Authorize only users holding the "superadmin" role.
-     */
-    public function authorize(): bool
-    {
-        return $this->user()?->hasRole('superadmin') ?? false;
-    }
+    use AuthorizesRoutePermission;
 
     /**
      * Validate the optional account-access user lookup filters: a name string,
@@ -42,6 +41,8 @@ class AccountAccessUsersRequest extends FormRequest
                 'nullable',
                 'integer',
                 'min:1',
+                // Each user carries all their access rows, so an unbounded page is costly.
+                'max:' . config('vc.max_per_pages'),
             ],
         ];
     }

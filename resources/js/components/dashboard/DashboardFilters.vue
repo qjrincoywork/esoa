@@ -123,87 +123,77 @@ watch([dateFrom, dateTo], () => applyRange());
 </script>
 
 <template>
-    <div class="flex flex-col gap-3 rounded-xl border bg-card p-4">
-        <div class="flex flex-wrap items-end gap-3">
-            <div class="grid w-full gap-2 sm:w-52">
-                <Label
-                    for="dashboard-range"
-                    class="text-xs text-muted-foreground"
-                >
-                    <CalendarRange
-                        class="mr-1 inline size-3.5"
-                        aria-hidden="true"
-                    />Period
-                </Label>
-                <Select v-model="presetModel">
-                    <!-- The id lives on the trigger, which is the element the label points at. -->
-                    <SelectTrigger id="dashboard-range" class="w-full">
-                        <SelectValue placeholder="Select a period" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectGroup>
-                            <SelectItem
-                                v-for="preset in presetItems"
-                                :key="preset.value"
-                                :value="preset.value"
-                            >
-                                {{ preset.name }}
-                            </SelectItem>
-                        </SelectGroup>
-                    </SelectContent>
-                </Select>
-            </div>
-
-            <DateRangePicker
-                v-if="isCustomRange"
-                v-model:from="dateFrom"
-                v-model:to="dateTo"
-                id="dashboard-dates"
-                label="Custom range"
-                class="w-full sm:w-72 [&>label]:text-xs [&>label]:text-muted-foreground"
-            />
-
-            <div v-if="canSelectUser" class="grid w-full gap-2 sm:w-72">
-                <Label
-                    for="dashboard-user"
-                    class="text-xs text-muted-foreground"
-                >
-                    <UserRound
-                        class="mr-1 inline size-3.5"
-                        aria-hidden="true"
-                    />Viewing data of
-                </Label>
-                <SearchableCombobox
-                    id="dashboard-user"
-                    v-model="userModel"
-                    v-model:search="userSearch"
-                    :items="userItems"
-                    placeholder="All users"
-                    search-placeholder="Search user..."
-                    empty-text="No user found."
-                />
-            </div>
-
-            <Button
-                v-if="isFiltered"
-                type="button"
-                variant="outline"
-                class="sm:ml-auto"
-                :disabled="processing"
-                @click="emit('reset')"
+    <!-- Framed by the page header, which also states the slice on screen and its progress -->
+    <div class="flex flex-wrap items-end gap-3">
+        <div class="grid w-full gap-2 sm:w-52">
+            <Label
+                for="dashboard-range"
+                class="text-xs text-muted-foreground"
             >
-                <RotateCcw class="size-4" aria-hidden="true" />
-                Reset filters
-            </Button>
+                <CalendarRange
+                    class="mr-1 inline size-3.5"
+                    aria-hidden="true"
+                />Period
+            </Label>
+            <Select v-model="presetModel">
+                <!-- The id lives on the trigger, which is the element the label points at. -->
+                <SelectTrigger id="dashboard-range" class="w-full">
+                    <SelectValue placeholder="Select a period" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectGroup>
+                        <SelectItem
+                            v-for="preset in presetItems"
+                            :key="preset.value"
+                            :value="preset.value"
+                        >
+                            {{ preset.name }}
+                        </SelectItem>
+                    </SelectGroup>
+                </SelectContent>
+            </Select>
         </div>
 
-        <p class="text-xs text-muted-foreground">
-            Showing {{ filters.label }}
-            <span aria-hidden="true">·</span>
-            {{ filters.granularity === 'day' ? 'daily' : 'monthly' }} breakdown
-            <template v-if="processing">
-                <span aria-hidden="true">·</span> updating…</template
+        <DateRangePicker
+            v-if="isCustomRange"
+            v-model:from="dateFrom"
+            v-model:to="dateTo"
+            id="dashboard-dates"
+            label="Custom range"
+            class="w-full sm:w-72 [&>label]:text-xs [&>label]:text-muted-foreground"
+        />
+
+        <div v-if="canSelectUser" class="grid w-full gap-2 sm:w-72">
+            <Label
+                for="dashboard-user"
+                class="text-xs text-muted-foreground"
             >
-        </p>
+                <UserRound
+                    class="mr-1 inline size-3.5"
+                    aria-hidden="true"
+                />Viewing data of
+            </Label>
+            <SearchableCombobox
+                id="dashboard-user"
+                v-model="userModel"
+                v-model:search="userSearch"
+                :items="userItems"
+                placeholder="All users"
+                search-placeholder="Search user..."
+                empty-text="No user found."
+            />
+        </div>
+
+        <Button
+            v-if="isFiltered"
+            type="button"
+            variant="outline"
+            class="sm:ml-auto"
+            :disabled="processing"
+            @click="emit('reset')"
+        >
+            <RotateCcw class="size-4" aria-hidden="true" />
+            Reset filters
+        </Button>
     </div>
 </template>

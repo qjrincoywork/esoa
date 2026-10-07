@@ -182,7 +182,13 @@ const table = useVueTable({
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: isServerPagination.value ? undefined : getPaginationRowModel(),
+    // Decided per render, not once at setup: a table mounted before its first server
+    // page arrives (total still 0) would otherwise stay client-paginated for good, and
+    // slice each 10-row server page by pageIndex — so page 2 onwards rendered empty.
+    get manualPagination() {
+        return isServerPagination.value
+    },
+    getPaginationRowModel: getPaginationRowModel(),
     enableRowSelection: true,
     enableMultiRowSelection: true,
     getRowId: row => row.id || row.ID || JSON.stringify(row)

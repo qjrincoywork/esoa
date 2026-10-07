@@ -31,7 +31,7 @@ class UserDetailsResource extends JsonResource
             'id' => $this->id,
             'username' => $this->username,
             'email' => $this->email,
-            'full_name' => $this->composeFullName($detail),
+            'full_name' => $detail?->full_name,
             'is_active' => (bool) $this->is_active,
             'is_approved' => (bool) $this->is_approved,
             'is_verified' => $this->email_verified_at !== null,
@@ -61,28 +61,8 @@ class UserDetailsResource extends JsonResource
                 fn () => $this->roles->pluck('name')->values(),
                 []
             ),
+
+            'credentials' => new UserCredentialResource($this->resource),
         ];
-    }
-
-    /**
-     * Compose "First Middle Last, Suffix" from whichever name parts are stored.
-     */
-    private function composeFullName($detail): ?string
-    {
-        if (!$detail) {
-            return null;
-        }
-
-        $name = trim(implode(' ', array_filter([
-            $detail->first_name,
-            $detail->middle_name,
-            $detail->last_name,
-        ])));
-
-        if ($name === '') {
-            return null;
-        }
-
-        return $detail->suffix ? "{$name}, {$detail->suffix}" : $name;
     }
 }

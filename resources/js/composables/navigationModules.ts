@@ -6,6 +6,8 @@ import { dispatchNotification } from '@/components/notification';
 import { showLoader, hideLoader } from '@/composables/useLoader';
 import { useModulePermissions } from '@/composables/useModulePermissions';
 import { router } from '@inertiajs/vue3';
+import type { VNode } from 'vue';
+import { badge } from '@/lib/directoryBadges';
 
 let formApi: { getFormData: () => FormData | null } | null = null;
 
@@ -21,6 +23,8 @@ export interface NavigationModule {
     ref_id?: number | null;
     order_number?: number | null;
     status?: number;
+    /** Server-side label for `status` (`App\Enums\Status::label()`). */
+    status_label?: string | null;
     deleted_at?: string | null;
     navigation?: { id: number; name: string };
     permission?: { id: number; name: string };
@@ -31,16 +35,69 @@ type SelectOption   = { id: number; name: string };
 type StatusOption   = { value: number; name: string };
 type ParentModule   = SelectOption & { navigation_id: number; navigation?: SelectOption };
 
-function refreshPage() {
-    router.get(window.location.pathname, {}, { preserveState: false, preserveScroll: true, replace: true });
+const STATUS_ACTIVE = 1; // App\Enums\Status::ACTIVE
+
+/**
+ * Status pill for a module row. A soft-deleted module reads "Deleted" whatever its
+ * status, since that is what decides whether it renders anywhere.
+ */
+export function moduleStatusBadge(module: NavigationModule): VNode {
+    if (module.deleted_at) {
+        return badge('Deleted', 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300');
+    }
+
+    const active = Number(module.status) === STATUS_ACTIVE;
+
+    return badge(
+        module.status_label ?? (active ? 'Active' : 'Inactive'),
+        active
+            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+            : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+    );
 }
 
-export function useNavigationModules() {
-    const { slug } = useModulePermissions();
+/** Action-column overrides that turn Delete into Restore on a soft-deleted row. */
+export function deleteActionProps(module: NavigationModule) {
+    return module.deleted_at
+        ? { name: 'Restore', icon: 'RotateCcw', color: 'green' }
+        : { name: 'Delete', icon: 'Trash2', color: 'red' };
+}
+
+/**
+ * Re-read the current page after a mutation. A reload keeps the URL — and with it the
+ * active search and page — keeps scroll and component state, and refreshes the shared
+ * props so the sidebar picks up the change.
+ */
+function refreshPage() {
+    router.reload();
+}
+
+export interface UseNavigationModulesOptions {
+    /**
+     * Called instead of a full-page reload after a successful create/update/delete.
+     * Lets an embedded list (e.g. the navigation details pane's Modules tab) refresh
+     * itself in place rather than reloading the whole host page.
+     */
+    onMutated?: () => void;
+}
+
+export function useNavigationModules(options: UseNavigationModulesOptions = {}) {
+    // Explicit slug: this composable is also used from within the navigations details
+    // pane, where the host page's component name is "navigations/Index", not
+    // "navigation_modules/Index" — auto-derivation would point requests at the wrong module.
+    const { slug } = useModulePermissions({ slug: 'navigation_modules' });
     const { openModal, closeModal } = useModal();
     const { get, post } = useAjax();
 
-    const createNavigationModule = async () => {
+    const afterMutation = () => {
+        if (options.onMutated) {
+            options.onMutated();
+        } else {
+            refreshPage();
+        }
+    };
+
+    const createNavigationModule = async (defaultNavigationId?: number, defaultRefId?: number) => {
         try {
             const response = await get<{
                 navigations:    SelectOption[];
@@ -59,6 +116,9 @@ export function useNavigationModules() {
                 buttonText: 'Save',
                 component: SavingForm,
                 componentProps: {
+                    navigationModule: (defaultNavigationId || defaultRefId)
+                        ? { navigation_id: defaultNavigationId, ref_id: defaultRefId }
+                        : undefined,
                     navigations:   payload.navigations,
                     permissions:   payload.permissions,
                     parentModules: payload.parent_modules,
@@ -79,7 +139,7 @@ export function useNavigationModules() {
                         } else {
                             dispatchNotification({ title: 'Success', content: res.data.message, type: 'success' });
                             closeModal();
-                            refreshPage();
+                            afterMutation();
                         }
                     } catch {
                         dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
@@ -134,7 +194,7 @@ export function useNavigationModules() {
                         } else {
                             dispatchNotification({ title: 'Success', content: res.data.message, type: 'success' });
                             closeModal();
-                            refreshPage();
+                            afterMutation();
                         }
                     } catch {
                         dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
@@ -178,7 +238,7 @@ export function useNavigationModules() {
                     } else {
                         dispatchNotification({ title: 'Success', content: res.data.message, type: 'success' });
                         closeModal();
-                        refreshPage();
+                        afterMutation();
                     }
                 } catch {
                     dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });

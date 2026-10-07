@@ -5,6 +5,8 @@ export interface Auth {
     user: User;
     is_superadmin: boolean;
     permissions: Permissions;
+    /** This user's landing page path (`App\Support\LandingRoute`); null for guests. */
+    landing_url: string | null;
 }
 
 export interface BreadcrumbItem {
@@ -53,6 +55,10 @@ export interface Soa {
     status?: number;
     status_color?: string;
     bill_date?: string;
+    /** The invoice's bill date, formatted for display. */
+    billing_date?: string;
+    /** The same date as YYYY-MM-DD, for the date input on the form. */
+    billing_date_value?: string | null;
     due_date?: string;
     /** Aging bucket label for the due date (e.g. "Past Due – 30 Days"). */
     due_in?: string;
@@ -185,6 +191,8 @@ export interface MetricBucket {
     badge_class: string;
     tone: VizTone | null;
     emphasis: boolean;
+    /** Status buckets only: whether the status counts toward the outstanding balance. */
+    outstanding: boolean;
     href: string;
 }
 
@@ -267,6 +275,21 @@ export interface DashboardFilters {
 export interface DashboardFilterOptions {
     presets: Array<{ value: string; name: string }>;
     users: Array<{ value: number; name: string }>;
+}
+
+/** Everything `DashboardReportService::props()` sends the dashboard page. */
+export type DashboardPageProps = {
+    filters: DashboardFilters;
+    filter_options?: DashboardFilterOptions;
+    data_window?: DashboardDataWindow | null;
+    summary?: DashboardSummary;
+    aging_buckets?: MetricBucket[];
+    status_buckets?: MetricBucket[];
+    billing_trend?: BillingTrend;
+    top_accounts?: TopAccount[];
+    /** Deferred for staff (undefined until it lands); null for everyone else. */
+    user_reports?: UserReportRow[] | null;
+    can_view_user_reports?: boolean;
 }
 
 export type BreadcrumbItemType = BreadcrumbItem;

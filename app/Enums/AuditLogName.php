@@ -14,12 +14,17 @@ use BenSampo\Enum\Enum;
  * The value is what lands in the database; the label is how the module is spoken about
  * in the interface, which is not always the model's name (a Soa is a billing invoice,
  * an AccountPayment is a remittance advice).
+ *
+ * Authentication is the one channel that is not a module's records: it holds what a
+ * person does with their own session and credentials ({@see \App\Support\AuthenticationAudit}),
+ * so a user's trail shows when they were here, not only what they changed.
  */
 final class AuditLogName extends Enum
 {
     public const BILLING_INVOICE = 'billing_invoice';
     public const CONCERN = 'concern';
     public const REMITTANCE_ADVICE = 'remittance_advice';
+    public const AUTHENTICATION = 'authentication';
 
     /**
      * Map an audit channel to the module name people know it by.
@@ -32,8 +37,22 @@ final class AuditLogName extends Enum
             self::BILLING_INVOICE => 'Billing invoice',
             self::CONCERN => 'Concern',
             self::REMITTANCE_ADVICE => 'Remittance advice',
+            self::AUTHENTICATION => 'Authentication',
             default => 'Record',
         };
+    }
+
+    /**
+     * Whether entries on this channel describe changes to a record's fields.
+     *
+     * A module's entries do, so an entry with no field changes there is worth pointing
+     * out; a sign-in never changes a field, and saying so on every one is noise.
+     *
+     * @param  string  $value
+     */
+    public static function recordsChanges($value): bool
+    {
+        return $value !== self::AUTHENTICATION;
     }
 
     /**

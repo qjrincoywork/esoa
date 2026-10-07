@@ -4,16 +4,16 @@ namespace App\Exports;
 
 use App\Enums\AccountType;
 use App\Enums\Server;
+use App\Enums\SoaAging;
 use App\Enums\SoaStatus;
 use App\Helpers\CommonHelper;
 use App\Helpers\SqlDatabase;
 use App\Models\Soa;
-use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\{Response, StreamedResponse};
 
-class SoaBillingInvoiceExporter
+class SoaBillingInvoiceExporter extends HtmlSpreadsheetExporter
 {
     /** @var array<string, string> */
     protected array $accountNameCache = [];
@@ -32,40 +32,12 @@ class SoaBillingInvoiceExporter
      */
     public function download(Builder $query, string $filename): StreamedResponse
     {
-        return response()->streamDownload(function () use ($query) {
-            echo $this->spreadsheetOpen();
+        // Header labels come from config('vc.billing_invoice_export_headers').
+        return $this->stream($filename, 'Billing Invoices', config('vc.billing_invoice_export_headers'), function () use ($query) {
             foreach ($query->cursor() as $soa) {
                 echo $this->rowHtml($soa);
             }
-            echo '</table></body></html>';
-        }, $filename, [
-            'Content-Type' => 'application/vnd.ms-excel; charset=UTF-8',
-            'Cache-Control' => 'max-age=0, no-cache, must-revalidate',
-            'Pragma' => 'public',
-        ]);
-    }
-
-    /**
-     * Build the opening HTML/Excel markup, including the header row derived from
-     * the config('vc.billing_invoice_export_headers') column labels.
-     */
-    protected function spreadsheetOpen(): string
-    {
-        $headers = config('vc.billing_invoice_export_headers');
-
-        $headerCells = '';
-        foreach ($headers as $header) {
-            $headerCells .= '<th>' . $this->escape($header) . '</th>';
-        }
-
-        return '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">'
-            . '<head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">'
-            . '<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>'
-            . '<x:Name>Billing Invoices</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>'
-            . '</x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>'
-            . '<body><table border="1"><thead><tr>'
-            . $headerCells
-            . '</tr></thead><tbody>';
+        });
     }
 
     /**
@@ -90,9 +62,10 @@ class SoaBillingInvoiceExporter
             $this->branchName($soa->branch_code),
             AccountType::label($soa->account_type),
             $billingRef,
+            CommonHelper::formatDate($soa->billing_date),
             CommonHelper::formatDate($soa->created_at),
             CommonHelper::formatDate($soa->due_date),
-            $this->formatDaysDue($soa->due_date),
+            $this->formatDaysDue($soa),
             number_format((float) $soa->amount, 2, '.', ''),
             SoaStatus::label((int) $soa->status),
             CommonHelper::formatDate($soa->period_date_from),
@@ -101,12 +74,7 @@ class SoaBillingInvoiceExporter
             CommonHelper::formatDate($this->contractEndDate($soa->account_code)),
         ];
 
-        $row = '<tr>';
-        foreach ($cells as $cell) {
-            $row .= '<td>' . $this->escape((string) $cell) . '</td>';
-        }
-
-        return $row . '</tr>';
+        return $this->row($cells);
     }
 
     /**
@@ -194,41 +162,14 @@ class SoaBillingInvoiceExporter
     }
 
     /**
-     * Produce a human-readable due-status label for a due date: 'Past Due',
-     * 'Due Today', 'Due Tomorrow', or 'Due in N days'. Returns '' when no date.
+     * The aging-bucket label shown in the list's "Due In" column
+     * ({@see SoaAging::classifyInvoice()}), so the export matches the screen.
+     * Blank when there is no due date or the invoice is settled (e.g. paid).
      */
-    protected function formatDaysDue(mixed $date): string
+    protected function formatDaysDue(Soa $soa): string
     {
-        if (!$date) {
-            return '';
-        }
+        $aging = SoaAging::classifyInvoice($soa->due_date, $soa->status);
 
-        $parsed = Carbon::parse($date);
-
-        if ($parsed->isPast()) {
-            return 'Past Due';
-        }
-
-        $days = (int) now()->diffInDays($parsed, true);
-
-        return match ($days) {
-            0 => 'Due Today',
-            1 => 'Due Tomorrow',
-            default => "Due in {$days} days",
-        };
-    }
-
-    /**
-     * HTML-escape a cell value, first neutralizing CSV/Excel formula-injection
-     * prefixes (=, +, -, @, tab, CR, LF) by prepending a single quote.
-     */
-    protected function escape(string $value): string
-    {
-        // Neutralize formula-injection prefixes before HTML-escaping
-        if ($value !== '' && in_array($value[0], ['=', '+', '-', '@', "\t", "\r", "\n"], true)) {
-            $value = "'" . $value;
-        }
-
-        return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        return $aging !== null ? SoaAging::label($aging) : '';
     }
 }

@@ -10,6 +10,7 @@ export { default as ChartCard } from './ChartCard.vue';
 export { default as ChartLegend } from './ChartLegend.vue';
 export { default as DonutChart } from './DonutChart.vue';
 export { default as LineChart } from './LineChart.vue';
+export { default as StackedBar } from './StackedBar.vue';
 export { default as StatTile } from './StatTile.vue';
 
 export {

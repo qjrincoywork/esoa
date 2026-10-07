@@ -5,40 +5,55 @@ namespace App\Http\Controllers;
 use App\Enums\{
     AccountStatus,
     AccountType,
+    AuditEvent,
+    AuditLogName,
+    CredentialAccess,
+    CredentialStatus,
     Gender,
+    PermissionAssignmentMode,
     Server,
+    UserCredentialReport,
     UserImportColumn,
     UserType
 };
+use App\Exports\UserCredentialReportExporter;
 use App\Helpers\CommonHelper;
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
 use App\Http\Requests\User\AccountAccessUsersRequest;
+use App\Http\Requests\User\ActivityLogRequest;
 use App\Http\Requests\User\AccountLookupRequest;
 use App\Http\Requests\User\BranchLookupRequest;
 use App\Http\Requests\User\BulkDestroyRequest;
 use App\Http\Requests\User\BulkStoreRequest;
 use App\Http\Requests\User\BulkToggleActiveRequest;
+use App\Http\Requests\User\BulkUpdatePermissionRequest;
 use App\Http\Requests\User\BulkUpdateRoleRequest;
 use App\Http\Requests\User\BulkUserVerificationRequest;
 use App\Http\Requests\User\CreateRequest;
 use App\Http\Requests\User\DeleteRequest;
+use App\Http\Requests\User\ExportCredentialReportRequest;
 use App\Http\Requests\User\ListRequest;
 use App\Http\Requests\User\ToggleActiveRequest;
 use App\Http\Requests\User\UpdateAccountMappingRequest;
+use App\Http\Requests\User\UpdatePermissionRequest;
 use App\Http\Requests\User\UpdateRequest;
 use App\Http\Requests\User\UpdateRoleRequest;
 use App\Http\Requests\User\VerifyRequest;
 use App\Http\Resources\AccountResource;
+use App\Http\Resources\ActivityLogListResource;
 use App\Http\Resources\BranchResource;
 use App\Http\Resources\CommonResource;
+use App\Http\Resources\PermissionOptionResource;
 use App\Http\Resources\UserAccessResource;
 use App\Http\Resources\UserAccountMappingResource;
 use App\Http\Resources\UserBulkImportResultResource;
 use App\Http\Resources\UserDetailsResource;
 use App\Http\Resources\UserListResource;
+use App\Http\Resources\UserPermissionsResource;
 use App\Mail\UserWelcome;
 use App\Models\Account;
+use App\Models\ActivityLog;
 use App\Models\Citizenship;
 use App\Models\CivilStatus;
 use App\Models\Department;
@@ -48,10 +63,13 @@ use App\Models\User;
 use App\Models\UserAccount;
 use App\Services\UserBulkImportService;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
 use Symfony\Component\HttpFoundation\Response;
@@ -90,22 +108,61 @@ class UserController extends Controller
     /**
      * Render the Inertia "users/Index" page with a filtered user list and filter options.
      *
-     * Also passes the user-type and department option lists used by the filter UI.
-     * Filters are validated by {@see ListRequest}.
+     * Also passes the user-type and department option lists used by the filter UI, and —
+     * for a bulk lookup — how many users each entry matched. Those counts are a closure
+     * so a partial reload that only pages the list (or singles out one entry) can leave
+     * them out and skip the aggregate. Filters are validated by {@see ListRequest}.
      *
      * @return \Inertia\Response
      */
     public function index(ListRequest $request)
     {
-        $users = $this->user->getUsers($request->validated());
+        $params = $request->validated();
+        $users = $this->user->getUsers($params);
 
         return Inertia::render('users/Index', [
             'users' => new CommonResource(UserListResource::collection($users)),
+            'search_term_matches' => fn () => $this->user->searchTermMatches($params),
+            'max_search_terms' => config('vc.max_search_terms'),
             'filter_options' => [
                 'user_types' => UserType::list(),
                 'departments' => Department::select(['id', 'name'])->get()->toArray(),
+                'credential_statuses' => CredentialStatus::list(),
+                'credential_accesses' => CredentialAccess::list(),
             ],
+            'credential_reports' => UserCredentialReport::list(),
         ]);
+    }
+
+    /**
+     * Download a credential report over the list's current filters.
+     *
+     * The report is chosen from {@see UserCredentialReport} and written by
+     * {@see UserCredentialReportExporter}; the filters are the list's own, so the file
+     * holds what the filtered list shows. Refuses an empty or oversized result with a
+     * JSON message rather than an empty or truncated file. Input is validated — and
+     * authorized by the `users.export` permission — in {@see ExportCredentialReportRequest}.
+     *
+     * @return \Symfony\Component\HttpFoundation\StreamedResponse|\Illuminate\Http\JsonResponse
+     */
+    public function export(ExportCredentialReportRequest $request, UserCredentialReportExporter $exporter)
+    {
+        $query = $this->user->listQuery($request->filters());
+        $total = (clone $query)->count();
+        $maxRows = (int) config('vc.user_export_max_rows');
+
+        if ($total === 0) {
+            return CustomResponse::error('No users match the selected filters.', Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        if ($total > $maxRows) {
+            return CustomResponse::error(
+                "Too many users to export ({$total}). Please narrow your filters (maximum {$maxRows}).",
+                Response::HTTP_UNPROCESSABLE_ENTITY
+            );
+        }
+
+        return $exporter->download($request->report(), $query);
     }
 
     /**
@@ -315,9 +372,11 @@ class UserController extends Controller
             ->orderBy('username')
             ->paginate($perPage);
 
-        // Resolve every code on the page up front so each resource labels its rows
-        // from the memo instead of hitting HMS per user.
-        CommonHelper::primeAccountBranchNames($users->getCollection()->flatMap->userAccounts);
+        // Resolve every code on the page up front so each resource labels and badges its
+        // rows from the memo instead of hitting HMS per user.
+        $userAccounts = $users->getCollection()->flatMap->userAccounts;
+        CommonHelper::primeAccountBranchNames($userAccounts);
+        CommonHelper::primeMappingBadges($userAccounts);
 
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
@@ -475,6 +534,46 @@ class UserController extends Controller
     }
 
     /**
+     * Return a user's direct and role-inherited permissions plus every permission,
+     * for the single-user permission modal (AJAX only).
+     *
+     * Non-AJAX requests fall through and receive no content.
+     *
+     * @return \Illuminate\Http\JsonResponse|void
+     */
+    public function editPermissions(int $id, Request $request)
+    {
+        $user = $this->user
+            ->with(['permissions:id,name', 'roles:id,name', 'roles.permissions:id,name'])
+            ->findOrFail($id);
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'user' => new UserPermissionsResource($user),
+                'all_permissions' => $this->permissionOptions(),
+            ]);
+        }
+    }
+
+    /**
+     * Return every permission and the assignment modes, for the bulk permission
+     * modal (AJAX only).
+     *
+     * Non-AJAX requests fall through and receive no content.
+     *
+     * @return \Illuminate\Http\JsonResponse|void
+     */
+    public function allPermissions(Request $request)
+    {
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'all_permissions' => $this->permissionOptions(),
+                'modes' => PermissionAssignmentMode::list(),
+            ]);
+        }
+    }
+
+    /**
      * Return a user's details and current account/branch mappings for the right pane.
      *
      * Serves both pane tabs in one request — the details tab reads the user, the
@@ -498,8 +597,9 @@ class UserController extends Controller
             ->findOrFail($id);
 
         // Resolve every mapped code in one lookup per directory so the resource labels
-        // its rows from the memo instead of querying HMS per row.
+        // and badges its rows from the memo instead of querying HMS per row.
         CommonHelper::primeAccountBranchNames($user->userAccounts);
+        CommonHelper::primeMappingBadges($user->userAccounts);
 
         // Return JSON for AJAX requests (no URL change)
         if ($request->wantsJson() || $request->ajax()) {
@@ -507,6 +607,36 @@ class UserController extends Controller
                 'user' => new UserDetailsResource($user),
                 'user_accounts' => UserAccountMappingResource::collection($user->userAccounts),
                 'account_types' => AccountType::list(),
+            ]);
+        }
+    }
+
+    /**
+     * Return one page of what a user has done, newest first (AJAX only).
+     *
+     * Feeds the user pane's Activity tab: the audit trail pinned to this user as the
+     * causer ({@see ActivityLog::getUserActivityLogs()}), shaped exactly like the
+     * audit-trail listing so an entry opens in the same detail view. The filter options
+     * travel with every page — they are two enum lists, cheaper to send than to cache.
+     * Deleted users are included, since a removed account's history is exactly what
+     * someone may need to look up. Filters and audience are validated by
+     * {@see ActivityLogRequest}. Non-AJAX requests fall through and receive no content.
+     *
+     * @return \Illuminate\Http\JsonResponse|void
+     */
+    public function activityLogs(int $id, ActivityLogRequest $request, ActivityLog $activityLog)
+    {
+        $user = $this->user->withTrashed()->findOrFail($id);
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'activity_logs' => new CommonResource(
+                    ActivityLogListResource::collection($activityLog->getUserActivityLogs($user, $request->validated()))
+                ),
+                'filter_options' => [
+                    'modules' => AuditLogName::list(),
+                    'events' => AuditEvent::list(),
+                ],
             ]);
         }
     }
@@ -535,6 +665,7 @@ class UserController extends Controller
 
             $mappings = $target->userAccounts()->get();
             CommonHelper::primeAccountBranchNames($mappings);
+            CommonHelper::primeMappingBadges($mappings);
 
             $message = $count === 0
                 ? 'Account & branch mapping cleared successfully'
@@ -643,6 +774,8 @@ class UserController extends Controller
         try {
             foreach ($users as $user) {
                 $plainPassword = $user->withTemporaryPassword();
+                // Restarts the credential lifecycle: access is judged against this send.
+                $user->credentials_sent_at = now();
 
                 if ($markVerified) {
                     $user->email_verified_at = now();
@@ -877,5 +1010,104 @@ class UserController extends Controller
 
             return CustomResponse::serverError($e, 'UserController');
         }
+    }
+
+    /**
+     * Replace a single user's direct permissions with the submitted set.
+     *
+     * An empty set clears every direct grant; permissions inherited through the
+     * user's roles are unaffected. Input is validated by {@see UpdatePermissionRequest}.
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function updatePermissions(UpdatePermissionRequest $request)
+    {
+        $validated = $request->validated();
+
+        DB::beginTransaction();
+
+        try {
+            $user = $this->user->findOrFail($validated['user_id']);
+            $user->applyDirectPermissions($this->resolvePermissions($validated['permissions'] ?? []));
+
+            DB::commit();
+
+            return CustomResponse::ok('User permissions updated successfully', Response::HTTP_OK);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return CustomResponse::serverError($e, 'UserController::updatePermissions');
+        }
+    }
+
+    /**
+     * Apply one set of direct permissions to many users at once.
+     *
+     * The mode decides whether the set replaces, adds to, or is removed from each
+     * user's direct grants ({@see PermissionAssignmentMode}). The permissions are
+     * resolved once and reused for every user. Input is validated by
+     * {@see BulkUpdatePermissionRequest}.
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function bulkUpdatePermissions(BulkUpdatePermissionRequest $request)
+    {
+        $validated = $request->validated();
+        $permissions = $this->resolvePermissions($validated['permissions'] ?? []);
+
+        DB::beginTransaction();
+
+        try {
+            $users = $this->user->whereIn('id', $validated['user_ids'])->with('permissions')->get();
+
+            foreach ($users as $user) {
+                $user->applyDirectPermissions($permissions, $validated['mode']);
+            }
+
+            DB::commit();
+
+            $count = $users->count();
+            $message = $count === 1
+                ? 'Permissions updated for 1 user successfully'
+                : "Permissions updated for {$count} users successfully";
+
+            return CustomResponse::ok($message, Response::HTTP_OK);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return CustomResponse::serverError($e, 'UserController::bulkUpdatePermissions');
+        }
+    }
+
+    /**
+     * Every web-guard permission as a picker option, ordered by name so each
+     * module's permissions arrive together.
+     */
+    private function permissionOptions(): AnonymousResourceCollection
+    {
+        return PermissionOptionResource::collection(
+            Permission::query()
+                ->where('guard_name', 'web')
+                ->orderBy('name')
+                ->get(['id', 'name'])
+        );
+    }
+
+    /**
+     * Resolve validated permission IDs to their models in one query.
+     *
+     * @param  array<int, int|string>  $permissionIds
+     * @return \Illuminate\Support\Collection<int, Permission>
+     */
+    private function resolvePermissions(array $permissionIds): Collection
+    {
+        if ($permissionIds === []) {
+            return collect();
+        }
+
+        return Permission::query()
+            ->where('guard_name', 'web')
+            ->whereIn('id', $permissionIds)
+            ->get();
     }
 }

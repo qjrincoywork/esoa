@@ -65,8 +65,24 @@ final class SoaAging extends Enum
     }
 
     /**
-     * SQL predicate (SQL Server) selecting SOAs whose {@code due_date} falls in this bucket.
-     * Returns {@code [rawExpression, bindings]} for {@code whereRaw()}.
+     * Statuses that take an invoice out of aging altogether: once settled, a due date
+     * no longer makes it "due" or "past due".
+     *
+     * @return array<int, int>
+     */
+    public static function excludedStatuses(): array
+    {
+        return [SoaStatus::PAID];
+    }
+
+    /**
+     * SQL predicate (SQL Server) selecting open SOAs whose {@code due_date} falls in this
+     * bucket. Returns {@code [rawExpression, bindings]} for {@code whereRaw()} — or for a
+     * {@code CASE WHEN}, so it is a single self-contained boolean expression.
+     *
+     * Invoices in an {@see excludedStatuses()} status never match any bucket. The rule
+     * lives here, not in each caller, so the list filter, both dashboards and the due
+     * reminders cannot disagree about what is aging.
      *
      * {@code DATEDIFF(day, GETDATE(), due_date)} = days from today until due_date
      * (negative = overdue; e.g. -1 means one day past due).
@@ -74,6 +90,24 @@ final class SoaAging extends Enum
      * @return array{0: string, 1: array<int, int>}
      */
     public static function sqlPredicate(int $value): array
+    {
+        [$expression, $bindings] = self::dueDatePredicate($value);
+        $excluded = self::excludedStatuses();
+        $placeholders = implode(', ', array_fill(0, count($excluded), '?'));
+
+        return [
+            "(({$expression}) AND status NOT IN ({$placeholders}))",
+            [...$bindings, ...$excluded],
+        ];
+    }
+
+    /**
+     * The due-date half of {@see sqlPredicate()}: which bucket a due date falls in,
+     * regardless of status.
+     *
+     * @return array{0: string, 1: array<int, int>}
+     */
+    private static function dueDatePredicate(int $value): array
     {
         return match ($value) {
             self::NOT_YET_DUE => ['CAST(due_date AS DATE) > EOMONTH(GETDATE())', []],
@@ -110,6 +144,24 @@ final class SoaAging extends Enum
         return $due->lessThanOrEqualTo($today->copy()->endOfMonth())
             ? self::DUE_CURRENT_MONTH
             : self::NOT_YET_DUE;
+    }
+
+    /**
+     * PHP mirror of the full {@see sqlPredicate()}: the aging bucket of one invoice, or
+     * null when it has no due date or its status takes it out of aging
+     * ({@see excludedStatuses()}) — so a row carries a "Due In" label exactly when it
+     * would appear under an aging filter.
+     *
+     * @param  \DateTimeInterface|string|null  $dueDate
+     * @param  int|string|null  $status
+     */
+    public static function classifyInvoice($dueDate, $status): ?int
+    {
+        if (empty($dueDate) || in_array((int) $status, self::excludedStatuses(), true)) {
+            return null;
+        }
+
+        return self::classify(Carbon::parse($dueDate));
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Enums\UserType;
+use App\Support\LandingRoute;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -83,6 +84,9 @@ class HandleInertiaRequests extends Middleware
                 ],
                 'is_superadmin' => $authUser?->hasRole('superadmin'),
                 'permissions' => $userPermissions,
+                // Where "home" links (logo, Dashboard item) point for this user, resolved by
+                // the same rules as the post-login redirect so they never open a forbidden page.
+                'landing_url' => $authUser ? LandingRoute::urlFor($authUser, absolute: false) : null,
             ],
             'navigations' => $navigationService->getNavigationsForUser($authUser),
             'sub_modules' => $navigationService->getReferencedModules(),

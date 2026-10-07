@@ -35,6 +35,7 @@ class NavigationModuleSeeder extends Seeder
             ['nav' => 'ICT Admin', 'perm' => 'users.verify',          'name' => 'Verify User',                  'slug' => 'users.verify',                 'icon' => 'ShieldCheck',    'color' => 'teal',   'url' => '/users/verify',                'parent' => 'users.index',           'order' => 1],
             ['nav' => 'ICT Admin', 'perm' => 'users.toggle_active',   'name' => 'Toggle User Active Status',    'slug' => 'users.toggle_active',          'icon' => 'ToggleRight',    'color' => 'orange', 'url' => '/users/toggle_active',         'parent' => 'users.index',           'order' => 6],
             ['nav' => 'ICT Admin', 'perm' => 'users.account_mapping', 'name' => 'Map Accounts & Branches',      'slug' => 'users.account_mapping',        'icon' => 'Network',        'color' => 'indigo', 'url' => '/users/{id}/account_mapping',  'parent' => 'users.index',           'order' => 7],
+            ['nav' => 'ICT Admin', 'perm' => 'users.edit_permissions', 'name' => 'Manage Permissions',          'slug' => 'users.edit_permissions',       'icon' => 'KeyRound',       'color' => 'green',  'url' => '/users/{id}/edit_permissions', 'parent' => 'users.index',           'order' => 3],
 
             // Roles
             ['nav' => 'ICT Admin', 'perm' => 'roles.index',           'name' => 'Roles',                        'slug' => 'roles.index',                  'icon' => 'Lock',           'color' => null,     'url' => '/roles',                       'parent' => null,                    'order' => 6],
@@ -77,7 +78,6 @@ class NavigationModuleSeeder extends Seeder
             // SOA sub-actions — cross-nav: in Soa nav but parented under ICT Admin modules
             ['nav' => 'Soa', 'perm' => 'roles.edit_permissions',      'name' => 'Manage Permissions',           'slug' => 'roles.edit_permissions',       'icon' => 'Key',            'color' => 'green',  'url' => '/roles/{id}/edit_permissions', 'parent' => 'roles.index',           'order' => 1],
             ['nav' => 'Soa', 'perm' => 'users.edit_roles',            'name' => 'Manage Roles',                 'slug' => 'users.edit_roles',             'icon' => 'UserRoundCog',   'color' => 'purple', 'url' => '/users/{id}/edit_roles',       'parent' => 'users.index',           'order' => 2],
-
             // SOA — under soas.index
             ['nav' => 'Soa', 'perm' => 'soas.show',                   'name' => 'View Soa',                     'slug' => 'soas.show',                    'icon' => 'Eye',            'color' => 'green',  'url' => '/soas/{id}/show',              'parent' => 'soas.index',            'order' => 1],
             ['nav' => 'Soa', 'perm' => 'soas.manage_file',             'name' => 'Undo Soa Tag',                 'slug' => 'soas.untag',                   'icon' => 'Undo',           'color' => 'blue',   'url' => '/soas/{id}/untag',             'parent' => 'soas.index',            'order' => 4],

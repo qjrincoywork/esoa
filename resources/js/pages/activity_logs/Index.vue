@@ -6,30 +6,39 @@
  * a trail is that it cannot be edited. Navigation is all filtering and reading: narrow
  * by module, event, person or date, then open a row to see the field-by-field changes.
  */
-import { ref, watch, computed, h } from 'vue';
-import { Head, router, usePage } from '@inertiajs/vue3';
-import { createColumnHelper } from '@tanstack/vue-table';
+import { computed, h, ref, watch } from 'vue';
+import { Head, usePage } from '@inertiajs/vue3';
+import { createColumnHelper, type ColumnDef } from '@tanstack/vue-table';
 import { type BreadcrumbItem } from '@/types';
 import AppLayout from '@/layouts/AppLayout.vue';
 import Datatable from '@/components/Datatable.vue';
+import FilterSelect from '@/components/FilterSelect.vue';
+import ListSearch from '@/components/ListSearch.vue';
 import RightPane from '@/components/RightPane.vue';
+import TopPane from '@/components/TopPane.vue';
 import { Button } from '@/components/ui/button';
-import { Select, SelectTrigger, SelectContent, SelectGroup, SelectItem, SelectValue } from '@/components/ui/select';
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
-import { useActivityLogs, type ActivityLogRow } from '@/composables/activityLogs';
+import { eventClass, useActivityLogs, type ActivityLogRow } from '@/composables/activityLogs';
+import { useServerListing, type ListingPage } from '@/composables/datatable/useServerListing';
 import { useModulePermissions } from '@/composables/useModulePermissions';
-import { SlidersHorizontal, X } from 'lucide-vue-next';
+import { avatar } from '@/lib/avatar';
+import { badge } from '@/lib/directoryBadges';
+import { timeAgo } from '@/lib/relativeTime';
+import { Bot, ChevronRight, SlidersHorizontal, X } from 'lucide-vue-next';
 
-type LogsPagination = {
-    current_page: number
-    per_page: number
-    total: number
-    data: unknown[]
-}
+type LogsPagination = ListingPage & { data: ActivityLogRow[] }
 
 type Option = { value: string | number; name: string }
 
+/** What `ActivityLogController::index` sends. */
+interface ActivityLogsPageProps {
+    activity_logs?: LogsPagination
+    filter_options?: { modules?: Option[]; events?: Option[]; causers?: Option[] }
+}
+
 const page = usePage();
+const pageProps = computed(() => page.props as unknown as ActivityLogsPageProps);
 const { slug } = useModulePermissions();
 
 const {
@@ -41,98 +50,166 @@ const {
     rightPaneError,
     rightPaneContentComponent,
     rightPaneComponentProps,
+    topPaneVisible,
+    topPaneTitle,
+    topPaneLoading,
+    topPaneError,
+    topPaneContentComponent,
+    topPaneComponentProps,
 } = useActivityLogs();
 
-const logs = computed<LogsPagination>(() => {
-    const props = (page.props as any).activity_logs as LogsPagination | undefined;
+const EMPTY_PAGE: LogsPagination = { current_page: 1, per_page: 10, total: 0, data: [] };
 
-    return props ?? { current_page: 1, per_page: 10, total: 0, data: [] };
-});
-
-const filterOptions = computed(() => {
-    const opts = (page.props as any).filter_options as
-        | { modules?: Option[]; events?: Option[]; causers?: Option[] }
-        | undefined;
-
-    return {
-        modules: opts?.modules ?? [],
-        events: opts?.events ?? [],
-        causers: opts?.causers ?? [],
-    };
-});
-
-const columnHelper = createColumnHelper();
-const pagination = ref({
-    current_page: logs.value.current_page,
-    per_page: Number(logs.value.per_page),
-    total: logs.value.total,
-});
+const logs = computed(() => pageProps.value.activity_logs ?? EMPTY_PAGE);
 
 const searchQuery = ref('');
-const hasInitialized = ref(false);
 
 // --- Filters ---
-const FILTER_ALL = 'all'; // sentinel — means "no filter applied"
+type FilterKey = 'log_name' | 'event' | 'causer_id'
 
-const filters = ref({ log_name: '', event: '', causer_id: '', date_from: '', date_to: '' });
+const emptyFilters = () => ({ log_name: '', event: '', causer_id: '', date_from: '', date_to: '' });
+const filters = ref(emptyFilters());
 
-const filtersActive = computed(() => Object.values(filters.value).some((value) => value !== ''));
+const activeFilterCount = computed(() => {
+    const { date_from, date_to, ...rest } = filters.value;
 
-/** Selects bind to a sentinel rather than '' so "All" is a real, selectable option. */
-const asSelectModel = (key: 'log_name' | 'event' | 'causer_id') => computed({
-    get: () => filters.value[key] || FILTER_ALL,
-    set: (v: string | undefined) => { filters.value[key] = v === FILTER_ALL ? '' : (v ?? ''); },
+    // A date range is one filter, however many of its ends are set.
+    return Object.values(rest).filter((value) => value !== '').length + (date_from || date_to ? 1 : 0);
 });
 
-const moduleModel = asSelectModel('log_name');
-const eventModel = asSelectModel('event');
-const causerModel = asSelectModel('causer_id');
+const toSelectOptions = (options: Option[] = []) => options.map(({ value, name }) => ({ value: String(value), label: name }));
+
+/** One dropdown of the filter bar: what it narrows, how "no filter" reads, and its choices. */
+interface FilterDef {
+    key: FilterKey
+    label: string
+    allLabel: string
+    options: { value: string; label: string }[]
+    width: string
+}
+
+/** The dropdowns of the filter bar, in order. */
+const filterDefs = computed<FilterDef[]>(() => {
+    const options = pageProps.value.filter_options;
+
+    return [
+        { key: 'log_name', label: 'Module', allLabel: 'All modules', options: toSelectOptions(options?.modules), width: 'w-44' },
+        { key: 'event', label: 'Event', allLabel: 'All events', options: toSelectOptions(options?.events), width: 'w-40' },
+        { key: 'causer_id', label: 'Performed by', allLabel: 'Anyone', options: toSelectOptions(options?.causers), width: 'w-48' },
+    ];
+});
+
+/** A day as the date inputs hold it (YYYY-MM-DD), in local time — not UTC, which can be a day off. */
+const toDateValue = (date: Date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+/** Ranges a trail is usually read over, ending today; `days` counts back before it. */
+const DATE_PRESETS = [
+    { key: 'today', label: 'Today', days: 0 },
+    { key: '7d', label: '7 days', days: 6 },
+    { key: '30d', label: '30 days', days: 29 },
+];
+
+const presetRange = (days: number) => {
+    const from = new Date();
+    from.setDate(from.getDate() - days);
+
+    return { from: toDateValue(from), to: toDateValue(new Date()) };
+};
+
+/** The preset the chosen range matches, if any — so picking the same dates by hand lights it too. */
+const activePreset = computed(() => DATE_PRESETS.find(({ days }) => {
+    const { from, to } = presetRange(days);
+
+    return filters.value.date_from === from && filters.value.date_to === to;
+})?.key);
+
+/** Apply a preset, or lift it when it is already the range shown. */
+const togglePreset = (preset: (typeof DATE_PRESETS)[number]) => {
+    const { from, to } = activePreset.value === preset.key ? { from: '', to: '' } : presetRange(preset.days);
+
+    filters.value.date_from = from;
+    filters.value.date_to = to;
+};
 
 const clearFilters = () => {
-    filters.value = { log_name: '', event: '', causer_id: '', date_from: '', date_to: '' };
+    filters.value = emptyFilters();
 };
 
-const EVENT_CLASSES: Record<string, string> = {
-    created: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-    updated: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-    deleted: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-    restored: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
-};
+// --- Summary & empty state ---
+const isNarrowed = computed(() => searchQuery.value.trim() !== '' || activeFilterCount.value > 0);
 
-/** A small pill, so the kind of change is readable at a glance down the column. */
-const badge = (text: string, classes: string) =>
-    h('span', { class: ['inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', classes] }, text);
+const resultSummary = computed(() => {
+    const total = logs.value.total;
 
-const columns: any[] = [
+    return `${total.toLocaleString()} ${isNarrowed.value ? 'matching ' : ''}${total === 1 ? 'entry' : 'entries'}`;
+});
+
+const emptyState = computed(() => isNarrowed.value
+    ? { message: 'No activity matches your search', description: 'Try a different search term, widen the dates, or clear the filters.' }
+    : { message: 'No activity yet', description: 'Sign-ins and changes to billing invoices, concerns and remittance advices will appear here.' });
+
+// --- Columns ---
+const DASH = '—';
+
+/** The server's label, tidied: an event it has no label for arrives as its raw name ("Batch_uploaded"). */
+const eventLabel = (row: ActivityLogRow) => (row.event_label ?? row.event ?? DASH).replace(/_/g, ' ');
+
+/** The exact time to read, and beneath it how long ago — for scanning recency down the column. */
+const whenCell = (row: ActivityLogRow) => h('div', { class: 'whitespace-nowrap' }, [
+    h('div', null, row.logged_at ?? DASH),
+    row.logged_at_value ? h('div', { class: 'text-muted-foreground' }, timeAgo(row.logged_at_value)) : null,
+]);
+
+/** Who acted; an entry without a person was written by the system (a job or import). */
+const causerCell = (row: ActivityLogRow) => h('div', { class: 'flex items-center gap-2' }, [
+    row.causer ? avatar(row.causer) : avatar(null, Bot),
+    h('span', { class: ['truncate', !row.causer && 'text-muted-foreground'] }, row.causer ?? 'System'),
+]);
+
+const columnHelper = createColumnHelper<ActivityLogRow>();
+
+/**
+ * No module column: every description already opens with the module ("Billing invoice
+ * BI-1 was updated"), and the module filter narrows by it.
+ */
+const columns: ColumnDef<ActivityLogRow, any>[] = [
     columnHelper.accessor('logged_at', {
         header: 'When',
         // The label reads well but sorts alphabetically; sort on the timestamp instead.
-        sortingFn: (a: any, b: any) =>
-            String(a.original?.logged_at_value ?? '').localeCompare(String(b.original?.logged_at_value ?? '')),
-        cell: (info: any) => info.getValue() ?? '—',
-    }),
-    columnHelper.accessor('module', {
-        header: 'Module',
-        cell: (info: any) => badge(info.getValue() ?? '—', 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300'),
+        sortingFn: (a, b) =>
+            String(a.original.logged_at_value ?? '').localeCompare(String(b.original.logged_at_value ?? '')),
+        cell: ({ row }) => whenCell(row.original),
     }),
     columnHelper.accessor('event_label', {
         header: 'Event',
-        cell: (info: any) => badge(
-            info.getValue() ?? '—',
-            EVENT_CLASSES[info.row.original?.event ?? ''] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300',
-        ),
+        // Colors come from the shared map, so the table, the panes and the lists agree.
+        cell: ({ row }) => badge(eventLabel(row.original), eventClass(row.original.event)),
     }),
     columnHelper.accessor('description', {
         header: 'Activity',
-        cell: (info: any) => info.getValue() ?? '—',
+        cell: (info) => h('span', { class: 'font-medium' }, info.getValue() ?? DASH),
     }),
     columnHelper.accessor('causer', {
-        header: 'Changed by',
-        cell: (info: any) => info.getValue() ?? 'System',
+        header: 'Performed by',
+        cell: ({ row }) => causerCell(row.original),
     }),
     columnHelper.accessor('change_count', {
-        header: 'Fields',
-        cell: (info: any) => Number(info.getValue()) || '—',
+        header: 'Changes',
+        // How much changed, so a one-field edit reads apart from a rewrite without opening it.
+        cell: (info) => {
+            const count = Number(info.getValue()) || 0;
+
+            return count
+                ? h('span', { class: 'whitespace-nowrap tabular-nums' }, `${count} ${count === 1 ? 'field' : 'fields'}`)
+                : h('span', { class: 'text-muted-foreground' }, DASH);
+        },
+    }),
+    // Says the row opens; the whole row is the target.
+    columnHelper.display({
+        id: 'open',
+        header: '',
+        cell: () => h(ChevronRight, { class: 'size-4 text-muted-foreground', 'aria-hidden': 'true' }),
     }),
 ];
 
@@ -143,78 +220,28 @@ const breadcrumbItems: BreadcrumbItem[] = [
     },
 ];
 
-const fetchLogs = () => {
-    const params: Record<string, any> = {
-        page: pagination.value.current_page,
-        per_page: pagination.value.per_page,
-    };
+// --- Fetching ---
+const filterParams = (): Record<string, string> => {
+    const params: Record<string, string> = {};
 
     if (searchQuery.value.trim()) params.search_string = searchQuery.value.trim();
-    if (filters.value.log_name) params.log_name = filters.value.log_name;
-    if (filters.value.event) params.event = filters.value.event;
-    if (filters.value.causer_id) params.causer_id = filters.value.causer_id;
-    if (filters.value.date_from) params.date_from = filters.value.date_from;
-    if (filters.value.date_to) params.date_to = filters.value.date_to;
+    for (const [key, value] of Object.entries(filters.value)) {
+        if (value !== '') params[key] = value;
+    }
 
-    router.get(`/${slug.value}`, params, {
-        preserveState: true,
-        preserveScroll: true,
-        replace: true,
-        only: ['activity_logs'],
-    });
+    return params;
 };
 
-// Debounced fetch for the search box
-const searchTimeout = ref<number | null>(null);
-watch(searchQuery, () => {
-    if (!hasInitialized.value) return;
-    if (searchTimeout.value) clearTimeout(searchTimeout.value);
-
-    searchTimeout.value = window.setTimeout(() => {
-        pagination.value.current_page = 1;
-        fetchLogs();
-    }, 500);
+const { pagination, isFetching, queueFetch, onPaginationChange } = useServerListing({
+    listing: () => logs.value,
+    url: () => `/${slug.value}`,
+    params: filterParams,
+    visit: () => ({ only: ['activity_logs'] }),
 });
 
-// Keep local pagination in step with what the server returned
-const isUpdatingFromServer = ref(false);
-watch(logs, (next) => {
-    if (!next) return;
-    isUpdatingFromServer.value = true;
-    pagination.value.current_page = next.current_page;
-    pagination.value.per_page = Number(next.per_page);
-    pagination.value.total = next.total;
-
-    setTimeout(() => { isUpdatingFromServer.value = false; }, 300);
-});
-
-// Debounced fetch for paging
-const fetchTimeout = ref<number | null>(null);
-watch(
-    () => [pagination.value.current_page, pagination.value.per_page],
-    ([currentPage, perPage]) => {
-        if (!hasInitialized.value || isUpdatingFromServer.value) return;
-        if (fetchTimeout.value) clearTimeout(fetchTimeout.value);
-
-        fetchTimeout.value = window.setTimeout(() => {
-            pagination.value.current_page = Number(currentPage) || 1;
-            pagination.value.per_page = Number(perPage) || 10;
-            fetchLogs();
-        }, 50);
-    },
-);
-
-// Debounced fetch when any filter changes
-const filterTimeout = ref<number | null>(null);
-watch(filters, () => {
-    if (filterTimeout.value) clearTimeout(filterTimeout.value);
-
-    filterTimeout.value = window.setTimeout(() => {
-        pagination.value.current_page = 1;
-        hasInitialized.value = true;
-        fetchLogs();
-    }, 300);
-}, { deep: true });
+// Typing reloads once it pauses; spacing alone changes nothing the server would see.
+watch(() => searchQuery.value.trim(), () => queueFetch(500));
+watch(filters, () => queueFetch(300), { deep: true });
 
 const openEntry = (row: ActivityLogRow) => openActivityLog(row);
 </script>
@@ -222,131 +249,98 @@ const openEntry = (row: ActivityLogRow) => openActivityLog(row);
 <template>
     <AppLayout :breadcrumbs="breadcrumbItems">
         <Head title="Activity Logs" />
-        <div class="bg-[var(--color-surface)] shadow-sm border border-[var(--color-border)] p-6">
-            <div class="flex flex-col gap-3 mb-4">
-                <!-- Top row: what this is + search -->
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <p class="text-sm text-[var(--color-text-muted)]">
-                        A read-only record of changes to billing invoices, concerns and remittance advices.
-                        Select a row to see what changed.
-                    </p>
-                    <div class="relative w-full sm:w-72">
-                        <label class="sr-only" for="activity-search">Search activity</label>
-                        <input
-                            id="activity-search"
-                            v-model="searchQuery"
-                            type="text"
-                            placeholder="Search record or person..."
-                            class="border border-[var(--color-border-strong)] rounded-md text-sm bg-[var(--color-surface)] text-[var(--color-text)] focus:ring-2 focus:ring-opacity-50 focus:border-transparent w-full px-4 py-2 pr-8"
-                            :style="{ '--tw-ring-color': 'var(--primary-color)' }"
-                            @input="hasInitialized = true" />
-                        <button
-                            v-if="searchQuery"
-                            class="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] hover:text-[var(--color-text)] focus:outline-none"
-                            aria-label="Clear search"
-                            @click="searchQuery = ''">
-                            <X class="w-4 h-4" />
-                        </button>
+
+        <div class="flex flex-1 flex-col gap-4 p-4">
+            <Card class="gap-0 py-0">
+                <!-- Title and live result count -->
+                <CardHeader class="flex flex-col gap-1.5 border-b px-4 py-5 sm:px-6 [.border-b]:pb-5">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <h1 class="text-lg leading-none font-semibold tracking-tight">Activity Logs</h1>
+                        <span
+                            class="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground"
+                            aria-live="polite">
+                            {{ resultSummary }}
+                        </span>
                     </div>
-                </div>
+                    <CardDescription>
+                        A read-only record of sign-ins and of changes to billing invoices, concerns and
+                        remittance advices. Open an entry to see what changed and where it came from.
+                    </CardDescription>
+                </CardHeader>
 
-                <!-- Filter row -->
-                <div class="flex flex-wrap items-end gap-2">
-                    <SlidersHorizontal class="mb-2 w-4 h-4 shrink-0 text-[var(--color-text-muted)]" aria-hidden="true" />
+                <!-- Search and filters -->
+                <CardContent class="flex flex-col gap-3 border-b px-4 py-4 sm:px-6">
+                    <ListSearch
+                        id="activity-search"
+                        v-model="searchQuery"
+                        label="Search activity"
+                        placeholder="Search record or person..." />
 
-                    <!-- Module -->
-                    <Select v-model="moduleModel">
-                        <SelectTrigger class="h-8 w-48 text-xs">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectGroup>
-                                <SelectItem :value="FILTER_ALL" class="text-xs text-[var(--color-text-muted)]">
-                                    All modules
-                                </SelectItem>
-                                <SelectItem
-                                    v-for="opt in filterOptions.modules"
-                                    :key="String(opt.value)"
-                                    :value="String(opt.value)"
-                                    class="text-xs">
-                                    {{ opt.name }}
-                                </SelectItem>
-                            </SelectGroup>
-                        </SelectContent>
-                    </Select>
+                    <div class="flex flex-wrap items-center gap-2" role="group" aria-label="Filters">
+                        <span class="flex items-center gap-1.5 pr-1 text-xs font-medium text-muted-foreground">
+                            <SlidersHorizontal class="size-3.5" aria-hidden="true" /> Filters
+                        </span>
 
-                    <!-- Event -->
-                    <Select v-model="eventModel">
-                        <SelectTrigger class="h-8 w-36 text-xs">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectGroup>
-                                <SelectItem :value="FILTER_ALL" class="text-xs text-[var(--color-text-muted)]">
-                                    All events
-                                </SelectItem>
-                                <SelectItem
-                                    v-for="opt in filterOptions.events"
-                                    :key="String(opt.value)"
-                                    :value="String(opt.value)"
-                                    class="text-xs">
-                                    {{ opt.name }}
-                                </SelectItem>
-                            </SelectGroup>
-                        </SelectContent>
-                    </Select>
+                        <FilterSelect
+                            v-for="def in filterDefs"
+                            :key="def.key"
+                            v-model="filters[def.key]"
+                            :label="def.label"
+                            :all-label="def.allLabel"
+                            :options="def.options"
+                            :class="def.width" />
 
-                    <!-- Person -->
-                    <Select v-model="causerModel">
-                        <SelectTrigger class="h-8 w-48 text-xs">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectGroup>
-                                <SelectItem :value="FILTER_ALL" class="text-xs text-[var(--color-text-muted)]">
-                                    Anyone
-                                </SelectItem>
-                                <SelectItem
-                                    v-for="opt in filterOptions.causers"
-                                    :key="String(opt.value)"
-                                    :value="String(opt.value)"
-                                    class="text-xs">
-                                    {{ opt.name }}
-                                </SelectItem>
-                            </SelectGroup>
-                        </SelectContent>
-                    </Select>
+                        <DateRangePicker
+                            id="activity-range"
+                            class="w-72"
+                            v-model:from="filters.date_from"
+                            v-model:to="filters.date_to" />
 
-                    <!-- When -->
-                    <DateRangePicker
-                        id="activity-range"
-                        class="w-72"
-                        v-model:from="filters.date_from"
-                        v-model:to="filters.date_to" />
+                        <!-- Common ranges in one click; the active one is pressed -->
+                        <div class="flex items-center gap-1" role="group" aria-label="Date presets">
+                            <Button
+                                v-for="preset in DATE_PRESETS"
+                                :key="preset.key"
+                                type="button"
+                                size="sm"
+                                :variant="activePreset === preset.key ? 'secondary' : 'ghost'"
+                                class="h-9 cursor-pointer px-2.5"
+                                :class="activePreset !== preset.key && 'text-muted-foreground'"
+                                :aria-pressed="activePreset === preset.key"
+                                @click="togglePreset(preset)">
+                                {{ preset.label }}
+                            </Button>
+                        </div>
 
-                    <Button
-                        v-if="filtersActive"
-                        variant="ghost"
-                        size="sm"
-                        class="mb-0.5 h-8 px-2 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
-                        @click="clearFilters">
-                        <X class="w-3 h-3 mr-1" />
-                        Clear
-                    </Button>
-                </div>
-            </div>
+                        <Button
+                            v-if="activeFilterCount"
+                            variant="ghost"
+                            size="sm"
+                            class="h-9 cursor-pointer px-2 text-muted-foreground hover:text-foreground"
+                            @click="clearFilters">
+                            <X class="size-3.5" /> Clear filters ({{ activeFilterCount }})
+                        </Button>
+                    </div>
+                </CardContent>
 
-            <Datatable
-                :data="logs.data"
-                :columns="columns"
-                :pagination="pagination"
-                :enable-search="false"
-                :enable-row-click="true"
-                :row-click="openEntry"
-                empty-message="No activity found"
-                empty-description="Changes to billing invoices, concerns and remittance advices will appear here."
-                export-file-name="activity_logs"
-                @update:pagination="(newPagination: typeof pagination) => { hasInitialized = true; pagination = newPagination }" />
+                <!-- The trail; dimmed while a reload is in flight -->
+                <CardContent
+                    class="px-4 py-4 transition-opacity duration-200 sm:px-6"
+                    :class="{ 'opacity-60': isFetching }"
+                    :aria-busy="isFetching">
+                    <Datatable
+                        :data="logs.data"
+                        :columns="columns"
+                        :pagination="pagination"
+                        :enable-search="false"
+                        :enable-row-click="true"
+                        :row-click="openEntry"
+                        :empty-message="emptyState.message"
+                        :empty-description="emptyState.description"
+                        export-file-name="activity_logs"
+                        @update:pagination="onPaginationChange" />
+                </CardContent>
+            </Card>
         </div>
 
         <RightPane
@@ -357,5 +351,15 @@ const openEntry = (row: ActivityLogRow) => openActivityLog(row);
             :content-component="rightPaneContentComponent"
             :component-props="rightPaneComponentProps"
             @update:open="(v) => { if (!v && !rightPaneLoading) closePane('right') }" />
+
+        <!-- Top pane: one entry of the batch, opened from the detail pane over it -->
+        <TopPane
+            :open="topPaneVisible"
+            :title="topPaneTitle"
+            :loading="topPaneLoading"
+            :error="topPaneError"
+            :content-component="topPaneContentComponent"
+            :component-props="topPaneComponentProps"
+            @update:open="(v) => { if (!v && !topPaneLoading) closePane('top') }" />
     </AppLayout>
 </template>

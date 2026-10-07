@@ -8,6 +8,7 @@ use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
+use App\Helpers\CommonHelper;
 use App\Models\Soa;
 
 class NewBillingInvoiceUploaded extends Mailable
@@ -44,9 +45,17 @@ class NewBillingInvoiceUploaded extends Mailable
 
     /**
      * Render the email using the emails.esoa.new-bi-uploaded view.
+     *
+     * The view greets the client by name and prints a contact number, neither of which
+     * is a column on the SOA. Queued mail restores the model from its key alone, so
+     * whatever the sender attached in memory is gone by the time a worker renders this;
+     * the fields are therefore resolved here, where they are actually needed. Already
+     * populated (the synchronous path), it costs nothing.
      */
     public function content(): Content
     {
+        CommonHelper::prepareBillingInvoiceForEmail($this->soa);
+
         return new Content(
             view: 'emails.esoa.new-bi-uploaded',
         );

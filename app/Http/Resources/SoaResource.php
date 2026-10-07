@@ -24,13 +24,16 @@ class SoaResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        if (!$this->contract_date_from) {
+        if (!empty($this->period_date_from)) {
             $startDate = $this->period_date_from;
             $endDate = $this->period_date_to;
         } else {
             $startDate = $this->contract_date_from;
             $endDate = $this->contract_date_to;
         }
+        // Classified once for both the label and its color; null (no badge) for settled invoices.
+        $aging = SoaAging::classifyInvoice($this->due_date, $this->status);
+
         return [
             'id' => $this->id,
             'soa_number' => $this->soa_number,
@@ -38,9 +41,13 @@ class SoaResource extends JsonResource
             'billing_ref_names' => $this->getBillingRefNames($this->billing_ref),
             'bill_type' => BillType::label((int) $this->bill_type),
             'created_at' => CommonHelper::formatDate($this->created_at),
+            'billing_date' => CommonHelper::formatDate($this->billing_date),
+            'billing_date_value' => $this->billing_date
+                ? Carbon::parse($this->billing_date)->toDateString()
+                : null,
             'due_date' => CommonHelper::formatDate($this->due_date),
-            'due_in' => $this->formatDaysDue($this->due_date),
-            'due_in_color' => $this->dueInColor($this->due_date),
+            'due_in' => $aging !== null ? SoaAging::label($aging) : null,
+            'due_in_color' => $aging !== null ? SoaAging::color($aging) : null,
             'period_date_from' => $this->period_date_from,
             'period_date_to' => $this->period_date_to,
             'utilization_coverage' => Str::upper(CommonHelper::formatDate($this->period_date_from) . ' TO ' . CommonHelper::formatDate($this->period_date_to)),
@@ -79,37 +86,6 @@ class SoaResource extends JsonResource
         }
 
         return implode(', ', $billingRefNames);
-    }
-
-    /**
-     * Aging-bucket label for a due date (single source of truth: {@see SoaAging::classify()}).
-     *
-     * @param string|null $date The due date to classify.
-     * @return string|null Null when no due date; otherwise the aging bucket label
-     *   (e.g. "Due (Current Month)", "Past Due – 30 Days").
-     */
-    public function formatDaysDue($date)
-    {
-        if (!$date) {
-            return null;
-        }
-
-        return SoaAging::label(SoaAging::classify(Carbon::parse($date)));
-    }
-
-    /**
-     * Aging-bucket color classes for a due date, used to style the "Due In" badge.
-     *
-     * @param string|null $date The due date to classify.
-     * @return string|null Null when no due date; otherwise semantic color utility classes.
-     */
-    public function dueInColor($date)
-    {
-        if (!$date) {
-            return null;
-        }
-
-        return SoaAging::color(SoaAging::classify(Carbon::parse($date)));
     }
 
     /**

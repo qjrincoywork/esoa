@@ -117,6 +117,131 @@ class UserAccount extends Model
     }
 
     /**
+     * Usernames mapped to each of the given account codes, matched exactly regardless
+     * of branch — mirrors what makes a code count as "assigned" in
+     * {@see assignedAccountCodes()}.
+     *
+     * Scoped to the codes asked for rather than the whole table, so a directory page of
+     * a few dozen rows costs one narrow `whereIn` rather than a table-wide scan.
+     *
+     * @param  array<int, string>  $codes
+     * @return array<string, array<int, string>> account_code => usernames
+     */
+    public static function usernamesByAccountCodes(array $codes): array
+    {
+        return self::groupUsernames(
+            self::query()->whereIn('account_code', self::normalizeCodes($codes)),
+            'account_code'
+        );
+    }
+
+    /**
+     * Usernames mapped directly to each of the given branch codes.
+     *
+     * Does not account for an account mapped in full — {@see usernamesByAccountCodesMappedInFull()}
+     * covers that half of how a branch becomes reachable.
+     *
+     * @param  array<int, string>  $codes
+     * @return array<string, array<int, string>> branch_code => usernames
+     */
+    public static function usernamesByBranchCodes(array $codes): array
+    {
+        return self::groupUsernames(
+            self::query()->whereIn('branch_code', self::normalizeCodes($codes)),
+            'branch_code'
+        );
+    }
+
+    /**
+     * Usernames mapped to each of the given account codes with no branch named — the
+     * mappings that grant every branch of the account ({@see accountCodesMappedInFull()}).
+     *
+     * @param  array<int, string>  $codes
+     * @return array<string, array<int, string>> account_code => usernames
+     */
+    public static function usernamesByAccountCodesMappedInFull(array $codes): array
+    {
+        return self::groupUsernames(
+            self::query()
+                ->where(fn ($query) => $query->whereNull('branch_code')->orWhere('branch_code', ''))
+                ->whereIn('account_code', self::normalizeCodes($codes)),
+            'account_code'
+        );
+    }
+
+    /**
+     * Every mapping row that reaches a given account code, user attached — any mapping
+     * naming that account at all, whole or by one of its branches, which is the same
+     * definition {@see usernamesByAccountCodes()} and {@see assignedAccountCodes()} use.
+     *
+     * Returns a query rather than a collection so the "Mapped Users" tab can add its
+     * own search and paginate at the database rather than in memory.
+     *
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public static function queryForAccountCode(string $accountCode)
+    {
+        return self::query()
+            ->where('account_code', trim($accountCode))
+            ->with('user:id,username,email,is_active');
+    }
+
+    /**
+     * Every mapping row that reaches a given branch, user attached.
+     *
+     * A branch is reached two ways, so both are queried: its own code mapped directly,
+     * or its account mapped in full — a blank branch code granting every branch of it
+     * ({@see mappingKey()}, {@see accountCodesMappedInFull()}).
+     *
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public static function queryForBranchCode(string $accountCode, string $branchCode)
+    {
+        $accountCode = trim($accountCode);
+        $branchCode = trim($branchCode);
+
+        return self::query()
+            ->where(function ($query) use ($accountCode, $branchCode) {
+                $query->where('branch_code', $branchCode)
+                    ->orWhere(function ($inFull) use ($accountCode) {
+                        $inFull->where('account_code', $accountCode)
+                            ->where(fn ($q) => $q->whereNull('branch_code')->orWhere('branch_code', ''));
+                    });
+            })
+            ->with('user:id,username,email,is_active');
+    }
+
+    /**
+     * Run a mapping query, grouped by the given column, into code => usernames.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder  $query
+     * @return array<string, array<int, string>>
+     */
+    private static function groupUsernames($query, string $groupColumn): array
+    {
+        return $query
+            ->with('user:id,username')
+            ->get([$groupColumn, 'user_id'])
+            ->groupBy($groupColumn)
+            ->map(fn ($rows) => $rows->pluck('user.username')->filter()->unique()->sort()->values()->all())
+            ->all();
+    }
+
+    /**
+     * Trim, drop blanks from, and dedupe a list of codes before it reaches a query.
+     *
+     * @param  array<int, string>  $codes
+     * @return array<int, string>
+     */
+    private static function normalizeCodes(array $codes): array
+    {
+        return array_values(array_unique(array_filter(
+            array_map(static fn ($code): string => trim((string) $code), $codes),
+            static fn (string $code): bool => $code !== ''
+        )));
+    }
+
+    /**
      * Replace a user's whole set of account/branch mappings with the given rows.
      *
      * The submitted list is the complete intended state, so the existing rows are

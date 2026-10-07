@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\AccountType;
 use App\Enums\AuditLogName;
 use App\Enums\DataScope;
 use App\Enums\OrderType;
@@ -28,6 +29,17 @@ class Soa extends Model
 {
     /** @use HasFactory<\Database\Factories\SoaFactory> */
     use HasFactory, SoftDeletes, LogsAuditActivity;
+
+    /**
+     * Billing attachment columns, keyed by the {type} segment of the
+     * soas.billing_attachments route that streams them.
+     *
+     * @var array<string, string>
+     */
+    public const BILLING_ATTACHMENTS = [
+        'pdf' => 'file_pdf',
+        'excel' => 'file_xls',
+    ];
 
     /**
      * Write this model's audit trail to the billing-invoice channel.
@@ -64,6 +76,7 @@ class Soa extends Model
         'bill_type',
         'status',
         'due_date',
+        'billing_date',
         'period_date_from',
         'period_date_to',
         'contract_date_from',
@@ -402,7 +415,9 @@ class Soa extends Model
         if (!empty($params['billing_ref'] ?? null)) {
             $query->where('billing_ref', $params['billing_ref']);
         }
-        if (!empty($params['account_type'] ?? null)) {
+        // Records are stamped with a single class ({@see AccountType::fromAccountCode()}),
+        // so TPA/HMO — "both" — narrows nothing rather than matching a value no row holds.
+        if (in_array($params['account_type'] ?? null, [AccountType::TPA, AccountType::HMO], true)) {
             $query->where('account_type', $params['account_type']);
         }
         if (array_key_exists('status', $params) && $params['status'] !== null && $params['status'] !== '') {
@@ -414,7 +429,7 @@ class Soa extends Model
     }
 
     /**
-     * Apply due-date and bill-date (created_at) range filters for list and export.
+     * Apply due-date and bill-date range filters for list and export.
      */
     protected function applyListDateFilters(Builder $query, array $params): void
     {
@@ -434,19 +449,23 @@ class Soa extends Model
             );
         }
 
+        // Bounded on `billing_date`, which is what the list has always called the bill
+        // date; it used to be read off `created_at` for want of a column of its own.
+        // Whole days on both ends: the column is a date, so a timestamp upper bound
+        // would exclude the last day of the range for want of a time.
         if (!empty($params['bill_date_from'] ?? null)) {
-            $query->where(
-                'created_at',
+            $query->whereDate(
+                'billing_date',
                 '>=',
-                Carbon::parse($params['bill_date_from'])->startOfDay()
+                Carbon::parse($params['bill_date_from'])->toDateString()
             );
         }
 
         if (!empty($params['bill_date_to'] ?? null)) {
-            $query->where(
-                'created_at',
+            $query->whereDate(
+                'billing_date',
                 '<=',
-                Carbon::parse($params['bill_date_to'])->endOfDay()
+                Carbon::parse($params['bill_date_to'])->toDateString()
             );
         }
     }

@@ -2,7 +2,9 @@
 
 namespace App\Helpers;
 
+use App\Enums\AccountMappingBadge;
 use App\Enums\Server;
+use App\Models\Soa;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Mail;
@@ -28,6 +30,28 @@ class CommonHelper
      * @var array<string, string>
      */
     protected static array $branchNameCache = [];
+
+    /**
+     * HMS account expiry dates resolved this request, keyed by account code, folded
+     * across duplicate codes. An empty value means none is recorded.
+     *
+     * @var array<string, string>
+     */
+    protected static array $accountExpiryCache = [];
+
+    /**
+     * HMS cardholder counts resolved this request, keyed by account code.
+     *
+     * @var array<string, int>
+     */
+    protected static array $accountMemberCountCache = [];
+
+    /**
+     * HMS cardholder counts resolved this request, keyed by branch code.
+     *
+     * @var array<string, int>
+     */
+    protected static array $branchMemberCountCache = [];
 
     /**
      * HMS system-user display names resolved this request, keyed by login.
@@ -419,6 +443,120 @@ class CommonHelper
     }
 
     /**
+     * The badges of one stored mapping, as {@see AccountMappingBadge::forRow()} decides them.
+     *
+     * A mapping stores codes only, so its account's expiry and its cardholder count —
+     * the account's for a whole-account row, the branch's for a branch row — are read
+     * from a request memo. A miss is resolved here, so a lone row is still right, but a
+     * caller serialising a collection calls {@see primeMappingBadges()} first so the
+     * whole set costs one lookup per fact rather than several per row.
+     *
+     * @param  string|null  $accountCode
+     * @param  string|null  $branchCode
+     * @return array{kind_badge: array<string, string>, status_badges: array<int, array<string, string>>}
+     */
+    public static function mappingBadges(?string $accountCode, ?string $branchCode): array
+    {
+        $accountCode = trim((string) $accountCode);
+        $branchCode = trim((string) $branchCode);
+        $kind = AccountMappingBadge::kindOf($branchCode);
+        $isBranch = $kind === AccountMappingBadge::BRANCH;
+
+        self::cacheMappingBadgeFacts(
+            [$accountCode],
+            $isBranch ? [] : [$accountCode],
+            $isBranch ? [$branchCode] : []
+        );
+
+        $memberCount = $isBranch
+            ? (self::$branchMemberCountCache[$branchCode] ?? null)
+            : (self::$accountMemberCountCache[$accountCode] ?? null);
+
+        return AccountMappingBadge::forRow(
+            $kind,
+            (self::$accountExpiryCache[$accountCode] ?? '') ?: null,
+            $memberCount
+        );
+    }
+
+    /**
+     * Warm the mapping-badge memo for a whole set of stored mappings at once.
+     *
+     * Only the counts a row actually shows are fetched: an account's for a row covering
+     * the whole account, a branch's for a branch row.
+     *
+     * @param  iterable<int, array<string, mixed>|\Illuminate\Database\Eloquent\Model|object>  $rows
+     * @return void
+     */
+    public static function primeMappingBadges(iterable $rows): void
+    {
+        $rows = collect($rows)
+            ->map(fn ($row) => $row instanceof Model ? $row->toArray() : (array) $row)
+            ->map(fn (array $row) => [
+                'account_code' => trim((string) ($row['account_code'] ?? '')),
+                'branch_code' => trim((string) ($row['branch_code'] ?? '')),
+            ]);
+
+        [$branchRows, $accountRows] = $rows->partition(
+            fn (array $row) => AccountMappingBadge::kindOf($row['branch_code']) === AccountMappingBadge::BRANCH
+        );
+
+        self::cacheMappingBadgeFacts(
+            $rows->pluck('account_code')->all(),
+            $accountRows->pluck('account_code')->all(),
+            $branchRows->pluck('branch_code')->all()
+        );
+    }
+
+    /**
+     * Resolve any mapping-badge facts not yet memoised, in one lookup per fact.
+     *
+     * A code HMS has nothing for is cached too — as no expiry, or zero members — so it
+     * is not looked up again for the rest of the request.
+     *
+     * @param  array<int, string>  $accountCodes  Codes whose expiry is needed.
+     * @param  array<int, string>  $memberAccountCodes  Account codes whose member count is needed.
+     * @param  array<int, string>  $memberBranchCodes  Branch codes whose member count is needed.
+     * @return void
+     */
+    protected static function cacheMappingBadgeFacts(array $accountCodes, array $memberAccountCodes, array $memberBranchCodes): void
+    {
+        $accountCodes = self::uncachedKeys($accountCodes, self::$accountExpiryCache);
+        $memberAccountCodes = self::uncachedKeys($memberAccountCodes, self::$accountMemberCountCache);
+        $memberBranchCodes = self::uncachedKeys($memberBranchCodes, self::$branchMemberCountCache);
+
+        if ($accountCodes === [] && $memberAccountCodes === [] && $memberBranchCodes === []) {
+            return;
+        }
+
+        $sqlDatabase = new SqlDatabase(Server::HMS);
+
+        if ($accountCodes !== []) {
+            $expiries = $sqlDatabase->getAccountExpiriesByCodes($accountCodes);
+
+            foreach ($accountCodes as $code) {
+                self::$accountExpiryCache[$code] = (string) ($expiries[$code] ?? '');
+            }
+        }
+
+        if ($memberAccountCodes !== []) {
+            $counts = $sqlDatabase->getMemberCountsByCodes('ch_accountid', $memberAccountCodes);
+
+            foreach ($memberAccountCodes as $code) {
+                self::$accountMemberCountCache[$code] = (int) ($counts[$code] ?? 0);
+            }
+        }
+
+        if ($memberBranchCodes !== []) {
+            $counts = $sqlDatabase->getMemberCountsByCodes('ch_branch_code', $memberBranchCodes);
+
+            foreach ($memberBranchCodes as $code) {
+                self::$branchMemberCountCache[$code] = (int) ($counts[$code] ?? 0);
+            }
+        }
+    }
+
+    /**
      * Resolve an HMS system user's display name from their login.
      *
      * Returns null when the login is blank or HMS has no such user — legacy records
@@ -491,17 +629,47 @@ class CommonHelper
     }
 
     /**
+     * Populate the display-only fields the billing-invoice emails render.
+     *
+     * `client_name` and `contact` are not columns — they are attached to the model in
+     * memory just before the mail is built. That matters for a queued mail: the job
+     * serializes only the model's key and re-fetches it when the worker runs, so
+     * anything set here is gone by render time. The mailables therefore call this
+     * again themselves, and it is a no-op when the values are already present so the
+     * synchronous path costs no extra HMS lookup.
+     *
+     * @param  object  $model
+     * @return void
+     */
+    public static function prepareBillingInvoiceForEmail($model): void
+    {
+        if (empty($model->client_name)) {
+            self::setClientName($model);
+        }
+
+        if (empty($model->contact)) {
+            $model->contact = config('vc.contact_email');
+        }
+    }
+
+    /**
      * Send billing invoice email and record activity.
+     *
+     * Pass $queue to hand the mail to the queue instead of sending it inline. Batch
+     * uploads use it so one request does not sit through dozens of SMTP round trips;
+     * the single-upload paths send inline as before. Note that when queued, the
+     * activity row records that the notification was dispatched, not that the SMTP
+     * server has accepted it — a worker must be running for it to actually go out.
      *
      * @param  object  $model
      * @param  object  $user
      * @param  string  $mailClass
+     * @param  bool  $queue
      * @return void
      */
-    public static function sendBillingInvoiceEmail($model, $user, string $mailClass): void
+    public static function sendBillingInvoiceEmail($model, $user, string $mailClass, bool $queue = false): void
     {
-        self::setClientName($model);
-        $model->contact = config('vc.contact_email');
+        self::prepareBillingInvoiceForEmail($model);
 
         $isAccountBranchAdmin = $user->hasAnyRole(['account_branch_admin', 'group_account_admin']);
         $billingNotificationEmail = config('vc.billing_notification_email', 'billing@example.com');
@@ -514,9 +682,10 @@ class CommonHelper
             ? $user->email
             : $billingNotificationEmail;
 
-        Mail::to($toEmail)
-            ->cc($ccEmail)
-            ->send(new $mailClass($model));
+        $pending = Mail::to($toEmail)->cc($ccEmail);
+        $mailable = new $mailClass($model);
+
+        $queue ? $pending->queue($mailable) : $pending->send($mailable);
 
         $model->recordActivity('billing_invoice_email_sent', [
             'to' => [
@@ -624,6 +793,35 @@ class CommonHelper
         }
 
         abort(Response::HTTP_FORBIDDEN);
+    }
+
+    /**
+     * Authorize the authenticated user against the account/branch a billing
+     * attachment was filed under.
+     *
+     * Needed for files reached through an SOA's activity history: an SOA can be
+     * reassigned to another account after a file was uploaded, and that earlier
+     * file is still the previous account's document, so owning the SOA today is
+     * not enough to read it. {@see storeUploadedFiles()} files every attachment
+     * under "{account}/{branch?}/", so the owner is read back from the path and
+     * checked through {@see assertUserMayAccessModel()} on a transient (never
+     * saved) SOA — full-access roles and tenant scoping behave exactly as they do
+     * for the SOA itself.
+     *
+     * @param  object  $request
+     * @param  string  $path  Path of the file on the billing disk.
+     * @throws \Symfony\Component\HttpKernel\Exception\HttpException
+     * @return void
+     */
+    public static function assertUserMayAccessBillingFile($request, string $path): void
+    {
+        $directory = trim(dirname(str_replace('\\', '/', $path)), '/');
+        [$accountCode, $branchCode] = array_pad(explode('/', $directory, 2), 2, null);
+
+        self::assertUserMayAccessModel($request, (new Soa())->forceFill([
+            'account_code' => $accountCode,
+            'branch_code' => $branchCode,
+        ]));
     }
 
     /**

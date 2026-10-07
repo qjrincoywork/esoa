@@ -3,6 +3,7 @@
 namespace App\Http\Requests\User;
 
 use App\Enums\AccountCodePrefix;
+use App\Http\Requests\Concerns\AuthorizesRoutePermission;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
@@ -15,18 +16,12 @@ use Illuminate\Foundation\Http\FormRequest;
  */
 class BranchLookupRequest extends FormRequest
 {
-    /**
-     * Authorize only users holding the "superadmin" role.
-     */
-    public function authorize(): bool
-    {
-        return $this->user()?->hasRole('superadmin') ?? false;
-    }
+    use AuthorizesRoutePermission;
 
     /**
      * Validate the optional branch lookup filters: the owning account, a name to
-     * search on, a code to keep visible even when it falls outside the search, and
-     * paging.
+     * search on, a code to keep visible even when it falls outside the search, paging,
+     * and whether to attach the mapping badges ({@see \App\Enums\AccountMappingBadge}).
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
@@ -57,6 +52,10 @@ class BranchLookupRequest extends FormRequest
                 'nullable',
                 'integer',
                 'min:1',
+            ],
+            'with_badges' => [
+                'nullable',
+                'boolean',
             ],
         ];
     }

@@ -2,9 +2,11 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\{Model, SoftDeletes, Relations\BelongsTo};
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Arr;
 use Spatie\Permission\Models\Permission;
 
 class NavigationModule extends Model
@@ -30,6 +32,23 @@ class NavigationModule extends Model
         'status',
         'created_by',
     ];
+
+    /**
+     * SQL Server hands some integer columns back as strings; cast them so the client
+     * can compare them strictly (status badges, pre-selected form options).
+     *
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'navigation_id' => 'integer',
+            'permission_id' => 'integer',
+            'ref_id'        => 'integer',
+            'order_number'  => 'integer',
+            'status'        => 'integer',
+        ];
+    }
 
     /**
      * Get the navigation that owns this module.
@@ -84,14 +103,15 @@ class NavigationModule extends Model
         $perPage = $params['per_page'] ?? config('vc.default_pages');
 
         $query = self::with(['navigation:id,name', 'permission:id,name'])
-            ->when(isset($params['search_string']), fn ($q) =>
-                $q->where(fn ($q2) =>
-                    $q2->where('name', 'LIKE', '%' . $params['search_string'] . '%')
-                       ->orWhere('slug', 'LIKE', '%' . $params['search_string'] . '%')
-                )
-            )
+            ->when(isset($params['search_string']), fn ($q) => $q->search($params['search_string']))
             ->when(isset($params['navigation_id']), fn ($q) =>
                 $q->where('navigation_id', $params['navigation_id'])
+            )
+            // 0 means "top-level only" (ref_id IS NULL); a positive id filters to that module's children.
+            ->when(isset($params['ref_id']), fn ($q) =>
+                ((int) $params['ref_id']) === 0
+                    ? $q->whereNull('ref_id')
+                    : $q->where('ref_id', (int) $params['ref_id'])
             )
             ->orderBy('navigation_id')
             ->orderBy('order_number')
@@ -105,19 +125,41 @@ class NavigationModule extends Model
     }
 
     /**
-     * Create or update a navigation module, stamping the authenticated user as created_by.
+     * Match modules whose name or slug contains the term.
      *
-     * Updates the existing record when the data contains an 'id' (findOrFail), otherwise creates a new one.
+     * LIKE wildcards in the term are escaped so a search for `users_` finds that literal
+     * text rather than any character after "users" — bracket syntax on SQL Server, the
+     * default backslash escape elsewhere.
      */
-    public function saveNavigationModule(array $data): void
+    public function scopeSearch(Builder $query, string $term): Builder
     {
-        $data += ['created_by' => auth()->id()];
+        $escapes = $query->getConnection()->getDriverName() === 'sqlsrv'
+            ? ['[' => '[[]', '%' => '[%]', '_' => '[_]']
+            : ['\\' => '\\\\', '%' => '\\%', '_' => '\\_'];
 
+        $like = '%' . strtr($term, $escapes) . '%';
+
+        return $query->where(fn (Builder $q) => $q
+            ->where('name', 'LIKE', $like)
+            ->orWhere('slug', 'LIKE', $like));
+    }
+
+    /**
+     * Create or update a navigation module.
+     *
+     * Updates the existing record when the data contains an 'id' (findOrFail), otherwise
+     * creates a new one stamped with the authenticated user as created_by — an update
+     * never rewrites who created the module.
+     */
+    public function saveNavigationModule(array $data): self
+    {
         if (isset($data['id'])) {
             $module = self::findOrFail($data['id']);
-            $module->update($data);
-        } else {
-            self::create($data);
+            $module->update(Arr::except($data, ['id', 'created_by']));
+
+            return $module;
         }
+
+        return self::create($data + ['created_by' => auth()->id()]);
     }
 }

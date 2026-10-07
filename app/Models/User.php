@@ -4,15 +4,18 @@ namespace App\Models;
 
 use Illuminate\Contracts\Auth\Access\Authorizable as AuthorizableContract;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Illuminate\Database\Eloquent\{Model, SoftDeletes, Relations\HasMany, Relations\HasOne, Relations\BelongsTo};
+use Illuminate\Database\Eloquent\{Builder, Model, SoftDeletes, Relations\HasMany, Relations\HasOne, Relations\BelongsTo};
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\Access\Authorizable;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Fortify\TwoFactorAuthenticatable;
-use App\Enums\UserType;
+use App\Enums\{AuditEvent, CredentialAccess, CredentialStatus, PermissionAssignmentMode, UserType};
+use App\Support\AuthenticationAudit;
+use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable implements AuthorizableContract, MustVerifyEmail
@@ -58,9 +61,108 @@ class User extends Authenticatable implements AuthorizableContract, MustVerifyEm
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
             'temporary_password_expires_at' => 'datetime',
+            'credentials_sent_at' => 'datetime',
+            'password_changed_at' => 'datetime',
+            'last_login_at' => 'datetime',
             'is_active' => 'boolean',
             'is_approved' => 'boolean',
         ];
+    }
+
+    /**
+     * Stamp password_changed_at whenever an existing user's password is replaced by one
+     * of their own.
+     *
+     * Every self-service path (settings, forgot-password reset) clears the temporary
+     * expiry alongside the new password, while issuing a temporary password sets one —
+     * so "password changed and no temporary expiry" is exactly "the user chose it",
+     * wherever the change came from. The same moment goes on the user's audit trail
+     * ({@see AuthenticationAudit}), once the change has actually been saved.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (self $user): void {
+            if ($user->exists && $user->isDirty('password') && $user->temporary_password_expires_at === null) {
+                $user->password_changed_at = now();
+            }
+        });
+
+        static::updated(function (self $user): void {
+            if ($user->wasChanged('password_changed_at')) {
+                AuthenticationAudit::record($user, AuditEvent::PASSWORD_CHANGED);
+            }
+        });
+    }
+
+    /**
+     * Where this user's credentials stand ({@see CredentialStatus}).
+     */
+    public function credentialStatus(): int
+    {
+        return CredentialStatus::resolve($this->credentials_sent_at, $this->temporary_password_expires_at);
+    }
+
+    /**
+     * Whether the user has used the credentials they were sent ({@see CredentialAccess}):
+     * signed in since they were sent, or already replaced the temporary password.
+     */
+    public function hasAccessedCredentials(): bool
+    {
+        if ($this->credentials_sent_at === null) {
+            return false;
+        }
+
+        return $this->credentialStatus() === CredentialStatus::UPDATED
+            || ($this->last_login_at !== null && $this->last_login_at->gte($this->credentials_sent_at));
+    }
+
+    /**
+     * Record a sign-in without touching updated_at or firing model events — a login is
+     * not an edit of the user, and must not show up as one in the audit trail.
+     */
+    public function recordLogin(): void
+    {
+        static::withoutTimestamps(fn () => $this->forceFill(['last_login_at' => now()])->saveQuietly());
+    }
+
+    /**
+     * Constrain to users in the given {@see CredentialStatus} — the query form of
+     * {@see CredentialStatus::resolve()}.
+     */
+    public function scopeCredentialStatus(Builder $query, int $status): Builder
+    {
+        return match ($status) {
+            CredentialStatus::NOT_SENT => $query->whereNull('credentials_sent_at'),
+            CredentialStatus::UPDATED => $query->whereNotNull('credentials_sent_at')->whereNull('temporary_password_expires_at'),
+            CredentialStatus::EXPIRED => $query->whereNotNull('credentials_sent_at')->where('temporary_password_expires_at', '<=', now()),
+            CredentialStatus::TEMPORARY => $query->whereNotNull('credentials_sent_at')->where('temporary_password_expires_at', '>', now()),
+            default => $query,
+        };
+    }
+
+    /**
+     * Constrain to users who have (or have not) accessed the credentials they were sent
+     * — the query form of {@see hasAccessedCredentials()}. Users never sent credentials
+     * match neither state.
+     */
+    public function scopeCredentialAccess(Builder $query, int $access): Builder
+    {
+        $query->whereNotNull('credentials_sent_at');
+
+        if ($access === CredentialAccess::ACCESSED) {
+            return $query->where(fn (Builder $q) => $q
+                ->whereNull('temporary_password_expires_at')
+                ->orWhereColumn('last_login_at', '>=', 'credentials_sent_at'));
+        }
+
+        // Spelled out rather than NOT(accessed): a never-signed-in user has a NULL
+        // last_login_at, the comparison is UNKNOWN, and NOT UNKNOWN would drop them from
+        // both states instead of counting them here.
+        return $query
+            ->whereNotNull('temporary_password_expires_at')
+            ->where(fn (Builder $q) => $q
+                ->whereNull('last_login_at')
+                ->orWhereColumn('last_login_at', '<', 'credentials_sent_at'));
     }
 
     /**
@@ -125,6 +227,18 @@ class User extends Authenticatable implements AuthorizableContract, MustVerifyEm
     }
 
     /**
+     * Whether this user's type (user_details.type) is one of the given types.
+     *
+     * @param int|array<int, int> $types
+     */
+    public function hasUserType(int|array $types): bool
+    {
+        $type = $this->userDetail?->type;
+
+        return $type !== null && in_array((int) $type, (array) $types, true);
+    }
+
+    /**
      * The account/branch pairs whose billing invoices are attributed to this user.
      *
      * Mirrors the row-level rule in {@see \App\Models\Soa::applyUserAccountRestriction()}
@@ -169,13 +283,41 @@ class User extends Authenticatable implements AuthorizableContract, MustVerifyEm
      */
     public function getUsers(array $params)
     {
-        // Pagination
-        $perPage = $params['per_page'] ?? config('vc.default_pages');
+        return $this->listQuery($params)->paginate($params['per_page'] ?? config('vc.default_pages'));
+    }
+
+    /**
+     * The filtered user query behind the list, shared with the credential reports so an
+     * export contains exactly what the filtered list shows.
+     *
+     * The search is grouped so an email-or-username match can never escape the other
+     * filters. A bulk lookup (`search_terms`) lists the users matching any of its
+     * entries — or only `search_term_focus`, when one entry is singled out — each
+     * matched the way {@see searchTermCondition()} says. Callers add their own eager
+     * loads beyond the user detail.
+     */
+    public function listQuery(array $params): Builder
+    {
+        $exactMatch = !empty($params['exact_match']);
+        $searchTerms = isset($params['search_term_focus'])
+            ? [$params['search_term_focus']]
+            : ($params['search_terms'] ?? []);
+
         $result = self::query()
             ->when(isset($params['search_string']), function ($query) use ($params) {
-                $query->where('email', 'LIKE', '%' . $params['search_string'] . '%')
-                    ->orWhere('username', 'LIKE', '%' . $params['search_string'] . '%');
+                $query->where(fn ($q) => $q
+                    ->where('email', 'LIKE', '%' . $params['search_string'] . '%')
+                    ->orWhere('username', 'LIKE', '%' . $params['search_string'] . '%'));
             })
+            ->when($searchTerms !== [], function ($query) use ($searchTerms, $exactMatch) {
+                $query->where(function ($q) use ($searchTerms, $exactMatch) {
+                    foreach ($searchTerms as $term) {
+                        $q->orWhereRaw(...$this->searchTermCondition($term, $exactMatch));
+                    }
+                });
+            })
+            ->when(isset($params['credential_status']), fn ($query) => $query->credentialStatus((int) $params['credential_status']))
+            ->when(isset($params['credential_access']), fn ($query) => $query->credentialAccess((int) $params['credential_access']))
             ->when(isset($params['is_active']), function ($query) use ($params) {
                 $query->where('is_active', $params['is_active']);
             })
@@ -197,7 +339,67 @@ class User extends Authenticatable implements AuthorizableContract, MustVerifyEm
             $result->withTrashed();
         }
 
-        return $result->paginate($perPage);
+        return $result;
+    }
+
+    /**
+     * How many users each entry of a bulk lookup matches, in the order it was entered.
+     *
+     * Counted under every other list filter — so a count is what the list would show
+     * for that entry — and in a single pass: one conditional SUM per entry rather than
+     * a query each. Empty when no bulk lookup was asked for.
+     *
+     * @param  array<string, mixed>  $params  The validated list filters.
+     * @return array<int, array{term: string, count: int}>
+     */
+    public function searchTermMatches(array $params): array
+    {
+        $terms = $params['search_terms'] ?? [];
+
+        if ($terms === []) {
+            return [];
+        }
+
+        $exactMatch = !empty($params['exact_match']);
+        $columns = [];
+        $bindings = [];
+
+        foreach ($terms as $index => $term) {
+            [$condition, $termBindings] = $this->searchTermCondition($term, $exactMatch);
+            $columns[] = "SUM(CASE WHEN {$condition} THEN 1 ELSE 0 END) AS match_{$index}";
+            array_push($bindings, ...$termBindings);
+        }
+
+        // Counted across the whole lookup, not just the entry singled out on the list.
+        $counts = $this->listQuery(array_diff_key($params, array_flip(['search_terms', 'search_term_focus'])))
+            ->toBase()
+            ->reorder()
+            ->selectRaw(implode(', ', $columns), $bindings)
+            ->first();
+
+        return array_map(
+            fn (string $term, int $index) => ['term' => $term, 'count' => (int) ($counts->{"match_{$index}"} ?? 0)],
+            $terms,
+            array_keys($terms)
+        );
+    }
+
+    /**
+     * The SQL deciding whether a user matches one bulk-lookup entry, with its bindings:
+     * the username or email equal to the entry when matching exactly, containing it
+     * otherwise. The list filter and the per-entry counts share it, so a count never
+     * disagrees with the rows the list then shows for that entry.
+     *
+     * @return array{0: string, 1: array<int, string>}
+     */
+    protected function searchTermCondition(string $term, bool $exactMatch): array
+    {
+        $email = $this->qualifyColumn('email');
+        $username = $this->qualifyColumn('username');
+
+        return $exactMatch
+            ? ["({$email} = ? OR {$username} = ?)", [$term, $term]]
+            : ["({$email} LIKE ? OR {$username} LIKE ?)", ["%{$term}%", "%{$term}%"]];
     }
 
     /**
@@ -256,6 +458,26 @@ class User extends Authenticatable implements AuthorizableContract, MustVerifyEm
         );
 
         return $plainPassword;
+    }
+
+    /**
+     * Apply a set of permissions to this user's direct grants in the given mode.
+     *
+     * Only direct grants (model_has_permissions) are touched; what the user inherits
+     * through a role stays with the role. The permissions are resolved by the caller
+     * once, so a bulk run applies the same models to every user without re-querying.
+     * No cache flush is needed: Spatie caches permissions and their roles, while a
+     * user's direct grants are read through the relation on each request.
+     *
+     * @param  Collection<int, Permission>  $permissions
+     */
+    public function applyDirectPermissions(Collection $permissions, string $mode = PermissionAssignmentMode::SYNC): void
+    {
+        match ($mode) {
+            PermissionAssignmentMode::GIVE => $this->givePermissionTo($permissions),
+            PermissionAssignmentMode::REVOKE => $this->revokePermissionTo($permissions),
+            default => $this->syncPermissions($permissions),
+        };
     }
 
     /**

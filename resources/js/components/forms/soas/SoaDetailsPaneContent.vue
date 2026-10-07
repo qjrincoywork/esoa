@@ -213,7 +213,8 @@ const existingExcel = computed(() => {
                   </Badge>
                 </span>
               </li>
-              <li>Bill Date: <span class="font-bold">{{ localSoa.created_at }} </span></li>
+              <li>Bill Date: <span class="font-bold">{{ localSoa.billing_date }} </span></li>
+              <li>Uploaded Date: <span class="font-bold">{{ localSoa.created_at }} </span></li>
               <!-- <li>Utilization Date: <span class="font-bold">{{ localSoa.utilization_coverage }}</span></li> -->
               <li>Period Coverage: <span class="font-bold">{{ localSoa.period_coverage }}</span></li>
               <li>Amount: <span class="font-bold">{{ localSoa.amount }}</span></li>

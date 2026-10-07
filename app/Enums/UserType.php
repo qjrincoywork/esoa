@@ -58,6 +58,36 @@ final class UserType extends Enum
     }
 
     /**
+     * Resolve route-middleware style tokens into user type values.
+     *
+     * Each token is a group alias (`mappable`), a constant name (`BROKER`) or a raw
+     * value (`3`); unknown tokens are dropped so a typo can never widen access by
+     * matching a type it was not meant to.
+     *
+     * @param array<int, string|int> $tokens
+     * @return array<int, int>
+     */
+    public static function resolve(array $tokens): array
+    {
+        $types = [];
+
+        foreach ($tokens as $token) {
+            $token = strtoupper(trim((string) $token));
+
+            $matched = match (true) {
+                $token === 'MAPPABLE' => self::mappable(),
+                self::hasKey($token) => [self::getValue($token)],
+                is_numeric($token) && self::hasValue((int) $token) => [(int) $token],
+                default => [],
+            };
+
+            array_push($types, ...$matched);
+        }
+
+        return array_values(array_unique($types));
+    }
+
+    /**
      * Whether the given type may hold account/branch mappings at all.
      *
      * @param int|string|null $value

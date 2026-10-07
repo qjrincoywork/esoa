@@ -92,6 +92,7 @@ const selectedBillType = ref<string | number>(soa.value?.bill_type ?? '')
 const selectedStatus = ref<string | number>(soa.value?.status ?? '1')
 const selectedBillRefFrom = ref<string | number>(soa.value?.billing_ref_from ?? '')
 const dueDate = ref(toDateInput(soa.value?.due_date))
+const billingDate = ref(toDateInput(soa.value?.billing_date_value ?? soa.value?.billing_date))
 const periodDateFrom = ref(toDateInput(soa.value?.period_date_from))
 const periodDateTo = ref(toDateInput(soa.value?.period_date_to))
 const contractDateFrom = ref(toDateInput(soa.value?.contract_date_from))
@@ -368,6 +369,8 @@ watch(soa, (val: Soa | undefined) => {
   if (val.bill_type != null) selectedBillType.value = String(val.bill_type);
   if (val.status != null) selectedStatus.value = String(val.status);
   if (val.due_date != null) dueDate.value = toDateInput(val.due_date);
+  const billingDateValue = val.billing_date_value ?? val.billing_date;
+  if (billingDateValue != null) billingDate.value = toDateInput(billingDateValue);
   if (val.period_date_from != null) periodDateFrom.value = toDateInput(val.period_date_from);
   if (val.period_date_to != null) periodDateTo.value = toDateInput(val.period_date_to);
   if (val.contract_date_from != null) contractDateFrom.value = toDateInput(val.contract_date_from);
@@ -551,6 +554,16 @@ watch(soa, (val: Soa | undefined) => {
           </Select>
         </FormField>
 
+        <FormField v-if="!isEndorsed" name="billing_date" label="Bill Date" for="billing_date" required>
+          <Input
+            id="billing_date"
+            type="date"
+            class="w-full [color-scheme:light] dark:[color-scheme:dark]"
+            name="billing_date"
+            v-model="billingDate"
+          />
+        </FormField>
+
         <FormField v-if="!isEndorsed" name="due_date" label="Due Date" for="due_date" required>
           <Input
             id="due_date"
@@ -559,26 +572,6 @@ watch(soa, (val: Soa | undefined) => {
             name="due_date"
             v-model="dueDate"
           />
-        </FormField>
-
-        <FormField name="status" label="Status" for="status" required>
-          <Select id="status" v-model="selectedStatus">
-            <SelectTrigger class="w-full">
-              <SelectValue placeholder="Select status" />
-            </SelectTrigger>
-            <SelectContent class="w-full">
-              <SelectGroup>
-                <SelectLabel>Status</SelectLabel>
-                <SelectItem
-                  v-for="st in filteredStatusTypes"
-                  :key="st.value"
-                  :value="String(st.value)"
-                >
-                  {{ st.name }}
-                </SelectItem>
-              </SelectGroup>
-            </SelectContent>
-          </Select>
         </FormField>
 
         <FormField v-if="!isEndorsed" :name="['period_date_from', 'period_date_to']" class="md:col-span-2">
@@ -659,6 +652,27 @@ watch(soa, (val: Soa | undefined) => {
             placeholder="0.00"
           />
         </FormField>
+
+        <FormField name="status" label="Status" for="status" required>
+          <Select id="status" v-model="selectedStatus">
+            <SelectTrigger class="w-full">
+              <SelectValue placeholder="Select status" />
+            </SelectTrigger>
+            <SelectContent class="w-full">
+              <SelectGroup>
+                <SelectLabel>Status</SelectLabel>
+                <SelectItem
+                  v-for="st in filteredStatusTypes"
+                  :key="st.value"
+                  :value="String(st.value)"
+                >
+                  {{ st.name }}
+                </SelectItem>
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+        </FormField>
+
       </div>
     </section>
   </form>

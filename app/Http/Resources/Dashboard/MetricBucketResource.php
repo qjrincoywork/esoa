@@ -13,7 +13,8 @@ use Illuminate\Http\Resources\Json\JsonResource;
  *
  * Handles both bucket kinds behind a single shape so the chart components stay generic:
  * an aging bucket adds the `emphasis` flag (past due or not) and a status bucket adds the
- * semantic `tone`. Labels, badge classes and the drill-through link all come from the
+ * semantic `tone` and whether it counts as outstanding. Labels, badge classes and the
+ * drill-through link all come from the
  * enums, which remain the single source of truth.
  */
 class MetricBucketResource extends JsonResource
@@ -40,6 +41,10 @@ class MetricBucketResource extends JsonResource
             'badge_class' => $isStatus ? SoaStatus::color($value) : SoaAging::color($value),
             'tone' => $isStatus ? SoaStatus::tone($value) : null,
             'emphasis' => $isStatus ? true : SoaAging::isPastDue($value),
+            // Whether this status counts toward the outstanding balance — the same
+            // "not paid" rule the summary sums, stated here so the page can split the
+            // balance by status without restating it.
+            'outstanding' => $isStatus && $value !== SoaStatus::PAID,
             'href' => $isStatus
                 ? route('soas.list', ['status' => $value])
                 : SoaAging::listUrl($value),
