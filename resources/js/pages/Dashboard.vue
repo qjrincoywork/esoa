@@ -5,178 +5,152 @@ import {
     ChartLegend,
     DonutChart,
     LineChart,
-    StatTile,
     compactCurrency,
     formatNumber,
-    toneVar,
     type ChartDatum,
+    type ChartLegendItem,
+    type ChartTableColumn,
     type ChartTableRow,
 } from '@/components/charts';
 import DashboardEmptyNotice from '@/components/dashboard/DashboardEmptyNotice.vue';
 import DashboardFilters from '@/components/dashboard/DashboardFilters.vue';
+import DashboardHeader from '@/components/dashboard/DashboardHeader.vue';
+import DashboardKpis from '@/components/dashboard/DashboardKpis.vue';
+import DashboardSection from '@/components/dashboard/DashboardSection.vue';
 import UserReportTable from '@/components/dashboard/UserReportTable.vue';
 import { DEFAULT_PRESET, useDashboardFilters } from '@/composables/dashboard';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { dashboard } from '@/routes';
 import type {
-    BillingTrend,
+    AppPageProps,
     BreadcrumbItem,
-    DashboardDataWindow,
     DashboardFilterOptions,
-    DashboardFilters as DashboardFilterState,
-    DashboardSummary,
+    DashboardPageProps,
     MetricBucket,
-    TopAccount,
-    UserReportRow,
 } from '@/types';
 import { Deferred, Head, router, usePage } from '@inertiajs/vue3';
-import { Users } from 'lucide-vue-next';
+import { Building2, Hourglass, TrendingUp, Users } from 'lucide-vue-next';
 import { computed } from 'vue';
 
 /**
- * Analytics dashboard.
+ * The administrator's dashboard.
  *
- * The page is composition only: it maps the server payload onto the neutral chart shapes
- * and lets the primitives in `@/components/charts` do the drawing. Each widget states the
- * job its form was chosen for — magnitude (bars), part-to-whole (donut), change over time
- * (line), one number (stat tile) — and ships a table twin so no value is locked behind a
- * hover or a color.
+ * Laid out in the order the questions are asked: what the figures cover (the header and
+ * its filters), how much is owed (the headline figures), how old it is and how it is
+ * being settled, how billing is moving over time, and who holds it — the accounts and,
+ * for staff, the users behind it. The page is composition only: it maps the server
+ * payload onto the neutral chart shapes and the primitives in `@/components/charts` do
+ * the drawing, each with a table twin so no value is locked behind a hover or a color.
  */
-const page = usePage();
+const page = usePage<AppPageProps<DashboardPageProps>>();
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Dashboard', href: dashboard().url },
 ];
 
-const filters = computed(
-    () => (page.props as any).filters as DashboardFilterState,
-);
-const filterOptions = computed(
-    () =>
-        ((page.props as any).filter_options ?? {
-            presets: [],
-            users: [],
-        }) as DashboardFilterOptions,
-);
-const summary = computed(() => (page.props as any).summary as DashboardSummary);
-const dataWindow = computed(
-    () =>
-        ((page.props as any).data_window ?? null) as DashboardDataWindow | null,
-);
-const agingBuckets = computed(
-    () => ((page.props as any).aging_buckets ?? []) as MetricBucket[],
-);
-const statusBuckets = computed(
-    () => ((page.props as any).status_buckets ?? []) as MetricBucket[],
-);
-const billingTrend = computed(
-    () => (page.props as any).billing_trend as BillingTrend,
-);
-const topAccounts = computed(
-    () => ((page.props as any).top_accounts ?? []) as TopAccount[],
-);
-const userReports = computed(
-    () => ((page.props as any).user_reports ?? null) as UserReportRow[] | null,
-);
-const canViewUserReports = computed(() =>
-    Boolean((page.props as any).can_view_user_reports),
-);
+const EMPTY_OPTIONS: DashboardFilterOptions = { presets: [], users: [] };
+
+const filters = computed(() => page.props.filters);
+const filterOptions = computed(() => page.props.filter_options ?? EMPTY_OPTIONS);
+const summary = computed(() => page.props.summary ?? null);
+const dataWindow = computed(() => page.props.data_window ?? null);
+const agingBuckets = computed(() => page.props.aging_buckets ?? []);
+const statusBuckets = computed(() => page.props.status_buckets ?? []);
+const billingTrend = computed(() => page.props.billing_trend ?? null);
+const topAccounts = computed(() => page.props.top_accounts ?? []);
+const userReports = computed(() => page.props.user_reports ?? []);
+const canViewUserReports = computed(() => Boolean(page.props.can_view_user_reports));
 
 const { processing, isCustomRange, isFiltered, apply, reset } =
     useDashboardFilters(() => filters.value);
 
-/* ── Aging: magnitude across ordered buckets ─────────────────────────────────
-   One accent hue for the buckets that are already overdue and the de-emphasis gray for
-   the ones that are not — emphasis rather than a seven-step ramp, which no single hue can
-   provide with visibly distinct steps. Every bar is directly labelled with its count. */
-const agingItems = computed<ChartDatum[]>(() =>
-    agingBuckets.value.map((bucket) => ({
-        key: bucket.key,
-        label: bucket.label,
-        value: bucket.count,
-        valueLabel: formatNumber(bucket.count),
-        secondaryLabel: bucket.amount_formatted,
-        emphasis: bucket.emphasis,
-        href: bucket.href,
-    })),
-);
-
-const agingLegend = [
-    {
-        key: 'past-due',
-        label: 'Past due',
-        tone: 'series-1' as const,
-        shape: 'rect' as const,
-    },
-    {
-        key: 'current',
-        label: 'Not yet past due',
-        tone: 'muted' as const,
-        shape: 'rect' as const,
-    },
+/* ── Table twins ──────────────────────────────────────────────────────────── */
+const amountColumns = (first: string): ChartTableColumn[] => [
+    { key: 'label', label: first },
+    { key: 'count', label: 'Invoices', align: 'right' },
+    { key: 'amount', label: 'Amount', align: 'right' },
 ];
 
-const agingTotal = computed(() =>
-    agingBuckets.value.reduce((total, bucket) => total + bucket.count, 0),
-);
+const AGING_COLUMNS = amountColumns('Aging bucket');
+const STATUS_COLUMNS = amountColumns('Status');
 
-const agingTableRows = computed<ChartTableRow[]>(() =>
-    agingBuckets.value.map((bucket) => ({
+const TREND_COLUMNS: ChartTableColumn[] = [
+    { key: 'period', label: 'Period' },
+    { key: 'billed', label: 'Billed', align: 'right' },
+    { key: 'collected', label: 'Collected', align: 'right' },
+    { key: 'count', label: 'Invoices', align: 'right' },
+];
+
+const balanceColumns = (first: string): ChartTableColumn[] => [
+    { key: 'label', label: first },
+    { key: 'count', label: 'Invoices', align: 'right' },
+    { key: 'billed', label: 'Billed', align: 'right' },
+    { key: 'outstanding', label: 'Outstanding', align: 'right' },
+];
+
+const ACCOUNT_COLUMNS = balanceColumns('Account');
+const USER_COLUMNS = balanceColumns('User');
+
+/* ── Buckets: aging and status share one shape, so one mapping serves both ── */
+const bucketTotal = (buckets: MetricBucket[]): number =>
+    buckets.reduce((total, bucket) => total + bucket.count, 0);
+
+const bucketRows = (buckets: MetricBucket[]): ChartTableRow[] =>
+    buckets.map((bucket) => ({
         key: bucket.key,
         cells: {
             label: bucket.label,
             count: formatNumber(bucket.count),
             amount: bucket.amount_formatted,
         },
-    })),
-);
+    }));
 
-/* ── Status: part-to-whole — tones from SoaStatus::tone(), colors from --viz-status-* ─ */
+const bucketItem = (bucket: MetricBucket): ChartDatum => ({
+    key: bucket.key,
+    label: bucket.label,
+    value: bucket.count,
+    valueLabel: formatNumber(bucket.count),
+    secondaryLabel: bucket.amount_formatted,
+    href: bucket.href,
+});
+
+/* Aging: one accent for buckets already past due, the de-emphasis gray for the rest —
+   emphasis rather than a seven-step ramp no single hue can keep distinct. */
+const agingItems = computed<ChartDatum[]>(() =>
+    agingBuckets.value.map((bucket) => ({ ...bucketItem(bucket), emphasis: bucket.emphasis })),
+);
+const agingTotal = computed(() => bucketTotal(agingBuckets.value));
+const agingRows = computed(() => bucketRows(agingBuckets.value));
+
+const AGING_LEGEND: ChartLegendItem[] = [
+    { key: 'past-due', label: 'Past due', tone: 'series-1', shape: 'rect' },
+    { key: 'current', label: 'Not yet past due', tone: 'muted', shape: 'rect' },
+];
+
+/* Status: part-to-whole; tones from SoaStatus::tone(), colors from --viz-status-*. */
 const statusItems = computed<ChartDatum[]>(() =>
-    statusBuckets.value.map((bucket) => ({
-        key: bucket.key,
-        label: bucket.label,
-        value: bucket.count,
-        valueLabel: formatNumber(bucket.count),
-        tone: bucket.tone ?? 'status-unpaid',
-        href: bucket.href,
-    })),
+    statusBuckets.value.map((bucket) => ({ ...bucketItem(bucket), tone: bucket.tone ?? 'status-unpaid' })),
 );
-
-const statusTotal = computed(() =>
-    statusBuckets.value.reduce((total, bucket) => total + bucket.count, 0),
-);
-
-const statusTableRows = computed<ChartTableRow[]>(() =>
-    statusBuckets.value.map((bucket) => ({
-        key: bucket.key,
-        cells: {
-            label: bucket.label,
-            count: formatNumber(bucket.count),
-            amount: bucket.amount_formatted,
-        },
-    })),
-);
+const statusTotal = computed(() => bucketTotal(statusBuckets.value));
+const statusRows = computed(() => bucketRows(statusBuckets.value));
 
 /* ── Trend: two money series, therefore one shared axis ─────────────────────── */
 const trendPoints = computed(() => billingTrend.value?.points ?? []);
 
 const trendIsEmpty = computed(() =>
-    trendPoints.value.every(
-        (point) => point.billed === 0 && point.collected === 0,
-    ),
+    trendPoints.value.every((point) => point.billed === 0 && point.collected === 0),
 );
 
-const trendLegend = computed(() =>
+const trendLegend = computed<ChartLegendItem[]>(() =>
     (billingTrend.value?.series ?? []).map((series) => ({
         key: series.key,
         label: series.label,
         tone: series.token,
-        shape: 'line' as const,
+        shape: 'line',
     })),
 );
 
-const trendTableRows = computed<ChartTableRow[]>(() =>
+const trendRows = computed<ChartTableRow[]>(() =>
     trendPoints.value.map((point) => ({
         key: point.key,
         cells: {
@@ -200,7 +174,7 @@ const accountItems = computed<ChartDatum[]>(() =>
     })),
 );
 
-const accountTableRows = computed<ChartTableRow[]>(() =>
+const accountRows = computed<ChartTableRow[]>(() =>
     topAccounts.value.map((account) => ({
         key: account.key,
         cells: {
@@ -212,11 +186,11 @@ const accountTableRows = computed<ChartTableRow[]>(() =>
     })),
 );
 
-/* ── Users (staff only): the leading uploaders as bars, everyone in the table ── */
+/* ── Users (staff only): the leading users as bars, everyone in the report ──── */
 const TOP_USER_BARS = 8;
 
 const userItems = computed<ChartDatum[]>(() =>
-    (userReports.value ?? [])
+    userReports.value
         .filter((row) => row.invoice_count > 0)
         .slice(0, TOP_USER_BARS)
         .map((row) => ({
@@ -225,14 +199,12 @@ const userItems = computed<ChartDatum[]>(() =>
             value: row.invoice_count,
             valueLabel: formatNumber(row.invoice_count),
             secondaryLabel: `${row.billed_formatted} billed · ${row.scope_label}`,
-            emphasis:
-                filters.value.user_id === null ||
-                filters.value.user_id === row.user_id,
+            emphasis: filters.value.user_id === null || filters.value.user_id === row.user_id,
         })),
 );
 
-const userTableRows = computed<ChartTableRow[]>(() =>
-    (userReports.value ?? []).map((row) => ({
+const userRows = computed<ChartTableRow[]>(() =>
+    userReports.value.map((row) => ({
         key: row.key,
         cells: {
             label: row.name,
@@ -243,78 +215,66 @@ const userTableRows = computed<ChartTableRow[]>(() =>
     })),
 );
 
+/** Bars carry the report row's key; the user it stands for is looked up, never parsed out of it. */
+const userIdByKey = computed(
+    () => new Map(userReports.value.map((row) => [row.key, row.user_id])),
+);
+
 const activeUserName = computed(() => {
     const id = filters.value.user_id;
-    if (id === null) {
-        return null;
-    }
+    if (id === null) return null;
 
     return (
-        (userReports.value ?? []).find((row) => row.user_id === id)?.name ??
+        userReports.value.find((row) => row.user_id === id)?.name ??
         filterOptions.value.users.find((option) => option.value === id)?.name ??
         `User #${id}`
     );
 });
 
-/** Collection-rate meter: the track is a lighter step of the fill's own hue. */
-const collectionMeter = computed(() => {
-    const rate = Math.min(
-        Math.max(summary.value?.collection_rate.value ?? 0, 0),
-        100,
-    );
-    const tone = toneVar(summary.value?.collection_rate.tone);
-
-    return {
-        width: `${rate}%`,
-        fill: tone,
-        track: `color-mix(in srgb, ${tone} 22%, transparent)`,
-    };
-});
-
+/* ── Actions ───────────────────────────────────────────────────────────────── */
 const openList = (item: ChartDatum) => {
-    if (item.href) {
-        router.get(item.href);
-    }
+    if (item.href) router.get(item.href);
 };
 
 const scopeToUser = (userId: number | null) => apply({ user_id: userId });
+
+const selectUserBar = (item: ChartDatum) => scopeToUser(userIdByKey.value.get(item.key) ?? null);
+
+const showAllTime = () =>
+    apply({ preset: DEFAULT_PRESET, date_from: null, date_to: null });
 
 /**
  * Nothing matched the current filter. Distinguished from "the page is broken" by the
  * notice above the widgets, which names the window that does hold data.
  */
-const isEmptyResult = computed(
-    () => (summary.value?.invoices.value ?? 0) === 0,
-);
-
-const showAllTime = () =>
-    apply({ preset: DEFAULT_PRESET, date_from: null, date_to: null });
+const isEmptyResult = computed(() => (summary.value?.invoices.value ?? 0) === 0);
 </script>
 
 <template>
     <Head title="Dashboard" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
-        <div class="flex flex-1 flex-col gap-4 overflow-x-auto p-4">
-            <DashboardFilters
+        <div class="flex flex-1 flex-col gap-6 overflow-x-auto p-4">
+            <DashboardHeader
                 :filters="filters"
-                :options="filterOptions"
-                :can-select-user="canViewUserReports"
-                :is-custom-range="isCustomRange"
-                :is-filtered="isFiltered"
+                :summary="summary"
+                :data-window="dataWindow"
+                :user-name="activeUserName"
                 :processing="processing"
-                @apply="apply"
-                @reset="reset"
-            />
-
-            <p v-if="activeUserName" class="text-sm text-muted-foreground">
-                <Users class="mr-1 inline size-4" aria-hidden="true" />
-                Reporting on
-                <span class="font-medium text-foreground">{{
-                    activeUserName
-                }}</span
-                >'s records only.
-            </p>
+                @clear-user="scopeToUser(null)"
+                @clear-account="apply({ account_code: null })"
+            >
+                <DashboardFilters
+                    :filters="filters"
+                    :options="filterOptions"
+                    :can-select-user="canViewUserReports"
+                    :is-custom-range="isCustomRange"
+                    :is-filtered="isFiltered"
+                    :processing="processing"
+                    @apply="apply"
+                    @reset="reset"
+                />
+            </DashboardHeader>
 
             <DashboardEmptyNotice
                 v-if="isEmptyResult"
@@ -325,150 +285,143 @@ const showAllTime = () =>
                 @clear-user="scopeToUser(null)"
             />
 
-            <!-- KPI row: the numbers that need no chart. -->
-            <div
+            <!-- The figures that need no chart -->
+            <DashboardKpis
                 v-if="summary"
-                class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6"
-                :class="
-                    processing
-                        ? 'opacity-60 transition-opacity'
-                        : 'transition-opacity'
-                "
-            >
-                <StatTile
-                    :stat="summary.outstanding"
-                    hero
-                    class="sm:col-span-2"
-                />
-                <StatTile :stat="summary.billed" />
-                <StatTile :stat="summary.collected" />
-                <StatTile :stat="summary.collection_rate">
-                    <div
-                        class="mt-3 h-1.5 w-full overflow-hidden rounded-full"
-                        :style="{ backgroundColor: collectionMeter.track }"
-                    >
-                        <div
-                            class="h-full rounded-full transition-[width] duration-300"
-                            :style="{
-                                width: collectionMeter.width,
-                                backgroundColor: collectionMeter.fill,
-                            }"
-                        />
-                    </div>
-                </StatTile>
-                <StatTile :stat="summary.past_due" />
-            </div>
+                :summary="summary"
+                :status-buckets="statusBuckets"
+                :processing="processing"
+            />
 
-            <div class="grid gap-4 lg:grid-cols-2">
+            <DashboardSection
+                title="Receivables"
+                description="How long open invoices have been waiting, and how every invoice has been settled."
+                :icon="Hourglass"
+            >
+                <div class="grid gap-4 lg:grid-cols-2">
+                    <ChartCard
+                        title="Invoice aging"
+                        :description="`${formatNumber(summary?.invoices.value ?? 0)} invoice(s) by age · select a bar to open its list`"
+                        :loading="processing"
+                        :empty="agingTotal === 0"
+                        empty-text="No billing invoices in the selected period."
+                        :table-columns="AGING_COLUMNS"
+                        :table-rows="agingRows"
+                    >
+                        <BarChart :items="agingItems" clickable @select="openList" />
+
+                        <template #legend>
+                            <ChartLegend :items="AGING_LEGEND" />
+                        </template>
+                    </ChartCard>
+
+                    <ChartCard
+                        title="Invoice status"
+                        description="Share of invoices by settlement state · select one to open its list"
+                        :loading="processing"
+                        :empty="statusTotal === 0"
+                        empty-text="No billing invoices in the selected period."
+                        :table-columns="STATUS_COLUMNS"
+                        :table-rows="statusRows"
+                    >
+                        <DonutChart
+                            :items="statusItems"
+                            center-label="Invoices"
+                            clickable
+                            @select="openList"
+                        />
+                    </ChartCard>
+                </div>
+            </DashboardSection>
+
+            <DashboardSection
+                title="Billing trend"
+                description="What was billed against what was collected, period by period."
+                :icon="TrendingUp"
+            >
                 <ChartCard
-                    title="Invoice aging"
-                    :description="`${formatNumber(summary?.invoices.value ?? 0)} invoice(s) · click a bar to open the filtered list`"
+                    title="Billed vs collected"
+                    :description="`${billingTrend?.granularity_label ?? 'Monthly'} totals across the selected period`"
                     :loading="processing"
-                    :empty="agingTotal === 0"
-                    empty-text="No billing invoices in the selected period."
-                    :table-columns="[
-                        { key: 'label', label: 'Aging bucket' },
-                        { key: 'count', label: 'Invoices', align: 'right' },
-                        { key: 'amount', label: 'Amount', align: 'right' },
-                    ]"
-                    :table-rows="agingTableRows"
+                    :empty="trendPoints.length === 0 || trendIsEmpty"
+                    empty-text="No billing activity to plot for the selected period."
+                    :table-columns="TREND_COLUMNS"
+                    :table-rows="trendRows"
                 >
-                    <BarChart
-                        :items="agingItems"
-                        clickable
-                        @select="openList"
+                    <LineChart
+                        :points="trendPoints"
+                        :series="billingTrend?.series ?? []"
+                        :height="280"
+                        :format-value="(value: number) => compactCurrency(value)"
+                        aria-label="Billed and collected amounts over time"
                     />
 
                     <template #legend>
-                        <ChartLegend :items="agingLegend" />
+                        <ChartLegend :items="trendLegend" />
                     </template>
                 </ChartCard>
+            </DashboardSection>
 
-                <ChartCard
-                    title="Invoice status"
-                    description="Share of invoices by settlement state"
-                    :loading="processing"
-                    :empty="statusTotal === 0"
-                    empty-text="No billing invoices in the selected period."
-                    :table-columns="[
-                        { key: 'label', label: 'Status' },
-                        { key: 'count', label: 'Invoices', align: 'right' },
-                        { key: 'amount', label: 'Amount', align: 'right' },
-                    ]"
-                    :table-rows="statusTableRows"
-                >
-                    <DonutChart
-                        :items="statusItems"
-                        center-label="Invoices"
-                        clickable
-                        @select="openList"
-                    />
-                </ChartCard>
-            </div>
-
-            <ChartCard
-                title="Billed vs collected"
-                :description="`${billingTrend?.granularity_label ?? 'Monthly'} totals across the selected period`"
-                :loading="processing"
-                :empty="trendPoints.length === 0 || trendIsEmpty"
-                empty-text="No billing activity to plot for the selected period."
-                :table-columns="[
-                    { key: 'period', label: 'Period' },
-                    { key: 'billed', label: 'Billed', align: 'right' },
-                    { key: 'collected', label: 'Collected', align: 'right' },
-                    { key: 'count', label: 'Invoices', align: 'right' },
-                ]"
-                :table-rows="trendTableRows"
+            <DashboardSection
+                :title="canViewUserReports ? 'Accounts & users' : 'Accounts'"
+                :description="
+                    canViewUserReports
+                        ? 'Where the open balance sits, and who the invoices are attributed to.'
+                        : 'Where the open balance sits.'
+                "
+                :icon="Building2"
             >
-                <LineChart
-                    :points="trendPoints"
-                    :series="billingTrend?.series ?? []"
-                    :height="280"
-                    :format-value="(value: number) => compactCurrency(value)"
-                    aria-label="Billed and collected amounts over time"
-                />
+                <div class="grid gap-4" :class="canViewUserReports && 'lg:grid-cols-2'">
+                    <ChartCard
+                        title="Accounts with the largest balance"
+                        description="Outstanding value per account · select one to open its invoices"
+                        :loading="processing"
+                        :empty="accountItems.length === 0"
+                        empty-text="No outstanding balance in the selected period."
+                        :table-columns="ACCOUNT_COLUMNS"
+                        :table-rows="accountRows"
+                    >
+                        <BarChart :items="accountItems" clickable @select="openList" />
+                    </ChartCard>
 
-                <template #legend>
-                    <ChartLegend :items="trendLegend" />
-                </template>
-            </ChartCard>
+                    <!-- Deferred server-side: the metric widgets paint first and this holds a
+                         placeholder meanwhile, rather than claiming "no data". -->
+                    <Deferred v-if="canViewUserReports" data="user_reports">
+                        <template #fallback>
+                            <ChartCard
+                                title="Invoices per user"
+                                description="Loading user activity…"
+                                loading
+                                empty
+                                empty-text="Loading…"
+                            />
+                        </template>
 
-            <div
-                class="grid gap-4"
-                :class="canViewUserReports ? 'lg:grid-cols-2' : ''"
-            >
-                <ChartCard
-                    title="Accounts with the largest balance"
-                    description="Outstanding value per account · click to open the filtered list"
-                    :loading="processing"
-                    :empty="accountItems.length === 0"
-                    empty-text="No outstanding balance in the selected period."
-                    :table-columns="[
-                        { key: 'label', label: 'Account' },
-                        { key: 'count', label: 'Invoices', align: 'right' },
-                        { key: 'billed', label: 'Billed', align: 'right' },
-                        {
-                            key: 'outstanding',
-                            label: 'Outstanding',
-                            align: 'right',
-                        },
-                    ]"
-                    :table-rows="accountTableRows"
-                >
-                    <BarChart
-                        :items="accountItems"
-                        clickable
-                        @select="openList"
-                    />
-                </ChartCard>
-
-                <!-- Deferred server-side: the metric widgets paint first, this arrives
-                     immediately after and holds a placeholder in the meantime rather than
-                     claiming "no data". -->
-                <Deferred v-if="canViewUserReports" data="user_reports">
-                    <template #fallback>
                         <ChartCard
                             title="Invoices per user"
+                            description="Uploaded, or billed to their assigned accounts · select one to report on that user"
+                            :loading="processing"
+                            :empty="userItems.length === 0"
+                            empty-text="No invoices are attributed to any user in the selected period."
+                            :table-columns="USER_COLUMNS"
+                            :table-rows="userRows"
+                        >
+                            <BarChart :items="userItems" clickable @select="selectUserBar" />
+                        </ChartCard>
+                    </Deferred>
+                </div>
+            </DashboardSection>
+
+            <DashboardSection
+                v-if="canViewUserReports"
+                title="Team activity"
+                description="Invoices attributed to each user, plus the concerns and payments they recorded · select a name to report on that user."
+                :icon="Users"
+            >
+                <Deferred data="user_reports">
+                    <template #fallback>
+                        <ChartCard
+                            title="User activity report"
                             description="Loading user activity…"
                             loading
                             empty
@@ -476,63 +429,16 @@ const showAllTime = () =>
                         />
                     </template>
 
-                    <ChartCard
-                        title="Invoices per user"
-                        description="Uploaded, or billed to the accounts they are assigned to · click to report on that user"
-                        :loading="processing"
-                        :empty="userItems.length === 0"
-                        empty-text="No invoices are attributed to any user in the selected period."
-                        :table-columns="[
-                            { key: 'label', label: 'User' },
-                            { key: 'count', label: 'Invoices', align: 'right' },
-                            { key: 'billed', label: 'Billed', align: 'right' },
-                            {
-                                key: 'outstanding',
-                                label: 'Outstanding',
-                                align: 'right',
-                            },
-                        ]"
-                        :table-rows="userTableRows"
-                    >
-                        <BarChart
-                            :items="userItems"
-                            clickable
-                            @select="
-                                (item) =>
-                                    scopeToUser(
-                                        Number(item.key.replace('user-', '')) ||
-                                            null,
-                                    )
-                            "
+                    <ChartCard title="User activity report" content-class="px-4">
+                        <UserReportTable
+                            :rows="userReports"
+                            :active-user-id="filters.user_id"
+                            :processing="processing"
+                            @select="scopeToUser"
                         />
                     </ChartCard>
                 </Deferred>
-            </div>
-
-            <Deferred v-if="canViewUserReports" data="user_reports">
-                <template #fallback>
-                    <ChartCard
-                        title="User activity report"
-                        description="Loading user activity…"
-                        loading
-                        empty
-                        empty-text="Loading…"
-                    />
-                </template>
-
-                <ChartCard
-                    title="User activity report"
-                    description="Invoices attributed to each user (uploads, or their assigned accounts), plus the concerns and payments they recorded"
-                    content-class="px-4"
-                >
-                    <UserReportTable
-                        :rows="userReports ?? []"
-                        :active-user-id="filters.user_id"
-                        :processing="processing"
-                        @select="scopeToUser"
-                    />
-                </ChartCard>
-            </Deferred>
+            </DashboardSection>
         </div>
     </AppLayout>
 </template>

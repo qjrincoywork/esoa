@@ -191,6 +191,8 @@ export interface MetricBucket {
     badge_class: string;
     tone: VizTone | null;
     emphasis: boolean;
+    /** Status buckets only: whether the status counts toward the outstanding balance. */
+    outstanding: boolean;
     href: string;
 }
 
@@ -273,6 +275,21 @@ export interface DashboardFilters {
 export interface DashboardFilterOptions {
     presets: Array<{ value: string; name: string }>;
     users: Array<{ value: number; name: string }>;
+}
+
+/** Everything `DashboardReportService::props()` sends the dashboard page. */
+export type DashboardPageProps = {
+    filters: DashboardFilters;
+    filter_options?: DashboardFilterOptions;
+    data_window?: DashboardDataWindow | null;
+    summary?: DashboardSummary;
+    aging_buckets?: MetricBucket[];
+    status_buckets?: MetricBucket[];
+    billing_trend?: BillingTrend;
+    top_accounts?: TopAccount[];
+    /** Deferred for staff (undefined until it lands); null for everyone else. */
+    user_reports?: UserReportRow[] | null;
+    can_view_user_reports?: boolean;
 }
 
 export type BreadcrumbItemType = BreadcrumbItem;

@@ -3,6 +3,7 @@ import {
   Activity,
   Ban,
   CircleAlert,
+  History,
   KeyRound,
   LogIn,
   LogOut,
@@ -101,33 +102,40 @@ export interface ActivityLogPageParams {
 export type ActivityLogPageFetcher = (params: ActivityLogPageParams) => Promise<ActivityLogPage | null>;
 
 /**
- * Event colours, kept beside the rows that use them rather than in the enum: which
+ * Event colors, kept beside the rows that use them rather than in the enum: which
  * hue reads as "deleted" is a presentation decision, not a property of the event.
+ *
+ * Records: green adds, blue edits, red removes, amber brings back or half succeeds.
+ * Sessions: sky for a sign-in, a quieter cyan for a remembered session coming back,
+ * violet for a credential change; a sign-out is routine and stays neutral. The one map
+ * every view reads (table, panes, lists), so an event looks the same wherever it shows.
  */
 const EVENT_CLASSES: Record<string, string> = {
   created: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
   updated: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
   deleted: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
   restored: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
-  logged_in: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400',
-  password_changed: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400',
-  batch_uploaded: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+  batch_uploaded: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300',
   batch_partial: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
   batch_rejected: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
   batch_failed: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+  logged_in: 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-400',
+  session_resumed: 'bg-cyan-50 text-cyan-800 dark:bg-cyan-900/20 dark:text-cyan-300',
+  password_changed: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400',
 };
 
 /** The badge classes for an event, wherever one is shown — table, pane or batch list. */
 export const eventClass = (event: string | null | undefined): string =>
   EVENT_CLASSES[event ?? ''] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
 
-/** Event icons, for the same reason the colours live here: they are presentation. */
+/** Event icons, for the same reason the colors live here: they are presentation. */
 const EVENT_ICONS: Record<string, Component> = {
   created: Plus,
   updated: Pencil,
   deleted: Trash2,
   restored: RotateCcw,
   logged_in: LogIn,
+  session_resumed: History,
   logged_out: LogOut,
   password_changed: KeyRound,
   batch_uploaded: Upload,

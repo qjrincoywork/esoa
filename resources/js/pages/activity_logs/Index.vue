@@ -19,7 +19,7 @@ import TopPane from '@/components/TopPane.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import { DateRangePicker } from '@/components/ui/date-range-picker';
-import { useActivityLogs, type ActivityLogRow } from '@/composables/activityLogs';
+import { eventClass, useActivityLogs, type ActivityLogRow } from '@/composables/activityLogs';
 import { useServerListing, type ListingPage } from '@/composables/datatable/useServerListing';
 import { useModulePermissions } from '@/composables/useModulePermissions';
 import { avatar } from '@/lib/avatar';
@@ -95,7 +95,7 @@ const filterDefs = computed<FilterDef[]>(() => {
     return [
         { key: 'log_name', label: 'Module', allLabel: 'All modules', options: toSelectOptions(options?.modules), width: 'w-44' },
         { key: 'event', label: 'Event', allLabel: 'All events', options: toSelectOptions(options?.events), width: 'w-40' },
-        { key: 'causer_id', label: 'Changed by', allLabel: 'Anyone', options: toSelectOptions(options?.causers), width: 'w-48' },
+        { key: 'causer_id', label: 'Performed by', allLabel: 'Anyone', options: toSelectOptions(options?.causers), width: 'w-48' },
     ];
 });
 
@@ -147,26 +147,10 @@ const resultSummary = computed(() => {
 
 const emptyState = computed(() => isNarrowed.value
     ? { message: 'No activity matches your search', description: 'Try a different search term, widen the dates, or clear the filters.' }
-    : { message: 'No activity yet', description: 'Changes to billing invoices, concerns and remittance advices will appear here.' });
+    : { message: 'No activity yet', description: 'Sign-ins and changes to billing invoices, concerns and remittance advices will appear here.' });
 
 // --- Columns ---
 const DASH = '—';
-
-/**
- * Event pills by outcome: green adds, blue edits, red removes, amber brings back or half
- * succeeds. The batch events come from the batch upload (`AuditEvent`); anything else is grey.
- */
-const EVENT_CLASSES: Record<string, string> = {
-    created: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-    updated: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-    deleted: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-    restored: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
-    batch_uploaded: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300',
-    batch_partial: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
-    batch_rejected: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-    batch_failed: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-};
-const NEUTRAL_EVENT = 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
 
 /** The server's label, tidied: an event it has no label for arrives as its raw name ("Batch_uploaded"). */
 const eventLabel = (row: ActivityLogRow) => (row.event_label ?? row.event ?? DASH).replace(/_/g, ' ');
@@ -177,7 +161,7 @@ const whenCell = (row: ActivityLogRow) => h('div', { class: 'whitespace-nowrap' 
     row.logged_at_value ? h('div', { class: 'text-muted-foreground' }, timeAgo(row.logged_at_value)) : null,
 ]);
 
-/** Who made the change; an entry without a person was written by the system (a job or import). */
+/** Who acted; an entry without a person was written by the system (a job or import). */
 const causerCell = (row: ActivityLogRow) => h('div', { class: 'flex items-center gap-2' }, [
     row.causer ? avatar(row.causer) : avatar(null, Bot),
     h('span', { class: ['truncate', !row.causer && 'text-muted-foreground'] }, row.causer ?? 'System'),
@@ -199,14 +183,15 @@ const columns: ColumnDef<ActivityLogRow, any>[] = [
     }),
     columnHelper.accessor('event_label', {
         header: 'Event',
-        cell: ({ row }) => badge(eventLabel(row.original), EVENT_CLASSES[row.original.event ?? ''] ?? NEUTRAL_EVENT),
+        // Colors come from the shared map, so the table, the panes and the lists agree.
+        cell: ({ row }) => badge(eventLabel(row.original), eventClass(row.original.event)),
     }),
     columnHelper.accessor('description', {
         header: 'Activity',
         cell: (info) => h('span', { class: 'font-medium' }, info.getValue() ?? DASH),
     }),
     columnHelper.accessor('causer', {
-        header: 'Changed by',
+        header: 'Performed by',
         cell: ({ row }) => causerCell(row.original),
     }),
     columnHelper.accessor('change_count', {
@@ -278,8 +263,8 @@ const openEntry = (row: ActivityLogRow) => openActivityLog(row);
                         </span>
                     </div>
                     <CardDescription>
-                        A read-only record of changes to billing invoices, concerns and remittance advices.
-                        Open an entry to see exactly what changed.
+                        A read-only record of sign-ins and of changes to billing invoices, concerns and
+                        remittance advices. Open an entry to see what changed and where it came from.
                     </CardDescription>
                 </CardHeader>
 
