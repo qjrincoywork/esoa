@@ -43,6 +43,19 @@ final class AuditLogName extends Enum
     }
 
     /**
+     * Whether entries on this channel describe changes to a record's fields.
+     *
+     * A module's entries do, so an entry with no field changes there is worth pointing
+     * out; a sign-in never changes a field, and saying so on every one is noise.
+     *
+     * @param  string  $value
+     */
+    public static function recordsChanges($value): bool
+    {
+        return $value !== self::AUTHENTICATION;
+    }
+
+    /**
      * Return every audit channel as {value, name} option arrays for select inputs.
      *
      * @return array<array{value:string,name:string}>

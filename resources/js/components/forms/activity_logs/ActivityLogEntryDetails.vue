@@ -2,15 +2,20 @@
 /**
  * One audit entry, opened up.
  *
- * The change table is the point of it — old value beside new, one row per field —
- * with the request it arrived on underneath. The same component serves the detail
- * pane's first tab and the top pane a batch entry opens in, so an entry reads the
- * same way wherever it was reached from.
+ * Reads top to bottom the way the question is asked: what happened, who did it and
+ * when, what it changed, and where it came from. The change table is shown only where
+ * a change is the point — a sign-in changes no field, and saying so on every one is
+ * noise — and the request, with the device behind it, closes the entry
+ * ({@link ActivityLogRequestDetails}). The same component serves the detail pane's first
+ * tab and the top pane an entry opens in elsewhere, so an entry reads the same way
+ * wherever it was reached from.
  */
 import { computed } from 'vue';
 import { Badge } from '@/components/ui/badge';
-import { ArrowRight, Info } from 'lucide-vue-next';
-import { eventClass, type ActivityLogDetail, type ActivityLogRow } from '@/composables/activityLogs';
+import ActivityLogRequestDetails from '@/components/forms/activity_logs/ActivityLogRequestDetails.vue';
+import { ArrowRight, Clock, FileText, UserRound } from 'lucide-vue-next';
+import { eventClass, eventIcon, type ActivityLogDetail, type ActivityLogRow } from '@/composables/activityLogs';
+import { timeAgo } from '@/lib/relativeTime';
 
 const props = withDefaults(
   defineProps<{
@@ -28,82 +33,111 @@ const props = withDefaults(
 const shown = computed(() => props.detail ?? (props.row as unknown as ActivityLogDetail));
 
 const changes = computed(() => props.detail?.changes ?? []);
-const context = computed(() => props.detail?.context ?? null);
 
-/** The facts worth a row each; blanks are dropped rather than shown empty. */
-const summaryRows = computed(() =>
-  [
-    { label: 'When', value: shown.value?.logged_at },
-    { label: 'Module', value: shown.value?.module },
-    { label: 'Changed by', value: shown.value?.causer ?? 'System' },
-    { label: 'Record', value: shown.value?.subject_type ? `${shown.value.subject_type} #${shown.value.subject_id}` : null },
-    { label: 'Email', value: props.detail?.causer_email },
-  ].filter((r) => r.value !== null && r.value !== undefined && r.value !== ''),
-);
+/** Whether to say anything about changes: always when there are some, else only where they were expected. */
+const showChanges = computed(() => changes.value.length > 0 || props.detail?.records_changes !== false);
 
-const contextRows = computed(() =>
-  [
-    { label: 'IP address', value: context.value?.ip },
-    { label: 'Route', value: context.value?.route },
-    { label: 'Method', value: context.value?.method },
-    { label: 'User agent', value: context.value?.user_agent },
-  ].filter((r) => r.value),
-);
+const loggedAgo = computed(() => (shown.value?.logged_at_value ? timeAgo(shown.value.logged_at_value) : null));
+
+/**
+ * Who, when and to what — a tile each, kept as data so the layout stays one loop.
+ * The email sits under the name only when it says something the name does not.
+ */
+const overview = computed(() => {
+  const entry = shown.value;
+  const email = props.detail?.causer_email;
+
+  return [
+    {
+      key: 'causer',
+      label: 'Performed by',
+      icon: UserRound,
+      value: entry?.causer ?? 'System',
+      hint: email && email !== entry?.causer ? email : null,
+    },
+    {
+      key: 'when',
+      label: 'When',
+      icon: Clock,
+      value: entry?.logged_at,
+      hint: loggedAgo.value,
+    },
+    {
+      key: 'record',
+      label: 'Record',
+      icon: FileText,
+      value: entry?.subject_type ? `${entry.subject_type} #${entry.subject_id}` : null,
+      hint: null,
+    },
+  ].filter((tile) => tile.value);
+});
 </script>
 
 <template>
-  <div class="flex w-full flex-col gap-4">
+  <div class="flex w-full flex-col gap-5">
     <!-- What happened -->
-    <div class="flex flex-col gap-2">
-      <div class="flex flex-wrap items-center gap-2">
-        <Badge :class="eventClass(shown?.event)" class="border-transparent">
-          {{ shown?.event_label ?? 'Activity' }}
-        </Badge>
-        <Badge variant="outline">{{ shown?.module }}</Badge>
-        <Badge v-if="shown?.change_count" variant="secondary">
-          {{ shown.change_count }} {{ shown.change_count === 1 ? 'field' : 'fields' }}
-        </Badge>
+    <div class="flex items-start gap-3">
+      <div
+        class="flex size-10 shrink-0 items-center justify-center rounded-full"
+        :class="eventClass(shown?.event)">
+        <component :is="eventIcon(shown?.event)" class="size-5" aria-hidden="true" />
       </div>
-      <p class="text-sm font-medium">{{ shown?.description }}</p>
+      <div class="flex min-w-0 flex-col gap-1.5">
+        <p class="text-base leading-snug font-semibold break-words">{{ shown?.description }}</p>
+        <div class="flex flex-wrap items-center gap-1.5">
+          <Badge :class="eventClass(shown?.event)" class="border-transparent">
+            {{ shown?.event_label ?? 'Activity' }}
+          </Badge>
+          <Badge variant="outline">{{ shown?.module }}</Badge>
+          <Badge v-if="shown?.change_count" variant="secondary">
+            {{ shown.change_count }} {{ shown.change_count === 1 ? 'field' : 'fields' }}
+          </Badge>
+          <span v-if="loggedAgo" class="text-xs text-muted-foreground" :title="shown?.logged_at ?? undefined">
+            · {{ loggedAgo }}
+          </span>
+        </div>
+      </div>
     </div>
 
-    <dl class="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
-      <div
-        v-for="row in summaryRows"
-        :key="row.label"
-        class="flex flex-col border-b border-[var(--color-border)] py-1.5 last:border-0">
-        <dt class="text-xs text-[var(--color-text-muted)]">{{ row.label }}</dt>
-        <dd class="truncate text-sm" :title="String(row.value)">{{ row.value }}</dd>
+    <!-- Who, when, to what -->
+    <dl class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+      <div v-for="tile in overview" :key="tile.key" class="flex min-w-0 items-start gap-2.5 rounded-lg border bg-card p-3">
+        <component :is="tile.icon" class="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <div class="flex min-w-0 flex-col">
+          <dt class="text-xs text-muted-foreground">{{ tile.label }}</dt>
+          <dd class="text-sm font-medium break-words">{{ tile.value }}</dd>
+          <dd v-if="tile.hint" class="truncate text-xs text-muted-foreground" :title="tile.hint">{{ tile.hint }}</dd>
+        </div>
       </div>
     </dl>
 
     <!-- What changed -->
-    <section>
-      <h4 class="mb-1.5 text-sm font-medium">What changed</h4>
+    <div v-if="showChanges" class="flex flex-col gap-2">
+      <h4 class="text-sm font-semibold">
+        What changed
+        <span v-if="changes.length" class="font-normal text-muted-foreground">({{ changes.length }})</span>
+      </h4>
 
-      <div v-if="changes.length" class="overflow-hidden rounded-lg border border-[var(--color-border)]">
+      <div v-if="changes.length" class="overflow-hidden rounded-lg border">
         <div class="overflow-x-auto">
           <table class="w-full text-sm">
             <thead>
-              <tr class="border-b border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-muted)]">
+              <tr class="border-b bg-muted/50 text-xs text-muted-foreground">
                 <th class="px-3 py-2 text-left font-medium">Field</th>
                 <th class="px-3 py-2 text-left font-medium">From</th>
                 <th class="px-3 py-2 text-left font-medium">To</th>
               </tr>
             </thead>
             <tbody>
-              <tr
-                v-for="change in changes"
-                :key="change.field"
-                class="border-b border-[var(--color-border)] last:border-0 align-top">
-                <td class="px-3 py-2 font-medium">{{ change.label }}</td>
-                <td class="px-3 py-2 text-[var(--color-text-muted)]">
+              <tr v-for="change in changes" :key="change.field" class="border-b align-top last:border-0">
+                <td class="px-3 py-2 font-medium whitespace-nowrap">{{ change.label }}</td>
+                <td class="px-3 py-2 text-muted-foreground">
                   <span class="break-all">{{ change.from ?? '—' }}</span>
                 </td>
                 <td class="px-3 py-2">
-                  <span class="inline-flex items-start gap-1">
-                    <ArrowRight class="mt-1 h-3 w-3 shrink-0 text-[var(--color-text-muted)]" aria-hidden="true" />
-                    <span class="break-all">{{ change.to ?? '—' }}</span>
+                  <span class="inline-flex items-start gap-1.5">
+                    <ArrowRight class="mt-1 size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
+                    <span class="font-medium break-all">{{ change.to ?? '—' }}</span>
                   </span>
                 </td>
               </tr>
@@ -112,29 +146,12 @@ const contextRows = computed(() =>
         </div>
       </div>
 
-      <p v-else class="text-sm text-[var(--color-text-muted)]">
+      <p v-else class="rounded-lg border border-dashed px-3 py-2 text-xs text-muted-foreground">
         No field-level changes were recorded for this entry.
       </p>
-    </section>
-
-    <!-- Where it came from -->
-    <section v-if="contextRows.length">
-      <h4 class="mb-1.5 text-sm font-medium">Request</h4>
-      <dl class="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
-        <div
-          v-for="row in contextRows"
-          :key="row.label"
-          class="flex flex-col border-b border-[var(--color-border)] py-1.5 last:border-0">
-          <dt class="text-xs text-[var(--color-text-muted)]">{{ row.label }}</dt>
-          <dd class="truncate text-sm" :title="String(row.value)">{{ row.value }}</dd>
-        </div>
-      </dl>
-    </section>
-    <div
-      v-else
-      class="flex items-start gap-2 rounded-md border border-[var(--color-border)] px-3 py-2 text-xs text-[var(--color-text-muted)]">
-      <Info class="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-      <span>No request was recorded — this change came from a console command or a queued job.</span>
     </div>
+
+    <!-- Where it came from — only once the detail has arrived, since the row carries no request -->
+    <ActivityLogRequestDetails v-if="detail" :context="detail.context" :device="detail.device" />
   </div>
 </template>
