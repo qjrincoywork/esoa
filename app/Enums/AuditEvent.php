@@ -29,6 +29,9 @@ final class AuditEvent extends Enum
     public const BATCH_PARTIAL = 'batch_partial';
     public const BATCH_FAILED = 'batch_failed';
     public const LOGGED_IN = 'logged_in';
+    // Re-authenticated from the "remember me" cookie after the session lapsed — not a
+    // sign-in: no credentials were entered, the browser simply came back.
+    public const SESSION_RESUMED = 'session_resumed';
     public const LOGGED_OUT = 'logged_out';
     public const PASSWORD_CHANGED = 'password_changed';
 
@@ -49,6 +52,7 @@ final class AuditEvent extends Enum
             self::BATCH_PARTIAL => 'Batch partially uploaded',
             self::BATCH_FAILED => 'Batch failed',
             self::LOGGED_IN => 'Signed in',
+            self::SESSION_RESUMED => 'Session resumed',
             self::LOGGED_OUT => 'Signed out',
             self::PASSWORD_CHANGED => 'Password changed',
             default => ucfirst((string) $value),
