@@ -1,48 +1,61 @@
 <script setup lang="ts">
 /**
- * "Search multiple users" — look up many usernames or emails at once.
+ * "Search multiple …" — look up many entries at once in a listing.
  *
  * Entries are typed or pasted into one box, separated by commas, semicolons or new
- * lines. The box only collects them: the host runs the lookup over the users list
- * (`search_terms`), and the server splits, de-duplicates and caps the entries
- * (`ListRequest`), then counts each one's matches under the list's other filters. Those
- * counts come back as `matches` and are listed per entry — the entries nobody matched
- * stand out, and choosing one narrows the list to that entry's matches (`focus`).
+ * lines. The box only collects them: the host runs the lookup over its listing
+ * ({@link useBulkLookup}), and the server splits, de-duplicates and caps the entries
+ * (`AcceptsBulkSearchTerms`), then counts each one's matches under the listing's other
+ * filters. Those counts come back as `matches` and are listed per entry — the entries
+ * nothing matched stand out, and choosing one narrows the listing to that entry's
+ * matches (`focus`).
+ *
+ * What is being looked up is the host's to say (title, description, nouns), so one panel
+ * serves every listing that offers a bulk lookup.
  */
 import { computed, ref, watch } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import type { BulkUserLookup, SearchTermMatch } from '@/composables/users';
+import type { BulkLookup, SearchTermMatch } from '@/composables/datatable/useBulkLookup';
+import { cn } from '@/lib/utils';
 import { ClipboardPaste, Search, X } from 'lucide-vue-next';
 
 const props = withDefaults(
   defineProps<{
-    /** Per-entry match counts of the lookup the list is showing; empty before one runs. */
+    /** Prefix for the panel's element ids, so two panels never share one. */
+    id: string;
+    title: string;
+    description: string;
+    placeholder?: string;
+    /** What a row of the listing is called, for the per-entry hints: "user", "users". */
+    noun: { one: string; many: string };
+    /** Per-entry match counts of the lookup the listing is showing; empty before one runs. */
     matches?: SearchTermMatch[];
-    /** Whether a lookup is applied to the list (its results are shown while it is). */
+    /** Whether a lookup is applied to the listing (its results are shown while it is). */
     applied?: boolean;
     /** Most entries one lookup may hold — the server's `vc.max_search_terms`. */
     maxTerms?: number;
   }>(),
   {
+    placeholder: '',
     matches: () => [],
     applied: false,
     maxTerms: 100,
   },
 );
 
-/** The entry the list is narrowed to; null lists the matches of every entry. */
+/** The entry the listing is narrowed to; null lists the matches of every entry. */
 const focus = defineModel<string | null>('focus', { default: null });
 
 const emit = defineEmits<{
-  search: [lookup: BulkUserLookup];
+  search: [lookup: BulkLookup];
   clear: [];
   close: [];
 }>();
 
-/** The separators `ListRequest::SEARCH_TERM_SEPARATORS` splits on — previewed here. */
+/** The separators `AcceptsBulkSearchTerms::SEARCH_TERM_SEPARATORS` splits on — previewed here. */
 const SEPARATORS = /[,;\r\n]+/;
 
 const input = ref('');
@@ -101,61 +114,58 @@ const pasteFromClipboard = async () => {
   }
 };
 
-/** Toggle the list between one entry's matches and every entry's. */
+/** Toggle the listing between one entry's matches and every entry's. */
 const toggleFocus = (term: string) => {
   focus.value = focus.value === term ? null : term;
 };
 
-const chipClass = (match: SearchTermMatch) => {
-  if (match.count === 0) {
-    return 'cursor-not-allowed border-red-300 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-900/20 dark:text-red-400';
-  }
+const matchHint = (match: SearchTermMatch) =>
+  match.count === 0
+    ? `No ${props.noun.one} matches this entry`
+    : `List the ${match.count} matching ${match.count === 1 ? props.noun.one : props.noun.many}`;
 
-  return focus.value === match.term
-    ? 'cursor-pointer border-[var(--primary-color)] bg-[var(--primary-color)]/10 text-[var(--color-text)]'
-    : 'cursor-pointer border-[var(--color-border-strong)] text-[var(--color-text)] hover:border-[var(--primary-color)]';
-};
+const chipClass = (match: SearchTermMatch) => cn(
+  'inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs transition-colors',
+  match.count === 0
+    ? 'cursor-not-allowed border-red-300 bg-red-50 text-red-700 dark:border-red-900/60 dark:bg-red-900/20 dark:text-red-400'
+    : focus.value === match.term
+      ? 'cursor-pointer border-primary bg-primary/10 text-foreground'
+      : 'cursor-pointer border-input text-foreground hover:border-primary',
+);
 </script>
 
 <template>
-  <section
-    class="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
-    aria-labelledby="bulk-user-search-title">
+  <div :id="id" class="rounded-lg border bg-card p-4" role="region" :aria-labelledby="`${id}-title`">
     <div class="flex items-start justify-between gap-2">
       <div>
-        <h3 id="bulk-user-search-title" class="text-sm font-semibold text-[var(--color-text)]">
-          Search multiple users
-        </h3>
-        <p class="mt-0.5 text-xs text-[var(--color-text-muted)]">
-          Enter usernames or emails separated by commas, semicolons, or new lines.
-        </p>
+        <h3 :id="`${id}-title`" class="text-sm font-semibold">{{ title }}</h3>
+        <p class="mt-0.5 text-xs text-muted-foreground">{{ description }}</p>
       </div>
       <Button
         type="button"
         variant="ghost"
         size="sm"
-        class="h-7 w-7 shrink-0 cursor-pointer p-0 text-[var(--color-text-muted)]"
-        aria-label="Close bulk search"
+        class="size-7 shrink-0 cursor-pointer p-0 text-muted-foreground"
+        :aria-label="`Close ${title.toLowerCase()}`"
         @click="emit('close')">
-        <X class="h-4 w-4" />
+        <X class="size-4" />
       </Button>
     </div>
 
-    <Label class="sr-only" for="bulk-user-search-input">Usernames or emails</Label>
+    <Label class="sr-only" :for="`${id}-input`">{{ description }}</Label>
     <Textarea
-      id="bulk-user-search-input"
+      :id="`${id}-input`"
       v-model="input"
       rows="4"
-      placeholder="jdelacruz, maria.santos@valucare.com.ph; jose.reyes"
-      class="mt-3 resize-y border-[var(--color-border-strong)] bg-[var(--color-surface)] text-[var(--color-text)] focus-visible:ring-offset-0"
-      :style="{ '--tw-ring-color': 'var(--primary-color)' }"
+      :placeholder="placeholder"
+      class="mt-3 resize-y"
       @keydown.ctrl.enter.prevent="search"
       @keydown.meta.enter.prevent="search" />
 
     <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
       <div class="flex flex-wrap items-center gap-2">
         <Button type="button" size="sm" class="cursor-pointer" :disabled="!canSearch" @click="search">
-          <Search class="mr-1 h-4 w-4" /> Search all
+          <Search /> Search all
         </Button>
         <Button
           v-if="canReadClipboard"
@@ -164,7 +174,7 @@ const chipClass = (match: SearchTermMatch) => {
           variant="outline"
           class="cursor-pointer"
           @click="pasteFromClipboard">
-          <ClipboardPaste class="mr-1 h-4 w-4" /> Paste from clipboard
+          <ClipboardPaste /> Paste from clipboard
         </Button>
         <Button
           type="button"
@@ -178,7 +188,7 @@ const chipClass = (match: SearchTermMatch) => {
         <span
           v-if="terms.length"
           class="text-xs"
-          :class="overLimit ? 'text-red-600 dark:text-red-400' : 'text-[var(--color-text-muted)]'">
+          :class="overLimit ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'">
           <template v-if="overLimit">{{ terms.length }} entries — search at most {{ maxTerms }} at a time</template>
           <template v-else>{{ terms.length }} {{ terms.length === 1 ? 'entry' : 'entries' }}</template>
         </span>
@@ -188,18 +198,18 @@ const chipClass = (match: SearchTermMatch) => {
       </div>
 
       <div class="flex items-center gap-2">
-        <Checkbox id="bulk-user-search-exact" v-model="exactMatch" class="cursor-pointer" />
-        <Label for="bulk-user-search-exact" class="cursor-pointer text-sm text-[var(--color-text-muted)]">
+        <Checkbox :id="`${id}-exact`" v-model="exactMatch" class="cursor-pointer" />
+        <Label :for="`${id}-exact`" class="cursor-pointer text-sm text-muted-foreground">
           Exact match only
         </Label>
       </div>
     </div>
 
-    <!-- Per-entry results: what each entry matched, and which matched nobody -->
-    <div v-if="applied && matches.length" class="mt-4 border-t border-[var(--color-border)] pt-3">
-      <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--color-text-muted)]">
+    <!-- Per-entry results: what each entry matched, and which matched nothing -->
+    <div v-if="applied && matches.length" class="mt-4 border-t pt-3">
+      <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
         <p>
-          <span class="font-medium text-[var(--color-text)]">{{ matchedCount }} of {{ matches.length }}</span>
+          <span class="font-medium text-foreground">{{ matchedCount }} of {{ matches.length }}</span>
           {{ matches.length === 1 ? 'entry' : 'entries' }} matched
           <template v-if="unmatchedCount">
             · <span class="text-red-600 dark:text-red-400">{{ unmatchedCount }} not found</span>
@@ -207,8 +217,8 @@ const chipClass = (match: SearchTermMatch) => {
         </p>
         <p>
           <template v-if="focus">
-            Showing matches for <span class="font-medium text-[var(--color-text)]">{{ focus }}</span> ·
-            <button type="button" class="cursor-pointer underline hover:text-[var(--color-text)]" @click="focus = null">
+            Showing matches for <span class="font-medium text-foreground">{{ focus }}</span> ·
+            <button type="button" class="cursor-pointer underline hover:text-foreground" @click="focus = null">
               show all
             </button>
           </template>
@@ -220,11 +230,10 @@ const chipClass = (match: SearchTermMatch) => {
         <li v-for="match in matches" :key="match.term">
           <button
             type="button"
-            class="inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs transition-colors"
             :class="chipClass(match)"
             :disabled="match.count === 0"
             :aria-pressed="focus === match.term"
-            :title="match.count === 0 ? 'No user matches this entry' : `List the ${match.count} matching user(s)`"
+            :title="matchHint(match)"
             @click="toggleFocus(match.term)">
             <span class="max-w-[16rem] truncate">{{ match.term }}</span>
             <span class="font-semibold tabular-nums">{{ match.count === 0 ? 'No match' : match.count }}</span>
@@ -232,5 +241,5 @@ const chipClass = (match: SearchTermMatch) => {
         </li>
       </ul>
     </div>
-  </section>
+  </div>
 </template>

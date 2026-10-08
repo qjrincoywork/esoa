@@ -166,18 +166,6 @@ export interface UserAccountMappingPayload {
   account_types: Array<{ value: string | number; name: string }>
 }
 
-/** A bulk user lookup as the list runs it: distinct entries, and whether they must match exactly. */
-export interface BulkUserLookup {
-  terms: string[]
-  exact: boolean
-}
-
-/** How many users one bulk-lookup entry matched, as `User::searchTermMatches()` reports it. */
-export interface SearchTermMatch {
-  term: string
-  count: number
-}
-
 /** The tabs the user right pane offers. */
 export type UserPaneTab = 'details' | 'account_mapping' | 'activity_logs';
 

@@ -8,30 +8,42 @@
  * account type or by how many members are sitting behind the gap, then go and map it
  * on the user it belongs to.
  *
- * Accounts and branches are two views of one listing rather than two pages: the
- * filters mean the same thing in both, so switching tabs keeps them. Only the tab
- * being looked at is fetched — the directory is tens of thousands of rows on a remote
- * database, and answering the other one would double the cost of every page.
+ * Accounts and branches are views of one listing rather than two pages: the filters
+ * mean the same thing in each, so switching tabs keeps them. The first view lists both
+ * kinds together, so a name or code — or a pasted list of them, through the bulk
+ * search — is found wherever it is, without first guessing which half it lives in. Only
+ * the view being looked at is fetched, and paged by the server: the directory is tens
+ * of thousands of rows on a remote database.
  */
 import { computed, h, ref, watch } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import { createColumnHelper, type ColumnDef } from '@tanstack/vue-table';
 import { type BreadcrumbItem } from '@/types';
 import AppLayout from '@/layouts/AppLayout.vue';
+import BulkSearch from '@/components/BulkSearch.vue';
 import Datatable from '@/components/Datatable.vue';
 import FilterSelect from '@/components/FilterSelect.vue';
 import ListSearch from '@/components/ListSearch.vue';
 import RightPane from '@/components/RightPane.vue';
+import MappingBadge from '@/components/forms/users/MappingBadge.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useBulkLookup, type SearchTermMatch } from '@/composables/datatable/useBulkLookup';
 import { useServerListing, type ListingPage } from '@/composables/datatable/useServerListing';
 import { useModulePermissions } from '@/composables/useModulePermissions';
-import { useUnmappedAccounts, type DirectoryRow, type DirectoryScope } from '@/composables/unmappedAccounts';
+import {
+    DIRECTORY_SCOPE,
+    DIRECTORY_VIEW,
+    useUnmappedAccounts,
+    type DirectoryRow,
+    type DirectoryScope,
+    type DirectoryView,
+} from '@/composables/unmappedAccounts';
 import { badge, mappedStatusBadge, standingBadge } from '@/lib/directoryBadges';
 import { cn } from '@/lib/utils';
-import { SlidersHorizontal, X } from 'lucide-vue-next';
+import { SlidersHorizontal, TextSearch, X } from 'lucide-vue-next';
 
 type DirectoryPagination = ListingPage & { data: DirectoryRow[] }
 
@@ -40,11 +52,18 @@ type Option = { value: string | number; name: string }
 /** What `UnmappedAccountController::index` sends. */
 interface UnmappedPageProps {
     directory?: DirectoryPagination
-    scope?: string
+    scope?: DirectoryView
+    search_term_matches?: SearchTermMatch[]
+    max_search_terms?: number
     filter_options?: { scopes?: Option[]; code_prefixes?: Option[]; account_types?: Option[]; statuses?: Option[] }
 }
 
-const SCOPE_BRANCH = 'branch';
+/** Everything the page says differently per view, in one place rather than a ternary per label. */
+const VIEW_COPY: Record<DirectoryView, { one: string; many: string; placeholder: string }> = {
+    [DIRECTORY_VIEW.ALL]: { one: 'account or branch', many: 'accounts and branches', placeholder: 'Search account or branch name or code...' },
+    [DIRECTORY_VIEW.ACCOUNT]: { one: 'account', many: 'accounts', placeholder: 'Search account name or code...' },
+    [DIRECTORY_VIEW.BRANCH]: { one: 'branch', many: 'branches', placeholder: 'Search branch, account or code...' },
+};
 
 const page = usePage();
 const pageProps = computed(() => page.props as unknown as UnmappedPageProps);
@@ -76,16 +95,31 @@ const scopes = computed(() => pageProps.value.filter_options?.scopes ?? []);
  * for as long as it takes. Both land together, because the scope prop travels with
  * the listing on every partial reload.
  */
-const scope = ref<string>(pageProps.value.scope ?? 'account');
-const renderedScope = computed<string>(() => pageProps.value.scope ?? scope.value);
-const isBranchScope = computed(() => renderedScope.value === SCOPE_BRANCH);
+const scope = ref<DirectoryView>(pageProps.value.scope ?? DIRECTORY_VIEW.ALL);
+const renderedScope = computed<DirectoryView>(() => pageProps.value.scope ?? scope.value);
+const isBranchScope = computed(() => renderedScope.value === DIRECTORY_VIEW.BRANCH);
 
 /** What the rows are called, so every label follows the tab: "3 unmapped branches". */
-const rowNoun = computed(() => (isBranchScope.value
-    ? { one: 'branch', many: 'branches' }
-    : { one: 'account', many: 'accounts' }));
+const viewCopy = computed(() => VIEW_COPY[renderedScope.value] ?? VIEW_COPY[DIRECTORY_VIEW.ALL]);
+const rowNoun = computed(() => ({ one: viewCopy.value.one, many: viewCopy.value.many }));
 
 const searchQuery = ref('');
+
+// --- Bulk lookup ("Search multiple accounts or branches") ---
+const {
+    lookup: bulkLookup,
+    open: bulkSearchOpen,
+    params: bulkLookupParams,
+    visit: bulkLookupVisit,
+    run: runBulkLookup,
+    focus: focusBulkTerm,
+    clear: clearBulkLookup,
+    toggle: toggleBulkSearch,
+    markStale: markMatchesStale,
+} = useBulkLookup({ reload: (delay) => queueFetch(delay), search: searchQuery });
+
+const searchTermMatches = computed(() => pageProps.value.search_term_matches ?? []);
+const maxSearchTerms = computed(() => Number(pageProps.value.max_search_terms) || 100);
 
 // --- Filters ---
 type FilterKey = 'code_prefix' | 'account_type' | 'is_active'
@@ -155,7 +189,7 @@ const clearFilters = () => {
 };
 
 // --- Summary & empty state ---
-const isNarrowed = computed(() => searchQuery.value.trim() !== '' || narrowingCount.value > 0);
+const isNarrowed = computed(() => searchQuery.value.trim() !== '' || bulkLookup.value !== null || narrowingCount.value > 0);
 
 const resultSummary = computed(() => {
     const total = directory.value.total;
@@ -164,11 +198,17 @@ const resultSummary = computed(() => {
     return `${total.toLocaleString()} ${qualifiers} ${total === 1 ? rowNoun.value.one : rowNoun.value.many}`.replace(/\s+/g, ' ');
 });
 
-const searchPlaceholder = computed(() => isBranchScope.value
-    ? 'Search branch, account or code...'
-    : 'Search account name or code...');
-
 const emptyState = computed(() => {
+    if (bulkLookup.value) {
+        return {
+            message: `No ${rowNoun.value.many} match these entries`,
+            description: [
+                bulkLookup.value.exact ? 'Check the entries for typos, or turn off exact match.' : 'Check the entries for typos.',
+                !includeMapped.value && 'Include mapped rows to see the ones already assigned.',
+            ].filter(Boolean).join(' '),
+        };
+    }
+
     if (includeMapped.value) {
         return { message: `No ${rowNoun.value.many} found`, description: 'Nothing in the HMS directory matches these filters.' };
     }
@@ -179,7 +219,7 @@ const emptyState = computed(() => {
     };
 });
 
-const exportFileName = computed(() => `unmapped_${rowNoun.value.many}`);
+const exportFileName = computed(() => `unmapped_${rowNoun.value.many.replace(/\s+/g, '_')}`);
 
 // --- Columns ---
 const DASH = '—';
@@ -227,16 +267,16 @@ const columnHelper = createColumnHelper<DirectoryRow>();
 
 /**
  * Standing, type and members. For a branch the standing is its account's — a branch has
- * none of its own — so the header says so rather than every row.
+ * none of its own — so on the branch view the header says so rather than every row.
  */
-const sharedColumns = (owner: 'account' | 'branch'): ColumnDef<DirectoryRow, any>[] => [
+const sharedColumns = (view: DirectoryView): ColumnDef<DirectoryRow, any>[] => [
     columnHelper.accessor('account_type_label', {
         header: 'Type',
         cell: ({ row }) => typeCell(row.original),
     }),
     columnHelper.accessor((row) => row.standing?.label ?? DASH, {
         id: 'standing',
-        header: owner === 'branch' ? 'Account status' : 'Status',
+        header: view === DIRECTORY_VIEW.BRANCH ? 'Account status' : 'Status',
         cell: ({ row }) => standingCell(row.original),
     }),
     columnHelper.accessor('member_count', {
@@ -245,12 +285,29 @@ const sharedColumns = (owner: 'account' | 'branch'): ColumnDef<DirectoryRow, any
     }),
 ];
 
+const isBranchRow = (row: DirectoryRow) => row.kind === DIRECTORY_SCOPE.BRANCH;
+
+/** What the row is: a branch by its own name and code, an account by its own. */
+const ownNameWithCode = (row: DirectoryRow) => isBranchRow(row)
+    ? nameWithCode(row.branch_name, row.branch_code)
+    : nameWithCode(row.account_name, row.account_code);
+
+/**
+ * Where kinds mix, the row's name leads with the badge the mapping pickers give it —
+ * mapping an account grants every branch, so which one a row is decides what mapping
+ * it would take.
+ */
+const kindNameCell = (row: DirectoryRow) => h('div', { class: 'flex items-start gap-2' }, [
+    h('span', { class: 'mt-0.5' }, [h(MappingBadge, { badge: row.kind_badge })]),
+    ownNameWithCode(row),
+]);
+
 const accountColumns: ColumnDef<DirectoryRow, any>[] = [
     columnHelper.accessor('account_name', {
         header: 'Account',
         cell: ({ row }) => nameWithCode(row.original.account_name, row.original.account_code),
     }),
-    ...sharedColumns('account'),
+    ...sharedColumns(DIRECTORY_VIEW.ACCOUNT),
 ];
 
 const branchColumns: ColumnDef<DirectoryRow, any>[] = [
@@ -263,8 +320,35 @@ const branchColumns: ColumnDef<DirectoryRow, any>[] = [
         header: 'Account',
         cell: ({ row }) => nameWithCode(row.original.account_name, row.original.account_code),
     }),
-    ...sharedColumns('branch'),
+    ...sharedColumns(DIRECTORY_VIEW.BRANCH),
 ];
+
+/**
+ * Both kinds in one table: the row's own name first, then — for a branch — whose branch
+ * it is. An account row is its own account, so that cell stays empty rather than
+ * repeating the name beside it.
+ */
+const allColumns: ColumnDef<DirectoryRow, any>[] = [
+    columnHelper.accessor((row) => (isBranchRow(row) ? row.branch_name : row.account_name) ?? '', {
+        id: 'name',
+        header: 'Account / Branch',
+        cell: ({ row }) => kindNameCell(row.original),
+    }),
+    columnHelper.accessor((row) => (isBranchRow(row) ? row.account_name : ''), {
+        id: 'owner_account',
+        header: 'Belongs to',
+        cell: ({ row }) => isBranchRow(row.original)
+            ? nameWithCode(row.original.account_name, row.original.account_code)
+            : h('span', { class: 'text-muted-foreground' }, DASH),
+    }),
+    ...sharedColumns(DIRECTORY_VIEW.ALL),
+];
+
+const COLUMNS_BY_VIEW: Record<DirectoryView, ColumnDef<DirectoryRow, any>[]> = {
+    [DIRECTORY_VIEW.ALL]: allColumns,
+    [DIRECTORY_VIEW.ACCOUNT]: accountColumns,
+    [DIRECTORY_VIEW.BRANCH]: branchColumns,
+};
 
 /** Appended only while `includeMapped` is on — otherwise every row would read "Unmapped". */
 const mappedColumn = columnHelper.accessor((row) => row.mapped_users ?? [], {
@@ -274,7 +358,7 @@ const mappedColumn = columnHelper.accessor((row) => row.mapped_users ?? [], {
 });
 
 const columns = computed(() => {
-    const base = isBranchScope.value ? branchColumns : accountColumns;
+    const base = COLUMNS_BY_VIEW[renderedScope.value] ?? allColumns;
 
     return includeMapped.value ? [...base, mappedColumn] : base;
 });
@@ -291,6 +375,7 @@ const filterParams = (): Record<string, string> => {
     const params: Record<string, string> = { scope: scope.value };
 
     if (searchQuery.value.trim()) params.search_string = searchQuery.value.trim();
+    Object.assign(params, bulkLookupParams());
     for (const [key, value] of Object.entries(filters.value)) {
         if (String(value) !== '') params[key] = String(value);
     }
@@ -303,16 +388,22 @@ const { pagination, isFetching, queueFetch, onPaginationChange } = useServerList
     listing: () => directory.value,
     url: () => `/${slug.value}`,
     params: filterParams,
-    visit: () => ({ only: ['directory', 'scope'] }),
+    // The per-entry counts ride along only when they may have changed (useBulkLookup).
+    visit: () => bulkLookupVisit(['directory', 'scope']),
 });
 
-/** Switching view starts the listing over: page 3 of accounts is not page 3 of branches. */
+const isView = (value: unknown): value is DirectoryView =>
+    Object.values(DIRECTORY_VIEW).includes(value as DirectoryView);
+
+/**
+ * Switching view starts the listing over — page 3 of accounts is not page 3 of
+ * branches — and recounts a bulk lookup's entries, which count different rows per view.
+ */
 const switchScope = (next: string | number | undefined) => {
-    const value = String(next ?? '');
+    if (!isView(next) || next === scope.value) return;
 
-    if (!value || value === scope.value) return;
-
-    scope.value = value;
+    scope.value = next;
+    markMatchesStale();
     queueFetch(0);
 };
 
@@ -324,22 +415,25 @@ watch(() => searchQuery.value.trim(), () => queueFetch(500));
 watch([filters, includeMapped], () => {
     // The server would refuse it; the field says why instead of the list going quiet.
     if (membersRangeInvalid.value) return;
+    // Per-entry counts are taken under the other filters, so they move with them.
+    markMatchesStale();
     queueFetch(400);
 }, { deep: true });
 
-// Keep the tab on the scope the server settled on.
+// Keep the tab on the view the server settled on.
 watch(() => pageProps.value.scope, (next) => {
-    if (next) scope.value = String(next);
+    if (isView(next)) scope.value = next;
 });
 
 /**
  * Opening a row.
  *
- * The scope comes from what is rendered rather than from the tab just clicked: the row
- * belongs to the listing on screen, and an account row opened as a branch would look up
- * the wrong code.
+ * Every row says what it is, which is what decides the lookup — an account row opened as
+ * a branch would look up the wrong code. Only a row that somehow does not say falls back
+ * to the view on screen (never the tab just clicked: the row belongs to what is rendered).
  */
-const openRow = (row: DirectoryRow) => openDirectoryRow(row, renderedScope.value as DirectoryScope);
+const openRow = (row: DirectoryRow) =>
+    openDirectoryRow(row, row.kind ?? (renderedScope.value as DirectoryScope));
 </script>
 
 <template>
@@ -360,6 +454,7 @@ const openRow = (row: DirectoryRow) => openDirectoryRow(row, renderedScope.value
                     </div>
                     <CardDescription>
                         Accounts and branches in the HMS directory that no user has been given access to yet.
+                        Search names or codes across both at once, or many at a time with bulk search.
                         Account classes that are never mapped to a user are left out.
                     </CardDescription>
                 </CardHeader>
@@ -382,11 +477,38 @@ const openRow = (row: DirectoryRow) => openDirectoryRow(row, renderedScope.value
                                 </TabsTrigger>
                             </TabsList>
                             <ListSearch
+                                v-if="!bulkSearchOpen"
                                 id="unmapped-search"
                                 v-model="searchQuery"
                                 label="Search directory"
-                                :placeholder="searchPlaceholder" />
+                                :placeholder="viewCopy.placeholder" />
+                            <!-- Many names or codes at once: opens in place of the single search -->
+                            <Button
+                                type="button"
+                                class="cursor-pointer self-start sm:self-auto"
+                                :variant="bulkSearchOpen ? 'default' : 'outline'"
+                                :aria-expanded="bulkSearchOpen"
+                                aria-controls="bulk-directory-search"
+                                @click="toggleBulkSearch">
+                                <TextSearch /> Bulk search
+                            </Button>
                         </div>
+
+                        <BulkSearch
+                            v-if="bulkSearchOpen"
+                            id="bulk-directory-search"
+                            title="Search multiple accounts or branches"
+                            description="Enter account or branch names or codes separated by commas, semicolons, or new lines."
+                            placeholder="AT-12681304, BR1907150430; SM City Valenzuela"
+                            :noun="{ one: 'account or branch', many: 'accounts and branches' }"
+                            :matches="searchTermMatches"
+                            :applied="bulkLookup !== null"
+                            :max-terms="maxSearchTerms"
+                            :focus="bulkLookup?.focus ?? null"
+                            @update:focus="focusBulkTerm"
+                            @search="runBulkLookup"
+                            @clear="clearBulkLookup"
+                            @close="toggleBulkSearch" />
 
                         <div class="flex flex-wrap items-center gap-2" role="group" aria-label="Filters">
                             <span class="flex items-center gap-1.5 pr-1 text-xs font-medium text-muted-foreground">

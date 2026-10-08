@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\AccountCodePrefix;
 use App\Enums\AccountDirectoryScope;
+use App\Enums\AccountDirectoryView;
 use App\Enums\AccountStanding;
 use App\Enums\AccountStatus;
 use App\Enums\AccountType;
@@ -24,6 +25,7 @@ use App\Http\Resources\DirectoryMemberResource;
 use App\Http\Resources\MappedUserResource;
 use App\Http\Resources\UnmappedAccountResource;
 use App\Http\Resources\UnmappedBranchResource;
+use App\Http\Resources\UnmappedDirectoryResource;
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -55,14 +57,20 @@ class UnmappedAccountController extends Controller
      * cannot be seen from any per-user view, because an account nobody is mapped to
      * appears on nobody's screen.
      *
-     * Accounts and branches are two views of one listing rather than two pages: they
-     * take the same filters, and the account classes excluded from user access are the
-     * same on both ({@see AccountCodePrefix::excludedFromUserAccess()}), so a row shown
-     * here is always one the mapping pickers would offer.
+     * Accounts and branches are views of one listing rather than two pages: they take
+     * the same filters, and the account classes excluded from user access are the same
+     * on both ({@see AccountCodePrefix::excludedFromUserAccess()}), so a row shown here
+     * is always one the mapping pickers would offer. The default view lists both
+     * together ({@see AccountDirectoryView}), so a name or code is searched across the
+     * whole directory at once instead of one half at a time.
      *
-     * Only the scope being viewed is queried. The listing spans a directory of tens of
-     * thousands of rows on a remote database, so answering the tab nobody is looking at
-     * would double the cost of every page.
+     * Only what is being viewed is queried, and paged by HMS itself. The listing spans a
+     * directory of tens of thousands of rows on a remote database, so answering a tab
+     * nobody is looking at would double the cost of every page.
+     *
+     * A bulk lookup (many names or codes at once) also reports how many rows each entry
+     * matched, under the other filters. That count is a closure so a partial reload that
+     * only pages the list — or singles out one entry — can leave it out and skip it.
      *
      * Access control: permission-based, not role-based. The route's `check_permissions`
      * middleware and {@see ListRequest::authorize()} both require the permission named
@@ -73,29 +81,28 @@ class UnmappedAccountController extends Controller
      */
     public function index(ListRequest $request)
     {
-        $scope = $request->scope();
+        $view = $request->view();
         $params = $request->lookupParams();
         $hms = new $this->sqlDatabase(Server::HMS);
 
-        if ($scope === AccountDirectoryScope::BRANCH) {
-            $branches = $hms->getUnassignedBranchesByParams($params);
+        [$page, $resource] = match ($view) {
+            AccountDirectoryView::ACCOUNT => [$hms->getUnassignedAccountsByParams($params), UnmappedAccountResource::class],
+            AccountDirectoryView::BRANCH => [$hms->getUnassignedBranchesByParams($params), UnmappedBranchResource::class],
+            default => [$hms->getUnassignedDirectoryByParams($params), UnmappedDirectoryResource::class],
+        };
 
-            // Each branch is labelled with the account it belongs to; resolve the
-            // page's codes in one lookup so the resource reads them from the memo.
-            CommonHelper::primeAccountNames($branches->getCollection()->pluck('br_ac_code'));
-
-            $directory = new CommonResource(UnmappedBranchResource::collection($branches));
-        } else {
-            $directory = new CommonResource(
-                UnmappedAccountResource::collection($hms->getUnassignedAccountsByParams($params))
-            );
-        }
+        // Each branch is labelled with the account it belongs to; resolve the page's
+        // codes in one lookup so the resource reads them from the memo. Account rows
+        // carry no `br_ac_code`, so on an account page this primes nothing.
+        CommonHelper::primeAccountNames($page->getCollection()->pluck('br_ac_code')->filter());
 
         return Inertia::render('unmapped_accounts/Index', [
-            'directory' => $directory,
-            'scope' => $scope,
+            'directory' => new CommonResource($resource::collection($page)),
+            'scope' => $view,
+            'search_term_matches' => fn () => $hms->getUnassignedSearchTermMatches($view, $params),
+            'max_search_terms' => config('vc.max_search_terms'),
             'filter_options' => [
-                'scopes' => AccountDirectoryScope::list(),
+                'scopes' => AccountDirectoryView::list(),
                 'code_prefixes' => AccountCodePrefix::list(),
                 'account_types' => AccountType::list(),
                 'statuses' => IsActive::list(),

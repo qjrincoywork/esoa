@@ -15,6 +15,7 @@ use Illuminate\Support\Str;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use App\Enums\{AuditEvent, CredentialAccess, CredentialStatus, PermissionAssignmentMode, UserType};
 use App\Support\AuthenticationAudit;
+use App\Support\BulkSearchTerms;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Traits\HasRoles;
 
@@ -298,24 +299,18 @@ class User extends Authenticatable implements AuthorizableContract, MustVerifyEm
      */
     public function listQuery(array $params): Builder
     {
-        $exactMatch = !empty($params['exact_match']);
-        $searchTerms = isset($params['search_term_focus'])
-            ? [$params['search_term_focus']]
-            : ($params['search_terms'] ?? []);
-
         $result = self::query()
             ->when(isset($params['search_string']), function ($query) use ($params) {
                 $query->where(fn ($q) => $q
                     ->where('email', 'LIKE', '%' . $params['search_string'] . '%')
                     ->orWhere('username', 'LIKE', '%' . $params['search_string'] . '%'));
             })
-            ->when($searchTerms !== [], function ($query) use ($searchTerms, $exactMatch) {
-                $query->where(function ($q) use ($searchTerms, $exactMatch) {
-                    foreach ($searchTerms as $term) {
-                        $q->orWhereRaw(...$this->searchTermCondition($term, $exactMatch));
-                    }
-                });
-            })
+            ->tap(fn ($query) => BulkSearchTerms::apply(
+                $query,
+                BulkSearchTerms::filtering($params),
+                BulkSearchTerms::isExact($params),
+                $this->searchTermCondition(...)
+            ))
             ->when(isset($params['credential_status']), fn ($query) => $query->credentialStatus((int) $params['credential_status']))
             ->when(isset($params['credential_access']), fn ($query) => $query->credentialAccess((int) $params['credential_access']))
             ->when(isset($params['is_active']), function ($query) use ($params) {
@@ -360,28 +355,20 @@ class User extends Authenticatable implements AuthorizableContract, MustVerifyEm
             return [];
         }
 
-        $exactMatch = !empty($params['exact_match']);
-        $columns = [];
-        $bindings = [];
-
-        foreach ($terms as $index => $term) {
-            [$condition, $termBindings] = $this->searchTermCondition($term, $exactMatch);
-            $columns[] = "SUM(CASE WHEN {$condition} THEN 1 ELSE 0 END) AS match_{$index}";
-            array_push($bindings, ...$termBindings);
-        }
+        [$columns, $bindings] = BulkSearchTerms::countColumns(
+            $terms,
+            BulkSearchTerms::isExact($params),
+            $this->searchTermCondition(...)
+        );
 
         // Counted across the whole lookup, not just the entry singled out on the list.
-        $counts = $this->listQuery(array_diff_key($params, array_flip(['search_terms', 'search_term_focus'])))
+        $counts = $this->listQuery(BulkSearchTerms::withoutLookup($params))
             ->toBase()
             ->reorder()
-            ->selectRaw(implode(', ', $columns), $bindings)
+            ->selectRaw($columns, $bindings)
             ->first();
 
-        return array_map(
-            fn (string $term, int $index) => ['term' => $term, 'count' => (int) ($counts->{"match_{$index}"} ?? 0)],
-            $terms,
-            array_keys($terms)
-        );
+        return BulkSearchTerms::matches($terms, [$counts]);
     }
 
     /**
