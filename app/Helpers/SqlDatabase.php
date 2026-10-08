@@ -2,6 +2,8 @@
 
 namespace App\Helpers;
 
+use App\Enums\AccountDirectoryScope;
+use App\Enums\AccountDirectoryView;
 use App\Enums\AccountStatus;
 use App\Enums\AccountType;
 use App\Enums\BillRefFrom;
@@ -10,12 +12,24 @@ use App\Enums\OrderType;
 use App\Enums\Server;
 use App\Enums\TenancyScope;
 use App\Models\UserAccount;
+use App\Support\BulkSearchTerms;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use Ramsey\Collection\Sort;
 
 class SqlDatabase
 {
+    /**
+     * The columns a directory search matches on a row of each kind: an account's name
+     * and code, a branch's name and code and its account's code. A branch also matches
+     * on its account's name, which lives on another table ({@see whereMatchesAnyTerm()}).
+     */
+    private const DIRECTORY_SEARCH_COLUMNS = [
+        AccountDirectoryScope::ACCOUNT => ['Accounts.ac_name', 'Accounts.ac_code'],
+        AccountDirectoryScope::BRANCH => ['Branches.br_branch_name', 'Branches.br_code', 'Branches.br_ac_code'],
+    ];
+
     /**
      * DB instance.
      *
@@ -709,37 +723,23 @@ class SqlDatabase
      * are equally mappable; `ac_status` travels with each row so the difference is
      * visible rather than silently decided here.
      *
-     * @param  array  $params  Supports per_page, search_string, code_prefix, account_type,
+     * @param  array  $params  Supports per_page, search_string, search_terms (with
+     *                         exact_match and search_term_focus), code_prefix, account_type,
      *                         members_min, members_max, exclude_prefixes, include_mapped and
      *                         assigned_account_codes.
      * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
      */
     public function getUnassignedAccountsByParams($params)
     {
-        $perPage = $params['per_page'] ?? config('vc.default_pages');
-        $search = trim((string) ($params['search_string'] ?? ''));
-
-        $query = $this->db
-            ->table('Accounts')
+        $page = $this->unassignedAccountsQuery($params)
             ->select('Accounts.ac_code', 'Accounts.ac_name', 'Accounts.ac_ma_code', 'Accounts.ac_status', 'Accounts.ac_expiry')
-            ->tap(fn ($q) => $this->applyAccountDirectoryFilter($q, auth()->user(), 'Accounts.ac_code'))
-            ->tap(fn ($q) => $this->applyExcludedAccountPrefixes($q, 'Accounts.ac_code', $params['exclude_prefixes'] ?? []))
-            ->tap(fn ($q) => $this->applyAccountCodePrefixFilter($q, 'Accounts.ac_code', $params['code_prefix'] ?? null))
-            ->tap(fn ($q) => $this->applyAccountTypeFilter($q, 'Accounts.ac_code', $params['account_type'] ?? null))
-            ->tap(fn ($q) => $this->applyAccountStatusFilter($q, 'Accounts.ac_status', $params['is_active'] ?? null))
-            ->tap(fn ($q) => $this->applyNotInChunked($q, 'Accounts.ac_code', $params['assigned_account_codes'] ?? []))
-            ->when($search !== '', function ($q) use ($search) {
-                $q->where(function ($sub) use ($search) {
-                    $sub->where('Accounts.ac_name', 'like', '%'.$search.'%')
-                        ->orWhere('Accounts.ac_code', 'like', '%'.$search.'%');
-                });
-            });
+            ->orderBy('Accounts.ac_name')
+            ->paginate($params['per_page'] ?? config('vc.default_pages'));
 
-        $this->applyMemberCountRange($query, $params, 'ch_accountid', 'Accounts.ac_code');
-
-        $page = $this->attachAccountMemberCounts($query->orderBy('Accounts.ac_name')->paginate($perPage));
-
-        return $this->attachAccountMappedUsers($page, (bool) ($params['include_mapped'] ?? false));
+        return $this->attachAccountMappedUsers(
+            $this->attachAccountMemberCounts($page),
+            (bool) ($params['include_mapped'] ?? false)
+        );
     }
 
     /**
@@ -753,19 +753,211 @@ class SqlDatabase
      * two HMS branches sharing a code are therefore both reachable, and both drop out
      * together.
      *
-     * @param  array  $params  Supports per_page, search_string, code_prefix, account_type,
+     * @param  array  $params  Supports per_page, search_string, search_terms (with
+     *                         exact_match and search_term_focus), code_prefix, account_type,
      *                         members_min, members_max, exclude_prefixes, include_mapped,
      *                         assigned_branch_codes and accounts_mapped_in_full.
      * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
      */
     public function getUnassignedBranchesByParams($params)
     {
-        $perPage = $params['per_page'] ?? config('vc.default_pages');
-        $search = trim((string) ($params['search_string'] ?? ''));
+        $page = $this->unassignedBranchesQuery($params)
+            ->select('Branches.br_code', 'Branches.br_branch_name', 'Branches.br_ac_code')
+            ->orderBy('Branches.br_branch_name')
+            ->paginate($params['per_page'] ?? config('vc.default_pages'));
 
+        return $this->attachBranchRowDetails($page, (bool) ($params['include_mapped'] ?? false));
+    }
+
+    /**
+     * Retrieves one paginated list of the unmapped accounts *and* branches together,
+     * ordered by name — so a name or code is searched across both at once instead of
+     * one half of the directory at a time.
+     *
+     * Each half is the exact query its own listing runs ({@see unassignedAccountsQuery()},
+     * {@see unassignedBranchesQuery()}), so the combined view can never show a row the
+     * single views would not, or miss one they would. The halves are stacked with a
+     * UNION ALL into one shape: a `kind` column says which half a row came from, and
+     * every row carries both halves' columns, with the other half's left null. That
+     * lets each row be enriched and serialised exactly as its own listing's would be
+     * ({@see attachAccountMemberCounts()}, {@see attachBranchRowDetails()}).
+     *
+     * Paged by the database rather than merged here: the directory runs to tens of
+     * thousands of rows, so only one page of the combined result ever leaves HMS.
+     *
+     * @param  array  $params  Everything the two single listings accept.
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     */
+    public function getUnassignedDirectoryByParams($params)
+    {
+        $accounts = $this->unassignedAccountsQuery($params)->selectRaw(
+            "? AS kind, Accounts.ac_name AS sort_name, Accounts.ac_code, Accounts.ac_name, Accounts.ac_ma_code,
+             Accounts.ac_status, Accounts.ac_expiry,
+             CAST(NULL AS NVARCHAR(255)) AS br_code, CAST(NULL AS NVARCHAR(255)) AS br_branch_name,
+             CAST(NULL AS NVARCHAR(255)) AS br_ac_code",
+            [AccountDirectoryScope::ACCOUNT]
+        );
+
+        $branches = $this->unassignedBranchesQuery($params)->selectRaw(
+            "? AS kind, Branches.br_branch_name AS sort_name, NULL AS ac_code, NULL AS ac_name, NULL AS ac_ma_code,
+             NULL AS ac_status, NULL AS ac_expiry,
+             Branches.br_code, Branches.br_branch_name, Branches.br_ac_code",
+            [AccountDirectoryScope::BRANCH]
+        );
+
+        $page = $this->db
+            ->query()
+            ->fromSub($accounts->unionAll($branches), 'directory')
+            // A name shared by an account and its branch lists the account first.
+            ->orderBy('sort_name')
+            ->orderBy('kind')
+            ->paginate($params['per_page'] ?? config('vc.default_pages'));
+
+        $includeMapped = (bool) ($params['include_mapped'] ?? false);
+        $rows = $page->getCollection()->groupBy('kind');
+
+        $this->attachAccountMappedUsers(
+            $this->attachAccountMemberCounts($rows->get(AccountDirectoryScope::ACCOUNT, collect())),
+            $includeMapped
+        );
+        $this->attachBranchRowDetails($rows->get(AccountDirectoryScope::BRANCH, collect()), $includeMapped);
+
+        return $page;
+    }
+
+    /**
+     * How many rows each entry of a bulk lookup matches, under every other filter, in
+     * the order the entries were given.
+     *
+     * One pass per half of the directory the view lists, each a single conditional SUM
+     * per entry ({@see BulkSearchTerms::countColumns()}), matching exactly as the
+     * listing filters ({@see whereMatchesAnyTerm()}) — so an entry's count is what the
+     * list then shows for it. The combined view adds the two halves together.
+     *
+     * @param  string  $view  An {@see AccountDirectoryView} value.
+     * @param  array  $params  The listing params.
+     * @return array<int, array{term: string, count: int}>
+     */
+    public function getUnassignedSearchTermMatches(string $view, array $params): array
+    {
+        $terms = array_values($params['search_terms'] ?? []);
+
+        if ($terms === []) {
+            return [];
+        }
+
+        $exact = BulkSearchTerms::isExact($params);
+        $base = BulkSearchTerms::withoutLookup($params);
+
+        $rows = array_map(
+            fn (string $scope) => $scope === AccountDirectoryScope::BRANCH
+                ? $this->countBranchTermMatches($base, $terms, $exact)
+                : $this->countAccountTermMatches($base, $terms, $exact),
+            AccountDirectoryView::scopes($view)
+        );
+
+        return BulkSearchTerms::matches($terms, $rows);
+    }
+
+    /**
+     * Per-entry counts over the unmapped accounts: an entry matches an account's name
+     * or code.
+     *
+     * @param  array<int, string>  $terms
+     * @return object|null One row of `match_<index>` counts.
+     */
+    private function countAccountTermMatches(array $params, array $terms, bool $exact): ?object
+    {
+        [$columns, $bindings] = BulkSearchTerms::countColumns(
+            $terms,
+            $exact,
+            fn (string $term, bool $exact): array => $this->directoryColumnsMatch(AccountDirectoryScope::ACCOUNT, $term, $exact)
+        );
+
+        return $this->unassignedAccountsQuery($params)->selectRaw($columns, $bindings)->first();
+    }
+
+    /**
+     * Per-entry counts over the unmapped branches: an entry matches a branch's own name
+     * or codes, or its account's name.
+     *
+     * The account name lives on another table, and testing it per entry with a
+     * subquery would both run one semi-join per entry and put a subquery inside the
+     * SUM, which SQL Server refuses. Instead the accounts whose name matches any entry
+     * are read once, grouped by code, with a flag per entry they match; joined on, every
+     * branch carries its account's flags. Grouping keeps it one row per code, so the
+     * join cannot duplicate a branch even though `ac_code` is not unique in HMS.
+     *
+     * @param  array<int, string>  $terms
+     * @return object|null One row of `match_<index>` counts.
+     */
+    private function countBranchTermMatches(array $params, array $terms, bool $exact): ?object
+    {
+        $indexOf = array_flip($terms);
+
+        $flags = [];
+        $flagBindings = [];
+        foreach ($terms as $index => $term) {
+            [$sql, $bindings] = $this->columnsMatch(['ac_name'], $term, $exact);
+            $flags[] = "MAX(CASE WHEN {$sql} THEN 1 ELSE 0 END) AS name_match_{$index}";
+            array_push($flagBindings, ...$bindings);
+        }
+
+        $accountNames = $this->accountsNamedQuery($terms, $exact)
+            ->selectRaw('ac_code, ' . implode(', ', $flags), $flagBindings)
+            ->groupBy('ac_code');
+
+        [$columns, $bindings] = BulkSearchTerms::countColumns(
+            $terms,
+            $exact,
+            function (string $term, bool $exact) use ($indexOf): array {
+                [$sql, $bindings] = $this->directoryColumnsMatch(AccountDirectoryScope::BRANCH, $term, $exact);
+
+                return ["({$sql} OR account_names.name_match_{$indexOf[$term]} = 1)", $bindings];
+            }
+        );
+
+        return $this->unassignedBranchesQuery($params)
+            ->leftJoinSub($accountNames, 'account_names', 'account_names.ac_code', '=', 'Branches.br_ac_code')
+            ->selectRaw($columns, $bindings)
+            ->first();
+    }
+
+    /**
+     * The unmapped-account query, every filter applied, no columns chosen and no order:
+     * what the account listing, the combined listing and the bulk-lookup counts share.
+     *
+     * @param  array  $params
+     * @return \Illuminate\Database\Query\Builder
+     */
+    private function unassignedAccountsQuery(array $params)
+    {
+        $query = $this->db
+            ->table('Accounts')
+            ->tap(fn ($q) => $this->applyAccountDirectoryFilter($q, auth()->user(), 'Accounts.ac_code'))
+            ->tap(fn ($q) => $this->applyExcludedAccountPrefixes($q, 'Accounts.ac_code', $params['exclude_prefixes'] ?? []))
+            ->tap(fn ($q) => $this->applyAccountCodePrefixFilter($q, 'Accounts.ac_code', $params['code_prefix'] ?? null))
+            ->tap(fn ($q) => $this->applyAccountTypeFilter($q, 'Accounts.ac_code', $params['account_type'] ?? null))
+            ->tap(fn ($q) => $this->applyAccountStatusFilter($q, 'Accounts.ac_status', $params['is_active'] ?? null))
+            ->tap(fn ($q) => $this->applyNotInChunked($q, 'Accounts.ac_code', $params['assigned_account_codes'] ?? []))
+            ->tap(fn ($q) => $this->applyDirectorySearch($q, $params, AccountDirectoryScope::ACCOUNT));
+
+        $this->applyMemberCountRange($query, $params, 'ch_accountid', 'Accounts.ac_code');
+
+        return $query;
+    }
+
+    /**
+     * The unmapped-branch query, every filter applied, no columns chosen and no order:
+     * what the branch listing, the combined listing and the bulk-lookup counts share.
+     *
+     * @param  array  $params
+     * @return \Illuminate\Database\Query\Builder
+     */
+    private function unassignedBranchesQuery(array $params)
+    {
         $query = $this->db
             ->table('Branches')
-            ->select('Branches.br_code', 'Branches.br_branch_name', 'Branches.br_ac_code')
             ->tap(fn ($q) => $this->applyAccountDirectoryFilter($q, auth()->user(), 'Branches.br_ac_code'))
             ->tap(fn ($q) => $this->applyExcludedAccountPrefixes($q, 'Branches.br_ac_code', $params['exclude_prefixes'] ?? []))
             ->tap(fn ($q) => $this->applyAccountCodePrefixFilter($q, 'Branches.br_ac_code', $params['code_prefix'] ?? null))
@@ -776,30 +968,124 @@ class SqlDatabase
             ->tap(fn ($q) => $this->applyBranchAccountStatusFilter($q, 'Branches.br_ac_code', $params['is_active'] ?? null))
             ->tap(fn ($q) => $this->applyNotInChunked($q, 'Branches.br_code', $params['assigned_branch_codes'] ?? []))
             ->tap(fn ($q) => $this->applyNotInChunked($q, 'Branches.br_ac_code', $params['accounts_mapped_in_full'] ?? []))
-            ->when($search !== '', function ($q) use ($search) {
-                $q->where(function ($sub) use ($search) {
-                    $sub->where('Branches.br_branch_name', 'like', '%'.$search.'%')
-                        ->orWhere('Branches.br_code', 'like', '%'.$search.'%')
-                        ->orWhere('Branches.br_ac_code', 'like', '%'.$search.'%')
-                        // The account name lives on another table, and joining Accounts
-                        // would both duplicate and drop branch rows — ac_code is not
-                        // unique and some branches point at an account HMS no longer
-                        // has. A semi-join filters without touching the row count.
-                        ->orWhereIn('Branches.br_ac_code', function ($accounts) use ($search) {
-                            $accounts->select('ac_code')
-                                ->from('Accounts')
-                                ->where('ac_name', 'like', '%'.$search.'%');
-                        });
-                });
-            });
+            ->tap(fn ($q) => $this->applyDirectorySearch($q, $params, AccountDirectoryScope::BRANCH));
 
         $this->applyMemberCountRange($query, $params, 'ch_branch_code', 'Branches.br_code');
 
-        $page = $this->attachBranchAccountStanding(
-            $this->attachBranchMemberCounts($query->orderBy('Branches.br_branch_name')->paginate($perPage))
-        );
+        return $query;
+    }
 
-        return $this->attachBranchMappedUsers($page, (bool) ($params['include_mapped'] ?? false));
+    /**
+     * Narrow a directory query by the free-text search and by a bulk lookup.
+     *
+     * Both match the same way ({@see whereMatchesAnyTerm()}), so typing a code in the
+     * search box and pasting it into a bulk lookup find the same rows — and the bulk
+     * counts agree with both. Each is its own group, so when both are given a row must
+     * satisfy both.
+     *
+     * @param  \Illuminate\Database\Query\Builder  $query
+     * @param  array  $params
+     * @param  string  $scope  An {@see AccountDirectoryScope} value: which table is queried.
+     */
+    private function applyDirectorySearch($query, array $params, string $scope): void
+    {
+        $search = trim((string) ($params['search_string'] ?? ''));
+
+        if ($search !== '') {
+            $this->whereMatchesAnyTerm($query, $scope, [$search], false);
+        }
+
+        $terms = BulkSearchTerms::filtering($params);
+
+        if ($terms !== []) {
+            $this->whereMatchesAnyTerm($query, $scope, $terms, BulkSearchTerms::isExact($params));
+        }
+    }
+
+    /**
+     * Keep the directory rows matching at least one of the entries.
+     *
+     * An account matches on its name or code. A branch matches on its own name or code,
+     * its account's code, or its account's name — a branch is looked for by whose it is
+     * as often as by what it is called. The account name lives on another table, and
+     * joining Accounts would both duplicate and drop branch rows (ac_code is not unique,
+     * and some branches point at an account HMS no longer has), so it is a semi-join —
+     * one for all the entries together, not one each, which halves the cost of a bulk
+     * lookup.
+     *
+     * @param  \Illuminate\Database\Query\Builder  $query
+     * @param  array<int, string>  $terms
+     */
+    private function whereMatchesAnyTerm($query, string $scope, array $terms, bool $exact): void
+    {
+        $query->where(function ($group) use ($scope, $terms, $exact) {
+            foreach ($terms as $term) {
+                $group->orWhereRaw(...$this->directoryColumnsMatch($scope, $term, $exact));
+            }
+
+            if ($scope === AccountDirectoryScope::BRANCH) {
+                $group->orWhereIn('Branches.br_ac_code', $this->accountsNamedQuery($terms, $exact)->select('ac_code'));
+            }
+        });
+    }
+
+    /**
+     * The accounts whose name matches any of the entries, no columns chosen.
+     *
+     * @param  array<int, string>  $terms
+     * @return \Illuminate\Database\Query\Builder
+     */
+    private function accountsNamedQuery(array $terms, bool $exact)
+    {
+        return $this->db->table('Accounts')->where(function ($names) use ($terms, $exact) {
+            foreach ($terms as $term) {
+                $names->orWhereRaw(...$this->columnsMatch(['ac_name'], $term, $exact));
+            }
+        });
+    }
+
+    /**
+     * Whether a row's own searchable columns match one entry ({@see DIRECTORY_SEARCH_COLUMNS}).
+     *
+     * @return array{0: string, 1: array<int, string>} SQL and bindings.
+     */
+    private function directoryColumnsMatch(string $scope, string $term, bool $exact): array
+    {
+        return $this->columnsMatch(self::DIRECTORY_SEARCH_COLUMNS[$scope], $term, $exact);
+    }
+
+    /**
+     * Whether any of the columns contains the entry — or equals it, for an exact match.
+     *
+     * Raw SQL rather than builder calls, because the same condition is also dropped into
+     * the bulk-lookup counts' `SUM(CASE WHEN … )`. Every value is bound.
+     *
+     * @param  array<int, string>  $columns
+     * @return array{0: string, 1: array<int, string>} SQL and bindings.
+     */
+    private function columnsMatch(array $columns, string $term, bool $exact): array
+    {
+        [$operator, $value] = $exact ? ['=', $term] : ['LIKE', "%{$term}%"];
+
+        return [
+            '(' . implode(' OR ', array_map(static fn (string $column): string => "{$column} {$operator} ?", $columns)) . ')',
+            array_fill(0, count($columns), $value),
+        ];
+    }
+
+    /**
+     * Everything a branch row shows beyond its own columns: members, its account's
+     * standing, and — when the listing includes mapped rows — who holds it.
+     *
+     * @param  \Illuminate\Contracts\Pagination\LengthAwarePaginator|\Illuminate\Support\Collection  $rows
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator|\Illuminate\Support\Collection
+     */
+    private function attachBranchRowDetails($rows, bool $includeMapped)
+    {
+        return $this->attachBranchMappedUsers(
+            $this->attachBranchAccountStanding($this->attachBranchMemberCounts($rows)),
+            $includeMapped
+        );
     }
 
     /**
@@ -1205,6 +1491,20 @@ class SqlDatabase
     }
 
     /**
+     * The rows of a page, or the rows themselves.
+     *
+     * The attach* helpers below enrich a page of one kind of row in place. The combined
+     * directory listing holds both kinds on one page, so it hands each helper just its
+     * own rows instead — the same objects, so the page they came from is enriched too.
+     *
+     * @param  \Illuminate\Contracts\Pagination\LengthAwarePaginator|Collection  $page
+     */
+    private function rowsOf($page): Collection
+    {
+        return $page instanceof Collection ? $page : $page->getCollection();
+    }
+
+    /**
      * Fill in `member_count` for the accounts on one page.
      *
      * Counting only what is displayed keeps the common case — no member filter — off
@@ -1212,12 +1512,12 @@ class SqlDatabase
      * index seeks. The page size is capped by `vc.max_per_pages`, so the `whereIn`
      * cannot approach the bound-parameter ceiling.
      *
-     * @param  \Illuminate\Contracts\Pagination\LengthAwarePaginator  $page
-     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     * @param  \Illuminate\Contracts\Pagination\LengthAwarePaginator|Collection  $page
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator|Collection
      */
     private function attachAccountMemberCounts($page)
     {
-        $rows = $page->getCollection();
+        $rows = $this->rowsOf($page);
         $counts = $this->getMemberCountsByCodes('ch_accountid', $rows->pluck('ac_code')->all());
 
         $rows->transform(function ($row) use ($counts) {
@@ -1235,12 +1535,12 @@ class SqlDatabase
      * Folded per code by {@see getAccountExpiriesByCodes()} rather than read off each
      * row, so a duplicated ac_code carries one expiry — the one its branches carry too.
      *
-     * @param  \Illuminate\Contracts\Pagination\LengthAwarePaginator  $page
-     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     * @param  \Illuminate\Contracts\Pagination\LengthAwarePaginator|Collection  $page
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator|Collection
      */
     private function attachAccountExpiry($page)
     {
-        $rows = $page->getCollection();
+        $rows = $this->rowsOf($page);
         $expiries = $this->getAccountExpiriesByCodes($rows->pluck('ac_code')->all());
 
         $rows->transform(function ($row) use ($expiries) {
@@ -1260,12 +1560,12 @@ class SqlDatabase
      * listing, because joining Accounts would duplicate and drop branch rows (ac_code
      * is not unique, and some branches point at an account HMS no longer has).
      *
-     * @param  \Illuminate\Contracts\Pagination\LengthAwarePaginator  $page
-     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     * @param  \Illuminate\Contracts\Pagination\LengthAwarePaginator|Collection  $page
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator|Collection
      */
     private function attachBranchAccountStanding($page)
     {
-        $rows = $page->getCollection();
+        $rows = $this->rowsOf($page);
         $accountCodes = $rows->pluck('br_ac_code')->filter()->unique()->values()->all();
 
         // ac_code is not unique in HMS, so each code is folded to one row: active when
@@ -1304,12 +1604,12 @@ class SqlDatabase
      * also the only column `cholders` indexes for this, which is what keeps the
      * bounded listing above under a second rather than over twenty.
      *
-     * @param  \Illuminate\Contracts\Pagination\LengthAwarePaginator  $page
-     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     * @param  \Illuminate\Contracts\Pagination\LengthAwarePaginator|Collection  $page
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator|Collection
      */
     private function attachBranchMemberCounts($page)
     {
-        $rows = $page->getCollection();
+        $rows = $this->rowsOf($page);
         $counts = $this->getMemberCountsByCodes('ch_branch_code', $rows->pluck('br_code')->all());
 
         $rows->transform(function ($row) use ($counts) {
@@ -1331,12 +1631,12 @@ class SqlDatabase
      * the listing to include what is already mapped ({@see ListRequest::lookupParams()}),
      * and even then it is scoped to the page's own codes rather than the whole table.
      *
-     * @param  \Illuminate\Contracts\Pagination\LengthAwarePaginator  $page
-     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     * @param  \Illuminate\Contracts\Pagination\LengthAwarePaginator|Collection  $page
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator|Collection
      */
     private function attachAccountMappedUsers($page, bool $enabled)
     {
-        $rows = $page->getCollection();
+        $rows = $this->rowsOf($page);
 
         if (!$enabled) {
             $rows->each(function ($row) {
@@ -1365,12 +1665,12 @@ class SqlDatabase
      * directly, or its account mapped in full ({@see \App\Models\UserAccount::mappingKey()}),
      * the same two ways {@see getUnassignedBranchesByParams()} subtracts when this is off.
      *
-     * @param  \Illuminate\Contracts\Pagination\LengthAwarePaginator  $page
-     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     * @param  \Illuminate\Contracts\Pagination\LengthAwarePaginator|Collection  $page
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator|Collection
      */
     private function attachBranchMappedUsers($page, bool $enabled)
     {
-        $rows = $page->getCollection();
+        $rows = $this->rowsOf($page);
 
         if (!$enabled) {
             $rows->each(function ($row) {

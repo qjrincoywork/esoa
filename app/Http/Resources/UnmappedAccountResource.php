@@ -3,6 +3,8 @@
 namespace App\Http\Resources;
 
 use App\Enums\AccountCodePrefix;
+use App\Enums\AccountDirectoryScope;
+use App\Enums\AccountMappingBadge;
 use App\Enums\AccountStanding;
 use App\Enums\AccountStatus;
 use App\Enums\AccountType;
@@ -37,6 +39,11 @@ class UnmappedAccountResource extends JsonResource
         $accountType = AccountType::fromAccountCode($accountCode);
 
         return [
+            // What the row is, so a listing holding both kinds can tell them apart — and
+            // the badge saying so, the same one the mapping pickers show.
+            'kind' => AccountDirectoryScope::ACCOUNT,
+            'kind_badge' => AccountMappingBadge::present(AccountMappingBadge::ACCOUNT),
+
             // The pair of codes identifies a mapping, so the row can be handed
             // straight to the mapping screen; an account row grants every branch.
             'account_code' => $accountCode,

@@ -28,15 +28,14 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import BulkUserSearch from '@/components/forms/users/BulkUserSearch.vue';
+import BulkSearch from '@/components/BulkSearch.vue';
 import { createRowActionsColumn, type RowAction } from '@/composables/datatable/rowActions';
+import { useBulkLookup, type SearchTermMatch } from '@/composables/datatable/useBulkLookup';
 import { useServerListing, type ListingPage } from '@/composables/datatable/useServerListing';
 import { useModulePermissions } from '@/composables/useModulePermissions';
 import {
     useUsers,
-    type BulkUserLookup,
     type CredentialReportOption,
-    type SearchTermMatch,
     type User,
     type UserCredentials,
 } from '@/composables/users';
@@ -147,15 +146,17 @@ const credentialReports = computed(() => pageProps.value.credential_reports ?? [
 const canExport = computed(() => hasPermission(`${slug.value}.export`) && credentialReports.value.length > 0);
 
 // --- Bulk lookup ("Search multiple users") ---
-/** The applied lookup, plus the one entry the list is narrowed to (null: every entry's matches). */
-const bulkLookup = ref<(BulkUserLookup & { focus: string | null }) | null>(null);
-const bulkSearchOpen = ref(false);
-/**
- * Whether the per-entry counts must be reloaded with the list. They depend on the entries
- * and the other filters, not on paging or on which entry is singled out — so those
- * reloads leave the server's lazy `search_term_matches` prop, and its aggregate, out.
- */
-const matchesStale = ref(false);
+const {
+    lookup: bulkLookup,
+    open: bulkSearchOpen,
+    params: bulkLookupParams,
+    visit: bulkLookupVisit,
+    run: runBulkLookup,
+    focus: focusBulkTerm,
+    clear: clearBulkLookup,
+    toggle: toggleBulkSearch,
+    markStale: markMatchesStale,
+} = useBulkLookup({ reload: (delay) => queueFetch(delay), search: searchQuery });
 
 const searchTermMatches = computed(() => pageProps.value.search_term_matches ?? []);
 const maxSearchTerms = computed(() => Number(pageProps.value.max_search_terms) || 100);
@@ -487,14 +488,8 @@ const filterParams = (): Record<string, string> => {
     const params: Record<string, string> = {};
 
     if (searchQuery.value.trim())               params.search_string     = searchQuery.value.trim();
-    if (bulkLookup.value) {
-        // One delimited string rather than an array, so it rides in the export's query string
-        // as well; the server splits it on the same separators (ListRequest).
-        params.search_terms = bulkLookup.value.terms.join('\n');
-        if (bulkLookup.value.exact)               params.exact_match       = '1';
-        if (bulkLookup.value.focus)               params.search_term_focus = bulkLookup.value.focus;
-    }
-    if (filters.value.type)                     params.type              = filters.value.type;
+    Object.assign(params, bulkLookupParams());
+    if (filters.value.type)                    params.type              = filters.value.type;
     if (filters.value.department_id)            params.department_id     = filters.value.department_id;
     // '' means "no filter"; '0' is a real choice, so these cannot be falsy tests.
     if (filters.value.status !== '')            params.is_active         = filters.value.status;
@@ -510,49 +505,9 @@ const { pagination, isFetching, queueFetch, onPaginationChange } = useServerList
     listing: () => users.value,
     url: () => `/${slug.value}`,
     params: filterParams,
-    visit: () => {
-        const reloadMatches = bulkLookup.value !== null && matchesStale.value;
-
-        return {
-            only: reloadMatches ? [slug.value, 'search_term_matches'] : [slug.value],
-            // A superseded visit never succeeds, so the counts stay stale until one that carried them lands.
-            onSuccess: () => { if (reloadMatches) matchesStale.value = false; },
-        };
-    },
+    // The per-entry counts ride along only when they may have changed (useBulkLookup).
+    visit: () => bulkLookupVisit([slug.value]),
 });
-
-/** Apply a bulk lookup from page one, listing every entry's matches. */
-const runBulkLookup = (lookup: BulkUserLookup) => {
-    bulkLookup.value = { ...lookup, focus: null };
-    matchesStale.value = true;
-    queueFetch(0);
-};
-
-/** Narrow the list to one entry's matches, or back to all of them; the counts are unchanged. */
-const focusBulkTerm = (term: string | null) => {
-    if (!bulkLookup.value || bulkLookup.value.focus === term) return;
-    bulkLookup.value.focus = term;
-    queueFetch(0);
-};
-
-const clearBulkLookup = () => {
-    if (!bulkLookup.value) return;
-    bulkLookup.value = null;
-    queueFetch(0);
-};
-
-/**
- * The bulk lookup replaces the single search while open — two searches over the same
- * columns would only narrow each other — and closing it drops whatever it applied.
- */
-const toggleBulkSearch = () => {
-    bulkSearchOpen.value = !bulkSearchOpen.value;
-    if (bulkSearchOpen.value) {
-        searchQuery.value = '';
-    } else {
-        clearBulkLookup();
-    }
-};
 
 // Typing reloads once it pauses; spacing alone changes nothing the server would see.
 watch(() => searchQuery.value.trim(), () => queueFetch(500));
@@ -561,7 +516,7 @@ watch(
     filters,
     () => {
         // Per-entry counts are taken under the other filters, so they move with them.
-        matchesStale.value = true;
+        markMatchesStale();
         queueFetch(300);
     },
     { deep: true },
@@ -645,9 +600,13 @@ watch(
                         </Button>
                     </div>
 
-                    <BulkUserSearch
+                    <BulkSearch
                         v-if="bulkSearchOpen"
                         id="bulk-user-search"
+                        title="Search multiple users"
+                        description="Enter usernames or emails separated by commas, semicolons, or new lines."
+                        placeholder="jdelacruz, maria.santos@valucare.com.ph; jose.reyes"
+                        :noun="{ one: 'user', many: 'users' }"
                         :matches="searchTermMatches"
                         :applied="bulkLookup !== null"
                         :max-terms="maxSearchTerms"

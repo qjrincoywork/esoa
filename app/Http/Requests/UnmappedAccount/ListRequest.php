@@ -4,9 +4,11 @@ namespace App\Http\Requests\UnmappedAccount;
 
 use App\Enums\AccountCodePrefix;
 use App\Enums\AccountDirectoryScope;
+use App\Enums\AccountDirectoryView;
 use App\Enums\AccountType;
 use App\Enums\IsActive;
 use App\Models\UserAccount;
+use App\Http\Requests\Concerns\AcceptsBulkSearchTerms;
 use App\Http\Requests\Concerns\AuthorizesRoutePermission;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -22,6 +24,7 @@ use Illuminate\Validation\Rule;
  */
 class ListRequest extends FormRequest
 {
+    use AcceptsBulkSearchTerms;
     use AuthorizesRoutePermission;
 
     /**
@@ -37,16 +40,22 @@ class ListRequest extends FormRequest
     public function rules(): array
     {
         return [
+            // Which rows are listed: accounts, branches, or both together
+            // ({@see AccountDirectoryView}). Still named `scope` on the wire.
             'scope' => [
                 'nullable',
                 'string',
-                Rule::in(AccountDirectoryScope::getValues()),
+                Rule::in(AccountDirectoryView::getValues()),
             ],
+            // Matches a name or a code — an account's own, or for a branch its own and
+            // its account's ({@see \App\Helpers\SqlDatabase::directoryTermConditions()}).
             'search_string' => [
                 'nullable',
                 'string',
                 'max:' . config('vc.max_string_limit'),
             ],
+            // Many names or codes at once, each matched the same way the search is.
+            ...$this->bulkSearchRules(),
             // Off by default, so the listing stays the coverage gap it's named for;
             // switched on, it widens the same query to the accounts/branches someone
             // already has, so a search can confirm a code is mapped rather than missing.
@@ -97,44 +106,59 @@ class ListRequest extends FormRequest
     }
 
     /**
-     * Which half of the directory is being listed, defaulting to accounts.
+     * What is being listed — accounts, branches, or both — defaulting to both.
      */
-    public function scope(): string
+    public function view(): string
     {
-        return AccountDirectoryScope::resolve($this->validated('scope'));
+        return AccountDirectoryView::resolve($this->validated('scope'));
     }
 
     /**
      * The validated filters, plus everything the client has no say over: the account
      * classes that are never mappable, and the codes already mapped to someone.
      *
-     * The assignment subtraction is resolved here, per scope, so only the lists the
-     * chosen query actually reads are fetched — an account listing has no use for the
-     * branch codes, and vice versa. When `include_mapped` is on, the subtraction lists
-     * are left empty rather than fetched: nothing needs excluding, so the query that
-     * would have built them is skipped entirely.
+     * The assignment subtraction is resolved here, per kind of row the view lists, so
+     * only the lists the chosen query actually reads are fetched — an account listing
+     * has no use for the branch codes, and vice versa; the combined view needs both.
+     * When `include_mapped` is on, the subtraction lists are left empty rather than
+     * fetched: nothing needs excluding, so the query that would have built them is
+     * skipped entirely.
      *
      * @return array<string, mixed>
      */
     public function lookupParams(): array
     {
         $includeMapped = $this->boolean('include_mapped');
+        $view = $this->view();
 
         $params = $this->validated() + [
             'exclude_prefixes' => AccountCodePrefix::excludedFromUserAccess(),
             'include_mapped' => $includeMapped,
         ];
 
-        if ($this->scope() === AccountDirectoryScope::BRANCH) {
-            return $params + [
+        if (AccountDirectoryView::includes($view, AccountDirectoryScope::ACCOUNT)) {
+            $params += [
+                'assigned_account_codes' => $includeMapped ? [] : UserAccount::assignedAccountCodes(),
+            ];
+        }
+
+        if (AccountDirectoryView::includes($view, AccountDirectoryScope::BRANCH)) {
+            $params += [
                 'assigned_branch_codes' => $includeMapped ? [] : UserAccount::assignedBranchCodes(),
                 'accounts_mapped_in_full' => $includeMapped ? [] : UserAccount::accountCodesMappedInFull(),
             ];
         }
 
-        return $params + [
-            'assigned_account_codes' => $includeMapped ? [] : UserAccount::assignedAccountCodes(),
-        ];
+        return $params;
+    }
+
+    /**
+     * Bulk lookups arrive as one delimited string and are split into their entries
+     * before validation ({@see AcceptsBulkSearchTerms}).
+     */
+    protected function prepareForValidation(): void
+    {
+        $this->splitBulkSearchTerms();
     }
 
     /**
@@ -144,7 +168,7 @@ class ListRequest extends FormRequest
      */
     public function messages(): array
     {
-        return [
+        return $this->bulkSearchMessages('accounts or branches') + [
             'scope.in' => 'The selected view is invalid',
             'code_prefix.in' => 'The selected account code prefix is invalid',
             'account_type.in' => 'The selected account type is invalid',

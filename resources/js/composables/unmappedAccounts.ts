@@ -5,11 +5,20 @@ import { showLoader, hideLoader } from '@/composables/useLoader';
 import { useModulePermissions } from '@/composables/useModulePermissions';
 import { usePane } from '@/composables/usePane';
 import UnmappedDirectoryPane from '@/components/forms/unmapped_accounts/UnmappedDirectoryPane.vue';
+import type { MappingBadge } from '@/composables/users';
 
 /** Which half of the directory a row belongs to; mirrors App\Enums\AccountDirectoryScope. */
 export const DIRECTORY_SCOPE = { ACCOUNT: 'account', BRANCH: 'branch' } as const;
 
 export type DirectoryScope = (typeof DIRECTORY_SCOPE)[keyof typeof DIRECTORY_SCOPE];
+
+/**
+ * What the listing shows: one kind of row, or both together; mirrors
+ * App\Enums\AccountDirectoryView. A view is not a scope — no row is ever "all".
+ */
+export const DIRECTORY_VIEW = { ALL: 'all', ...DIRECTORY_SCOPE } as const;
+
+export type DirectoryView = (typeof DIRECTORY_VIEW)[keyof typeof DIRECTORY_VIEW];
 
 /**
  * Whether an account is in force, decided and presented by `App\Enums\AccountStanding`
@@ -26,6 +35,10 @@ export interface AccountStanding {
 
 /** One row of the unmapped listing, as the two Unmapped*Resource classes shape it. */
 export interface DirectoryRow {
+  /** Which kind of row this is — what a listing of both kinds tells them apart by. */
+  kind: DirectoryScope;
+  /** The kind as a badge, decided and colored by `App\Enums\AccountMappingBadge`. */
+  kind_badge: MappingBadge;
   account_code: string;
   account_name: string;
   branch_code: string | null;
