@@ -50,6 +50,7 @@ use App\Http\Resources\UserAccountMappingResource;
 use App\Http\Resources\UserBulkImportResultResource;
 use App\Http\Resources\UserDetailsResource;
 use App\Http\Resources\UserListResource;
+use App\Http\Resources\UserMappingRulesResource;
 use App\Http\Resources\UserPermissionsResource;
 use App\Mail\UserWelcome;
 use App\Models\Account;
@@ -574,41 +575,72 @@ class UserController extends Controller
     }
 
     /**
-     * Return a user's details and current account/branch mappings for the right pane.
+     * Return a user's details for the right pane's "User Details" tab (AJAX only).
      *
-     * Serves both pane tabs in one request — the details tab reads the user, the
-     * mapping tab reads the mappings and the account-type options its pickers offer —
-     * so opening the pane on either tab costs a single round trip. Non-AJAX requests
-     * fall through and receive no content.
+     * Each pane tab fetches its own data, and only once it is opened, so a row click
+     * costs only this: the user and their detail labels, their roles, and how many
+     * mappings they hold — counted rather than loaded, because labelling mappings means
+     * asking HMS, which only the mapping tab needs ({@see accountMapping()}). Nothing here
+     * touches HMS.
+     *
+     * Soft-deleted users are found too: the list shows them to whoever may restore them,
+     * and their details must open like anyone else's. Non-AJAX requests fall through and
+     * receive no content.
      *
      * @return \Illuminate\Http\JsonResponse|void
      */
-    public function accountMapping(int $id, Request $request)
+    public function details(int $id, Request $request)
     {
+        if (!$request->wantsJson() && !$request->ajax()) {
+            return;
+        }
+
         $user = $this->user
+            ->withTrashed()
             ->with([
                 'userDetail.department',
                 'userDetail.position',
                 'userDetail.civil_status',
                 'userDetail.citizenship',
-                'userAccounts',
                 'roles:id,name',
             ])
+            ->withCount('userAccounts')
             ->findOrFail($id);
+
+        return response()->json([
+            'user' => new UserDetailsResource($user),
+        ]);
+    }
+
+    /**
+     * Return a user's account/branch mappings for the right pane's mapping tab (AJAX only).
+     *
+     * Fetched only when that tab is opened — it is the one pane request that has to ask
+     * HMS, to label and badge each mapping. Carries everything the tab needs on its own,
+     * since the pane can open straight onto it: the mappings, the account-type options
+     * its pickers offer, and the type's mapping rules ({@see UserMappingRulesResource}).
+     * Non-AJAX requests fall through and receive no content.
+     *
+     * @return \Illuminate\Http\JsonResponse|void
+     */
+    public function accountMapping(int $id, Request $request)
+    {
+        if (!$request->wantsJson() && !$request->ajax()) {
+            return;
+        }
+
+        $user = $this->user->with(['userDetail', 'userAccounts'])->findOrFail($id);
 
         // Resolve every mapped code in one lookup per directory so the resource labels
         // and badges its rows from the memo instead of querying HMS per row.
         CommonHelper::primeAccountBranchNames($user->userAccounts);
         CommonHelper::primeMappingBadges($user->userAccounts);
 
-        // Return JSON for AJAX requests (no URL change)
-        if ($request->wantsJson() || $request->ajax()) {
-            return response()->json([
-                'user' => new UserDetailsResource($user),
-                'user_accounts' => UserAccountMappingResource::collection($user->userAccounts),
-                'account_types' => AccountType::list(),
-            ]);
-        }
+        return response()->json([
+            'rules' => new UserMappingRulesResource($user),
+            'user_accounts' => UserAccountMappingResource::collection($user->userAccounts),
+            'account_types' => AccountType::list(),
+        ]);
     }
 
     /**

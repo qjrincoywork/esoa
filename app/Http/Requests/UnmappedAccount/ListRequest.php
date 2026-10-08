@@ -63,6 +63,12 @@ class ListRequest extends FormRequest
                 'nullable',
                 'boolean',
             ],
+            // Leave out accounts — and the branches of accounts — whose expiry has passed
+            // ({@see \App\Enums\AccountStanding::isExpired()}).
+            'exclude_expired' => [
+                'nullable',
+                'boolean',
+            ],
             'code_prefix' => [
                 'nullable',
                 'string',

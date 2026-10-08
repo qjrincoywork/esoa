@@ -17,11 +17,13 @@
  * Every row on either panel carries its badges — account or branch, plus expired and
  * no members where they apply — decided and styled server-side by
  * `App\Enums\AccountMappingBadge`, so this component only renders what it is sent.
+ * Expired accounts, and their branches, are left out of the choices unless asked for.
  */
 import { computed, onMounted, ref, watch } from 'vue';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import DragDropTransfer from '@/components/DragDropTransfer.vue';
 import CopyUserAccessPicker from '@/components/forms/users/CopyUserAccessPicker.vue';
 import MappingBadge from '@/components/forms/users/MappingBadge.vue';
@@ -329,9 +331,23 @@ const showSourceSpinner = computed(
  */
 const WITH_BADGES = { with_badges: 1 } as const;
 
+/**
+ * On by default: mapping an account that has already expired grants nothing anyone can
+ * use, and most of HMS has expired. Expiry is the server's reading (`AccountStanding`),
+ * applied before paging, so a page is never emptied by it. Switched off, expired rows
+ * come back, wearing their "expired" badge.
+ */
+const hideExpired = ref(true);
+
+/** The params every directory lookup carries: the badges, and the expiry filter while it is on. */
+const lookupOptions = computed(() => ({
+  ...WITH_BADGES,
+  ...(hideExpired.value ? { exclude_expired: 1 } : {}),
+}));
+
 const fetchAccountPage = async (nextPage: number, append: boolean) => {
   const result = await getAccountsByParams({
-    ...WITH_BADGES,
+    ...lookupOptions.value,
     type: accountType.value,
     name: searchTerm.value,
     page: nextPage,
@@ -347,7 +363,7 @@ const fetchBranchPage = async (nextPage: number, append: boolean) => {
   const scope = focusedAccount.value ? { account_code: focusedAccount.value.code } : {};
 
   const result = await getBranchesByParams({
-    ...WITH_BADGES,
+    ...lookupOptions.value,
     ...scope,
     name: searchTerm.value,
     page: nextPage,
@@ -455,6 +471,10 @@ watch(accountType, () => {
   search.value = '';
   void load();
 });
+
+// Showing or hiding expired rows changes what every page holds, so the panel reloads in
+// place — same account, same search — from the first page.
+watch(hideExpired, () => void load());
 
 onMounted(() => void load());
 
@@ -674,6 +694,12 @@ const accountTypeName = computed(
                 <X class="h-3.5 w-3.5" />
               </button>
             </div>
+
+            <!-- On by default: an expired account (or a branch of one) is rarely worth mapping -->
+            <label class="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground select-none">
+              <Switch v-model="hideExpired" />
+              Hide expired accounts &amp; branches
+            </label>
           </div>
         </template>
 

@@ -59,6 +59,12 @@ class AccountLookupRequest extends FormRequest
                 'nullable',
                 'boolean',
             ],
+            // Opt-in, like with_badges: leave out accounts whose expiry has passed
+            // ({@see \App\Enums\AccountStanding::isExpired()}).
+            'exclude_expired' => [
+                'nullable',
+                'boolean',
+            ],
         ];
     }
 
