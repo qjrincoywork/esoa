@@ -2,6 +2,8 @@
 
 namespace App\Helpers;
 
+use PDO;
+
 /**
  * How much a single SQL Server statement may bind.
  *
@@ -73,11 +75,43 @@ final class SqlServerBinding
     /**
      * Split a list of `whereIn` values into batches that each fit in one statement.
      *
+     * Only for lists that can be asked about one statement per batch. Batches combined
+     * into a single statement still spend one parameter per value between them — for
+     * a list that must stay inside one statement, use {@see valuesRows()}.
+     *
      * @param  array<int, mixed>  $values
      * @return array<int, array<int, mixed>>
      */
     public static function chunkValues(array $values): array
     {
         return $values === [] ? [] : array_chunk($values, self::USABLE_PARAMETERS);
+    }
+
+    /**
+     * A list of any length as the rows of a `VALUES` table constructor, binding nothing.
+     *
+     * Some lists cannot be split across statements — an exclusion that has to hold
+     * inside one paginated or UNIONed query, say — and one parameter per value runs
+     * that statement into the ceiling as soon as the list grows. Written as literal
+     * rows, the list costs no parameters at all, whatever its size; used as
+     * `NOT EXISTS (SELECT 1 FROM (VALUES …) AS t(code) WHERE …)` it is also fast, since
+     * the server plans a table of rows as a proper anti-join.
+     *
+     * The alternatives were measured on HMS (3,000 codes against ~4,700 branches) and
+     * rejected: `STRING_SPLIT()` / `OPENJSON()` need database compatibility level 130
+     * and HMS runs at 100; an XML document shredded into rows took 35–45 s, re-read for
+     * every outer row; the same literals as a `NOT IN (…)` list took 4–8 s, tested one
+     * by one per row; a `#temp` table does not survive the driver's prepared batches.
+     * The `VALUES` rows took 0.3 s.
+     *
+     * Each value is quoted by the connection's own driver (`PDO::quote()`), never by
+     * hand, so a value is always read as data — a quote inside one cannot end it.
+     *
+     * @param  array<int, string>  $values  Non-empty.
+     * @return string The rows, e.g. `('A'),('B')`.
+     */
+    public static function valuesRows(PDO $pdo, array $values): string
+    {
+        return implode(',', array_map(static fn (string $value): string => '(' . $pdo->quote($value) . ')', $values));
     }
 }
