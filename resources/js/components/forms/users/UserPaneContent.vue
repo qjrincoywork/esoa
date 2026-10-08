@@ -6,40 +6,78 @@
  * The pane is reached two ways and opens on a different tab for each — a row click
  * lands on the details tab, the mapping action lands on the mapping tab — but it is
  * one pane either way, so an administrator can read who a user is, change what they
- * can see and look back over what they did without leaving the screen. The mapping and
- * activity tabs each appear only for a role holding their permission, and only mount
- * their panels once they are on screen, so a pane opened to read details never queries
- * the account directory or the audit trail.
+ * can see and look back over what they did without leaving the screen.
+ *
+ * It opens at once on the list row it came from, and each tab fetches its own data the
+ * first time it is shown: details from `users.details` (no HMS), mappings from
+ * `users.account_mapping` (the one request that labels codes through HMS), the activity
+ * trail a page at a time from its own list. What a tab loaded is kept while the pane
+ * shows the same user, so switching back costs nothing; opening another user starts
+ * over. The mapping and activity tabs appear only for a role holding their permission.
  */
 import { computed, ref, watch } from 'vue';
+import LazyContentState from '@/components/LazyContentState.vue';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import UserAccountMappingForm from '@/components/forms/users/UserAccountMappingForm.vue';
 import UserActivityLogList from '@/components/forms/users/UserActivityLogList.vue';
+import { useLazyResource } from '@/composables/useLazyResource';
 import { useModulePermissions } from '@/composables/useModulePermissions';
-import type { User, UserAccountMapping, UserPaneDetails, UserPaneTab } from '@/composables/users';
+import {
+  useUsers,
+  type User,
+  type UserAccountMapping,
+  type UserMappingRules,
+  type UserPaneDetails,
+  type UserPaneTab,
+} from '@/composables/users';
 
 const props = withDefaults(
   defineProps<{
-    /** The list row the pane was opened from — the fallback when the fetch failed. */
+    /** The list row the pane was opened from — shown until, or instead of, the fetched details. */
     user: User;
-    details?: UserPaneDetails | null;
-    mappings?: UserAccountMapping[];
-    accountTypes?: Array<{ value: string | number; name: string }>;
     initialTab?: UserPaneTab;
   }>(),
-  {
-    details: null,
-    mappings: () => [],
-    accountTypes: () => [],
-    initialTab: 'details',
-  },
+  { initialTab: 'details' },
 );
 
 const { slug, hasPermission } = useModulePermissions();
+const { getUserDetails, getUserAccountMapping } = useUsers();
 
-/** Prefer the fetched user; fall back to the row so the pane is never empty. */
-const user = computed<UserPaneDetails>(() => props.details ?? (props.user as UserPaneDetails));
+const userId = computed(() => props.user?.id ?? '');
+
+// ─── Per-tab data, each fetched the first time its tab is shown ───────────
+const {
+  data: details,
+  loading: detailsLoading,
+  failed: detailsFailed,
+  load: loadDetails,
+  reset: resetDetails,
+} = useLazyResource(() => getUserDetails(userId.value));
+
+const {
+  data: mapping,
+  loading: mappingLoading,
+  failed: mappingFailed,
+  load: loadMapping,
+  reset: resetMapping,
+  set: setMapping,
+} = useLazyResource(() => getUserAccountMapping(userId.value));
+
+/** Prefer the fetched details; the row stands in until they land, or if they cannot. */
+const user = computed<UserPaneDetails>(() => details.value ?? (props.user as UserPaneDetails));
+
+/**
+ * The type's mapping rules: the mapping tab's own copy once it has loaded, otherwise
+ * what the details — or the row — already say, which is enough to decide whether the
+ * tab is on offer before anything about it is fetched.
+ */
+const mappingRules = computed<UserMappingRules>(() => mapping.value?.rules ?? {
+  type: user.value?.type ?? null,
+  type_label: user.value?.type_label ?? null,
+  allows_account_mapping: user.value?.allows_account_mapping === true,
+  account_mapping_limit: user.value?.account_mapping_limit ?? null,
+});
 
 /**
  * The mapping tab needs both the permission to manage mappings and a user the mappings
@@ -49,7 +87,7 @@ const user = computed<UserPaneDetails>(() => props.details ?? (props.user as Use
  * everyone else rather than offering a change that would have no effect.
  */
 const canMap = computed(() =>
-  hasPermission(`${slug.value}.account_mapping`) && user.value?.allows_account_mapping === true,
+  hasPermission(`${slug.value}.account_mapping`) && mappingRules.value.allows_account_mapping,
 );
 
 /** The user's audit trail is the trail's own audience (superadmin), granted as a permission. */
@@ -68,22 +106,33 @@ const resolveInitialTab = (): UserPaneTab =>
 
 const activeTab = ref<UserPaneTab>(resolveInitialTab());
 
-const mappings = ref<UserAccountMapping[]>([...props.mappings]);
+/**
+ * What showing each tab fetches. The activity tab has none here: its list fetches its
+ * own pages when it mounts, which only happens while the tab is shown.
+ */
+const TAB_LOADERS: Partial<Record<UserPaneTab, () => Promise<void>>> = {
+  details: () => loadDetails(),
+  account_mapping: () => loadMapping(),
+};
 
-// Reopening the pane swaps these props on the same component instance rather than
-// mounting a fresh one, so the local copies have to follow them; snapshotting once
-// would leave the second user looking at the first user's mappings and tab.
-watch(
-  () => props.mappings,
-  (next) => { mappings.value = [...next]; },
-  { deep: true },
-);
+const loadTab = (tab: UserPaneTab) => void TAB_LOADERS[tab]?.();
 
-watch(
-  [() => props.initialTab, () => user.value?.id],
-  () => { activeTab.value = resolveInitialTab(); },
-);
+watch(activeTab, loadTab, { immediate: true });
 
+// Reopening the pane swaps the row on the same component instance rather than mounting
+// a fresh one, so another user means forgetting the last one's data and starting over.
+watch(userId, () => {
+  resetDetails();
+  resetMapping();
+  activeTab.value = resolveInitialTab();
+  loadTab(activeTab.value);
+});
+
+watch(() => props.initialTab, () => {
+  activeTab.value = resolveInitialTab();
+});
+
+// ─── Details tab ──────────────────────────────────────────────────────────
 const isActive = computed(() => Number(user.value?.is_active) !== 0);
 
 /**
@@ -112,21 +161,31 @@ const detailRows = computed(() =>
 const roles = computed<string[]>(() => {
   const list = user.value?.roles ?? [];
 
-  // Roles arrive as names from the pane payload, or as objects on a raw list row.
+  // Roles arrive as names from the details payload, or as objects on a raw list row.
   return list.map((role: any) => (typeof role === 'string' ? role : role?.name)).filter(Boolean);
 });
 
+/**
+ * How many mappings the user holds: the mapping tab's list once it is loaded (it is the
+ * fresher of the two after a save), otherwise the count the details carried. Unknown —
+ * and so not shown — until one of them has arrived.
+ */
+const mappingCount = computed<number | null>(() =>
+  mapping.value?.user_accounts.length ?? user.value?.account_mapping_count ?? null,
+);
+
 const mappingSummary = computed(() => {
-  const total = mappings.value.length;
+  if (!mappingRules.value.allows_account_mapping) return 'Not applicable';
+  if (mappingCount.value === null) return null;
+  if (mappingCount.value === 0) return 'None mapped';
 
-  if (!user.value?.allows_account_mapping) return 'Not applicable';
-  if (total === 0) return 'None mapped';
-
-  return `${total} ${total === 1 ? 'mapping' : 'mappings'}`;
+  return `${mappingCount.value} ${mappingCount.value === 1 ? 'mapping' : 'mappings'}`;
 });
 
+// ─── Mapping tab ──────────────────────────────────────────────────────────
+/** A save returns the stored set; keep it, so the tab and the summary need no refetch. */
 const onMappingSaved = (saved: UserAccountMapping[]) => {
-  mappings.value = saved;
+  if (mapping.value) setMapping({ ...mapping.value, user_accounts: saved });
 };
 </script>
 
@@ -145,27 +204,36 @@ const onMappingSaved = (saved: UserAccountMapping[]) => {
 
       <TabsContent value="details">
         <div class="flex flex-col gap-4 pt-2">
+          <!-- The row's fields show at once; the full details fill in when they land -->
+          <LazyContentState
+            inline
+            :loading="detailsLoading"
+            :failed="detailsFailed"
+            loading-text="Loading full details…"
+            failed-text="Full details could not be loaded — showing what the list knows."
+            @retry="loadDetails(true)" />
+
           <div class="flex flex-wrap items-center gap-2">
             <Badge :variant="isActive ? 'default' : 'secondary'">
               {{ isActive ? 'Active' : 'Inactive' }}
             </Badge>
             <Badge v-if="user?.is_verified" variant="outline">Verified</Badge>
             <Badge v-if="user?.deleted_at" variant="destructive">Deleted</Badge>
-            <Badge variant="outline">{{ mappingSummary }}</Badge>
+            <Badge v-if="mappingSummary" variant="outline">{{ mappingSummary }}</Badge>
           </div>
 
           <dl class="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
             <div
               v-for="row in detailRows"
               :key="row.label"
-              class="flex flex-col border-b border-[var(--color-border)] py-1.5 last:border-0">
-              <dt class="text-xs text-[var(--color-text-muted)]">{{ row.label }}</dt>
+              class="flex flex-col border-b py-1.5 last:border-0">
+              <dt class="text-xs text-muted-foreground">{{ row.label }}</dt>
               <dd class="truncate text-sm" :title="String(row.value)">{{ row.value }}</dd>
             </div>
           </dl>
 
           <div v-if="roles.length">
-            <p class="mb-1 text-xs text-[var(--color-text-muted)]">Roles</p>
+            <p class="mb-1 text-xs text-muted-foreground">Roles</p>
             <div class="flex flex-wrap gap-1.5">
               <Badge v-for="role in roles" :key="role" variant="secondary">{{ role }}</Badge>
             </div>
@@ -176,13 +244,21 @@ const onMappingSaved = (saved: UserAccountMapping[]) => {
       <TabsContent v-if="canMap" value="account_mapping">
         <!-- Mounted only while this tab is open, so the directory is queried on demand -->
         <div v-if="activeTab === 'account_mapping'" class="pt-2">
+          <LazyContentState
+            :loading="mappingLoading"
+            :failed="mappingFailed"
+            loading-text="Loading accounts & branches…"
+            failed-text="The account & branch mapping could not be loaded."
+            @retry="loadMapping(true)" />
+
           <UserAccountMappingForm
-            :user-id="user?.id ?? props.user?.id ?? ''"
-            :mappings="mappings"
-            :account-types="props.accountTypes"
-            :allows-mapping="user?.allows_account_mapping !== false"
-            :limit="user?.account_mapping_limit ?? null"
-            :type-label="user?.type_label ?? null"
+            v-if="mapping"
+            :user-id="userId"
+            :mappings="mapping.user_accounts"
+            :account-types="mapping.account_types"
+            :allows-mapping="mapping.rules.allows_account_mapping"
+            :limit="mapping.rules.account_mapping_limit"
+            :type-label="mapping.rules.type_label"
             @saved="onMappingSaved" />
         </div>
       </TabsContent>
@@ -190,7 +266,7 @@ const onMappingSaved = (saved: UserAccountMapping[]) => {
       <TabsContent v-if="canViewActivity" value="activity_logs">
         <!-- Mounted only while this tab is open, so the trail is queried on demand -->
         <div v-if="activeTab === 'activity_logs'" class="pt-2">
-          <UserActivityLogList :user-id="user?.id ?? props.user?.id ?? ''" />
+          <UserActivityLogList :user-id="userId" />
         </div>
       </TabsContent>
     </Tabs>

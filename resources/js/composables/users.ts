@@ -156,12 +156,22 @@ export interface UserPaneDetails {
   allows_account_mapping?: boolean
   /** How many mappings the type may hold; null when unlimited. */
   account_mapping_limit?: number | null
+  /** How many mappings the user holds (counted server-side, no HMS lookup). */
+  account_mapping_count?: number
   [key: string]: any
 }
 
-/** Everything `users.account_mapping` returns — details tab, mapping tab and its options. */
+/** What a user's type allows in mapping, as `UserMappingRulesResource` shapes it. */
+export interface UserMappingRules {
+  type: number | null
+  type_label: string | null
+  allows_account_mapping: boolean
+  account_mapping_limit: number | null
+}
+
+/** Everything `users.account_mapping` returns — all the mapping tab needs on its own. */
 export interface UserAccountMappingPayload {
-  user: UserPaneDetails
+  rules: UserMappingRules
   user_accounts: UserAccountMapping[]
   account_types: Array<{ value: string | number; name: string }>
 }
@@ -194,9 +204,6 @@ export function useUsers() {
   const {
     openPane,
     closePane,
-    setPaneLoading,
-    setPaneError,
-    setPaneContent,
     rightPane,
     topPane,
   } = usePane();
@@ -1031,11 +1038,30 @@ export function useUsers() {
   };
 
   /**
-   * Fetch a user's details and current account/branch mappings.
-   *
-   * One request feeds both pane tabs, so opening the pane on either costs a single
-   * round trip. Returns null when the request fails; the caller decides whether that
-   * is fatal — the pane falls back to the row it already has.
+   * Fetch a user's details for the pane's details tab (`users.details`) — no HMS lookup
+   * behind it. Returns null when the request fails; the pane then keeps showing what the
+   * list row already knows.
+   */
+  const getUserDetails = async (userId: number | string): Promise<UserPaneDetails | null> => {
+    try {
+      const response = await get<{ user: UserPaneDetails }>(`/${slug.value}/${userId}/details`);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch user details');
+      }
+
+      return response.data?.user ?? null;
+    } catch {
+      dispatchNotification({ title: 'Error', content: 'Error fetching user details', type: 'error' });
+
+      return null;
+    }
+  };
+
+  /**
+   * Fetch a user's account/branch mappings, with the options and rules the mapping tab
+   * works from. Only the mapping tab asks for this — it is the pane request that has to
+   * reach HMS. Returns null when the request fails.
    */
   const getUserAccountMapping = async (userId: number | string): Promise<UserAccountMappingPayload | null> => {
     try {
@@ -1137,35 +1163,17 @@ export function useUsers() {
    *
    * A row click lands on the details tab and the mapping action lands on the mapping
    * tab, but both open the same pane so a user's details and their access are never
-   * two screens apart. The pane opens even when the fetch fails, showing what the list
-   * row already knows rather than nothing at all.
+   * two screens apart. It opens at once, on what the list row already knows: each tab
+   * fetches its own data when it is first shown (UserPaneContent), so a row click no
+   * longer waits on — or pays for — tabs nobody opens.
    */
-  const openUserPane = async (user: User, initialTab: UserPaneTab = 'details') => {
-    showLoader();
-
-    try {
-      const payload = await getUserAccountMapping(user.id ?? '');
-
-      openPane({
-        side: 'right',
-        title: `User: ${payload?.user?.username ?? user.username ?? user.email ?? user.id}`,
-        component: UserPaneContent,
-        componentProps: {
-          user,
-          details: payload?.user ?? null,
-          mappings: payload?.user_accounts ?? [],
-          accountTypes: payload?.account_types ?? [],
-          initialTab,
-        },
-      });
-    } catch {
-      setPaneLoading('right', false);
-      setPaneError('right', 'Error fetching user data.');
-      setPaneContent('right', null);
-      dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
-    } finally {
-      hideLoader();
-    }
+  const openUserPane = (user: User, initialTab: UserPaneTab = 'details') => {
+    openPane({
+      side: 'right',
+      title: `User: ${user.username ?? user.email ?? user.id}`,
+      component: UserPaneContent,
+      componentProps: { user, initialTab },
+    });
   };
 
   return {
@@ -1176,6 +1184,7 @@ export function useUsers() {
     getAccountsByParams,
     getBranchesByParams,
     getUsersWithAccounts,
+    getUserDetails,
     getUserAccountMapping,
     saveUserAccountMapping,
     getUserActivityLogs,

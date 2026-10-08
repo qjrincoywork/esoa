@@ -185,6 +185,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::get('/export', 'export')->name('export');
                 Route::get('/get_accounts', 'getAccounts')->name('get_accounts');
                 Route::get('/get_branches', 'getBranches')->name('get_branches');
+                // The user pane's tabs, each fetched only when it is opened.
+                Route::get('/{id}/details', 'details')->whereNumber('id')->name('details');
                 Route::get('/{id}/account_mapping', 'accountMapping')->name('account_mapping');
                 Route::post('/update_account_mapping', 'updateAccountMapping')->name('update_account_mapping');
                 // "Copy access from another user" source list — the edit form and the mapping pane.

@@ -144,6 +144,15 @@ const filters = ref(emptyFilters());
  */
 const includeMapped = ref(false);
 
+/**
+ * On by default: an account past its expiry — or a branch of one — is rarely a gap worth
+ * closing, and three quarters of HMS has expired, so leaving them in buries the live
+ * ones. Expiry is the server's reading (`AccountStanding::isExpired`), applied before
+ * paging, so the counts and the bulk lookup agree with what is listed.
+ */
+const HIDE_EXPIRED_BY_DEFAULT = true;
+const hideExpired = ref(HIDE_EXPIRED_BY_DEFAULT);
+
 const toSelectOptions = (options: Option[] = []) => options.map(({ value, name }) => ({ value: String(value), label: name }));
 
 const filterDefs = computed<FilterDef[]>(() => {
@@ -170,7 +179,9 @@ const membersRangeInvalid = computed(() =>
 const narrowingCount = computed(() =>
     filterDefs.value.filter(({ key }) => filters.value[key] !== '').length + (hasMembersMin.value || hasMembersMax.value ? 1 : 0));
 
-const activeFilterCount = computed(() => narrowingCount.value + (includeMapped.value ? 1 : 0));
+/** The switches count only when moved off their default — that is what "Clear" undoes. */
+const activeFilterCount = computed(() =>
+    narrowingCount.value + (includeMapped.value ? 1 : 0) + (hideExpired.value !== HIDE_EXPIRED_BY_DEFAULT ? 1 : 0));
 
 /**
  * The members range box, styled like the other filter controls: tinted while a bound is
@@ -186,6 +197,7 @@ const membersControlClass = computed(() => cn(
 const clearFilters = () => {
     filters.value = emptyFilters();
     includeMapped.value = false;
+    hideExpired.value = HIDE_EXPIRED_BY_DEFAULT;
 };
 
 // --- Summary & empty state ---
@@ -209,13 +221,15 @@ const emptyState = computed(() => {
         };
     }
 
+    const expiredNote = hideExpired.value ? ' Expired ones are hidden — switch "Hide expired" off to include them.' : '';
+
     if (includeMapped.value) {
-        return { message: `No ${rowNoun.value.many} found`, description: 'Nothing in the HMS directory matches these filters.' };
+        return { message: `No ${rowNoun.value.many} found`, description: `Nothing in the HMS directory matches these filters.${expiredNote}` };
     }
 
     return {
         message: `No unmapped ${rowNoun.value.many} found`,
-        description: `Every ${rowNoun.value.one} matching these filters is already assigned to a user.`,
+        description: `Every ${rowNoun.value.one} matching these filters is already assigned to a user.${expiredNote}`,
     };
 });
 
@@ -380,6 +394,7 @@ const filterParams = (): Record<string, string> => {
         if (String(value) !== '') params[key] = String(value);
     }
     if (includeMapped.value) params.include_mapped = '1';
+    if (hideExpired.value) params.exclude_expired = '1';
 
     return params;
 };
@@ -410,9 +425,9 @@ const switchScope = (next: string | number | undefined) => {
 // Typing reloads once it pauses; spacing alone changes nothing the server would see.
 watch(() => searchQuery.value.trim(), () => queueFetch(500));
 
-// includeMapped rides the same reload as the filters, so toggling it and clearing the
+// The switches ride the same reload as the filters, so toggling one and clearing the
 // filters in the same tick still makes one request, not two.
-watch([filters, includeMapped], () => {
+watch([filters, includeMapped, hideExpired], () => {
     // The server would refuse it; the field says why instead of the list going quiet.
     if (membersRangeInvalid.value) return;
     // Per-entry counts are taken under the other filters, so they move with them.
@@ -455,7 +470,7 @@ const openRow = (row: DirectoryRow) =>
                     <CardDescription>
                         Accounts and branches in the HMS directory that no user has been given access to yet.
                         Search names or codes across both at once, or many at a time with bulk search.
-                        Account classes that are never mapped to a user are left out.
+                        Account classes that are never mapped to a user are left out, and expired accounts are hidden unless you ask for them.
                     </CardDescription>
                 </CardHeader>
 
@@ -568,6 +583,12 @@ const openRow = (row: DirectoryRow) =>
                             <label class="flex h-9 cursor-pointer items-center gap-2 px-1 text-sm text-muted-foreground select-none">
                                 <Switch v-model="includeMapped" />
                                 Include mapped {{ rowNoun.many }}
+                            </label>
+
+                            <!-- On by default: expired accounts, and branches of them, stay out of the gap -->
+                            <label class="flex h-9 cursor-pointer items-center gap-2 px-1 text-sm text-muted-foreground select-none">
+                                <Switch v-model="hideExpired" />
+                                Hide expired
                             </label>
 
                             <Button

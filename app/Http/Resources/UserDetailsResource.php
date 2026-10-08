@@ -3,7 +3,6 @@
 namespace App\Http\Resources;
 
 use App\Enums\Gender;
-use App\Enums\UserType;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -11,9 +10,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * A user as the right-pane "User Details" tab reads them.
  *
  * Codes are resolved to the labels the forms use, and the type's mapping rules travel
- * with the payload so the mapping tab can enable itself and cap its list from what the
- * server already decided — {@see UserType::accountMappingLimit()} — rather than
- * repeating the rule in the client.
+ * with the payload ({@see UserMappingRulesResource}) so the pane can tell whether the
+ * mapping tab applies without fetching it. Nothing here asks HMS: the mappings are only
+ * counted, and are labelled by the mapping tab's own request when it is opened.
  */
 class UserDetailsResource extends JsonResource
 {
@@ -25,7 +24,6 @@ class UserDetailsResource extends JsonResource
     public function toArray(Request $request): array
     {
         $detail = $this->userDetail;
-        $type = $detail?->type;
 
         return [
             'id' => $this->id,
@@ -39,11 +37,12 @@ class UserDetailsResource extends JsonResource
             'deleted_at' => $this->deleted_at?->toDayDateTimeString(),
             'created_at' => $this->created_at?->toDayDateTimeString(),
 
-            'type' => $type !== null ? (int) $type : null,
-            'type_label' => $type !== null ? UserType::label((int) $type) : null,
-            // Mapping rules for this type, so the mapping tab needs no copy of them.
-            'allows_account_mapping' => UserType::allowsAccountMapping($type),
-            'account_mapping_limit' => UserType::accountMappingLimit($type),
+            // The type, and its mapping rules, so the mapping tab needs no copy of them.
+            ...(new UserMappingRulesResource($this->resource))->toArray($request),
+            // How many mappings the user holds — counted, not loaded, so the details tab
+            // can say so without labelling every one from HMS. Present only when counted.
+            // (The SQL Server driver hands counts back as strings.)
+            'account_mapping_count' => $this->whenCounted('userAccounts', fn ($count) => (int) $count),
 
             'employee_no' => $detail?->employee_no,
             'agent_code' => $detail?->agent_code,

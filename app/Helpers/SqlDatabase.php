@@ -427,7 +427,10 @@ class SqlDatabase
      * for {@see \App\Enums\AccountMappingBadge}. It is opt-in so the pickers that only
      * need a name and a code are not charged the two extra page-sized lookups.
      *
-     * @param array $params Supports per_page, selected_code, type, name and with_badges.
+     * With `exclude_expired`, accounts whose expiry has passed are left out
+     * ({@see applyExcludeExpiredFilter()}) — opt-in for the same reason.
+     *
+     * @param array $params Supports per_page, selected_code, type, name, with_badges and exclude_expired.
      * @return \Illuminate\Pagination\Paginator
      */
     public function getAccountsByParams($params)
@@ -441,6 +444,7 @@ class SqlDatabase
             ->tap(fn ($query) => $this->applyAccountDirectoryFilter($query, auth()->user(), 'ac_code'))
             ->tap(fn ($query) => $this->applyExcludedAccountPrefixes($query, 'ac_code', $params['exclude_prefixes'] ?? []))
             ->tap(fn ($query) => $this->applyAccountTypeFilter($query, 'ac_code', $params['type'] ?? null))
+            ->tap(fn ($query) => $this->applyExcludeExpiredFilter($query, 'ac_code', $params['exclude_expired'] ?? null))
             ->when(isset($params['name']) && $params['name'] !== '', function ($query) use ($params, $selectedCode) {
                 $query->where(function ($nameQuery) use ($params, $selectedCode) {
                     $nameQuery->where('ac_name', 'like', '%' . $params['name'] . '%');
@@ -738,8 +742,8 @@ class SqlDatabase
      *
      * @param  array  $params  Supports per_page, search_string, search_terms (with
      *                         exact_match and search_term_focus), code_prefix, account_type,
-     *                         members_min, members_max, exclude_prefixes, include_mapped and
-     *                         assigned_account_codes.
+     *                         members_min, members_max, exclude_prefixes, include_mapped,
+     *                         exclude_expired and assigned_account_codes.
      * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
      */
     public function getUnassignedAccountsByParams($params)
@@ -769,7 +773,7 @@ class SqlDatabase
      * @param  array  $params  Supports per_page, search_string, search_terms (with
      *                         exact_match and search_term_focus), code_prefix, account_type,
      *                         members_min, members_max, exclude_prefixes, include_mapped,
-     *                         assigned_branch_codes and accounts_mapped_in_full.
+     *                         exclude_expired, assigned_branch_codes and accounts_mapped_in_full.
      * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
      */
     public function getUnassignedBranchesByParams($params)
@@ -952,6 +956,7 @@ class SqlDatabase
             ->tap(fn ($q) => $this->applyAccountCodePrefixFilter($q, 'Accounts.ac_code', $params['code_prefix'] ?? null))
             ->tap(fn ($q) => $this->applyAccountTypeFilter($q, 'Accounts.ac_code', $params['account_type'] ?? null))
             ->tap(fn ($q) => $this->applyAccountStatusFilter($q, 'Accounts.ac_status', $params['is_active'] ?? null))
+            ->tap(fn ($q) => $this->applyExcludeExpiredFilter($q, 'Accounts.ac_code', $params['exclude_expired'] ?? null))
             ->tap(fn ($q) => $this->applyNotInList($q, 'Accounts.ac_code', $params['assigned_account_codes'] ?? []))
             ->tap(fn ($q) => $this->applyDirectorySearch($q, $params, AccountDirectoryScope::ACCOUNT));
 
@@ -979,6 +984,7 @@ class SqlDatabase
             // account it belongs to is, which is the same account this listing already
             // classifies it by.
             ->tap(fn ($q) => $this->applyBranchAccountStatusFilter($q, 'Branches.br_ac_code', $params['is_active'] ?? null))
+            ->tap(fn ($q) => $this->applyExcludeExpiredFilter($q, 'Branches.br_ac_code', $params['exclude_expired'] ?? null))
             ->tap(fn ($q) => $this->applyNotInList($q, 'Branches.br_code', $params['assigned_branch_codes'] ?? []))
             ->tap(fn ($q) => $this->applyNotInList($q, 'Branches.br_ac_code', $params['accounts_mapped_in_full'] ?? []))
             ->tap(fn ($q) => $this->applyDirectorySearch($q, $params, AccountDirectoryScope::BRANCH));
@@ -1193,6 +1199,40 @@ class SqlDatabase
                     ->orWhere('email', 'like', '%'.$search.'%');
             });
         });
+    }
+
+    /**
+     * Leave out every row whose account has expired, when asked to.
+     *
+     * "Expired" is {@see \App\Enums\AccountStanding::isExpired()}: an expiry date before
+     * today, and never for an account with no expiry recorded. It is decided per account
+     * code, on the latest expiry recorded against it — `ac_code` is not unique in HMS,
+     * and the latest is the reading the badges and a branch's standing already give
+     * ({@see getAccountExpiriesByCodes()}, {@see attachBranchAccountStanding()}) — so a
+     * row hidden here is exactly a row that would have been badged expired.
+     *
+     * Applied through the account code, so it serves accounts and branches alike: a
+     * branch is expired exactly when its account is. The expired codes are a grouped
+     * subquery rather than a list sent from here — three quarters of HMS has expired,
+     * which no bound-parameter list could carry.
+     *
+     * @param  \Illuminate\Database\Query\Builder  $query
+     * @param  string  $accountColumn  The account-code column on the queried table.
+     * @param  mixed  $excludeExpired  Truthy to filter; anything else narrows nothing.
+     * @return void
+     */
+    private function applyExcludeExpiredFilter($query, string $accountColumn, $excludeExpired): void
+    {
+        if (empty($excludeExpired)) {
+            return;
+        }
+
+        $query->whereNotIn($accountColumn, fn ($expired) => $expired
+            ->select('ac_code')
+            ->from('Accounts')
+            ->whereNotNull('ac_code')
+            ->groupBy('ac_code')
+            ->havingRaw('CAST(MAX(ac_expiry) AS DATE) < CAST(? AS DATE)', [Carbon::today()->toDateString()]));
     }
 
     /**
@@ -2424,9 +2464,10 @@ class SqlDatabase
      *
      * With `with_badges`, each row also carries `member_count` and its account's
      * standing (`account_expiry` among it) for {@see \App\Enums\AccountMappingBadge} —
-     * opt-in for the same reason as {@see getAccountsByParams()}.
+     * opt-in for the same reason as {@see getAccountsByParams()}, as is `exclude_expired`,
+     * which leaves out the branches of an expired account.
      *
-     * @param array $params Supports per_page, selected_code, account_code, name and with_badges.
+     * @param array $params Supports per_page, selected_code, account_code, name, with_badges and exclude_expired.
      * @return \Illuminate\Pagination\Paginator
      */
     public function getBranchesByParams($params)
@@ -2440,6 +2481,7 @@ class SqlDatabase
             ->tap(fn ($query) => $this->applyAccountDirectoryFilter($query, auth()->user(), 'br_ac_code'))
             ->tap(fn ($query) => $this->applyAssignedBranchFilter($query, auth()->user()))
             ->tap(fn ($query) => $this->applyExcludedAccountPrefixes($query, 'br_ac_code', $params['exclude_prefixes'] ?? []))
+            ->tap(fn ($query) => $this->applyExcludeExpiredFilter($query, 'br_ac_code', $params['exclude_expired'] ?? null))
             ->when(isset($params['account_code']), function ($query) use ($params) {
                 $query->where('br_ac_code', $params['account_code']);
             })
