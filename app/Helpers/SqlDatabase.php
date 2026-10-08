@@ -685,27 +685,40 @@ class SqlDatabase
     /**
      * Exclude a set of codes from a query, however large the set is.
      *
-     * One `whereNotIn` per value would blow the bound-parameter ceiling on a big set,
-     * so the values are split into statement-sized batches
-     * ({@see SqlServerBinding::chunkValues()}) and applied as several ANDed clauses —
-     * excluding each batch in turn excludes exactly their union, which is what one
-     * clause would have done.
+     * The set is every code already mapped to someone, so it grows with the mappings,
+     * and it has to hold inside one statement — the listing is paginated, and the
+     * combined view UNIONs two halves that each carry their own set. One bound
+     * parameter per code therefore cannot work: splitting it into batches still puts
+     * every batch in the same statement, which is what ran production past SQL Server's
+     * 2,100-parameter ceiling. The set is written as driver-quoted literal rows instead
+     * ({@see SqlServerBinding::valuesRows()}), so its size costs no parameters at all,
+     * and excluded with NOT EXISTS, which the server answers as one anti-join.
+     *
+     * The `IS NOT NULL` keeps the result exactly what `NOT IN` gave: a row with no code
+     * at all is dropped by `NOT IN` (the comparison is unknown) but kept by NOT EXISTS.
      *
      * @param  \Illuminate\Database\Query\Builder  $query
      * @param  string  $column
      * @param  array<int, string>  $values
      * @return void
      */
-    private function applyNotInChunked($query, string $column, array $values): void
+    private function applyNotInList($query, string $column, array $values): void
     {
         $values = array_values(array_unique(array_filter(
             array_map(static fn ($value): string => trim((string) $value), $values),
             static fn (string $value): bool => $value !== ''
         )));
 
-        foreach (SqlServerBinding::chunkValues($values) as $batch) {
-            $query->whereNotIn($column, $batch);
+        if ($values === []) {
+            return;
         }
+
+        $column = $query->getGrammar()->wrap($column);
+        $rows = SqlServerBinding::valuesRows($this->db->getPdo(), $values);
+
+        $query->whereRaw(
+            "{$column} IS NOT NULL AND NOT EXISTS (SELECT 1 FROM (VALUES {$rows}) AS excluded(code) WHERE excluded.code = {$column})"
+        );
     }
 
     /**
@@ -939,7 +952,7 @@ class SqlDatabase
             ->tap(fn ($q) => $this->applyAccountCodePrefixFilter($q, 'Accounts.ac_code', $params['code_prefix'] ?? null))
             ->tap(fn ($q) => $this->applyAccountTypeFilter($q, 'Accounts.ac_code', $params['account_type'] ?? null))
             ->tap(fn ($q) => $this->applyAccountStatusFilter($q, 'Accounts.ac_status', $params['is_active'] ?? null))
-            ->tap(fn ($q) => $this->applyNotInChunked($q, 'Accounts.ac_code', $params['assigned_account_codes'] ?? []))
+            ->tap(fn ($q) => $this->applyNotInList($q, 'Accounts.ac_code', $params['assigned_account_codes'] ?? []))
             ->tap(fn ($q) => $this->applyDirectorySearch($q, $params, AccountDirectoryScope::ACCOUNT));
 
         $this->applyMemberCountRange($query, $params, 'ch_accountid', 'Accounts.ac_code');
@@ -966,8 +979,8 @@ class SqlDatabase
             // account it belongs to is, which is the same account this listing already
             // classifies it by.
             ->tap(fn ($q) => $this->applyBranchAccountStatusFilter($q, 'Branches.br_ac_code', $params['is_active'] ?? null))
-            ->tap(fn ($q) => $this->applyNotInChunked($q, 'Branches.br_code', $params['assigned_branch_codes'] ?? []))
-            ->tap(fn ($q) => $this->applyNotInChunked($q, 'Branches.br_ac_code', $params['accounts_mapped_in_full'] ?? []))
+            ->tap(fn ($q) => $this->applyNotInList($q, 'Branches.br_code', $params['assigned_branch_codes'] ?? []))
+            ->tap(fn ($q) => $this->applyNotInList($q, 'Branches.br_ac_code', $params['accounts_mapped_in_full'] ?? []))
             ->tap(fn ($q) => $this->applyDirectorySearch($q, $params, AccountDirectoryScope::BRANCH));
 
         $this->applyMemberCountRange($query, $params, 'ch_branch_code', 'Branches.br_code');
