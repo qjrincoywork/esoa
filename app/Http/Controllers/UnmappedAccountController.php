@@ -9,16 +9,21 @@ use App\Enums\AccountStanding;
 use App\Enums\AccountStatus;
 use App\Enums\AccountType;
 use App\Enums\IsActive;
+use App\Enums\MappingEligibility;
 use App\Enums\Server;
+use App\Enums\UserType;
 use App\Helpers\CommonHelper;
 use App\Helpers\CustomResponse;
 use App\Helpers\SqlDatabase;
+use App\Http\Requests\UnmappedAccount\AssignableUserListRequest;
+use App\Http\Requests\UnmappedAccount\AssignUsersRequest;
 use App\Http\Requests\UnmappedAccount\BranchListRequest;
 use App\Http\Requests\UnmappedAccount\DetailRequest;
 use App\Http\Requests\UnmappedAccount\ListRequest;
 use App\Http\Requests\UnmappedAccount\MappedUserListRequest;
 use App\Http\Requests\UnmappedAccount\MemberListRequest;
 use App\Http\Resources\AccountDirectoryDetailResource;
+use App\Http\Resources\AssignableUserResource;
 use App\Http\Resources\BranchDirectoryDetailResource;
 use App\Http\Resources\CommonResource;
 use App\Http\Resources\DirectoryMemberResource;
@@ -26,6 +31,9 @@ use App\Http\Resources\MappedUserResource;
 use App\Http\Resources\UnmappedAccountResource;
 use App\Http\Resources\UnmappedBranchResource;
 use App\Http\Resources\UnmappedDirectoryResource;
+use App\Models\User;
+use App\Models\UserAccount;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -243,6 +251,90 @@ class UnmappedAccountController extends Controller
                 'mapped_users' => new CommonResource(MappedUserResource::collection($users)),
             ]);
         }
+    }
+
+    /**
+     * Return a page of users who could be given the selected rows (AJAX only), for the
+     * "Assign users" picker.
+     *
+     * Only the types that mappings apply to are listed ({@see UserType::mappable()}),
+     * searched by username, email or name. Each comes with how many mappings they hold
+     * and their eligibility for exactly the rows selected ({@see MappingEligibility}),
+     * counted for the whole page in two narrow queries
+     * ({@see UserAccount::mappingSummaryFor()}). Nothing here touches HMS.
+     *
+     * @return \Illuminate\Http\JsonResponse|void
+     */
+    public function assignableUsers(AssignableUserListRequest $request)
+    {
+        if (!$request->wantsJson() && !$request->ajax()) {
+            return;
+        }
+
+        $filters = $request->filters();
+        $search = $filters['search'];
+        $keys = $request->targetKeys();
+
+        $users = User::query()
+            ->with('userDetail')
+            ->whereHas('userDetail', fn ($query) => $query->whereIn('type', UserType::mappable()))
+            ->when($search !== '', fn ($query) => $query->where(fn ($match) => $match
+                ->where('username', 'like', "%{$search}%")
+                ->orWhere('email', 'like', "%{$search}%")
+                ->orWhereHas('userDetail', fn ($detail) => $detail
+                    ->where('first_name', 'like', "%{$search}%")
+                    ->orWhere('last_name', 'like', "%{$search}%"))))
+            ->orderBy('username')
+            ->paginate($filters['per_page'], ['*'], 'page', $filters['page']);
+
+        $summary = UserAccount::mappingSummaryFor($users->getCollection()->modelKeys(), $keys);
+
+        $users->getCollection()->each(function (User $user) use ($summary, $keys): void {
+            $user->mapping_count = $summary[$user->id]['mapped'] ?? 0;
+            $user->held_count = $summary[$user->id]['held'] ?? 0;
+            $user->requested_count = count($keys);
+        });
+
+        return response()->json([
+            'users' => new CommonResource(AssignableUserResource::collection($users)),
+        ]);
+    }
+
+    /**
+     * Map the selected accounts/branches onto the chosen users.
+     *
+     * Every row goes to every user, skipping only what a user already holds, in one
+     * transaction ({@see UserAccount::grantToUsers()}). The rows are checked against HMS
+     * and the users against their mapping rules by {@see AssignUsersRequest} first, so
+     * by the time anything is written every pair is known to be real and to fit.
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function assignUsers(AssignUsersRequest $request)
+    {
+        $users = $request->users();
+        $pairs = $request->targetPairs();
+
+        DB::beginTransaction();
+
+        try {
+            $written = UserAccount::grantToUsers($users->modelKeys(), $pairs);
+
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return CustomResponse::serverError($e, 'UnmappedAccountController::assignUsers');
+        }
+
+        $rows = count($pairs) === 1 ? '1 account or branch' : count($pairs) . ' accounts or branches';
+        $people = $users->count() === 1 ? $users->first()->username : $users->count() . ' users';
+
+        return response()->json([
+            'status' => 'success',
+            'message' => "Mapped {$rows} to {$people} ({$written} new " . ($written === 1 ? 'mapping' : 'mappings') . ')',
+            'mapped_count' => $written,
+        ], Response::HTTP_OK);
     }
 
     /**

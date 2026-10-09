@@ -2,11 +2,12 @@
 /**
  * The account-mapping coverage gap: accounts and branches nobody has been given.
  *
- * Read-only by design — nothing is mapped from here. This is the question the user
- * screens cannot answer: a per-user view lists what someone has, so an account nobody
- * is mapped to appears on nobody's screen. Narrow it by name, by code class, by
- * account type or by how many members are sitting behind the gap, then go and map it
- * on the user it belongs to.
+ * This is the question the user screens cannot answer: a per-user view lists what
+ * someone has, so an account nobody is mapped to appears on nobody's screen. Narrow it by
+ * name, by code class, by account type or by how many members are sitting behind the
+ * gap, then close it in place: "Assign users" on a row — or on a selection of rows —
+ * maps them onto the users picked, written to `user_accounts`. The action is offered only
+ * to those granted it, as a navigation sub-module of this page.
  *
  * Accounts and branches are views of one listing rather than two pages: the filters
  * mean the same thing in each, so switching tabs keeps them. The first view lists both
@@ -30,6 +31,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { createRowActionsColumn, type RowAction } from '@/composables/datatable/rowActions';
 import { useBulkLookup, type SearchTermMatch } from '@/composables/datatable/useBulkLookup';
 import { useServerListing, type ListingPage } from '@/composables/datatable/useServerListing';
 import { useModulePermissions } from '@/composables/useModulePermissions';
@@ -43,19 +45,23 @@ import {
 } from '@/composables/unmappedAccounts';
 import { badge, mappedStatusBadge, standingBadge } from '@/lib/directoryBadges';
 import { cn } from '@/lib/utils';
-import { SlidersHorizontal, TextSearch, X } from 'lucide-vue-next';
+import { SlidersHorizontal, TextSearch, UserPlus, X } from 'lucide-vue-next';
 
 type DirectoryPagination = ListingPage & { data: DirectoryRow[] }
 
 type Option = { value: string | number; name: string }
 
-/** What `UnmappedAccountController::index` sends. */
+/** A row action as the shared `sub_modules` prop lists it (a navigation module). */
+type SubModule = { slug: string; name?: string; icon?: string }
+
+/** What `UnmappedAccountController::index` sends, plus the shared `sub_modules`. */
 interface UnmappedPageProps {
     directory?: DirectoryPagination
     scope?: DirectoryView
     search_term_matches?: SearchTermMatch[]
     max_search_terms?: number
     filter_options?: { scopes?: Option[]; code_prefixes?: Option[]; account_types?: Option[]; statuses?: Option[] }
+    sub_modules?: SubModule[]
 }
 
 /** Everything the page says differently per view, in one place rather than a ternary per label. */
@@ -67,9 +73,10 @@ const VIEW_COPY: Record<DirectoryView, { one: string; many: string; placeholder:
 
 const page = usePage();
 const pageProps = computed(() => page.props as unknown as UnmappedPageProps);
-const { slug } = useModulePermissions();
+const { slug, hasPermission } = useModulePermissions();
 const {
     openDirectoryRow,
+    openAssignUsers,
     closePane,
     rightPaneVisible,
     rightPaneTitle,
@@ -371,11 +378,68 @@ const mappedColumn = columnHelper.accessor((row) => row.mapped_users ?? [], {
     cell: (info) => mappedStatusBadge(info.getValue()),
 });
 
+// --- Assigning users ---
+/**
+ * Map rows onto users, then reload: assigned rows leave the gap, and a bulk lookup's
+ * per-entry counts move with them.
+ */
+const assignUsersTo = (rows: DirectoryRow[]) => openAssignUsers(rows, () => {
+    markMatchesStale();
+    queueFetch(0);
+});
+
+/** Both halves of the action: its picker and its save. */
+const canAssignUsers = computed(() =>
+    hasPermission(`${slug.value}.assign_users`) && hasPermission(`${slug.value}.assignable_users`));
+
+/**
+ * What each sub-module action (`unmapped_accounts.<action>`) does on a row. Name and icon
+ * come from the sub-module itself; sub-modules not listed here are not offered on rows.
+ */
+const rowActionSpecs: Record<string, {
+    run: (row: DirectoryRow) => unknown
+    allowed: () => boolean
+    resolve?: () => Partial<Omit<RowAction, 'key' | 'onSelect'>>
+}> = {
+    // The one thing a gap is opened to do, so it sits beside the row rather than in a menu.
+    assign_users: { run: (row) => assignUsersTo([row]), allowed: () => canAssignUsers.value, resolve: () => ({ inline: true }) },
+};
+
+/** The row actions this user may take: permitted sub-modules this page knows how to run. */
+const permittedRowActions = computed(() => {
+    const modules = new Map((pageProps.value.sub_modules ?? []).map((module) => [module.slug.split('.')[1], module]));
+
+    return Object.entries(rowActionSpecs).flatMap(([action, spec]) => {
+        const module = modules.get(action);
+
+        return module && spec.allowed() ? [{ action, module, spec }] : [];
+    });
+});
+
+const rowActionsFor = (row: DirectoryRow): RowAction[] => permittedRowActions.value.map(({ action, module, spec }) => ({
+    key: action,
+    label: module.name ?? action,
+    icon: module.icon,
+    ...spec.resolve?.(),
+    onSelect: () => spec.run(row),
+}));
+
+const rowLabel = (row: DirectoryRow) => (isBranchRow(row) ? row.branch_name : row.account_name) || row.account_code;
+
+const actionsColumn = createRowActionsColumn<DirectoryRow>(rowActionsFor, (row) => `Actions for ${rowLabel(row)}`);
+
 const columns = computed(() => {
     const base = COLUMNS_BY_VIEW[renderedScope.value] ?? allColumns;
 
-    return includeMapped.value ? [...base, mappedColumn] : base;
+    return [
+        ...base,
+        ...(includeMapped.value ? [mappedColumn] : []),
+        ...(permittedRowActions.value.length ? [actionsColumn] : []),
+    ];
 });
+
+/** The selection is the same rows, so the bulk action is the row action applied to them all. */
+const selectedDirectoryRows = (rows: { original: unknown }[]) => rows.map((row) => row.original as DirectoryRow);
 
 const breadcrumbItems: BreadcrumbItem[] = [
     {
@@ -622,13 +686,25 @@ const openRow = (row: DirectoryRow) =>
                                 :data="directory.data"
                                 :columns="columns"
                                 :pagination="pagination"
+                                :show-selection-column="canAssignUsers"
                                 :enable-search="false"
                                 :enable-row-click="true"
                                 :row-click="openRow"
                                 :empty-message="emptyState.message"
                                 :empty-description="emptyState.description"
                                 :export-file-name="exportFileName"
-                                @update:pagination="onPaginationChange" />
+                                @update:pagination="onPaginationChange">
+                                <template #bulk-actions="{ selectedRows }">
+                                    <Button
+                                        v-if="canAssignUsers"
+                                        size="sm"
+                                        class="cursor-pointer"
+                                        @click="assignUsersTo(selectedDirectoryRows(selectedRows))">
+                                        <UserPlus /> Assign users
+                                        <span class="tabular-nums opacity-70">({{ selectedRows.length }})</span>
+                                    </Button>
+                                </template>
+                            </Datatable>
                         </CardContent>
                     </TabsContent>
                 </Tabs>

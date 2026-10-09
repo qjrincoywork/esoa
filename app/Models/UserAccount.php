@@ -389,27 +389,143 @@ class UserAccount extends Model
     }
 
     /**
+     * Give the same accounts/branches to many users at once, keeping what each holds.
+     *
+     * The unmapped listing's "assign users" action: every pair goes to every user, and a
+     * pair a user already holds is skipped for that user only, so assigning twice is
+     * harmless. What the users already hold is read in one query narrowed to the pairs'
+     * accounts, and the new rows are written in batches that each fit one statement.
+     * Limits are the caller's to have checked ({@see \App\Enums\MappingEligibility}).
+     *
+     * @param  array<int, int>  $userIds
+     * @param  iterable<int, array<string, mixed>|\Illuminate\Database\Eloquent\Model|object>  $pairs
+     * @return int Number of mappings written.
+     */
+    public static function grantToUsers(array $userIds, iterable $pairs): int
+    {
+        $mappings = self::normalize($pairs);
+        $userIds = array_values(array_unique(array_map('intval', $userIds)));
+
+        if ($mappings === [] || $userIds === []) {
+            return 0;
+        }
+
+        $held = self::heldKeysByUser($userIds, array_column($mappings, 'account_code'));
+        $now = now();
+        $rows = [];
+
+        foreach ($userIds as $userId) {
+            foreach ($mappings as $mapping) {
+                if (isset($held[$userId][self::mappingKey($mapping['account_code'], $mapping['branch_code'])])) {
+                    continue;
+                }
+
+                $rows[] = $mapping + ['user_id' => $userId, 'created_at' => $now, 'updated_at' => $now];
+            }
+        }
+
+        self::insertRows($rows);
+
+        return count($rows);
+    }
+
+    /**
+     * How many mappings each user holds, and how many of the given pairs among them.
+     *
+     * Two narrow queries for any number of users — a count per user, and only the rows
+     * on the pairs' own accounts — rather than loading every mapping of every user, which
+     * for a page of group account admins runs to thousands of rows.
+     *
+     * @param  array<int, int>  $userIds
+     * @param  array<int, string>  $keys  Pair keys built by {@see mappingKey()}.
+     * @return array<int, array{mapped: int, held: int}> Keyed by user id; every id is present.
+     */
+    public static function mappingSummaryFor(array $userIds, array $keys): array
+    {
+        $userIds = array_values(array_unique(array_map('intval', $userIds)));
+
+        if ($userIds === []) {
+            return [];
+        }
+
+        $keys = array_values(array_unique($keys));
+        // A key is "account|branch", so its account code is everything before the bar.
+        $accountCodes = array_map(static fn (string $key): string => strstr($key, '|', true) ?: $key, $keys);
+        $held = self::heldKeysByUser($userIds, $accountCodes);
+
+        $counts = self::query()
+            ->selectRaw('user_id, COUNT(*) AS mapped')
+            ->whereIn('user_id', $userIds)
+            ->groupBy('user_id')
+            ->pluck('mapped', 'user_id');
+
+        $summary = [];
+
+        foreach ($userIds as $userId) {
+            $summary[$userId] = [
+                // The SQL Server driver hands counts back as strings.
+                'mapped' => (int) ($counts[$userId] ?? 0),
+                'held' => count(array_intersect_key($held[$userId] ?? [], array_flip($keys))),
+            ];
+        }
+
+        return $summary;
+    }
+
+    /**
+     * The pair keys each user holds on the given accounts.
+     *
+     * @param  array<int, int>  $userIds
+     * @param  array<int, string>  $accountCodes
+     * @return array<int, array<string, true>> user id => key => true
+     */
+    private static function heldKeysByUser(array $userIds, array $accountCodes): array
+    {
+        $accountCodes = self::normalizeCodes($accountCodes);
+
+        if ($userIds === [] || $accountCodes === []) {
+            return [];
+        }
+
+        $held = [];
+
+        self::query()
+            ->whereIn('user_id', $userIds)
+            ->whereIn('account_code', $accountCodes)
+            ->get(['user_id', 'account_code', 'branch_code'])
+            ->each(function (self $row) use (&$held): void {
+                $held[(int) $row->user_id][$row->mapping_key] = true;
+            });
+
+        return $held;
+    }
+
+    /**
      * Write normalised mappings for a user, in batches that each fit one statement.
      *
      * @param  array<int, array{account_type: string|null, account_code: string, branch_code: string|null}>  $mappings
      */
     private static function insertFor(User $user, array $mappings): void
     {
-        if ($mappings === []) {
-            return;
-        }
-
         $now = now();
 
-        $rows = array_map(
+        self::insertRows(array_map(
             static fn (array $mapping): array => $mapping + [
                 'user_id' => $user->id,
                 'created_at' => $now,
                 'updated_at' => $now,
             ],
             $mappings
-        );
+        ));
+    }
 
+    /**
+     * Insert complete rows in batches that each fit inside one SQL Server statement.
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     */
+    private static function insertRows(array $rows): void
+    {
         foreach (SqlServerBinding::chunkRows($rows) as $batch) {
             self::insert($batch);
         }

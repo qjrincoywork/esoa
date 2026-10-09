@@ -2,8 +2,10 @@ import { toRef } from 'vue';
 import { dispatchNotification } from '@/components/notification';
 import { useAjax } from '@/composables/useAjax';
 import { showLoader, hideLoader } from '@/composables/useLoader';
+import { useModal } from '@/composables/useModal';
 import { useModulePermissions } from '@/composables/useModulePermissions';
 import { usePane } from '@/composables/usePane';
+import AssignUsersForm from '@/components/forms/unmapped_accounts/AssignUsersForm.vue';
 import UnmappedDirectoryPane from '@/components/forms/unmapped_accounts/UnmappedDirectoryPane.vue';
 import type { MappingBadge } from '@/composables/users';
 
@@ -153,7 +155,48 @@ export interface MappedUser {
 
 export type MappedUserPage = DirectoryPage<MappedUser>;
 
+/**
+ * One row as "Assign users" carries it: the pair a mapping stores. A null branch code
+ * maps the whole account. Matches `Concerns\ReadsMappingTargets`.
+ */
+export interface MappingTarget {
+  account_code: string;
+  branch_code: string | null;
+}
+
+/** Whether a user can take the selected rows, decided by `App\Enums\MappingEligibility`. */
+export interface MappingEligibility extends MappingBadge {
+  value: 'eligible' | 'partially_mapped' | 'already_mapped' | 'limit_reached' | 'not_mappable';
+  /** Picking the user would map something: there is something to add and room for it. */
+  assignable: boolean;
+}
+
+/** One user in the "Assign users" picker, as `AssignableUserResource` shapes it. */
+export interface AssignableUser {
+  id: number;
+  username: string;
+  email: string | null;
+  full_name: string | null;
+  is_active: boolean;
+  type: number | null;
+  type_label: string;
+  mapping_count: number;
+  /** The type's cap on mappings; null when unlimited. */
+  mapping_limit: number | null;
+  /** How many of the selected rows the user already holds. */
+  held_count: number;
+  eligibility: MappingEligibility;
+}
+
+export type AssignableUserPage = DirectoryPage<AssignableUser> & { last_page: number };
+
 const EMPTY_PAGE = { data: [], current_page: 1, per_page: 10, total: 0 };
+
+/** The pair a listing row maps: a branch with its account, or the whole account. */
+export const toMappingTarget = (row: DirectoryRow): MappingTarget => ({
+  account_code: row.account_code,
+  branch_code: row.kind === DIRECTORY_SCOPE.BRANCH ? row.branch_code : null,
+});
 
 /**
  * Opening one row of the unmapped listing.
@@ -165,7 +208,8 @@ const EMPTY_PAGE = { data: [], current_page: 1, per_page: 10, total: 0 };
  */
 export function useUnmappedAccounts() {
   const { slug } = useModulePermissions();
-  const { get } = useAjax();
+  const { get, post } = useAjax();
+  const { openModal, closeModal } = useModal();
   const {
     openPane,
     closePane,
@@ -270,6 +314,105 @@ export function useUnmappedAccounts() {
   };
 
   /**
+   * Fetch a page of the users who could be given the selected rows, each with their
+   * eligibility for exactly those rows. Posted because it carries the rows. Returns null
+   * when the request fails.
+   */
+  const getAssignableUsers = async (
+    targets: MappingTarget[],
+    params: { search?: string; page?: number; per_page?: number } = {},
+  ): Promise<AssignableUserPage | null> => {
+    try {
+      const response = await post<{ users: AssignableUserPage }>(`/${slug.value}/assignable_users`, {
+        targets,
+        ...params,
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch users');
+      }
+
+      return response.data?.users ?? null;
+    } catch {
+      dispatchNotification({ title: 'Error', content: 'Error fetching users', type: 'error' });
+
+      return null;
+    }
+  };
+
+  /**
+   * Map the selected rows onto the chosen users. A rejection is reported, and its field
+   * messages reach the open form through `useAjax`. Returns whether it was saved.
+   */
+  const assignUsers = async (targets: MappingTarget[], userIds: number[]): Promise<boolean> => {
+    showLoader();
+
+    try {
+      const response = await post<{ message: string }>(`/${slug.value}/assign_users`, {
+        targets,
+        user_ids: userIds,
+      });
+
+      dispatchNotification({
+        title: response.ok ? 'Success' : 'Error',
+        content: response.data?.message ?? (response.ok ? 'Users assigned' : 'Could not assign the users'),
+        type: response.ok ? 'success' : 'error',
+      });
+
+      return response.ok;
+    } catch {
+      dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+
+      return false;
+    } finally {
+      hideLoader();
+    }
+  };
+
+  /**
+   * Open "Assign users" for one row or a selection of them.
+   *
+   * The form picks the users; this owns the save, so the modal stays open — selection
+   * intact — when the server refuses, and closes only once the mapping is stored.
+   */
+  const openAssignUsers = (rows: DirectoryRow[], onAssigned?: () => void) => {
+    if (!rows.length) return;
+
+    const targets = rows.map(toMappingTarget);
+    let form: { selectedUserIds: () => number[] } | null = null;
+    const [first] = rows;
+
+    openModal({
+      modalTitle: rows.length === 1
+        ? `Assign users to ${(first.kind === DIRECTORY_SCOPE.BRANCH ? first.branch_name : first.account_name) || codeOf(first, first.kind)}`
+        : `Assign users to ${rows.length} accounts & branches`,
+      buttonText: 'Assign',
+      component: AssignUsersForm,
+      componentProps: {
+        rows,
+        targets,
+        onReady: (api: { selectedUserIds: () => number[] }) => {
+          form = api;
+        },
+      },
+      size: 'xl2',
+      onSubmit: async () => {
+        const userIds = form?.selectedUserIds() ?? [];
+
+        if (!userIds.length) {
+          dispatchNotification({ title: 'Error', content: 'Select at least one user to assign.', type: 'error' });
+          return;
+        }
+
+        if (await assignUsers(targets, userIds)) {
+          closeModal();
+          onAssigned?.();
+        }
+      },
+    });
+  };
+
+  /**
    * Open a row in the right pane.
    *
    * Only the record is awaited. The members tab fetches its own first page when it is
@@ -309,6 +452,8 @@ export function useUnmappedAccounts() {
     getDirectoryMembers,
     getAccountBranches,
     getMappedUsers,
+    getAssignableUsers,
+    openAssignUsers,
     openDirectoryRow,
     closePane,
     rightPaneVisible,
