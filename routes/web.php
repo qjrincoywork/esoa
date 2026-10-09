@@ -188,6 +188,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 // The user pane's tabs, each fetched only when it is opened.
                 Route::get('/{id}/details', 'details')->whereNumber('id')->name('details');
                 Route::get('/{id}/account_mapping', 'accountMapping')->name('account_mapping');
+                // The mapping tab's saved mappings, a labelled page at a time.
+                Route::get('/{id}/mapped_accounts', 'mappedAccounts')->whereNumber('id')->name('mapped_accounts');
                 Route::post('/update_account_mapping', 'updateAccountMapping')->name('update_account_mapping');
                 // "Copy access from another user" source list — the edit form and the mapping pane.
                 Route::get('/account_access_users', 'accountAccessUsers')->name('account_access_users');

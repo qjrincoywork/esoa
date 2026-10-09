@@ -38,6 +38,7 @@ class RolePermissionSeeder extends Seeder
             'users.verify',
             'users.toggle_active',
             'users.account_mapping',
+            'users.mapped_accounts',
             'users.edit_permissions',
             'users.all_permissions',
             'users.update_permissions',

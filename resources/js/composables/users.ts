@@ -169,11 +169,42 @@ export interface UserMappingRules {
   account_mapping_limit: number | null
 }
 
-/** Everything `users.account_mapping` returns — all the mapping tab needs on its own. */
+/**
+ * Everything `users.account_mapping` returns — what the mapping tab needs before it
+ * lists anything. The mappings themselves come a page at a time
+ * ({@link UserAccountMappingPage}); `mapped_keys` is every saved pair's key, codes only,
+ * so the pickers can leave mapped pairs out without the whole set being labelled.
+ */
 export interface UserAccountMappingPayload {
   rules: UserMappingRules
-  user_accounts: UserAccountMapping[]
+  mapped_keys: string[]
   account_types: Array<{ value: string | number; name: string }>
+}
+
+/** One page of a user's saved mappings, as `users.mapped_accounts` returns it. */
+export interface UserAccountMappingPage {
+  data: UserAccountMapping[]
+  current_page: number
+  per_page: number
+  last_page: number
+  total: number
+}
+
+/** What the mapped panel narrows and pages by. Matches `User\MappedAccountListRequest`. */
+export interface UserMappedAccountParams {
+  search?: string
+  page?: number
+  per_page?: number
+}
+
+/**
+ * The unsaved edits to a user's mappings, posted as changes rather than the whole set:
+ * the pairs added, the saved pairs removed, and whether everything saved is cleared first.
+ */
+export interface UserAccountMappingChanges {
+  added: UserAccountMapping[]
+  removed: UserAccountMapping[]
+  clear_existing: boolean
 }
 
 /** The tabs the user right pane offers. */
@@ -1059,9 +1090,10 @@ export function useUsers() {
   };
 
   /**
-   * Fetch a user's account/branch mappings, with the options and rules the mapping tab
-   * works from. Only the mapping tab asks for this — it is the pane request that has to
-   * reach HMS. Returns null when the request fails.
+   * Fetch what the mapping tab works from: the type's rules, the account-type options
+   * and the key of every saved pair. No HMS behind it — the mappings themselves are
+   * listed a page at a time by {@link getUserMappedAccounts}. Returns null when the
+   * request fails.
    */
   const getUserAccountMapping = async (userId: number | string): Promise<UserAccountMappingPayload | null> => {
     try {
@@ -1072,6 +1104,37 @@ export function useUsers() {
       }
 
       return response.data ?? null;
+    } catch {
+      dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
+
+      return null;
+    }
+  };
+
+  /**
+   * Fetch one page of a user's saved mappings, labelled and badged — only the page asked
+   * for reaches HMS. A blank search is left off the query. Returns null when the request
+   * fails.
+   */
+  const getUserMappedAccounts = async (
+    userId: number | string,
+    params: UserMappedAccountParams = {},
+  ): Promise<UserAccountMappingPage | null> => {
+    const query = Object.fromEntries(
+      Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== ''),
+    ) as Record<string, string | number>;
+
+    try {
+      const response = await get<{ user_accounts: UserAccountMappingPage }>(
+        `/${slug.value}/${userId}/mapped_accounts`,
+        query,
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch the mapped accounts');
+      }
+
+      return response.data?.user_accounts ?? null;
     } catch {
       dispatchNotification({ title: 'Error', content: 'Error fetching data', type: 'error' });
 
@@ -1109,30 +1172,36 @@ export function useUsers() {
   };
 
   /**
-   * Persist a user's account/branch mappings.
+   * Persist the changes to a user's account/branch mappings.
    *
-   * The full set is posted because the endpoint treats it as the complete intended
-   * state — it grants and revokes in one call — and only the three stored columns are
-   * sent, since the display names are the server's to resolve. Returns the rows as
-   * saved so the caller can re-seed from them instead of trusting local state.
+   * Only what changed is posted — the tab pages the saved set rather than holding it —
+   * and only the stored columns, since the display names are the server's to resolve.
+   * Returns the key of every pair the user holds afterwards, so the caller re-syncs
+   * from the server instead of trusting local state.
    */
   const saveUserAccountMapping = async (
     userId: number | string,
-    mappings: UserAccountMapping[],
-  ): Promise<{ ok: boolean; user_accounts?: UserAccountMapping[] }> => {
+    changes: UserAccountMappingChanges,
+  ): Promise<{ ok: boolean; mapped_keys?: string[] }> => {
+    // Blank means "every branch of this account"; send it as null, not ''.
+    const pair = (mapping: UserAccountMapping) => ({
+      account_code: mapping.account_code,
+      branch_code: mapping.branch_code || null,
+    });
+
     showLoader();
 
     try {
-      const response = await post<{ message: string; user_accounts?: UserAccountMapping[] }>(
+      const response = await post<{ message: string; mapped_keys?: string[] }>(
         `/${slug.value}/update_account_mapping`,
         {
           user_id: userId,
-          user_accounts: mappings.map((mapping) => ({
+          clear_existing: changes.clear_existing,
+          added: changes.added.map((mapping) => ({
             account_type: mapping.account_type || null,
-            account_code: mapping.account_code,
-            // Blank means "every branch of this account"; send it as null, not ''.
-            branch_code: mapping.branch_code || null,
+            ...pair(mapping),
           })),
+          removed: changes.removed.map(pair),
         },
       );
 
@@ -1148,7 +1217,7 @@ export function useUsers() {
 
       dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
 
-      return { ok: true, user_accounts: response.data.user_accounts ?? [] };
+      return { ok: true, mapped_keys: response.data.mapped_keys ?? [] };
     } catch {
       dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
 
@@ -1186,6 +1255,7 @@ export function useUsers() {
     getUsersWithAccounts,
     getUserDetails,
     getUserAccountMapping,
+    getUserMappedAccounts,
     saveUserAccountMapping,
     getUserActivityLogs,
     openUserPane,

@@ -9,9 +9,9 @@
  * can see and look back over what they did without leaving the screen.
  *
  * It opens at once on the list row it came from, and each tab fetches its own data the
- * first time it is shown: details from `users.details` (no HMS), mappings from
- * `users.account_mapping` (the one request that labels codes through HMS), the activity
- * trail a page at a time from its own list. What a tab loaded is kept while the pane
+ * first time it is shown: details from `users.details` (no HMS), the mapping tab's rules
+ * and mapped keys from `users.account_mapping` (no HMS either — its form labels the
+ * mappings a page at a time), the activity trail a page at a time from its own list. What a tab loaded is kept while the pane
  * shows the same user, so switching back costs nothing; opening another user starts
  * over. The mapping and activity tabs appear only for a role holding their permission.
  */
@@ -26,7 +26,6 @@ import { useModulePermissions } from '@/composables/useModulePermissions';
 import {
   useUsers,
   type User,
-  type UserAccountMapping,
   type UserMappingRules,
   type UserPaneDetails,
   type UserPaneTab,
@@ -171,7 +170,7 @@ const roles = computed<string[]>(() => {
  * and so not shown — until one of them has arrived.
  */
 const mappingCount = computed<number | null>(() =>
-  mapping.value?.user_accounts.length ?? user.value?.account_mapping_count ?? null,
+  mapping.value?.mapped_keys.length ?? user.value?.account_mapping_count ?? null,
 );
 
 const mappingSummary = computed(() => {
@@ -183,9 +182,9 @@ const mappingSummary = computed(() => {
 });
 
 // ─── Mapping tab ──────────────────────────────────────────────────────────
-/** A save returns the stored set; keep it, so the tab and the summary need no refetch. */
-const onMappingSaved = (saved: UserAccountMapping[]) => {
-  if (mapping.value) setMapping({ ...mapping.value, user_accounts: saved });
+/** A save returns the stored keys; keep them, so the tab and the summary need no refetch. */
+const onMappingSaved = (mappedKeys: string[]) => {
+  if (mapping.value) setMapping({ ...mapping.value, mapped_keys: mappedKeys });
 };
 </script>
 
@@ -254,7 +253,7 @@ const onMappingSaved = (saved: UserAccountMapping[]) => {
           <UserAccountMappingForm
             v-if="mapping"
             :user-id="userId"
-            :mappings="mapping.user_accounts"
+            :mapped-keys="mapping.mapped_keys"
             :account-types="mapping.account_types"
             :allows-mapping="mapping.rules.allows_account_mapping"
             :limit="mapping.rules.account_mapping_limit"
