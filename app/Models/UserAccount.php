@@ -2,9 +2,14 @@
 
 namespace App\Models;
 
+use App\Enums\OrderType;
+use App\Helpers\CommonHelper;
 use App\Helpers\SqlServerBinding;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Pagination\Paginator;
+use Illuminate\Support\Str;
 
 class UserAccount extends Model
 {
@@ -261,9 +266,137 @@ class UserAccount extends Model
         $mappings = self::normalize($rows, $limit);
 
         $user->userAccounts()->delete();
+        self::insertFor($user, $mappings);
 
+        return count($mappings);
+    }
+
+    /**
+     * Apply a set of changes to a user's mappings, leaving the rest as stored.
+     *
+     * The mapping tab pages a user's mappings rather than holding them all, so it saves
+     * what changed instead of the whole set ({@see syncForUser()}): the pairs removed
+     * are deleted, the pairs added are written, and — when `$clearExisting` is set —
+     * everything stored is dropped first. An added pair the user already keeps is
+     * skipped, so a change is safe to apply twice. Rows are matched by
+     * {@see mappingKey()}, so a pair stored twice is removed in full.
+     *
+     * Deletes go by id in batches, and inserts in batches, to stay inside SQL Server's
+     * {@see SqlServerBinding::MAX_PARAMETERS}. Call inside a transaction: the deletes
+     * and the inserts are only meaningful together.
+     *
+     * @param  iterable<int, array<string, mixed>|\Illuminate\Database\Eloquent\Model|object>  $added
+     * @param  array<int, string>  $removedKeys  Keys built by {@see mappingKey()}.
+     * @return int Number of mappings the user holds afterwards.
+     */
+    public static function applyChanges(User $user, iterable $added, array $removedKeys, bool $clearExisting = false): int
+    {
+        $stored = $user->userAccounts()
+            ->get(['id', 'account_code', 'branch_code'])
+            ->groupBy(fn (self $row): string => $row->mapping_key)
+            // A plain collection: Eloquent's only()/except() match model ids, not these keys.
+            ->toBase();
+
+        $dropped = $clearExisting ? $stored : $stored->only($removedKeys);
+        $kept = $stored->except($dropped->keys()->all());
+
+        foreach (SqlServerBinding::chunkValues($dropped->flatten()->pluck('id')->all()) as $ids) {
+            self::query()->whereKey($ids)->delete();
+        }
+
+        $mappings = array_values(array_filter(
+            self::normalize($added),
+            static fn (array $mapping): bool => !$kept->has(self::mappingKey($mapping['account_code'], $mapping['branch_code']))
+        ));
+
+        self::insertFor($user, $mappings);
+
+        return $kept->count() + count($mappings);
+    }
+
+    /**
+     * The keys of every pair a user is mapped to, oldest first and without repeats.
+     *
+     * Codes only — nothing is labelled — so it costs one narrow query however many
+     * mappings the user holds. The mapping tab keeps this whole list so it can leave
+     * mapped pairs out of its pickers while showing only a page of the mappings.
+     *
+     * @return array<int, string>
+     */
+    public static function mappedKeysFor(User $user): array
+    {
+        return $user->userAccounts()
+            ->orderBy('id')
+            ->get(['account_code', 'branch_code'])
+            ->map(fn (self $row): string => $row->mapping_key)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * One page of a user's mappings, oldest first, optionally narrowed by a search term.
+     *
+     * Unfiltered, the page is cut by the database. A search matches the account and
+     * branch codes and their names — and the names live in HMS, not beside the codes —
+     * so a search reads the user's codes (cheap: one narrow query), resolves their
+     * names in one lookup per directory, and pages the matches in memory. Either way
+     * only the returned page needs labelling and badging by the caller.
+     *
+     * @param  array{search?: string, page?: int, per_page?: int}  $params
+     * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
+     */
+    public static function pageForUser(User $user, array $params)
+    {
+        $search = trim((string) ($params['search'] ?? ''));
+        $page = max(1, (int) ($params['page'] ?? 1));
+        $perPage = max(1, (int) ($params['per_page'] ?? config('vc.default_pages')));
+        $query = $user->userAccounts()->orderBy('id', OrderType::ASC);
+
+        if ($search === '') {
+            return $query->paginate($perPage, ['*'], 'page', $page);
+        }
+
+        $rows = $query->get();
+        // Labelled in the same order as the rows, so the two line up by index.
+        $labelled = CommonHelper::withAccountBranchNames($rows);
+        $matches = $rows->filter(fn (self $row, int $index): bool => self::rowMatches($labelled[$index], $search))->values();
+
+        return new LengthAwarePaginator(
+            $matches->forPage($page, $perPage)->values(),
+            $matches->count(),
+            $perPage,
+            $page,
+            ['path' => Paginator::resolveCurrentPath(), 'pageName' => 'page']
+        );
+    }
+
+    /**
+     * Whether a labelled mapping row contains the search term in any of its codes or
+     * names, ignoring case.
+     *
+     * @param  array<string, mixed>  $row  A row from {@see CommonHelper::withAccountBranchNames()}.
+     */
+    private static function rowMatches(array $row, string $search): bool
+    {
+        foreach (['account_code', 'account_name', 'branch_code', 'branch_name'] as $field) {
+            if (Str::contains((string) ($row[$field] ?? ''), $search, ignoreCase: true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Write normalised mappings for a user, in batches that each fit one statement.
+     *
+     * @param  array<int, array{account_type: string|null, account_code: string, branch_code: string|null}>  $mappings
+     */
+    private static function insertFor(User $user, array $mappings): void
+    {
         if ($mappings === []) {
-            return 0;
+            return;
         }
 
         $now = now();
@@ -280,8 +413,6 @@ class UserAccount extends Model
         foreach (SqlServerBinding::chunkRows($rows) as $batch) {
             self::insert($batch);
         }
-
-        return count($mappings);
     }
 
     /**

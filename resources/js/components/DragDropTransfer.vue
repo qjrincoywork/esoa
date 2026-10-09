@@ -48,6 +48,11 @@ const props = withDefaults(
     reorderable?: boolean;
     /** Cap on assigned items; null for no cap. */
     max?: number | null;
+    /**
+     * How many items are assigned in all, when `target` holds only the loaded slice of
+     * a paged list. Drives the header count and the `max` cap; null counts `target`.
+     */
+    targetCount?: number | null;
     /** Height class for both scroll areas, so panels line up with the pane. */
     listClass?: string;
   }>(),
@@ -64,6 +69,7 @@ const props = withDefaults(
     disabled: false,
     reorderable: false,
     max: null,
+    targetCount: null,
     listClass: 'h-72',
   },
 );
@@ -94,7 +100,10 @@ const assignedKeys = computed(() => new Set(props.target.map((item) => resolveKe
 
 const isAssigned = (item: S): boolean => assignedKeys.value.has(resolveKey(item));
 
-const isFull = computed(() => props.max !== null && props.target.length >= props.max);
+/** Everything assigned, not just what is loaded — a paged target passes its own total. */
+const assignedCount = computed(() => props.targetCount ?? props.target.length);
+
+const isFull = computed(() => props.max !== null && assignedCount.value >= props.max);
 
 /** An item can be taken only while there is room and it is not already assigned. */
 const canAdd = (item: S): boolean => !props.disabled && !isFull.value && !isAssigned(item);
@@ -319,7 +328,7 @@ const rowClass = (interactive: boolean) => [
         <div class="flex items-center justify-between gap-2">
           <h4 class="text-sm font-medium">{{ targetTitle }}</h4>
           <span class="text-xs text-[var(--color-text-muted)]">
-            {{ target.length }}<template v-if="max !== null">/{{ max }}</template>
+            {{ assignedCount }}<template v-if="max !== null">/{{ max }}</template>
           </span>
         </div>
         <p v-if="targetHint" class="mt-0.5 text-xs text-[var(--color-text-muted)]">

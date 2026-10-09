@@ -34,6 +34,7 @@ use App\Http\Requests\User\CreateRequest;
 use App\Http\Requests\User\DeleteRequest;
 use App\Http\Requests\User\ExportCredentialReportRequest;
 use App\Http\Requests\User\ListRequest;
+use App\Http\Requests\User\MappedAccountListRequest;
 use App\Http\Requests\User\ToggleActiveRequest;
 use App\Http\Requests\User\UpdateAccountMappingRequest;
 use App\Http\Requests\User\UpdatePermissionRequest;
@@ -613,12 +614,14 @@ class UserController extends Controller
     }
 
     /**
-     * Return a user's account/branch mappings for the right pane's mapping tab (AJAX only).
+     * Return what the right pane's mapping tab needs before it lists anything (AJAX only).
      *
-     * Fetched only when that tab is opened — it is the one pane request that has to ask
-     * HMS, to label and badge each mapping. Carries everything the tab needs on its own,
-     * since the pane can open straight onto it: the mappings, the account-type options
-     * its pickers offer, and the type's mapping rules ({@see UserMappingRulesResource}).
+     * Fetched only when that tab is opened. Carries everything the tab needs on its own,
+     * since the pane can open straight onto it: the type's mapping rules
+     * ({@see UserMappingRulesResource}), the account-type options its pickers offer, and
+     * the key of every pair the user is mapped to — codes only, so the pickers can leave
+     * mapped pairs out without anything being labelled. Nothing here touches HMS; the
+     * mappings themselves are listed a labelled page at a time by {@see mappedAccounts()}.
      * Non-AJAX requests fall through and receive no content.
      *
      * @return \Illuminate\Http\JsonResponse|void
@@ -629,17 +632,40 @@ class UserController extends Controller
             return;
         }
 
-        $user = $this->user->with(['userDetail', 'userAccounts'])->findOrFail($id);
-
-        // Resolve every mapped code in one lookup per directory so the resource labels
-        // and badges its rows from the memo instead of querying HMS per row.
-        CommonHelper::primeAccountBranchNames($user->userAccounts);
-        CommonHelper::primeMappingBadges($user->userAccounts);
+        $user = $this->user->with('userDetail')->findOrFail($id);
 
         return response()->json([
             'rules' => new UserMappingRulesResource($user),
-            'user_accounts' => UserAccountMappingResource::collection($user->userAccounts),
+            'mapped_keys' => UserAccount::mappedKeysFor($user),
             'account_types' => AccountType::list(),
+        ]);
+    }
+
+    /**
+     * Return one page of a user's account/branch mappings, labelled and badged (AJAX only).
+     *
+     * Feeds the mapping tab's "Mapped" panel. Labelling and badging a mapping costs HMS
+     * lookups, so only the page asked for is resolved — one lookup per directory and per
+     * badge fact for the page, however many mappings the user holds. Filters are
+     * validated by {@see MappedAccountListRequest}. Non-AJAX requests fall through and
+     * receive no content.
+     *
+     * @return \Illuminate\Http\JsonResponse|void
+     */
+    public function mappedAccounts(int $id, MappedAccountListRequest $request)
+    {
+        if (!$request->wantsJson() && !$request->ajax()) {
+            return;
+        }
+
+        $user = $this->user->findOrFail($id);
+        $mappings = UserAccount::pageForUser($user, $request->filters());
+
+        CommonHelper::primeAccountBranchNames($mappings->getCollection());
+        CommonHelper::primeMappingBadges($mappings->getCollection());
+
+        return response()->json([
+            'user_accounts' => new CommonResource(UserAccountMappingResource::collection($mappings)),
         ]);
     }
 
@@ -674,14 +700,14 @@ class UserController extends Controller
     }
 
     /**
-     * Replace a user's account/branch mappings with the submitted set.
+     * Apply the submitted changes to a user's account/branch mappings.
      *
-     * The payload is the complete intended state, so this both grants and revokes:
-     * {@see UserAccount::syncForUser()} drops what is stored and writes the normalised
-     * set in one batch inside a transaction. The saved rows are returned relabelled so
-     * the pane re-syncs from the server rather than trusting what it dragged.
-     * Input — including the type's mapping limit — is validated by
-     * {@see UpdateAccountMappingRequest}.
+     * The mapping tab pages a user's mappings, so it posts what changed — pairs added,
+     * pairs removed, and whether everything stored was cleared first — and
+     * {@see UserAccount::applyChanges()} applies them inside a transaction. The keys the
+     * user now holds are returned, codes only, so the tab re-syncs its pickers from the
+     * server and reloads just the page it shows. Input — including the type's mapping
+     * limit over the resulting set — is validated by {@see UpdateAccountMappingRequest}.
      *
      * @return \Illuminate\Http\JsonResponse
      */
@@ -691,13 +717,14 @@ class UserController extends Controller
 
         try {
             $target = $request->target() ?? User::findOrFail($request->validated()['user_id']);
-            $count = UserAccount::syncForUser($target, $request->mappings(), $request->mappingLimit());
+            $count = UserAccount::applyChanges(
+                $target,
+                $request->added(),
+                $request->removedKeys(),
+                $request->clearsExisting()
+            );
 
             DB::commit();
-
-            $mappings = $target->userAccounts()->get();
-            CommonHelper::primeAccountBranchNames($mappings);
-            CommonHelper::primeMappingBadges($mappings);
 
             $message = $count === 0
                 ? 'Account & branch mapping cleared successfully'
@@ -708,7 +735,7 @@ class UserController extends Controller
             return response()->json([
                 'status' => 'success',
                 'message' => $message,
-                'user_accounts' => UserAccountMappingResource::collection($mappings),
+                'mapped_keys' => UserAccount::mappedKeysFor($target),
             ], Response::HTTP_OK);
         } catch (\Exception $e) {
             DB::rollBack();

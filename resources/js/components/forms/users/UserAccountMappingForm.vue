@@ -10,9 +10,14 @@
  * Both lists are searched and paged server-side (`users.get_accounts` /
  * `users.get_branches`), so a directory of thousands is never pulled down to be
  * filtered in the browser. Anything already mapped is dropped from the choices, so the
- * panel only ever offers something that would actually change the mapping. Saving posts
- * the whole assigned set, since that endpoint treats the payload as the complete
- * intended state — it grants and revokes at once.
+ * panel only ever offers something that would actually change the mapping.
+ *
+ * The mapped panel is paged and searched server-side too (`users.mapped_accounts`):
+ * labelling and badging a mapping costs HMS lookups, and a group account admin can
+ * hold hundreds, so only the loaded pages are labelled. What the user holds in full is
+ * known by key alone (`mappedKeys`, codes only), which is all the pickers need. Edits
+ * are kept as changes on top of the saved set — pairs added, saved pairs removed, or
+ * everything cleared — and saving posts just those changes.
  *
  * Every row on either panel carries its badges — account or branch, plus expired and
  * no members where they apply — decided and styled server-side by
@@ -21,6 +26,7 @@
  */
 import { computed, onMounted, ref, watch } from 'vue';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
@@ -78,8 +84,8 @@ const badgesOf = (row: MappingBadges): Required<MappingBadges> => ({
 const props = withDefaults(
   defineProps<{
     userId: number | string;
-    /** Mappings already saved for this user. */
-    mappings?: UserAccountMapping[];
+    /** Key of every pair already saved for this user ({@link mappingKey}); the rows load a page at a time. */
+    mappedKeys?: string[];
     accountTypes?: Option[];
     /** False when the user's type is not one that mappings apply to. */
     allowsMapping?: boolean;
@@ -88,7 +94,7 @@ const props = withDefaults(
     typeLabel?: string | null;
   }>(),
   {
-    mappings: () => [],
+    mappedKeys: () => [],
     accountTypes: () => [],
     allowsMapping: true,
     limit: null,
@@ -97,10 +103,11 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{
-  saved: [mappings: UserAccountMapping[]];
+  /** The key of every pair the user holds once saved. */
+  saved: [mappedKeys: string[]];
 }>();
 
-const { getAccountsByParams, getBranchesByParams, saveUserAccountMapping } = useUsers();
+const { getAccountsByParams, getBranchesByParams, getUserMappedAccounts, saveUserAccountMapping } = useUsers();
 
 /**
  * Both ends must agree on what makes two mappings the same pair, so this mirrors
@@ -136,23 +143,147 @@ const toMapping = (row: Partial<UserAccountMapping>): UserAccountMapping => {
   };
 };
 
-// ─── Assigned set ─────────────────────────────────────────────────────────
-const assigned = ref<UserAccountMapping[]>([]);
-/** What the server last confirmed, so "unsaved changes" is a real comparison. */
-const savedKeys = ref<string[]>([]);
+/** Page position of one paged list. */
+type Cursor = { page: number; lastPage: number };
 
-const syncFromProps = () => {
-  assigned.value = props.mappings.map(toMapping);
-  savedKeys.value = assigned.value.map((mapping) => mapping.key);
+const freshCursor = (): Cursor => ({ page: 1, lastPage: 1 });
+const hasNextPage = (cursor: Cursor): boolean => cursor.page < cursor.lastPage;
+
+/** Whether a row contains a search term in any of its codes or names, ignoring case. */
+const rowMatches = (row: UserAccountMapping, term: string): boolean => {
+  const needle = term.toLowerCase();
+
+  return [row.account_code, row.account_name, row.branch_code, row.branch_name]
+    .some((field) => String(field ?? '').toLowerCase().includes(needle));
 };
 
-watch(() => props.mappings, syncFromProps, { immediate: true, deep: true });
+// ─── Saved set, a page at a time ──────────────────────────────────────────
+/** Key of every pair the server last confirmed — the whole set, codes only. */
+const savedKeys = ref<string[]>([]);
 
-const isDirty = computed(() => {
-  const current = assigned.value.map((mapping) => mapping.key);
+watch(() => props.mappedKeys, (keys) => {
+  savedKeys.value = [...keys];
+}, { immediate: true });
 
-  return current.length !== savedKeys.value.length
-    || current.some((key, index) => key !== savedKeys.value[index]);
+/** One screenful of the mapped panel; each page costs an HMS lookup, so keep it small. */
+const MAPPED_PER_PAGE = 20;
+
+/** The saved rows loaded so far, labelled and badged by the server. */
+const mappedRows = ref<UserAccountMapping[]>([]);
+const mappedCursor = ref<Cursor>(freshCursor());
+const mappedSearch = ref('');
+const mappedLoading = ref(false);
+const mappedLoadingMore = ref(false);
+/** Bumped per request, so a slow response to an older search cannot overwrite a newer one. */
+let mappedRequest = 0;
+
+const mappedSearchTerm = computed(() => mappedSearch.value.trim());
+
+/**
+ * Load the first page of saved rows for the current search, or append the next one.
+ *
+ * A pair HMS lists twice can come back on two pages; only its first row is kept, so
+ * the panel never renders two rows under one key.
+ */
+const loadMapped = async (append = false) => {
+  if (append && (!hasNextPage(mappedCursor.value) || mappedLoadingMore.value)) return;
+
+  const ticket = ++mappedRequest;
+
+  if (append) {
+    mappedLoadingMore.value = true;
+  } else {
+    mappedLoading.value = true;
+  }
+
+  try {
+    const result = await getUserMappedAccounts(props.userId, {
+      search: mappedSearchTerm.value,
+      page: append ? mappedCursor.value.page + 1 : 1,
+      per_page: MAPPED_PER_PAGE,
+    });
+
+    if (!result || ticket !== mappedRequest) return;
+
+    const loaded = append ? mappedRows.value : [];
+    const seen = new Set(loaded.map((row) => row.key));
+    const fresh = result.data.map(toMapping).filter((row) => !seen.has(row.key) && seen.add(row.key));
+
+    mappedRows.value = [...loaded, ...fresh];
+    mappedCursor.value = { page: result.current_page, lastPage: result.last_page };
+  } finally {
+    if (ticket === mappedRequest) {
+      mappedLoading.value = false;
+      mappedLoadingMore.value = false;
+    }
+  }
+};
+
+const debouncedMappedSearch = debounce(() => void loadMapped(), 400);
+
+const clearMappedSearch = () => {
+  mappedSearch.value = '';
+  void loadMapped();
+};
+
+// ─── Pending changes on top of the saved set ──────────────────────────────
+/** Pairs added since the last save, newest last, labelled from the row they were dropped from. */
+const pendingAdds = ref<UserAccountMapping[]>([]);
+/** Saved pairs removed since the last save, by key — kept whole so the save can name them. */
+const pendingRemovals = ref(new Map<string, UserAccountMapping>());
+/** Set by "Clear all": every saved pair goes on save, whatever is or is not loaded. */
+const clearedSaved = ref(false);
+
+const discardChanges = () => {
+  pendingAdds.value = [];
+  pendingRemovals.value = new Map();
+  clearedSaved.value = false;
+};
+
+/**
+ * Every pair the user would hold if saved now — the saved set minus what was removed
+ * (or nothing, once cleared), plus what was added. This, not the loaded rows, is what
+ * the pickers filter by and what the type's limit is counted against.
+ */
+const assignedKeys = computed(() => {
+  const keys = new Set(
+    clearedSaved.value ? [] : savedKeys.value.filter((key) => !pendingRemovals.value.has(key)),
+  );
+
+  pendingAdds.value.forEach((mapping) => keys.add(mapping.key));
+
+  return keys;
+});
+
+const assignedCount = computed(() => assignedKeys.value.size);
+const pendingAddKeys = computed(() => new Set(pendingAdds.value.map((mapping) => mapping.key)));
+
+/**
+ * What the mapped panel shows: unsaved additions first, so a drop is seen landing,
+ * then the loaded saved rows that are still kept. Additions follow the panel's search
+ * here, since the server only searched the saved set.
+ */
+const assigned = computed<UserAccountMapping[]>(() => [
+  ...(mappedSearchTerm.value
+    ? pendingAdds.value.filter((row) => rowMatches(row, mappedSearchTerm.value))
+    : pendingAdds.value),
+  ...(clearedSaved.value ? [] : mappedRows.value.filter((row) => !pendingRemovals.value.has(row.key))),
+]);
+
+/** More saved rows behind the loaded ones — moot once the saved set is cleared. */
+const hasMoreMapped = computed(() => !clearedSaved.value && hasNextPage(mappedCursor.value));
+
+const isDirty = computed(() =>
+  pendingAdds.value.length > 0
+  || pendingRemovals.value.size > 0
+  || (clearedSaved.value && savedKeys.value.length > 0),
+);
+
+const targetEmptyText = computed(() => {
+  if (mappedSearchTerm.value) return 'No mapped accounts or branches match this search.';
+  if (clearedSaved.value && savedKeys.value.length) return 'Every saved mapping will be removed on save.';
+
+  return 'No accounts or branches mapped yet.';
 });
 
 // ─── Available panel ──────────────────────────────────────────────────────
@@ -171,12 +302,6 @@ const loading = ref(false);
 const loadingMore = ref(false);
 /** How many all-mapped pages have been skipped since the last fresh load. */
 const autoAdvanced = ref(0);
-
-/** Page position of one directory list. */
-type Cursor = { page: number; lastPage: number };
-
-const freshCursor = (): Cursor => ({ page: 1, lastPage: 1 });
-const hasNextPage = (cursor: Cursor): boolean => cursor.page < cursor.lastPage;
 
 /**
  * The two directories page independently — an account search and a branch search run
@@ -263,11 +388,9 @@ const sourceItems = computed<SourceItem[]>(() =>
     : [...accounts.value.map(toAccountItem), ...branches.value.map(toBranchItem)],
 );
 
-/** The mapped pairs, as a set, so filtering a page is one lookup per row. */
-const assignedKeys = computed(() => new Set(assigned.value.map((mapping) => mapping.key)));
-
 /**
- * What the panel actually offers: the loaded rows minus anything already mapped.
+ * What the panel actually offers: the loaded rows minus anything already mapped —
+ * saved or pending, loaded into the mapped panel or not ({@link assignedKeys}).
  *
  * Removing them rather than showing them inert keeps every row in the list actionable,
  * and it happens here — not inside the transfer list — because the transfer list
@@ -476,40 +599,61 @@ watch(accountType, () => {
 // place — same account, same search — from the first page.
 watch(hideExpired, () => void load());
 
-onMounted(() => void load());
+// Both panels fill at once: the directory and the first page of what is mapped.
+onMounted(() => {
+  void load();
+  void loadMapped();
+});
 
 // ─── Transfers ────────────────────────────────────────────────────────────
-const assign = (item: SourceItem) => {
+/**
+ * Map one pair. A saved pair that was removed and is dropped back simply stops being
+ * removed; anything else becomes a pending addition.
+ */
+const stage = (mapping: UserAccountMapping) => {
   // Mapped pairs are already filtered out of the choices; this just makes the
-  // invariant local, so no path can push a second row for the same pair.
-  if (assignedKeys.value.has(item.key)) return;
+  // invariant local, so no path can stage a second row for the same pair.
+  if (assignedKeys.value.has(mapping.key)) return;
 
-  assigned.value = [
-    ...assigned.value,
-    toMapping({
-      account_type: item.account_type,
-      account_code: item.account_code,
-      account_name: item.account_name,
-      branch_code: item.branch_code,
-      branch_name: item.branch_name,
-      ...badgesOf(item),
-    }),
-  ];
+  if (!clearedSaved.value && pendingRemovals.value.has(mapping.key)) {
+    const removals = new Map(pendingRemovals.value);
+    removals.delete(mapping.key);
+    pendingRemovals.value = removals;
+
+    return;
+  }
+
+  pendingAdds.value = [...pendingAdds.value, mapping];
 };
 
-const unassign = (_item: UserAccountMapping, index: number) => {
-  assigned.value = assigned.value.filter((_, position) => position !== index);
+const assign = (item: SourceItem) => stage(toMapping({
+  account_type: item.account_type,
+  account_code: item.account_code,
+  account_name: item.account_name,
+  branch_code: item.branch_code,
+  branch_name: item.branch_name,
+  ...badgesOf(item),
+}));
+
+/** Unmap one row: an unsaved addition is just dropped, a saved pair is marked for removal. */
+const unassign = (item: UserAccountMapping) => {
+  if (pendingAddKeys.value.has(item.key)) {
+    pendingAdds.value = pendingAdds.value.filter((mapping) => mapping.key !== item.key);
+
+    return;
+  }
+
+  pendingRemovals.value = new Map(pendingRemovals.value).set(item.key, item);
 };
 
-const reorder = (next: UserAccountMapping[]) => {
-  assigned.value = next;
-};
-
+/** Unmap everything — the saved set as a whole, loaded or not, and anything staged. */
 const clearAll = () => {
-  assigned.value = [];
+  pendingAdds.value = [];
+  pendingRemovals.value = new Map();
+  clearedSaved.value = true;
 };
 
-const reset = () => syncFromProps();
+const reset = () => discardChanges();
 
 /**
  * Pull another user's access into the assigned set — the "Copy Access" picker's `apply`.
@@ -520,8 +664,6 @@ const reset = () => syncFromProps();
  * as unsaved changes to review, exactly like a drag.
  */
 const copyAccess = (rows: CopiedUserAccess[]): CopyAccessResult => {
-  const next = [...assigned.value];
-  const keys = new Set(next.map((mapping) => mapping.key));
   const result: Required<CopyAccessResult> = { added: 0, skipped: 0, overLimit: 0 };
 
   for (const row of rows) {
@@ -534,18 +676,15 @@ const copyAccess = (rows: CopiedUserAccess[]): CopyAccessResult => {
       ...badgesOf(row),
     });
 
-    if (keys.has(mapping.key)) {
+    if (assignedKeys.value.has(mapping.key)) {
       result.skipped++;
-    } else if (props.limit !== null && next.length >= props.limit) {
+    } else if (limitReached.value) {
       result.overLimit++;
     } else {
-      keys.add(mapping.key);
-      next.push(mapping);
+      stage(mapping);
       result.added++;
     }
   }
-
-  assigned.value = next;
 
   return result;
 };
@@ -553,25 +692,33 @@ const copyAccess = (rows: CopiedUserAccess[]): CopyAccessResult => {
 // ─── Save ─────────────────────────────────────────────────────────────────
 const saving = ref(false);
 
+/**
+ * Post the pending changes, then start over from what the server now holds: its keys
+ * for the pickers, and a fresh first page — same search — for the mapped panel.
+ */
 const save = async () => {
   saving.value = true;
 
   try {
-    const result = await saveUserAccountMapping(props.userId, assigned.value);
+    const result = await saveUserAccountMapping(props.userId, {
+      added: pendingAdds.value,
+      removed: clearedSaved.value ? [] : [...pendingRemovals.value.values()],
+      clear_existing: clearedSaved.value,
+    });
 
     if (!result?.ok) return;
 
-    // Re-seed from the server so labels and ids match what was actually stored.
-    assigned.value = (result.user_accounts ?? []).map(toMapping);
-    savedKeys.value = assigned.value.map((mapping) => mapping.key);
-    emit('saved', assigned.value);
+    savedKeys.value = result.mapped_keys ?? [];
+    discardChanges();
+    emit('saved', savedKeys.value);
+    void loadMapped();
   } finally {
     saving.value = false;
   }
 };
 
 const limitReached = computed(
-  () => props.limit !== null && assigned.value.length >= (props.limit ?? 0),
+  () => props.limit !== null && assignedCount.value >= props.limit,
 );
 
 const accountTypeName = computed(
@@ -615,24 +762,24 @@ const accountTypeName = computed(
       The transfer panel is the field: a rejected mapping is rejected as a set, or on a
       row that only exists inside it, so there is no single control to mark instead.
     -->
-    <FormField name="user_accounts" nested>
+    <FormField :name="['added', 'removed']" nested>
       <DragDropTransfer
         :source="availableItems"
         :target="assigned"
+        :target-count="assignedCount"
         item-key="key"
         :source-title="subject.title"
         target-title="Mapped Accounts & Branches"
         :source-hint="sourceHint"
         :source-empty="emptyText"
-        target-empty="No accounts or branches mapped yet."
+        :target-empty="targetEmptyText"
         :source-loading="showSourceSpinner"
+        :target-loading="mappedLoading"
         :disabled="!allowsMapping"
         :max="limit"
-        reorderable
         list-class="max-h-100"
         @add="assign"
-        @remove="unassign"
-        @reorder="reorder">
+        @remove="unassign">
         <!-- Directory controls: account type, breadcrumb back to accounts, and search -->
         <template #source-toolbar>
           <div class="mt-2 flex flex-col gap-2">
@@ -747,23 +894,51 @@ const accountTypeName = computed(
           </div>
         </template>
 
+        <!-- Mapped controls: search the saved set server-side, see what is pending, clear -->
         <template #target-toolbar>
-          <div v-if="assigned.length" class="mt-2 flex items-center justify-between gap-2">
-            <span v-if="limitReached" class="text-xs text-amber-600 dark:text-amber-400">
-              Limit reached
-            </span>
-            <span v-else class="text-xs text-[var(--color-text-muted)]">
-              Drag to reorder
-            </span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              class="h-6 px-1.5 text-xs text-red-500 hover:text-red-700"
-              :disabled="!allowsMapping"
-              @click="clearAll">
-              Clear all
-            </Button>
+          <div class="mt-2 flex flex-col gap-2">
+            <div v-if="savedKeys.length || pendingAdds.length" class="relative">
+              <Search
+                class="pointer-events-none absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true" />
+              <Input
+                v-model="mappedSearch"
+                type="text"
+                placeholder="Search mapped accounts or branches..."
+                class="h-7 pr-7 pl-7 text-xs"
+                aria-label="Search mapped accounts and branches"
+                @input="debouncedMappedSearch" />
+              <button
+                v-if="mappedSearch"
+                type="button"
+                class="absolute top-1/2 right-2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label="Clear mapped search"
+                @click="clearMappedSearch">
+                <X class="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            <div v-if="assignedCount || isDirty" class="flex items-center justify-between gap-2">
+              <span v-if="limitReached" class="text-xs text-amber-600 dark:text-amber-400">
+                Limit reached
+              </span>
+              <span v-else-if="isDirty" class="text-xs text-muted-foreground">
+                <template v-if="clearedSaved">All saved cleared</template>
+                <template v-else-if="pendingRemovals.size">{{ pendingRemovals.size }} to remove</template>
+                <template v-if="(clearedSaved || pendingRemovals.size) && pendingAdds.length"> · </template>
+                <template v-if="pendingAdds.length">{{ pendingAdds.length }} to add</template>
+              </span>
+              <span v-else />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                class="h-6 px-1.5 text-xs text-red-500 hover:text-red-700"
+                :disabled="!allowsMapping || !assignedCount"
+                @click="clearAll">
+                Clear all
+              </Button>
+            </div>
           </div>
         </template>
 
@@ -772,6 +947,12 @@ const accountTypeName = computed(
             <p class="flex items-center gap-1.5 font-medium" :title="item.account_name">
               <!-- Same badges as the row it was dropped from, so the two panels read alike -->
               <MappingBadge v-if="item.kind_badge" :badge="item.kind_badge" />
+              <!-- Staged but not yet saved, so a drop is told apart from what is stored -->
+              <span
+                v-if="pendingAddKeys.has(item.key)"
+                class="shrink-0 rounded px-1 text-[10px] font-medium text-emerald-700 ring-1 ring-emerald-600/30 dark:text-emerald-400">
+                Unsaved
+              </span>
               <span class="truncate">
                 {{ item.account_name }}
                 <span class="text-xs font-normal text-[var(--color-text-muted)]">
@@ -791,6 +972,20 @@ const accountTypeName = computed(
             </div>
           </div>
         </template>
+
+        <template #target-footer>
+          <div v-if="hasMoreMapped && !mappedLoading" class="pt-2 text-center">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              class="h-7 text-xs"
+              :disabled="mappedLoadingMore"
+              @click="loadMapped(true)">
+              {{ mappedLoadingMore ? 'Loading...' : 'Load more' }}
+            </Button>
+          </div>
+        </template>
       </DragDropTransfer>
     </FormField>
 
@@ -799,8 +994,8 @@ const accountTypeName = computed(
       <p class="text-xs text-[var(--color-text-muted)]">
         <template v-if="isDirty">Unsaved changes</template>
         <template v-else>
-          {{ assigned.length }}
-          {{ assigned.length === 1 ? 'mapping' : 'mappings' }} saved
+          {{ assignedCount }}
+          {{ assignedCount === 1 ? 'mapping' : 'mappings' }} saved
         </template>
       </p>
       <div class="flex items-center gap-2">
