@@ -56,6 +56,8 @@ class RolePermissionSeeder extends Seeder
             'unmapped_accounts.members',
             'unmapped_accounts.branches',
             'unmapped_accounts.mapped_users',
+            'unmapped_accounts.assignable_users',
+            'unmapped_accounts.assign_users',
 
             // roles
             'roles.index',

@@ -309,6 +309,34 @@ class SqlDatabase
     }
 
     /**
+     * Retrieve the account each of many branches belongs to, in one round trip.
+     *
+     * A branch is only ever mapped as an account/branch pair, so anything that writes one
+     * checks the pair against this rather than trusting the account code it was sent.
+     * Batched like {@see getBranchNamesByCodes()}.
+     *
+     * @param  array<int, string>  $branchCodes
+     * @return \Illuminate\Support\Collection<string, string> Account code keyed by branch code.
+     */
+    public function getBranchAccountCodesByCodes(array $branchCodes)
+    {
+        $branchCodes = array_values(array_unique(array_filter($branchCodes)));
+        $accounts = collect();
+
+        foreach (SqlServerBinding::chunkValues($branchCodes) as $batch) {
+            $accounts = $accounts->union(
+                $this->db
+                    ->table('Branches')
+                    ->whereIn('br_code', $batch)
+                    ->pluck('br_ac_code', 'br_code')
+                    ->map(fn ($code) => trim((string) $code))
+            );
+        }
+
+        return $accounts;
+    }
+
+    /**
      * Retrieve the expiry date of many accounts in one round trip.
      *
      * ac_code is not unique in HMS, so each code is folded to the latest expiry

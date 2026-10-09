@@ -176,6 +176,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::get('/members', 'members')->name('members');
                 Route::get('/branches', 'branches')->name('branches');
                 Route::get('/mapped_users', 'mappedUsers')->name('mapped_users');
+                // "Assign users": the picker (posted — it carries the selected rows) and the save.
+                Route::post('/assignable_users', 'assignableUsers')->name('assignable_users');
+                Route::post('/assign_users', 'assignUsers')->name('assign_users');
         });
         // Gated by permission rather than role, so it can be granted to any role or user.
         Route::prefix('users')->name('users.')
