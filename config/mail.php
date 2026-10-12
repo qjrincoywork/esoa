@@ -123,4 +123,21 @@ return [
         'name' => env('MAIL_FROM_NAME', 'Example'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Global "BCC" Addresses
+    |--------------------------------------------------------------------------
+    |
+    | Every outgoing email is silently copied to these addresses so delivery
+    | can be checked and validated. Set MAIL_BCC to a comma-separated list;
+    | leave it empty to turn the copy off. Invalid addresses are dropped so a
+    | typo here can never block real mail. See App\Listeners\AddGlobalBcc.
+    |
+    */
+
+    'bcc' => array_values(array_filter(
+        array_map('trim', explode(',', (string) env('MAIL_BCC', ''))),
+        fn (string $address) => filter_var($address, FILTER_VALIDATE_EMAIL) !== false,
+    )),
+
 ];
