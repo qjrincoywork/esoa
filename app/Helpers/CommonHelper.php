@@ -189,6 +189,22 @@ class CommonHelper
     }
 
     /**
+     * Check if a saved model has a stored attachment and an account code.
+     *
+     * The counterpart of {@see hasFileAttachmentAndAccount()} for callers that no
+     * longer hold the request the file arrived on — a batch upload, notifying once
+     * every invoice is committed — and so judge by the path that was stored instead.
+     *
+     * @param  object  $model
+     * @param  string  $fileField
+     * @return bool
+     */
+    public static function hasStoredAttachmentAndAccount($model, string $fileField = 'file_pdf'): bool
+    {
+        return !empty($model->{$fileField}) && !empty($model->account_code);
+    }
+
+    /**
      * Store uploaded files with SOA number in filename.
      *
      * @param  string  $soaNumber
@@ -661,6 +677,11 @@ class CommonHelper
      * activity row records that the notification was dispatched, not that the SMTP
      * server has accepted it — a worker must be running for it to actually go out.
      *
+     * The display fields are only prepared for an inline send. A queued mail keeps
+     * nothing but the model's key and its mailable prepares them again at render time
+     * ({@see prepareBillingInvoiceForEmail()}), so preparing here would cost a batch
+     * up to two HMS lookups per invoice for values that are then thrown away.
+     *
      * @param  object  $model
      * @param  object  $user
      * @param  string  $mailClass
@@ -669,7 +690,9 @@ class CommonHelper
      */
     public static function sendBillingInvoiceEmail($model, $user, string $mailClass, bool $queue = false): void
     {
-        self::prepareBillingInvoiceForEmail($model);
+        if (!$queue) {
+            self::prepareBillingInvoiceForEmail($model);
+        }
 
         $isAccountBranchAdmin = $user->hasAnyRole(['account_branch_admin', 'group_account_admin']);
         $billingNotificationEmail = config('vc.billing_notification_email', 'billing@example.com');

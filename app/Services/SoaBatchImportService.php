@@ -999,7 +999,9 @@ class SoaBatchImportService
     private function notify(array $soas, User $user): void
     {
         foreach ($soas as $soa) {
-            if (empty($soa->file_pdf) || empty($soa->account_code)) {
+            // Same condition as the single upload ({@see \App\Http\Controllers\SoaController::store()}),
+            // judged by the stored path since the upload request is gone by now.
+            if (! CommonHelper::hasStoredAttachmentAndAccount($soa)) {
                 continue;
             }
 
