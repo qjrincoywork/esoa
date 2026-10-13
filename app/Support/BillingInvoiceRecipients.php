@@ -31,14 +31,26 @@ final class BillingInvoiceRecipients
      */
     public function for(Soa $soa): array
     {
-        $accountCode = trim((string) $soa->account_code);
+        return $this->forAccount($soa->account_code, $soa->branch_code);
+    }
+
+    /**
+     * The same, for an invoice not saved yet — what upload validation asks
+     * ({@see \App\Rules\HasBillingInvoiceRecipients}).
+     *
+     * @return list<string>
+     */
+    public function forAccount(?string $accountCode, ?string $branchCode): array
+    {
+        $accountCode = trim((string) $accountCode);
+        $branchCode = trim((string) $branchCode) ?: null;
 
         if ($accountCode === '') {
             return [];
         }
 
-        return $this->resolved[UserAccount::mappingKey($accountCode, $soa->branch_code)] ??= User::query()
-            ->accountAdminsCovering($accountCode, $soa->branch_code)
+        return $this->resolved[UserAccount::mappingKey($accountCode, $branchCode)] ??= User::query()
+            ->accountAdminsCovering($accountCode, $branchCode)
             ->pluck('email')
             ->map(static fn ($email): string => trim((string) $email))
             ->filter()

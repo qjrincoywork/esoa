@@ -3,7 +3,7 @@
 namespace App\Http\Requests\Soa;
 
 use App\Enums\{ AccountType, BillRefFrom, BillType, Server };
-use App\Rules\{ IsDataExists, IsServerDataExists, SoaAmountIsValid, SoaStatusIsValid };
+use App\Rules\{ HasBillingInvoiceRecipients, IsDataExists, IsServerDataExists, SoaAmountIsValid, SoaStatusIsValid };
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -23,7 +23,8 @@ class CreateRequest extends FormRequest
 
     /**
      * Validation rules for creating an SOA: account/branch codes must exist on the HMS
-     * server, the SOA number must be unique and alphanumeric, and a PDF file (plus an
+     * server and have an HR user mapped to receive the upload notice, the SOA number must
+     * be unique and alphanumeric, and a PDF file (plus an
      * XLS file unless the bill type is ECU) is required alongside the billing details.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
@@ -42,10 +43,13 @@ class CreateRequest extends FormRequest
                 Rule::in(AccountType::getValues()),
             ],
             'account_code' => [
+                'bail',
                 'required',
                 'string',
                 'max:191',
                 new IsServerDataExists(Server::HMS, 'Accounts', 'ac_code'),
+                // Every upload is announced to the account's HR users; refuse one nobody would receive.
+                new HasBillingInvoiceRecipients(),
             ],
             'branch_code' => [
                 'nullable',

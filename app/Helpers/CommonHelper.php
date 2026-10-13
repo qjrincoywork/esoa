@@ -678,15 +678,20 @@ class CommonHelper
      * Every account-side user (group account admin / account branch admin) mapped to the
      * invoice's account/branch in `user_accounts` — exactly the users who can open it
      * ({@see BillingInvoiceRecipients}) — gets an email of their own, addressed to them
-     * alone, so no recipient ever sees another's address. The billing mailbox gets one
-     * record copy per invoice, with the uploader copied, rather than one per HR user.
-     * When nobody is mapped yet only that record copy goes out, and a warning is logged
-     * so the missing mapping can be fixed.
+     * with only the billing mailbox copied, so no HR user ever sees another's address.
+     *
+     * An upload with nobody to announce it to is refused at validation
+     * ({@see \App\Rules\HasBillingInvoiceRecipients}). Should the mapping vanish between
+     * validation and sending, nothing is sent and a warning is logged instead.
+     *
+     * The uploader is never addressed directly: uploaders are billing admins, who all
+     * receive the billing mailbox (a distribution list), so a direct copy would only
+     * duplicate the one they already get.
      *
      * Batch uploads pass one shared $recipients so each account/branch pair is looked up
      * once; see {@see sendBillingInvoiceEmail()} for what $queue changes.
      *
-     * @param  object  $user  The uploader.
+     * @param  object  $user  The uploader, recorded as who sent the notice.
      */
     public static function sendNewBillingInvoiceEmail(
         Soa $soa,
@@ -694,18 +699,23 @@ class CommonHelper
         bool $queue = false,
         ?BillingInvoiceRecipients $recipients = null
     ): void {
+        $billingNotificationEmail = config('vc.billing_notification_email');
         $hrEmails = ($recipients ?? new BillingInvoiceRecipients())->for($soa);
 
         if ($hrEmails === []) {
-            Log::warning('Billing invoice uploaded with no HR user mapped to its account/branch', [
+            Log::warning('Billing invoice email skipped: no HR user mapped to its account/branch', [
                 'soa_number' => $soa->soa_number,
                 'account_code' => $soa->account_code,
                 'branch_code' => $soa->branch_code,
             ]);
+
+            return;
         }
 
-        $envelopes = array_map(static fn (string $email): array => ['to' => $email, 'cc' => []], $hrEmails);
-        $envelopes[] = ['to' => config('vc.billing_notification_email'), 'cc' => [$user->email]];
+        $envelopes = array_map(
+            static fn (string $email): array => ['to' => $email, 'cc' => [$billingNotificationEmail]],
+            $hrEmails
+        );
 
         self::deliverBillingInvoiceEmail($soa, $user, NewBillingInvoiceUploaded::class, $envelopes, $queue);
     }
@@ -742,9 +752,8 @@ class CommonHelper
     /**
      * Send (or queue) one billing-invoice mailable per envelope and record who got it.
      *
-     * Each envelope is a separate message. An address is reached at most once across
-     * all of them: a blank or repeated "to" skips its envelope, and a "cc" already
-     * reached elsewhere is dropped. Messages fail independently — one bad address is
+     * Each envelope is a separate message, normalised by {@see distinctEnvelopes()}.
+     * Messages fail independently — one bad address is
      * logged and the rest still go out — and the single activity row lists only the
      * addresses that were actually sent (or queued).
      *
@@ -808,18 +817,18 @@ class CommonHelper
     }
 
     /**
-     * Normalise envelopes so every address is reached exactly once.
+     * Normalise envelopes so nobody is sent the same message twice.
      *
-     * Envelopes are taken in order: one whose "to" is blank or already reached is
-     * dropped, and each "cc" keeps only addresses not reached by an earlier envelope or
-     * by any envelope's "to" — so a copy never duplicates someone's own email.
+     * Envelopes are taken in order, and one whose "to" is blank or already used by an
+     * earlier envelope is dropped. Each "cc" is trimmed, de-duplicated, and cleared of
+     * its own "to" — but a copied address may repeat across envelopes, since that is
+     * the point of copying e.g. the billing mailbox on every recipient's email.
      *
      * @param  array<int, array{to: string|null, cc: array<int, string|null>}>  $envelopes
      * @return list<array{to: string, cc: list<string>}>
      */
     private static function distinctEnvelopes(array $envelopes): array
     {
-        $reached = array_flip(array_map('strtolower', self::distinctEmails(array_column($envelopes, 'to'))));
         $sent = [];
         $normalised = [];
 
@@ -831,14 +840,7 @@ class CommonHelper
             }
 
             $sent[strtolower($to)] = true;
-            $cc = array_values(array_filter(
-                self::distinctEmails($envelope['cc'] ?? []),
-                static fn (string $email): bool => !isset($reached[strtolower($email)])
-            ));
-
-            foreach ($cc as $email) {
-                $reached[strtolower($email)] = true;
-            }
+            $cc = array_values(array_udiff(self::distinctEmails($envelope['cc'] ?? []), [$to], 'strcasecmp'));
 
             $normalised[] = ['to' => $to, 'cc' => $cc];
         }

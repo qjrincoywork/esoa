@@ -4,7 +4,7 @@ namespace App\Http\Requests\Soa;
 
 use App\Enums\{ AccountType, BillRefFrom, BillType, Server, SoaStatus };
 use App\Models\Soa;
-use App\Rules\{ IsDataExists, IsServerDataExists, SoaStatusIsValid };
+use App\Rules\{ HasBillingInvoiceRecipients, IsDataExists, IsServerDataExists, SoaStatusIsValid };
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -14,7 +14,8 @@ class UpdateRequest extends FormRequest
      * Validation rules for updating an SOA. Account/group admins may only change the id
      * and status; other users validate the full SOA payload, where the PDF and (unless
      * the bill type is ECU) XLS files are required only when no file is already stored,
-     * and most fields are skipped when the status is ENDORSED.
+     * and most fields are skipped when the status is ENDORSED. A new PDF on an UNPAID SOA
+     * is announced to the account's HR users, so it also requires one to be mapped.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
@@ -82,10 +83,15 @@ class UpdateRequest extends FormRequest
                     Rule::in(AccountType::getValues()),
                 ],
                 'account_code' => [
+                    'bail',
                     'required',
                     'string',
                     'max:191',
                     new IsServerDataExists(Server::HMS, 'Accounts', 'ac_code'),
+                    // Same condition SoaController::update() announces a new PDF on.
+                    ...($this->hasFile('file_pdf') && (int) $this->input('status') === SoaStatus::UNPAID
+                        ? [new HasBillingInvoiceRecipients()]
+                        : []),
                 ],
                 'branch_code' => [
                     'nullable',

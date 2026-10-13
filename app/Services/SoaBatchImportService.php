@@ -10,6 +10,7 @@ use App\Helpers\CommonHelper;
 use App\Http\Requests\Soa\CreateRequest;
 use App\Models\Soa;
 use App\Models\User;
+use App\Rules\HasBillingInvoiceRecipients;
 use App\Rules\IsDataExists;
 use App\Rules\IsServerDataExists;
 use App\Support\AuditContext;
@@ -73,6 +74,12 @@ class SoaBatchImportService
     private array $ruleMessages = [];
 
     /**
+     * HR recipients per account/branch, shared by row validation and the notices sent
+     * afterwards, so each pair is looked up once per request.
+     */
+    private BillingInvoiceRecipients $recipients;
+
+    /**
      * Attachments already written to the billing disk that a failed import removed again.
      *
      * Recorded so the failure entry can say whether anything reached the share, which is
@@ -126,6 +133,7 @@ class SoaBatchImportService
         $createRequest = new CreateRequest();
         $this->rules = $createRequest->rules();
         $this->ruleMessages = $createRequest->messages();
+        $this->recipients = new BillingInvoiceRecipients();
 
         $this->attachments = $this->indexAttachments($attachments);
         $this->seenSoaNumbers = [];
@@ -549,6 +557,13 @@ class SoaBatchImportService
             }
 
             foreach ($fieldRules as $index => $rule) {
+                if ($rule instanceof HasBillingInvoiceRecipients) {
+                    // Memoised per account/branch pair, and kept for the notices.
+                    $this->rules[$field][$index] = $rule->using($this->recipients);
+
+                    continue;
+                }
+
                 if ($rule instanceof IsServerDataExists) {
                     $column = $rule->column() ?? $field;
                     $existing = $this->existingValues(
@@ -994,16 +1009,14 @@ class SoaBatchImportService
      * Best-effort and per invoice: the batch is already committed by this point, so a
      * failure to enqueue is logged and the remaining notifications still go out.
      *
-     * Recipients are the HR users mapped to each invoice's account/branch; one resolver
-     * is shared across the batch so each pair is looked up once, however many invoices
-     * it carries.
+     * Recipients are the HR users mapped to each invoice's account/branch, read from the
+     * resolver validation already filled ({@see $recipients}), so no pair is looked up
+     * twice.
      *
      * @param  list<Soa>  $soas
      */
     private function notify(array $soas, User $user): void
     {
-        $recipients = new BillingInvoiceRecipients();
-
         foreach ($soas as $soa) {
             // Same condition as the single upload ({@see \App\Http\Controllers\SoaController::store()}),
             // judged by the stored path since the upload request is gone by now.
@@ -1012,7 +1025,7 @@ class SoaBatchImportService
             }
 
             try {
-                CommonHelper::sendNewBillingInvoiceEmail($soa, $user, queue: true, recipients: $recipients);
+                CommonHelper::sendNewBillingInvoiceEmail($soa, $user, queue: true, recipients: $this->recipients);
             } catch (\Throwable $e) {
                 Log::error('SoaBatchImportService: notification could not be queued', [
                     'soa_number' => $soa->soa_number,
