@@ -217,6 +217,53 @@ class UserAccount extends Model
     }
 
     /**
+     * Mapping rows that grant sight of a record filed under the given account/branch.
+     *
+     * The inverse of {@see \App\Models\Soa::applyUserAccountRestriction()}: a mapping
+     * reaches a record when it names the record's account and either covers every
+     * branch of it (blank branch code, {@see mappingKey()}) or names the record's own
+     * branch. A record filed under no branch is therefore reached by whole-account
+     * mappings only.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder  $query
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public function scopeCovering($query, string $accountCode, ?string $branchCode)
+    {
+        $branchCode = trim((string) $branchCode);
+
+        return $query
+            ->where($this->qualifyColumn('account_code'), trim($accountCode))
+            ->where(function ($branch) use ($branchCode) {
+                $branch->whereNull($this->qualifyColumn('branch_code'))
+                    ->orWhere($this->qualifyColumn('branch_code'), '')
+                    ->when($branchCode !== '', fn ($q) => $q->orWhere($this->qualifyColumn('branch_code'), $branchCode));
+            });
+    }
+
+    /**
+     * Only each user's earliest mapping.
+     *
+     * An account/branch admin is scoped to their first mapping alone
+     * ({@see \App\Models\User::scopedAccountPairs()}), so any row after it grants
+     * nothing and must not make them a recipient of what they cannot open.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder  $query
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public function scopeEarliestOfUser($query)
+    {
+        $table = $this->getTable();
+
+        return $query->whereNotExists(function ($earlier) use ($table) {
+            $earlier->selectRaw('1')
+                ->from("{$table} as earlier")
+                ->whereColumn('earlier.user_id', "{$table}.user_id")
+                ->whereColumn('earlier.id', '<', "{$table}.id");
+        });
+    }
+
+    /**
      * Run a mapping query, grouped by the given column, into code => usernames.
      *
      * @param  \Illuminate\Database\Eloquent\Builder  $query

@@ -477,7 +477,7 @@ class SoaController extends Controller
                 $soa = $this->soa->saveSoa($validated);
 
                 if (CommonHelper::hasFileAttachmentAndAccount($soa, $request)) {
-                    CommonHelper::sendBillingInvoiceEmail($soa, $request->user(), NewBillingInvoiceUploaded::class);
+                    CommonHelper::sendNewBillingInvoiceEmail($soa, $request->user());
                 }
 
                 return $soa;
@@ -1003,7 +1003,7 @@ class SoaController extends Controller
 
                     if ($request->hasFile('file_pdf') && $soa->status == SoaStatus::UNPAID) {
                         if (CommonHelper::hasFileAttachmentAndAccount($soa, $request)) {
-                            CommonHelper::sendBillingInvoiceEmail($soa, $request->user(), NewBillingInvoiceUploaded::class);
+                            CommonHelper::sendNewBillingInvoiceEmail($soa, $request->user());
                         }
                     }
 
