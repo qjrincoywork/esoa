@@ -8,12 +8,12 @@ use App\Enums\AuditLogName;
 use App\Enums\SoaImportColumn as Col;
 use App\Helpers\CommonHelper;
 use App\Http\Requests\Soa\CreateRequest;
-use App\Mail\NewBillingInvoiceUploaded;
 use App\Models\Soa;
 use App\Models\User;
 use App\Rules\IsDataExists;
 use App\Rules\IsServerDataExists;
 use App\Support\AuditContext;
+use App\Support\BillingInvoiceRecipients;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -994,10 +994,16 @@ class SoaBatchImportService
      * Best-effort and per invoice: the batch is already committed by this point, so a
      * failure to enqueue is logged and the remaining notifications still go out.
      *
+     * Recipients are the HR users mapped to each invoice's account/branch; one resolver
+     * is shared across the batch so each pair is looked up once, however many invoices
+     * it carries.
+     *
      * @param  list<Soa>  $soas
      */
     private function notify(array $soas, User $user): void
     {
+        $recipients = new BillingInvoiceRecipients();
+
         foreach ($soas as $soa) {
             // Same condition as the single upload ({@see \App\Http\Controllers\SoaController::store()}),
             // judged by the stored path since the upload request is gone by now.
@@ -1006,7 +1012,7 @@ class SoaBatchImportService
             }
 
             try {
-                CommonHelper::sendBillingInvoiceEmail($soa, $user, NewBillingInvoiceUploaded::class, queue: true);
+                CommonHelper::sendNewBillingInvoiceEmail($soa, $user, queue: true, recipients: $recipients);
             } catch (\Throwable $e) {
                 Log::error('SoaBatchImportService: notification could not be queued', [
                     'soa_number' => $soa->soa_number,

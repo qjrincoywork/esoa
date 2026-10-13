@@ -277,6 +277,31 @@ class User extends Authenticatable implements AuthorizableContract, MustVerifyEm
     }
 
     /**
+     * Active, mailable account-side (HR) users who can see a record filed under the
+     * given account/branch.
+     *
+     * Applies the same reach as {@see scopedAccountPairs()}, in one query rather than
+     * per user: a group account admin through any of their mappings, an account/branch
+     * admin through their first mapping only. Mailbox-less and deactivated users are
+     * left out, and soft-deleted ones by the model itself.
+     */
+    public function scopeAccountAdminsCovering(Builder $query, string $accountCode, ?string $branchCode): Builder
+    {
+        $withRole = fn (Builder $q, string $role) => $q->whereHas('roles', fn ($r) => $r->where('name', $role));
+        $covering = fn ($mapping) => $mapping->covering($accountCode, $branchCode);
+
+        return $query
+            ->where('is_active', true)
+            ->whereNotNull('email')
+            ->where('email', '!=', '')
+            ->where(function (Builder $reach) use ($withRole, $covering) {
+                $reach->where(fn (Builder $q) => $withRole($q, 'group_account_admin')->whereHas('userAccounts', $covering))
+                    ->orWhere(fn (Builder $q) => $withRole($q, 'account_branch_admin')
+                        ->whereHas('userAccounts', fn ($mapping) => $covering($mapping)->earliestOfUser()));
+            });
+    }
+
+    /**
      * Get users with optional filters and pagination.
      *
      * @param array $params

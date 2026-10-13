@@ -4,9 +4,13 @@ namespace App\Helpers;
 
 use App\Enums\AccountMappingBadge;
 use App\Enums\Server;
+use App\Enums\TenancyScope;
+use App\Mail\NewBillingInvoiceUploaded;
 use App\Models\Soa;
+use App\Support\BillingInvoiceRecipients;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use App\Helpers\SqlDatabase;
 use Illuminate\Database\Eloquent\Model;
@@ -669,18 +673,54 @@ class CommonHelper
     }
 
     /**
-     * Send billing invoice email and record activity.
+     * Announce a newly created or uploaded billing invoice to the client's HR users.
+     *
+     * Every account-side user (group account admin / account branch admin) mapped to the
+     * invoice's account/branch in `user_accounts` — exactly the users who can open it
+     * ({@see BillingInvoiceRecipients}) — gets an email of their own, addressed to them
+     * alone, so no recipient ever sees another's address. The billing mailbox gets one
+     * record copy per invoice, with the uploader copied, rather than one per HR user.
+     * When nobody is mapped yet only that record copy goes out, and a warning is logged
+     * so the missing mapping can be fixed.
+     *
+     * Batch uploads pass one shared $recipients so each account/branch pair is looked up
+     * once; see {@see sendBillingInvoiceEmail()} for what $queue changes.
+     *
+     * @param  object  $user  The uploader.
+     */
+    public static function sendNewBillingInvoiceEmail(
+        Soa $soa,
+        $user,
+        bool $queue = false,
+        ?BillingInvoiceRecipients $recipients = null
+    ): void {
+        $hrEmails = ($recipients ?? new BillingInvoiceRecipients())->for($soa);
+
+        if ($hrEmails === []) {
+            Log::warning('Billing invoice uploaded with no HR user mapped to its account/branch', [
+                'soa_number' => $soa->soa_number,
+                'account_code' => $soa->account_code,
+                'branch_code' => $soa->branch_code,
+            ]);
+        }
+
+        $envelopes = array_map(static fn (string $email): array => ['to' => $email, 'cc' => []], $hrEmails);
+        $envelopes[] = ['to' => config('vc.billing_notification_email'), 'cc' => [$user->email]];
+
+        self::deliverBillingInvoiceEmail($soa, $user, NewBillingInvoiceUploaded::class, $envelopes, $queue);
+    }
+
+    /**
+     * Send a billing-invoice email between the acting user and the billing mailbox.
+     *
+     * An account-side user's action (e.g. a status change) is addressed to billing with
+     * the user copied; anyone else's is addressed to the user with billing copied.
      *
      * Pass $queue to hand the mail to the queue instead of sending it inline. Batch
      * uploads use it so one request does not sit through dozens of SMTP round trips;
      * the single-upload paths send inline as before. Note that when queued, the
      * activity row records that the notification was dispatched, not that the SMTP
      * server has accepted it — a worker must be running for it to actually go out.
-     *
-     * The display fields are only prepared for an inline send. A queued mail keeps
-     * nothing but the model's key and its mailable prepares them again at render time
-     * ({@see prepareBillingInvoiceForEmail()}), so preparing here would cost a batch
-     * up to two HMS lookups per invoice for values that are then thrown away.
      *
      * @param  object  $model
      * @param  object  $user
@@ -690,33 +730,136 @@ class CommonHelper
      */
     public static function sendBillingInvoiceEmail($model, $user, string $mailClass, bool $queue = false): void
     {
+        $isAccountBranchAdmin = $user->hasAnyRole(TenancyScope::assignedAccountRoles());
+        $billingNotificationEmail = config('vc.billing_notification_email');
+
+        self::deliverBillingInvoiceEmail($model, $user, $mailClass, [[
+            'to' => $isAccountBranchAdmin ? $billingNotificationEmail : $user->email,
+            'cc' => [$isAccountBranchAdmin ? $user->email : $billingNotificationEmail],
+        ]], $queue);
+    }
+
+    /**
+     * Send (or queue) one billing-invoice mailable per envelope and record who got it.
+     *
+     * Each envelope is a separate message. An address is reached at most once across
+     * all of them: a blank or repeated "to" skips its envelope, and a "cc" already
+     * reached elsewhere is dropped. Messages fail independently — one bad address is
+     * logged and the rest still go out — and the single activity row lists only the
+     * addresses that were actually sent (or queued).
+     *
+     * The display fields are only prepared for an inline send. A queued mail keeps
+     * nothing but the model's key and its mailable prepares them again at render time
+     * ({@see prepareBillingInvoiceForEmail()}), so preparing here would cost a batch
+     * up to two HMS lookups per invoice for values that are then thrown away.
+     *
+     * @param  object  $model
+     * @param  object  $user
+     * @param  array<int, array{to: string|null, cc: array<int, string|null>}>  $envelopes
+     */
+    private static function deliverBillingInvoiceEmail($model, $user, string $mailClass, array $envelopes, bool $queue): void
+    {
+        $envelopes = self::distinctEnvelopes($envelopes);
+
+        if ($envelopes === []) {
+            Log::warning('Billing invoice email skipped: no recipient address', [
+                'soa_number' => $model->soa_number,
+                'mail' => $mailClass,
+            ]);
+
+            return;
+        }
+
         if (!$queue) {
             self::prepareBillingInvoiceForEmail($model);
         }
 
-        $isAccountBranchAdmin = $user->hasAnyRole(['account_branch_admin', 'group_account_admin']);
-        $billingNotificationEmail = config('vc.billing_notification_email', 'billing@example.com');
+        $notified = [];
 
-        $toEmail = $isAccountBranchAdmin
-            ? $billingNotificationEmail
-            : $user->email;
+        foreach ($envelopes as $envelope) {
+            try {
+                $pending = Mail::to($envelope['to'])->cc($envelope['cc']);
+                $mailable = new $mailClass($model);
 
-        $ccEmail = $isAccountBranchAdmin
-            ? $user->email
-            : $billingNotificationEmail;
+                $queue ? $pending->queue($mailable) : $pending->send($mailable);
 
-        $pending = Mail::to($toEmail)->cc($ccEmail);
-        $mailable = new $mailClass($model);
+                $notified[] = $envelope['to'];
+            } catch (\Throwable $e) {
+                Log::error('Billing invoice email could not be delivered', [
+                    'soa_number' => $model->soa_number,
+                    'mail' => $mailClass,
+                    'to' => $envelope['to'],
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
 
-        $queue ? $pending->queue($mailable) : $pending->send($mailable);
+        if ($notified === []) {
+            return;
+        }
 
         $model->recordActivity('billing_invoice_email_sent', [
             'to' => [
                 'soa_number' => $model->soa_number,
                 'file_pdf' => $model->file_pdf,
-                'notified_email' => $toEmail,
+                'notified_email' => implode(', ', $notified),
             ],
         ], $user);
+    }
+
+    /**
+     * Normalise envelopes so every address is reached exactly once.
+     *
+     * Envelopes are taken in order: one whose "to" is blank or already reached is
+     * dropped, and each "cc" keeps only addresses not reached by an earlier envelope or
+     * by any envelope's "to" — so a copy never duplicates someone's own email.
+     *
+     * @param  array<int, array{to: string|null, cc: array<int, string|null>}>  $envelopes
+     * @return list<array{to: string, cc: list<string>}>
+     */
+    private static function distinctEnvelopes(array $envelopes): array
+    {
+        $reached = array_flip(array_map('strtolower', self::distinctEmails(array_column($envelopes, 'to'))));
+        $sent = [];
+        $normalised = [];
+
+        foreach ($envelopes as $envelope) {
+            $to = trim((string) $envelope['to']);
+
+            if ($to === '' || isset($sent[strtolower($to)])) {
+                continue;
+            }
+
+            $sent[strtolower($to)] = true;
+            $cc = array_values(array_filter(
+                self::distinctEmails($envelope['cc'] ?? []),
+                static fn (string $email): bool => !isset($reached[strtolower($email)])
+            ));
+
+            foreach ($cc as $email) {
+                $reached[strtolower($email)] = true;
+            }
+
+            $normalised[] = ['to' => $to, 'cc' => $cc];
+        }
+
+        return $normalised;
+    }
+
+    /**
+     * Trim a list of addresses, drop blanks, and de-duplicate it ignoring case.
+     *
+     * @param  array<int, string|null>  $emails
+     * @return list<string>
+     */
+    private static function distinctEmails(array $emails): array
+    {
+        return collect($emails)
+            ->map(static fn ($email): string => trim((string) $email))
+            ->filter()
+            ->unique(static fn (string $email): string => strtolower($email))
+            ->values()
+            ->all();
     }
 
     /**

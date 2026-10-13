@@ -142,9 +142,21 @@ const chunkProgress = ref<{ current: number; total: number } | null>(null);
 const canonical = (value: unknown): string =>
     String(value ?? '').toLowerCase().trim().replace(/\s+/g, '_');
 
-/** A spreadsheet date cell as an ISO day, without a timezone shifting it. */
-const toIsoDate = (value: Date): string =>
-    `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+/**
+ * An Excel date serial as an ISO day, decoded as a plain calendar date.
+ *
+ * Deliberately never goes through a JS `Date`: SheetJS builds one in the browser's
+ * time zone, and for zones whose historical offset differs from today's (Windows'
+ * "Kuala Lumpur, Singapore", "Beijing, Hong Kong", India, …) it lands a few seconds
+ * before midnight — so the day read back is the one *before* what Excel shows, but
+ * only on machines set to those zones. The serial itself carries no time zone at all.
+ * Null when the number is not a usable date serial.
+ */
+const serialToIsoDate = (serial: number, date1904: boolean): string | null => {
+    const parsed = XLSX.SSF.parse_date_code(serial, { date1904 });
+    if (!parsed || !parsed.y) return null;
+    return `${parsed.y}-${String(parsed.m).padStart(2, '0')}-${String(parsed.d).padStart(2, '0')}`;
+};
 
 /** The key a raw file selection is de-duplicated on: its file name, case-insensitively. */
 const attachmentKey = (name: string): string => name.split(/[\\/]/).pop()?.toLowerCase().trim() ?? '';
@@ -481,7 +493,11 @@ const processManifestFile = async (file: File) => {
 
     try {
         const buffer = await file.arrayBuffer();
-        const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
+        // Dates are left as Excel serials and decoded per date column below
+        // ({@see serialToIsoDate}); `cellDates` would route them through a local-time Date.
+        const workbook = XLSX.read(buffer, { type: 'array' });
+        const date1904 = !!workbook.Workbook?.WBProps?.date1904;
+        const dateColumns = new Set(props.dateColumns);
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '', raw: true });
 
@@ -505,11 +521,13 @@ const processManifestFile = async (file: File) => {
                     const rawHeader = headerMap.get(column);
                     const value = rawHeader !== undefined ? raw[rawHeader] : '';
 
-                    if (value instanceof Date) {
-                        obj[column] = toIsoDate(value);
-                    } else {
-                        obj[column] = value === null || value === undefined ? '' : String(value).trim();
-                    }
+                    // A real date cell reaches us as its serial number; a date typed as text
+                    // stays text for the server to interpret, as before.
+                    const isoDate = dateColumns.has(column) && typeof value === 'number'
+                        ? serialToIsoDate(value, date1904)
+                        : null;
+
+                    obj[column] = isoDate ?? (value === null || value === undefined ? '' : String(value).trim());
                 });
                 // Where this came from in the file: the header is line 1, so the first
                 // data row is line 2. Stamped before any filtering, so a reported row
