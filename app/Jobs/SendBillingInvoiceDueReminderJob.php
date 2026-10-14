@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Enums\EmailNotification;
 use App\Models\User;
 use App\Mail\BillingInvoiceDueReminder;
 use Illuminate\Bus\Queueable;
@@ -82,6 +83,11 @@ class SendBillingInvoiceDueReminderJob implements ShouldQueue
 
             if (!$user || empty($user->email)) {
                 Log::warning('User not found or has no email', ['user_id' => $userId]);
+                return;
+            }
+
+            if (!$user->receivesEmailNotification(EmailNotification::BILLING_INVOICE_DUE_REMINDER)) {
+                Log::info('Skipped due reminder email: user is excluded from due reminders', ['user_id' => $userId]);
                 return;
             }
 

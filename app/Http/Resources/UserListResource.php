@@ -35,6 +35,7 @@ class UserListResource extends JsonResource
             'department_id' => $detail?->department_id,
             'department'    => $detail?->department?->name,
             'credentials'   => new UserCredentialResource($this->resource),
+            'email_notifications' => new UserEmailNotificationResource($this->resource),
         ];
     }
 }

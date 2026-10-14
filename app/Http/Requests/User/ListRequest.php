@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\User;
 
-use App\Enums\{CredentialAccess, CredentialStatus, IsActive, UserType};
+use App\Enums\{CredentialAccess, CredentialStatus, EmailNotification, IsActive, UserType};
 use App\Http\Requests\Concerns\AcceptsBulkSearchTerms;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -15,8 +15,9 @@ class ListRequest extends FormRequest
      * Validate the optional user listing filters: a search string, a bulk lookup (many
      * usernames/emails at once, optionally exact, optionally narrowed to one of them —
      * {@see AcceptsBulkSearchTerms}), page size, a user type, a department ID, an
-     * active-status flag, and the credential status and access state
-     * ({@see CredentialStatus}, {@see CredentialAccess}).
+     * active-status flag, the credential status and access state
+     * ({@see CredentialStatus}, {@see CredentialAccess}), and an email notification the
+     * user is excluded from ({@see EmailNotification}).
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
@@ -31,6 +32,7 @@ class ListRequest extends FormRequest
             'is_active'         => ['nullable', 'integer', Rule::in(IsActive::getValues())],
             'credential_status' => ['nullable', 'integer', Rule::in(CredentialStatus::getValues())],
             'credential_access' => ['nullable', 'integer', Rule::in(CredentialAccess::getValues())],
+            'excluded_notification' => ['nullable', 'string', Rule::in(EmailNotification::getValues())],
         ];
     }
 

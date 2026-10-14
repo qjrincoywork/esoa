@@ -3,6 +3,7 @@
 namespace App\Helpers;
 
 use App\Enums\AccountMappingBadge;
+use App\Enums\EmailNotification;
 use App\Enums\Server;
 use App\Enums\TenancyScope;
 use App\Listeners\AddGlobalBcc;
@@ -681,9 +682,11 @@ class CommonHelper
      * ({@see BillingInvoiceRecipients}) — gets an email of their own, addressed to them
      * with only the billing mailbox copied, so no HR user ever sees another's address.
      *
-     * An upload with nobody to announce it to is refused at validation
-     * ({@see \App\Rules\HasBillingInvoiceRecipients}). Should the mapping vanish between
-     * validation and sending, nothing is sent and a warning is logged instead.
+     * HR users excluded from this notification ({@see EmailNotification::NEW_BILLING_INVOICE})
+     * are left off. An upload with nobody mapped to it is refused at validation
+     * ({@see \App\Rules\HasBillingInvoiceRecipients}); should the mapping vanish between
+     * validation and sending — or everyone mapped be excluded — nothing is sent and a
+     * warning is logged instead.
      *
      * The uploader is never addressed directly: uploaders are billing admins, who all
      * receive the billing mailbox (a distribution list), so a direct copy would only
@@ -704,7 +707,7 @@ class CommonHelper
         $hrEmails = ($recipients ?? new BillingInvoiceRecipients())->for($soa);
 
         if ($hrEmails === []) {
-            Log::warning('Billing invoice email skipped: no HR user mapped to its account/branch', [
+            Log::warning('Billing invoice email skipped: no HR user mapped to its account/branch receives email notifications', [
                 'soa_number' => $soa->soa_number,
                 'account_code' => $soa->account_code,
                 'branch_code' => $soa->branch_code,
@@ -725,7 +728,9 @@ class CommonHelper
      * Send a billing-invoice email between the acting user and the billing mailbox.
      *
      * An account-side user's action (e.g. a status change) is addressed to billing with
-     * the user copied; anyone else's is addressed to the user with billing copied.
+     * the user copied; anyone else's is addressed to the user with billing copied. A user
+     * excluded from the mail's notification ({@see EmailNotification::forMailable()}) is left
+     * off, and billing is then addressed alone.
      *
      * Pass $queue to hand the mail to the queue instead of sending it inline. Batch
      * uploads use it so one request does not sit through dozens of SMTP round trips;
@@ -743,10 +748,11 @@ class CommonHelper
     {
         $isAccountBranchAdmin = $user->hasAnyRole(TenancyScope::assignedAccountRoles());
         $billingNotificationEmail = config('vc.billing_notification_email');
+        $userEmail = $user->notificationEmail(EmailNotification::forMailable($mailClass));
 
         self::deliverBillingInvoiceEmail($model, $user, $mailClass, [[
-            'to' => $isAccountBranchAdmin ? $billingNotificationEmail : $user->email,
-            'cc' => [$isAccountBranchAdmin ? $user->email : $billingNotificationEmail],
+            'to' => $isAccountBranchAdmin || empty($userEmail) ? $billingNotificationEmail : $userEmail,
+            'cc' => [$isAccountBranchAdmin ? $userEmail : $billingNotificationEmail],
         ]], $queue);
     }
 
@@ -875,6 +881,9 @@ class CommonHelper
     /**
      * Send a generic notification email to the configured contact address and CC the request creator.
      *
+     * A creator excluded from the mail's notification ({@see EmailNotification::forMailable()})
+     * is not copied; the contact address still receives it.
+     *
      * @param  object  $model
      * @param  object  $user
      * @param  string  $mailClass
@@ -889,9 +898,13 @@ class CommonHelper
             return;
         }
 
-        Mail::to($toEmail)
-            ->cc($user->email)
-            ->send(new $mailClass($model));
+        $pending = Mail::to($toEmail);
+
+        if ($ccEmail = $user->notificationEmail(EmailNotification::forMailable($mailClass))) {
+            $pending->cc($ccEmail);
+        }
+
+        $pending->send(new $mailClass($model));
     }
 
     /**

@@ -35,6 +35,7 @@ class NavigationModuleSeeder extends Seeder
             ['nav' => 'ICT Admin', 'perm' => 'users.verify',          'name' => 'Verify User',                  'slug' => 'users.verify',                 'icon' => 'ShieldCheck',    'color' => 'teal',   'url' => '/users/verify',                'parent' => 'users.index',           'order' => 1],
             ['nav' => 'ICT Admin', 'perm' => 'users.toggle_active',   'name' => 'Toggle User Active Status',    'slug' => 'users.toggle_active',          'icon' => 'ToggleRight',    'color' => 'orange', 'url' => '/users/toggle_active',         'parent' => 'users.index',           'order' => 6],
             ['nav' => 'ICT Admin', 'perm' => 'users.account_mapping', 'name' => 'Map Accounts & Branches',      'slug' => 'users.account_mapping',        'icon' => 'Network',        'color' => 'indigo', 'url' => '/users/{id}/account_mapping',  'parent' => 'users.index',           'order' => 7],
+            ['nav' => 'ICT Admin', 'perm' => 'users.email_notifications', 'name' => 'Email Notifications', 'slug' => 'users.email_notifications', 'icon' => 'Mail', 'color' => 'orange', 'url' => '/users/email_notifications', 'parent' => 'users.index', 'order' => 8],
             ['nav' => 'ICT Admin', 'perm' => 'users.edit_permissions', 'name' => 'Manage Permissions',          'slug' => 'users.edit_permissions',       'icon' => 'KeyRound',       'color' => 'green',  'url' => '/users/{id}/edit_permissions', 'parent' => 'users.index',           'order' => 3],
 
             // Roles

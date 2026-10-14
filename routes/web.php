@@ -96,6 +96,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 Route::post('/bulk_verify', 'bulkUserVerification')->name('bulk_verify');
                 Route::post('/toggle_active', 'toggleActive')->name('toggle_active');
                 Route::post('/bulk_toggle_active', 'bulkToggleActive')->name('bulk_toggle_active');
+                // Which email notifications users receive — one row or many.
+                Route::post('/email_notifications', 'updateEmailNotifications')->name('email_notifications');
                 Route::post('/bulk_destroy', 'bulkDestroy')->name('bulk_destroy');
                 // The user pane's Activity tab — the audit trail pinned to one user.
                 Route::get('/{id}/activity_logs', 'activityLogs')->whereNumber('id')->name('activity_logs');

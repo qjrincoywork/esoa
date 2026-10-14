@@ -9,12 +9,13 @@ use Illuminate\Contracts\Validation\ValidationRule;
 
 /**
  * Pass only when the account (and branch, when given) has at least one HR user mapped
- * to it who would receive the billing invoice's upload notice.
+ * to it who can see the billing invoice.
  *
- * Applied to `account_code`; the branch is read from the same payload. Recipients are
- * resolved exactly as the notice resolves them ({@see BillingInvoiceRecipients}), so an
- * invoice that passes is one the notice can be addressed to. Hand in a shared resolver
- * to validate many rows with one lookup per account/branch pair.
+ * Applied to `account_code`; the branch is read from the same payload. The mapped users
+ * are resolved exactly as the notice resolves them ({@see BillingInvoiceRecipients}).
+ * A user excluded from the new-invoice notification still counts: they see the invoice in the
+ * system and are only left off its notice. Hand in a shared resolver to validate many
+ * rows with one lookup per account/branch pair.
  */
 class HasBillingInvoiceRecipients implements DataAwareRule, ValidationRule
 {
@@ -61,7 +62,7 @@ class HasBillingInvoiceRecipients implements DataAwareRule, ValidationRule
         $branchCode = trim((string) ($this->data['branch_code'] ?? ''));
         $this->recipients ??= new BillingInvoiceRecipients();
 
-        if ($this->recipients->forAccount($accountCode, $branchCode) !== []) {
+        if ($this->recipients->coversAccount($accountCode, $branchCode)) {
             return;
         }
 
