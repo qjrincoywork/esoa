@@ -5,6 +5,7 @@ namespace App\Helpers;
 use App\Enums\AccountMappingBadge;
 use App\Enums\Server;
 use App\Enums\TenancyScope;
+use App\Listeners\AddGlobalBcc;
 use App\Mail\NewBillingInvoiceUploaded;
 use App\Models\Soa;
 use App\Support\BillingInvoiceRecipients;
@@ -788,6 +789,13 @@ class CommonHelper
         foreach ($envelopes as $envelope) {
             try {
                 $pending = Mail::to($envelope['to'])->cc($envelope['cc']);
+
+                // A queued message is sent by whichever worker takes it, under that
+                // worker's config — so carry the global BCC with it ({@see AddGlobalBcc}).
+                if ($queue) {
+                    $pending->bcc(AddGlobalBcc::missingFrom([$envelope['to'], ...$envelope['cc']]));
+                }
+
                 $mailable = new $mailClass($model);
 
                 $queue ? $pending->queue($mailable) : $pending->send($mailable);
