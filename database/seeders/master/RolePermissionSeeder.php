@@ -37,6 +37,7 @@ class RolePermissionSeeder extends Seeder
             'users.destroy',
             'users.verify',
             'users.toggle_active',
+            'users.email_notifications',
             'users.account_mapping',
             'users.mapped_accounts',
             'users.edit_permissions',

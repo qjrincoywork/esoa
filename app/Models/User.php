@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Laravel\Fortify\TwoFactorAuthenticatable;
-use App\Enums\{AuditEvent, CredentialAccess, CredentialStatus, PermissionAssignmentMode, UserType};
+use App\Enums\{AuditEvent, CredentialAccess, CredentialStatus, EmailNotification, PermissionAssignmentMode, UserType};
 use App\Support\AuthenticationAudit;
 use App\Support\BulkSearchTerms;
 use Spatie\Permission\Models\Permission;
@@ -164,6 +164,55 @@ class User extends Authenticatable implements AuthorizableContract, MustVerifyEm
             ->where(fn (Builder $q) => $q
                 ->whereNull('last_login_at')
                 ->orWhereColumn('last_login_at', '<', 'credentials_sent_at'));
+    }
+
+    /**
+     * Whether this user is sent the given email notification ({@see EmailNotification}).
+     *
+     * Null stands for mail that is not a notification — login credentials, password
+     * resets — which always goes out. Reads the loaded exclusions when there are any, so
+     * a list that eager-loads them asks nothing per row.
+     */
+    public function receivesEmailNotification(?string $notification): bool
+    {
+        if ($notification === null) {
+            return true;
+        }
+
+        return $this->relationLoaded('notificationExclusions')
+            ? !$this->notificationExclusions->contains('notification', $notification)
+            : !$this->notificationExclusions()->where('notification', $notification)->exists();
+    }
+
+    /**
+     * The address to put on the given notification for this user: their email, or null
+     * when they are excluded from it ({@see receivesEmailNotification()}).
+     */
+    public function notificationEmail(?string $notification): ?string
+    {
+        return $this->receivesEmailNotification($notification) ? $this->email : null;
+    }
+
+    /**
+     * Constrain to users who are sent the given email notification — the query form of
+     * {@see receivesEmailNotification()}.
+     */
+    public function scopeReceivesEmailNotification(Builder $query, string $notification): Builder
+    {
+        return $query->whereDoesntHave(
+            'notificationExclusions',
+            fn (Builder $exclusion) => $exclusion->where('notification', $notification)
+        );
+    }
+
+    /**
+     * Get the email notifications this user is excluded from (has-many UserNotificationExclusion via user_id).
+     *
+     * @return HasMany
+     */
+    public function notificationExclusions(): HasMany
+    {
+        return $this->hasMany(UserNotificationExclusion::class, 'user_id');
     }
 
     /**
@@ -341,6 +390,9 @@ class User extends Authenticatable implements AuthorizableContract, MustVerifyEm
             ->when(isset($params['is_active']), function ($query) use ($params) {
                 $query->where('is_active', $params['is_active']);
             })
+            ->when(isset($params['excluded_notification']), function ($query) use ($params) {
+                $query->whereHas('notificationExclusions', fn ($q) => $q->where('notification', $params['excluded_notification']));
+            })
             ->when(isset($params['type']), function ($query) use ($params) {
                 $query->whereHas('userDetail', fn ($q) => $q->where('type', $params['type']));
             })
@@ -348,7 +400,7 @@ class User extends Authenticatable implements AuthorizableContract, MustVerifyEm
                 isset($params['department_id']) && isset($params['type']) && (int) $params['type'] === UserType::VC_EMPLOYEE,
                 fn ($query) => $query->whereHas('userDetail', fn ($q) => $q->where('department_id', $params['department_id']))
             )
-            ->with('userDetail.department')
+            ->with(['userDetail.department', 'notificationExclusions:id,user_id,notification'])
             ->orderBy('id', 'desc');
 
         $authUser = auth()->user();

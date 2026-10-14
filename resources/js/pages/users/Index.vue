@@ -38,6 +38,8 @@ import {
     type CredentialReportOption,
     type User,
     type UserCredentials,
+    type EmailNotificationOption,
+    type UserEmailNotification,
 } from '@/composables/users';
 import { avatar } from '@/lib/avatar';
 import { badge } from '@/lib/directoryBadges';
@@ -47,6 +49,8 @@ import {
     FileDown,
     KeyRound,
     MailCheck,
+    Mail,
+    MailX,
     RotateCcw,
     SlidersHorizontal,
     TextSearch,
@@ -75,6 +79,7 @@ interface UserRow extends User {
     department_id: number | null
     department: string | null
     credentials?: UserCredentials
+    email_notifications?: UserEmailNotification[]
 }
 
 type UsersPagination = ListingPage & { data: UserRow[] }
@@ -86,6 +91,7 @@ type FilterOptions = {
     departments: { id: number; name: string }[]
     credential_statuses: Option[]
     credential_accesses: Option[]
+    email_notifications: EmailNotificationOption[]
 }
 
 /** A row action as the shared `sub_modules` prop lists it (a navigation module). */
@@ -119,6 +125,7 @@ const {
     verifyUsers,
     bulkVerifyCredentials,
     toggleActiveUser,
+    manageEmailNotifications,
     openUserPane,
     closePane,
     rightPaneVisible,
@@ -145,6 +152,9 @@ const searchQuery = ref('');
 const credentialReports = computed(() => pageProps.value.credential_reports ?? []);
 const canExport = computed(() => hasPermission(`${slug.value}.export`) && credentialReports.value.length > 0);
 
+/** The email notifications a user can be excluded from — the server's list (`EmailNotification`). */
+const emailNotificationOptions = computed(() => pageProps.value.filter_options?.email_notifications ?? []);
+
 // --- Bulk lookup ("Search multiple users") ---
 const {
     lookup: bulkLookup,
@@ -164,7 +174,7 @@ const maxSearchTerms = computed(() => Number(pageProps.value.max_search_terms) |
 // --- Filters ---
 const VC_EMPLOYEE_TYPE = '1'; // UserType::VC_EMPLOYEE
 
-type FilterKey = 'type' | 'department_id' | 'status' | 'credential_status' | 'credential_access'
+type FilterKey = 'type' | 'department_id' | 'status' | 'credential_status' | 'credential_access' | 'excluded_notification'
 
 /** One filter dropdown: what it narrows, how "no filter" reads, and the choices it offers. */
 interface FilterDef {
@@ -176,7 +186,7 @@ interface FilterDef {
 }
 
 const emptyFilters = (): Record<FilterKey, string> =>
-    ({ type: '', department_id: '', status: '', credential_status: '', credential_access: '' });
+    ({ type: '', department_id: '', status: '', credential_status: '', credential_access: '', excluded_notification: '' });
 const filters = ref(emptyFilters());
 
 const activeFilterCount = computed(() => Object.values(filters.value).filter((value) => value !== '').length);
@@ -206,6 +216,7 @@ const filterDefs = computed<FilterDef[]>(() => {
         { key: 'status', label: 'Status', allLabel: 'All statuses', options: STATUS_OPTIONS, width: 'w-36' },
         { key: 'credential_status', label: 'Password status', allLabel: 'Any password status', options: toSelectOptions(options?.credential_statuses), width: 'w-52' },
         { key: 'credential_access', label: 'Credential access', allLabel: 'Any credential access', options: toSelectOptions(options?.credential_accesses), width: 'w-52' },
+        { key: 'excluded_notification', label: 'Excluded from email', allLabel: 'Any email setting', options: toSelectOptions(options?.email_notifications), width: 'w-52' },
     ];
 
     return defs.filter((def) => def.key !== 'department_id' || filters.value.type === VC_EMPLOYEE_TYPE);
@@ -257,6 +268,8 @@ const CREDENTIAL_STATUS = { NOT_SENT: 0, EXPIRED: 2 } as const;
 
 const isActive = (user: UserRow) => Number(user.is_active) !== 0;
 const isDeleted = (user: UserRow) => Boolean(user.deleted_at);
+/** The email notifications the user is excluded from, in the server's order. */
+const excludedNotifications = (user: UserRow) => (user.email_notifications ?? []).filter((notification) => !notification.enabled);
 
 /** Never sent, or the temporary password lapsed unused: (re)sending them is what the user is waiting on. */
 const awaitsCredentials = (user: UserRow) =>
@@ -283,13 +296,47 @@ const stackedCell = (primary: string, secondary?: string | null) => h('div', { c
     secondary ? h('div', { class: 'truncate text-muted-foreground' }, secondary) : null,
 ]);
 
-/** A coloured dot and a word — status is binary, so it needs less ink than the credential pill beside it. */
+/**
+ * How many email notifications the user is excluded from, with which ones in a tooltip —
+ * or nothing, since receiving them all is the norm.
+ */
+const emailExclusionNote = (user: UserRow) => {
+    const excluded = excludedNotifications(user);
+    if (!excluded.length) return null;
+
+    const total = user.email_notifications?.length ?? 0;
+    const label = excluded.length === total ? 'All emails off' : `${excluded.length} of ${total} emails off`;
+
+    return h(Tooltip, null, {
+        default: () => [
+            h(TooltipTrigger, { asChild: true }, () =>
+                h('span', { class: 'inline-flex items-center gap-1 whitespace-nowrap text-muted-foreground', tabindex: 0 }, [
+                    h(MailX, { class: 'size-3.5', 'aria-hidden': 'true' }),
+                    label,
+                ]),
+            ),
+            h(TooltipContent, { align: 'start' }, () => [
+                h('p', { class: 'mb-0.5 opacity-70' }, 'Not emailed:'),
+                h('ul', null, excluded.map((notification) => h('li', null, notification.label))),
+            ]),
+        ],
+    });
+};
+
+/**
+ * A coloured dot and a word — status is binary, so it needs less ink than the credential
+ * pill beside it. Email notifications the user is excluded from are noted beneath, since
+ * that is the exception worth noticing.
+ */
 const statusCell = (user: UserRow) => {
     const active = isActive(user);
 
-    return h('span', { class: 'inline-flex items-center gap-1.5 whitespace-nowrap' }, [
-        h('span', { class: ['size-2 rounded-full', active ? 'bg-green-500' : 'bg-orange-500'], 'aria-hidden': 'true' }),
-        active ? 'Active' : 'Inactive',
+    return h('div', { class: 'flex flex-col items-start gap-0.5' }, [
+        h('span', { class: 'inline-flex items-center gap-1.5 whitespace-nowrap' }, [
+            h('span', { class: ['size-2 rounded-full', active ? 'bg-green-500' : 'bg-orange-500'], 'aria-hidden': 'true' }),
+            active ? 'Active' : 'Inactive',
+        ]),
+        emailExclusionNote(user),
     ]);
 };
 
@@ -368,6 +415,10 @@ const rowActionSpecs: Record<string, {
         resolve: (user) => isActive(user)
             ? { label: 'Deactivate User', icon: ToggleRight }
             : { label: 'Activate User', icon: ToggleLeft },
+    },
+    email_notifications: {
+        run: (user) => manageEmailNotifications([user], emailNotificationOptions.value),
+        resolve: () => ({ icon: Mail }),
     },
     destroy: {
         run: deleteUser,
@@ -457,6 +508,7 @@ const bulkActions: BulkAction[] = [
     },
     { key: 'activate', permission: 'toggle_active', label: 'Activate', icon: ToggleLeft, variant: 'outline', appliesTo: (user) => !isActive(user), run: (targets) => bulkToggleActiveUsers(targets, 1) },
     { key: 'deactivate', permission: 'toggle_active', label: 'Deactivate', icon: ToggleRight, variant: 'outline', appliesTo: isActive, run: (targets) => bulkToggleActiveUsers(targets, 0) },
+    { key: 'email_notifications', permission: 'email_notifications', label: 'Email Notifications', icon: Mail, variant: 'outline', run: (targets) => manageEmailNotifications(targets, emailNotificationOptions.value) },
     { key: 'restore', permission: 'destroy', label: 'Restore', icon: RotateCcw, variant: 'outline', appliesTo: isDeleted, run: (targets) => bulkDeleteUsers(targets, 'restore') },
     { key: 'delete', permission: 'destroy', label: 'Delete', icon: Trash2, variant: 'destructive', appliesTo: (user) => !isDeleted(user), run: (targets) => bulkDeleteUsers(targets, 'delete') },
 ];
@@ -495,6 +547,7 @@ const filterParams = (): Record<string, string> => {
     if (filters.value.status !== '')            params.is_active         = filters.value.status;
     if (filters.value.credential_status !== '') params.credential_status = filters.value.credential_status;
     if (filters.value.credential_access !== '') params.credential_access = filters.value.credential_access;
+    if (filters.value.excluded_notification)    params.excluded_notification = filters.value.excluded_notification;
 
     return params;
 };

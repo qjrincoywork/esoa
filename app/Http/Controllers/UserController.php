@@ -9,6 +9,7 @@ use App\Enums\{
     AuditLogName,
     CredentialAccess,
     CredentialStatus,
+    EmailNotification,
     Gender,
     PermissionAssignmentMode,
     Server,
@@ -37,6 +38,7 @@ use App\Http\Requests\User\ListRequest;
 use App\Http\Requests\User\MappedAccountListRequest;
 use App\Http\Requests\User\ToggleActiveRequest;
 use App\Http\Requests\User\UpdateAccountMappingRequest;
+use App\Http\Requests\User\UpdateEmailNotificationsRequest;
 use App\Http\Requests\User\UpdatePermissionRequest;
 use App\Http\Requests\User\UpdateRequest;
 use App\Http\Requests\User\UpdateRoleRequest;
@@ -63,6 +65,7 @@ use App\Models\Position;
 use App\Models\Suffix;
 use App\Models\User;
 use App\Models\UserAccount;
+use App\Models\UserNotificationExclusion;
 use App\Services\UserBulkImportService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -131,6 +134,7 @@ class UserController extends Controller
                 'departments' => Department::select(['id', 'name'])->get()->toArray(),
                 'credential_statuses' => CredentialStatus::list(),
                 'credential_accesses' => CredentialAccess::list(),
+                'email_notifications' => EmailNotification::list(),
             ],
             'credential_reports' => UserCredentialReport::list(),
         ]);
@@ -991,6 +995,44 @@ class UserController extends Controller
             if ($request->wantsJson() || $request->ajax()) {
                 return CustomResponse::serverError($e, 'UserController::bulkToggleActive');
             }
+        }
+    }
+
+    /**
+     * Set which email notifications ({@see EmailNotification}) one or more users receive.
+     *
+     * The row action and the bulk action share this endpoint — a row posts a list of
+     * one. Each notification sent is turned on or off for every user; any left out stay
+     * as they are ({@see UserNotificationExclusion::apply()}). Login credentials and
+     * password resets are not notifications and always go out. Input is validated — and
+     * authorized by the `users.email_notifications` permission — in
+     * {@see UpdateEmailNotificationsRequest}.
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function updateEmailNotifications(UpdateEmailNotificationsRequest $request)
+    {
+        $userIds = $request->userIds();
+
+        DB::beginTransaction();
+
+        try {
+            $changed = UserNotificationExclusion::apply($userIds, $request->settings());
+
+            DB::commit();
+
+            $count = count($userIds);
+            $message = match (true) {
+                $changed === 0 => 'No changes made: the selected notifications were already set this way',
+                $count === 1 => 'Email notifications updated successfully',
+                default => "Email notifications updated for {$count} users successfully",
+            };
+
+            return CustomResponse::ok($message, Response::HTTP_OK);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return CustomResponse::serverError($e, 'UserController::updateEmailNotifications');
         }
     }
 

@@ -11,6 +11,7 @@ import BulkToggleActiveForm from '@/components/forms/users/BulkToggleActiveForm.
 import BulkDeleteForm from '@/components/forms/users/BulkDeleteForm.vue';
 import VerifyForm from '@/components/forms/users/VerifyForm.vue';
 import ToggleActiveForm from '@/components/forms/users/ToggleActiveForm.vue';
+import EmailNotificationForm from '@/components/forms/users/EmailNotificationForm.vue';
 import UserPaneContent from '@/components/forms/users/UserPaneContent.vue';
 let formApi: { getFormData: () => FormData | null } | null = null;
 import { toRef } from 'vue';
@@ -58,6 +59,23 @@ export interface UserCredentials {
   /** The same moment as ISO 8601, for relative times ("3 days ago"). */
   last_login_at_value: string | null
 }
+
+/** One email notification a user can be excluded from, as `EmailNotification::list()` shapes it. */
+export interface EmailNotificationOption {
+  value: string
+  name: string
+  description: string
+}
+
+/** A user's setting for one email notification, as `UserEmailNotificationResource` shapes it. */
+export interface UserEmailNotification {
+  value: string
+  label: string
+  enabled: boolean
+}
+
+/** Notification → whether the users receive it; notifications left out stay as they are. */
+export type EmailNotificationSettings = Record<string, boolean>;
 
 /** One exportable report, as `UserCredentialReport::list()` shapes it. */
 export interface CredentialReportOption {
@@ -976,6 +994,63 @@ export function useUsers() {
     });
   };
 
+  /**
+   * Choose which email notifications users receive. One row and a bulk selection go
+   * through the same endpoint (`users.email_notifications`): a single user is shown each
+   * notification as it stands, a selection only sends the notifications that were changed.
+   * Login credentials and password resets are not notifications and always go out.
+   */
+  const manageEmailNotifications = async (users: User[], notifications: EmailNotificationOption[]) => {
+    if (!users.length || !notifications.length) return;
+
+    let settingsApi: { getSettings: () => EmailNotificationSettings } | null = null;
+
+    openModal({
+      modalTitle: users.length === 1
+        ? `Email Notifications: ${users[0]?.username || users[0]?.email || 'User'}`
+        : `Email Notifications: ${users.length} Users`,
+      buttonText: 'Save',
+      component: EmailNotificationForm,
+      componentProps: {
+        users,
+        notifications,
+        onReady: (api: { getSettings: () => EmailNotificationSettings }) => {
+          settingsApi = api;
+        },
+      },
+      size: 'md',
+      onSubmit: async () => {
+        const api = settingsApi;
+        if (!api) return;
+
+        const settings = api.getSettings();
+        if (!Object.keys(settings).length) {
+          dispatchNotification({ title: 'Error', content: 'Turn at least one notification on or off.', type: 'error' });
+          return;
+        }
+
+        showLoader();
+        try {
+          const response = await post(`/${slug.value}/email_notifications`, {
+            user_ids: users.map((u) => u.id),
+            settings,
+          });
+          if (!response.ok) {
+            dispatchNotification({ title: 'Error', content: response.data.message, type: 'error' });
+          } else {
+            dispatchNotification({ title: 'Success', content: response.data.message, type: 'success' });
+            closeModal();
+            router.get(window.location.href, {}, { preserveState: false, preserveScroll: true, replace: true });
+          }
+        } catch {
+          dispatchNotification({ title: 'Error', content: 'Network error', type: 'error' });
+        } finally {
+          hideLoader();
+        }
+      },
+    });
+  };
+
   const bulkImportUsers = async () => {
     try {
       const response = await get<{
@@ -1269,6 +1344,7 @@ export function useUsers() {
     verifyUsers,
     bulkVerifyCredentials,
     toggleActiveUser,
+    manageEmailNotifications,
     closePane,
     rightPaneVisible,
     rightPaneTitle,
