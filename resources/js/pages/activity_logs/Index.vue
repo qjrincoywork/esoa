@@ -24,6 +24,7 @@ import { useServerListing, type ListingPage } from '@/composables/datatable/useS
 import { useModulePermissions } from '@/composables/useModulePermissions';
 import { avatar } from '@/lib/avatar';
 import { badge } from '@/lib/directoryBadges';
+import { filtersFromQuery, filtersToParams, listingQuery } from '@/lib/listingQuery';
 import { timeAgo } from '@/lib/relativeTime';
 import { Bot, ChevronRight, SlidersHorizontal, X } from 'lucide-vue-next';
 
@@ -62,13 +63,16 @@ const EMPTY_PAGE: LogsPagination = { current_page: 1, per_page: 10, total: 0, da
 
 const logs = computed(() => pageProps.value.activity_logs ?? EMPTY_PAGE);
 
-const searchQuery = ref('');
+/** What the trail was last filtered by, so the form comes back as the rows are (`listingQuery`). */
+const query = listingQuery(page.url);
+
+const searchQuery = ref(query.get('search_string') ?? '');
 
 // --- Filters ---
 type FilterKey = 'log_name' | 'event' | 'causer_id'
 
 const emptyFilters = () => ({ log_name: '', event: '', causer_id: '', date_from: '', date_to: '' });
-const filters = ref(emptyFilters());
+const filters = ref(filtersFromQuery(emptyFilters(), query));
 
 const activeFilterCount = computed(() => {
     const { date_from, date_to, ...rest } = filters.value;
@@ -225,9 +229,7 @@ const filterParams = (): Record<string, string> => {
     const params: Record<string, string> = {};
 
     if (searchQuery.value.trim()) params.search_string = searchQuery.value.trim();
-    for (const [key, value] of Object.entries(filters.value)) {
-        if (value !== '') params[key] = value;
-    }
+    Object.assign(params, filtersToParams(filters.value));
 
     return params;
 };

@@ -44,6 +44,7 @@ import {
     type DirectoryView,
 } from '@/composables/unmappedAccounts';
 import { badge, mappedStatusBadge, standingBadge } from '@/lib/directoryBadges';
+import { filtersFromQuery, filtersToParams, listingQuery, switchFromQuery } from '@/lib/listingQuery';
 import { cn } from '@/lib/utils';
 import { SlidersHorizontal, TextSearch, UserPlus, X } from 'lucide-vue-next';
 
@@ -110,7 +111,10 @@ const isBranchScope = computed(() => renderedScope.value === DIRECTORY_VIEW.BRAN
 const viewCopy = computed(() => VIEW_COPY[renderedScope.value] ?? VIEW_COPY[DIRECTORY_VIEW.ALL]);
 const rowNoun = computed(() => ({ one: viewCopy.value.one, many: viewCopy.value.many }));
 
-const searchQuery = ref('');
+/** What the listing was last filtered by, so the form comes back as the rows are (`listingQuery`). */
+const query = listingQuery(page.url);
+
+const searchQuery = ref(query.get('search_string') ?? '');
 
 // --- Bulk lookup ("Search multiple accounts or branches") ---
 const {
@@ -123,7 +127,7 @@ const {
     clear: clearBulkLookup,
     toggle: toggleBulkSearch,
     markStale: markMatchesStale,
-} = useBulkLookup({ reload: (delay) => queueFetch(delay), search: searchQuery });
+} = useBulkLookup({ reload: (delay) => queueFetch(delay), search: searchQuery, query });
 
 const searchTermMatches = computed(() => pageProps.value.search_term_matches ?? []);
 const maxSearchTerms = computed(() => Number(pageProps.value.max_search_terms) || 100);
@@ -141,7 +145,7 @@ interface FilterDef {
 }
 
 const emptyFilters = () => ({ code_prefix: '', account_type: '', is_active: '', members_min: '', members_max: '' });
-const filters = ref(emptyFilters());
+const filters = ref(filtersFromQuery(emptyFilters(), query));
 
 /**
  * Off by default, so the listing stays the coverage gap it's named for: only what
@@ -149,16 +153,17 @@ const filters = ref(emptyFilters());
  * from `user_accounts` — so a code that looks missing can be confirmed as taken rather
  * than left ambiguous.
  */
-const includeMapped = ref(false);
+const includeMapped = ref(switchFromQuery(query, 'include_mapped', false));
 
 /**
  * On by default: an account past its expiry — or a branch of one — is rarely a gap worth
  * closing, and three quarters of HMS has expired, so leaving them in buries the live
  * ones. Expiry is the server's reading (`AccountStanding::isExpired`), applied before
- * paging, so the counts and the bulk lookup agree with what is listed.
+ * paging, so the counts and the bulk lookup agree with what is listed. The server applies
+ * the same default when the request does not say (`UnmappedAccount\ListRequest`).
  */
 const HIDE_EXPIRED_BY_DEFAULT = true;
-const hideExpired = ref(HIDE_EXPIRED_BY_DEFAULT);
+const hideExpired = ref(switchFromQuery(query, 'exclude_expired', HIDE_EXPIRED_BY_DEFAULT));
 
 const toSelectOptions = (options: Option[] = []) => options.map(({ value, name }) => ({ value: String(value), label: name }));
 
@@ -453,12 +458,11 @@ const filterParams = (): Record<string, string> => {
     const params: Record<string, string> = { scope: scope.value };
 
     if (searchQuery.value.trim()) params.search_string = searchQuery.value.trim();
-    Object.assign(params, bulkLookupParams());
-    for (const [key, value] of Object.entries(filters.value)) {
-        if (String(value) !== '') params[key] = String(value);
-    }
-    if (includeMapped.value) params.include_mapped = '1';
-    if (hideExpired.value) params.exclude_expired = '1';
+    Object.assign(params, bulkLookupParams(), filtersToParams(filters.value));
+    // Sent either way, so the URL says which way each switch is — an absent one would
+    // read back as its default after a reload.
+    params.include_mapped = includeMapped.value ? '1' : '0';
+    params.exclude_expired = hideExpired.value ? '1' : '0';
 
     return params;
 };
@@ -583,6 +587,7 @@ const openRow = (row: DirectoryRow) =>
                             :matches="searchTermMatches"
                             :applied="bulkLookup !== null"
                             :max-terms="maxSearchTerms"
+                            :initial="bulkLookup"
                             :focus="bulkLookup?.focus ?? null"
                             @update:focus="focusBulkTerm"
                             @search="runBulkLookup"

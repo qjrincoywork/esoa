@@ -71,7 +71,9 @@ class ActivityLogDetailResource extends JsonResource
      *
      * The two sides are not always both present — a creation has no "before" and a
      * deletion has no "after" — so the union of their keys drives the rows, and a side
-     * that does not apply is simply null rather than an invented blank.
+     * that does not apply is simply null rather than an invented blank. A field holding a
+     * user's id ({@see CommonHelper::isUserReferenceField()}) shows that user's username,
+     * both sides resolved in one query.
      *
      * @param  \Illuminate\Support\Collection<string, mixed>  $properties
      * @return array<int, array{field: string, label: string, from: string|null, to: string|null}>
@@ -84,12 +86,25 @@ class ActivityLogDetailResource extends JsonResource
         $fields = array_keys($after + $before);
         sort($fields);
 
+        CommonHelper::primeUsernames(CommonHelper::userIdsIn([$before, $after]));
+
         return array_map(fn (string $field): array => [
             'field' => $field,
-            'label' => str_replace('_', ' ', ucfirst($field)),
-            'from' => array_key_exists($field, $before) ? $this->readable($before[$field]) : null,
-            'to' => array_key_exists($field, $after) ? $this->readable($after[$field]) : null,
+            'label' => $this->fieldLabel($field),
+            'from' => array_key_exists($field, $before) ? $this->readable($field, $before[$field]) : null,
+            'to' => array_key_exists($field, $after) ? $this->readable($field, $after[$field]) : null,
         ], $fields);
+    }
+
+    /**
+     * A field's name as a reader would say it. A user reference drops its "_id", since
+     * the row shows the user rather than the id: `user_id` reads "User".
+     */
+    private function fieldLabel(string $field): string
+    {
+        $name = CommonHelper::isUserReferenceField($field) ? preg_replace('/_id$/', '', $field) : $field;
+
+        return str_replace('_', ' ', ucfirst($name));
     }
 
     /**
@@ -97,14 +112,18 @@ class ActivityLogDetailResource extends JsonResource
      *
      * Audited columns are not all scalars — a billing reference is cast to an array —
      * and a blank is shown as an em dash so "set to empty" is not mistaken for
-     * "unchanged".
+     * "unchanged". A user's id is shown as their username.
      *
      * @param  mixed  $value
      */
-    private function readable($value): ?string
+    private function readable(string $field, $value): ?string
     {
         if ($value === null || $value === '') {
             return '—';
+        }
+
+        if (CommonHelper::isUserReferenceField($field) && is_numeric($value)) {
+            return CommonHelper::usernameFor($value);
         }
 
         if (is_bool($value)) {

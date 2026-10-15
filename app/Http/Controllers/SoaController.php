@@ -750,8 +750,9 @@ class SoaController extends Controller
      * Return a paginated audit trail of activities for the given SOA as JSON.
      *
      * Resolves the SOA, paginates its activity rows (newest first) and returns
-     * them as {@see SoaActivityListResource} data with pagination metadata. Always
-     * responds with JSON regardless of request type.
+     * them as {@see SoaActivityListResource} data with pagination metadata. User ids in
+     * the snapshots are shown as usernames, resolved for the whole page in one query.
+     * Always responds with JSON regardless of request type.
      *
      * Access control (RBAC): {@see CommonHelper::assertUserMayAccessModel()} is
      * enforced before the activities are loaded.
@@ -769,6 +770,12 @@ class SoaController extends Controller
         $paginator = $soa->soaActivity()
             ->orderByDesc('created_at')
             ->paginate($perPage);
+
+        // The snapshots hold user ids; resolve the page's in one query so each row reads
+        // its usernames from the memo.
+        CommonHelper::primeUsernames(CommonHelper::userIdsIn(
+            collect($paginator->items())->flatMap(fn ($activity) => [$activity->from, $activity->to])
+        ));
 
         $payload = [
             'data' => SoaActivityListResource::collection($paginator->items())->resolve($request),

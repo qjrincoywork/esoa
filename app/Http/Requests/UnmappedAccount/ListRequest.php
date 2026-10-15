@@ -165,6 +165,10 @@ class ListRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $this->splitBulkSearchTerms();
+
+        // Expired accounts are hidden unless the request says otherwise — the page's
+        // "Hide expired" switch starts on, and a first visit carries no switches at all.
+        $this->mergeIfMissing(['exclude_expired' => true]);
     }
 
     /**
