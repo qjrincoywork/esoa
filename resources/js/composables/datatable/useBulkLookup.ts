@@ -21,7 +21,31 @@ export interface BulkLookupOptions {
   reload: (delay: number) => void;
   /** The single search the bulk lookup stands in for while it is open. */
   search: Ref<string>;
+  /**
+   * The listing's query (`listingQuery(page.url)`), to pick a lookup the URL already
+   * carries back up — after a reload the rows are still the lookup's, so the panel must be too.
+   */
+  query?: URLSearchParams;
 }
+
+/** The separators the lookup's entries are joined and split on (`AcceptsBulkSearchTerms`). */
+const TERM_SEPARATORS = /[,;\r\n]+/;
+
+/** The lookup a listing query carries, as {@link useBulkLookup}'s `params` wrote it, or null. */
+const lookupFromQuery = (query?: URLSearchParams): AppliedBulkLookup | null => {
+  const terms = (query?.get('search_terms') ?? '')
+    .split(TERM_SEPARATORS)
+    .map((term) => term.trim())
+    .filter(Boolean);
+
+  if (!terms.length) return null;
+
+  return {
+    terms,
+    exact: query?.get('exact_match') === '1',
+    focus: query?.get('search_term_focus') || null,
+  };
+};
 
 /** The prop the server answers the per-entry counts in (`BulkSearchTerms::matches()`). */
 const MATCHES_PROP = 'search_term_matches';
@@ -37,9 +61,10 @@ const MATCHES_PROP = 'search_term_matches';
  *
  * The server side is `AcceptsBulkSearchTerms` (parsing) and `BulkSearchTerms` (matching).
  */
-export function useBulkLookup({ reload, search }: BulkLookupOptions) {
-  const lookup = ref<AppliedBulkLookup | null>(null);
-  const open = ref(false);
+export function useBulkLookup({ reload, search, query }: BulkLookupOptions) {
+  const lookup = ref<AppliedBulkLookup | null>(lookupFromQuery(query));
+  // A restored lookup reopens its panel: the panel is how it is seen, changed and cleared.
+  const open = ref(lookup.value !== null);
   /** Whether the per-entry counts must travel with the next reload. */
   const matchesStale = ref(false);
 

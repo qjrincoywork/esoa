@@ -43,6 +43,7 @@ import {
 } from '@/composables/users';
 import { avatar } from '@/lib/avatar';
 import { badge } from '@/lib/directoryBadges';
+import { filtersFromQuery, filtersToParams, listingQuery } from '@/lib/listingQuery';
 import { timeAgo } from '@/lib/relativeTime';
 import {
     ChevronDown,
@@ -146,7 +147,10 @@ const EMPTY_PAGE: UsersPagination = { current_page: 1, per_page: 10, total: 0, d
 
 const users = computed(() => pageProps.value.users ?? EMPTY_PAGE);
 
-const searchQuery = ref('');
+/** What the listing was last filtered by, so the form comes back as the rows are (`listingQuery`). */
+const query = listingQuery(page.url);
+
+const searchQuery = ref(query.get('search_string') ?? '');
 
 /** The reports the export menu offers — the server's list (`UserCredentialReport`). */
 const credentialReports = computed(() => pageProps.value.credential_reports ?? []);
@@ -166,7 +170,7 @@ const {
     clear: clearBulkLookup,
     toggle: toggleBulkSearch,
     markStale: markMatchesStale,
-} = useBulkLookup({ reload: (delay) => queueFetch(delay), search: searchQuery });
+} = useBulkLookup({ reload: (delay) => queueFetch(delay), search: searchQuery, query });
 
 const searchTermMatches = computed(() => pageProps.value.search_term_matches ?? []);
 const maxSearchTerms = computed(() => Number(pageProps.value.max_search_terms) || 100);
@@ -187,7 +191,11 @@ interface FilterDef {
 
 const emptyFilters = (): Record<FilterKey, string> =>
     ({ type: '', department_id: '', status: '', credential_status: '', credential_access: '', excluded_notification: '' });
-const filters = ref(emptyFilters());
+
+/** Filters the request names differently from the form (`ListRequest`); the rest share a name. */
+const FILTER_PARAMS: Partial<Record<FilterKey, string>> = { status: 'is_active' };
+
+const filters = ref(filtersFromQuery(emptyFilters(), query, FILTER_PARAMS));
 
 const activeFilterCount = computed(() => Object.values(filters.value).filter((value) => value !== '').length);
 
@@ -539,15 +547,8 @@ const breadcrumbItems: BreadcrumbItem[] = [
 const filterParams = (): Record<string, string> => {
     const params: Record<string, string> = {};
 
-    if (searchQuery.value.trim())               params.search_string     = searchQuery.value.trim();
-    Object.assign(params, bulkLookupParams());
-    if (filters.value.type)                    params.type              = filters.value.type;
-    if (filters.value.department_id)            params.department_id     = filters.value.department_id;
-    // '' means "no filter"; '0' is a real choice, so these cannot be falsy tests.
-    if (filters.value.status !== '')            params.is_active         = filters.value.status;
-    if (filters.value.credential_status !== '') params.credential_status = filters.value.credential_status;
-    if (filters.value.credential_access !== '') params.credential_access = filters.value.credential_access;
-    if (filters.value.excluded_notification)    params.excluded_notification = filters.value.excluded_notification;
+    if (searchQuery.value.trim()) params.search_string = searchQuery.value.trim();
+    Object.assign(params, bulkLookupParams(), filtersToParams(filters.value, FILTER_PARAMS));
 
     return params;
 };
@@ -663,6 +664,7 @@ watch(
                         :matches="searchTermMatches"
                         :applied="bulkLookup !== null"
                         :max-terms="maxSearchTerms"
+                        :initial="bulkLookup"
                         :focus="bulkLookup?.focus ?? null"
                         @update:focus="focusBulkTerm"
                         @search="runBulkLookup"

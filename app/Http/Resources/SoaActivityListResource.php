@@ -343,6 +343,11 @@ class SoaActivityListResource extends JsonResource
             return $base !== '' ? $base : $value;
         }
 
+        // A user's id reads as their username; the page's ids are primed by the controller.
+        if (CommonHelper::isUserReferenceField($key) && is_numeric($value)) {
+            return CommonHelper::usernameFor($value) ?? (string) $value;
+        }
+
         if (in_array($key, ['due_date', 'period_date_from', 'period_date_to', 'created_at', 'updated_at', 'deleted_at'], true)) {
             $formatted = CommonHelper::formatDate((string) $value);
 

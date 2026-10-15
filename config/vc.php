@@ -36,6 +36,9 @@ return [
     'billing_notification_email' => env('BILLING_NOTIFICATION_EMAIL', 'esoabillingandcollection@valuecarehealth.com'),
     'contact_number' => '+639123456789',
     'ignored_diff_keys' => ['created_at', 'updated_at', 'deleted_at'],
+    // Snapshot and audit fields that hold a user's id: activity lists and the audit trail
+    // show the username instead (CommonHelper::usernameFor()).
+    'user_reference_fields' => ['user_id'],
     'allowed_soa_status_for_account_branch_admin' => [2, 4],
 
     /*

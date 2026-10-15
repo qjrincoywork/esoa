@@ -9,6 +9,7 @@ use App\Enums\TenancyScope;
 use App\Listeners\AddGlobalBcc;
 use App\Mail\NewBillingInvoiceUploaded;
 use App\Models\Soa;
+use App\Models\User;
 use App\Support\BillingInvoiceRecipients;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Crypt;
@@ -66,6 +67,14 @@ class CommonHelper
      * @var array<string, string>
      */
     protected static array $systemUserNameCache = [];
+
+    /**
+     * App usernames resolved this request, keyed by user id. An empty value means the id
+     * was looked up and no user — not even a soft-deleted one — has it.
+     *
+     * @var array<string, string>
+     */
+    protected static array $usernameCache = [];
 
     /**
      * Best-effort fix for legacy mojibake like:
@@ -632,6 +641,81 @@ class CommonHelper
             self::$systemUserNameCache[$login] = self::convertStringEncoding(
                 $names[strtoupper($login)] ?? ''
             );
+        }
+    }
+
+    /**
+     * Whether a snapshot or audit field holds a user's id ({@see config('vc.user_reference_fields')}),
+     * and so is shown as that user's username rather than the bare number.
+     */
+    public static function isUserReferenceField(string $field): bool
+    {
+        return in_array($field, config('vc.user_reference_fields', []), true);
+    }
+
+    /**
+     * Every user id held by a user-reference field of the given snapshots — what a page of
+     * activity rows needs resolved, for {@see primeUsernames()}.
+     *
+     * @param  iterable<int, mixed>  $snapshots  Attribute arrays; anything else is skipped.
+     * @return array<int, string>
+     */
+    public static function userIdsIn(iterable $snapshots): array
+    {
+        return collect($snapshots)
+            ->filter(fn ($snapshot) => is_array($snapshot))
+            ->flatMap(fn (array $snapshot) => collect($snapshot)
+                ->filter(fn ($value, $field) => is_string($field) && self::isUserReferenceField($field) && is_numeric($value))
+                ->values())
+            ->map(fn ($id) => (string) (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * How a user id reads in a list or the audit trail: the username, or "User #id" when
+     * no user has that id any more — so the value never silently becomes a bare number.
+     *
+     * Soft-deleted users keep their name: the trail is history, and they did act.
+     */
+    public static function usernameFor(int|string|null $id): ?string
+    {
+        if ($id === null || $id === '' || !is_numeric($id)) {
+            return null;
+        }
+
+        $id = (string) (int) $id;
+
+        if (! array_key_exists($id, self::$usernameCache)) {
+            self::primeUsernames([$id]);
+        }
+
+        return self::$usernameCache[$id] ?: "User #{$id}";
+    }
+
+    /**
+     * Resolve every not-yet-memoised user id in one query (chunked under SQL Server's
+     * parameter limit).
+     *
+     * Call this with a whole page of ids before reading them one at a time through
+     * {@see usernameFor()}, which then costs no queries at all.
+     *
+     * @param  iterable<int, int|string|null>  $ids
+     */
+    public static function primeUsernames(iterable $ids): void
+    {
+        $ids = self::uncachedKeys(
+            collect($ids)->filter(fn ($id) => is_numeric($id))->map(fn ($id) => (string) (int) $id)->all(),
+            self::$usernameCache
+        );
+
+        foreach (array_chunk($ids, 1000) as $chunk) {
+            $names = User::withTrashed()->whereIn('id', $chunk)->pluck('username', 'id');
+
+            foreach ($chunk as $id) {
+                self::$usernameCache[$id] = (string) ($names[(int) $id] ?? '');
+            }
         }
     }
 

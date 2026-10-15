@@ -37,12 +37,15 @@ const props = withDefaults(
     applied?: boolean;
     /** Most entries one lookup may hold — the server's `vc.max_search_terms`. */
     maxTerms?: number;
+    /** A lookup already applied when the panel opens (restored from the URL), to show its entries. */
+    initial?: BulkLookup | null;
   }>(),
   {
     placeholder: '',
     matches: () => [],
     applied: false,
     maxTerms: 100,
+    initial: null,
   },
 );
 
@@ -58,8 +61,8 @@ const emit = defineEmits<{
 /** The separators `AcceptsBulkSearchTerms::SEARCH_TERM_SEPARATORS` splits on — previewed here. */
 const SEPARATORS = /[,;\r\n]+/;
 
-const input = ref('');
-const exactMatch = ref(false);
+const input = ref(props.initial?.terms.join('\n') ?? '');
+const exactMatch = ref(props.initial?.exact ?? false);
 const clipboardBlocked = ref(false);
 
 /** The distinct entries typed so far, first spelling kept — what the server will search. */
