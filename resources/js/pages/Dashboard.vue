@@ -39,8 +39,9 @@ import { computed, onMounted, ref, watch, type Component } from 'vue';
  * The header and its filters stay on top because they govern everything below; the
  * content is split into tabs so each question fits on one screen instead of a long
  * scroll: the overview (headline figures), the billing trend, receivables (how old
- * and how settled), the accounts holding the balance and, for staff, the team behind
- * them. The page is composition only: it maps the server payload onto the neutral chart
+ * and how settled), the accounts holding the balance and, for staff, the users on both
+ * sides of the invoices — client HR POCs who settle them, VC employees who bill and
+ * collect them, and brokers. The page is composition only: it maps the server payload onto the neutral chart
  * shapes and the primitives in `@/components/charts` do the drawing, each with a table
  * twin so no value is locked behind a hover or a color.
  */
@@ -200,7 +201,7 @@ const activeUserName = computed(() => {
 });
 
 /* ── Tabs ──────────────────────────────────────────────────────────────────── */
-type TabKey = 'overview' | 'trend' | 'receivables' | 'accounts' | 'team';
+type TabKey = 'overview' | 'trend' | 'receivables' | 'accounts' | 'users';
 
 interface DashboardTab {
     key: TabKey;
@@ -239,11 +240,11 @@ const tabs = computed<DashboardTab[]>(() => {
         // Deferred: undefined until it lands, so the count appears once it is known.
         const users = page.props.user_reports?.length;
         list.push({
-            key: 'team',
-            label: 'Team',
+            key: 'users',
+            label: 'Users',
             icon: Users,
             count: users ? formatNumber(users) : null,
-            countTitle: 'Users in the report',
+            countTitle: 'HR POCs, VC employees and brokers in the report',
         });
     }
 
@@ -457,11 +458,12 @@ const isEmptyResult = computed(() => (summary.value?.invoices.value ?? 0) === 0)
                     </ChartCard>
                 </TabsContent>
 
-                <!-- Team (staff only): who the invoices are attributed to -->
-                <TabsContent v-if="canViewUserReports" value="team" class="mt-0 flex flex-col gap-4">
+                <!-- Users (staff only): client HR POCs who settle the invoices, VC employees
+                     who bill and collect them, and brokers -->
+                <TabsContent v-if="canViewUserReports" value="users" class="mt-0 flex flex-col gap-4">
                     <p class="text-xs text-muted-foreground">
-                        Who the invoices are attributed to, and the concerns and payments each
-                        user recorded · select a user to report on them.
+                        Everyone on both sides of an invoice, grouped by their role in it ·
+                        select a person to narrow the dashboard to their invoices.
                     </p>
 
                     <!-- Deferred server-side: the metric widgets paint first and this holds a
@@ -469,11 +471,14 @@ const isEmptyResult = computed(() => (summary.value?.invoices.value ?? 0) === 0)
                     <Deferred data="user_reports">
                         <template #fallback>
                             <div class="flex flex-col gap-4" aria-busy="true">
+                                <div class="grid gap-3 md:grid-cols-3">
+                                    <Skeleton v-for="n in 3" :key="n" class="h-20 rounded-xl" />
+                                </div>
                                 <Skeleton class="h-[4.5rem] w-full rounded-xl" />
                                 <div class="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
                                     <Skeleton v-for="n in 3" :key="n" class="h-52 rounded-xl" />
                                 </div>
-                                <span class="sr-only">Loading team activity…</span>
+                                <span class="sr-only">Loading user activity…</span>
                             </div>
                         </template>
 
