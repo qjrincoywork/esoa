@@ -41,9 +41,9 @@ import { computed, onMounted, ref, watch, type Component } from 'vue';
  * scroll: the overview (headline figures), the billing trend, receivables (how old
  * and how settled), the accounts holding the balance and, for staff, the users on both
  * sides of the invoices — client HR POCs who settle them, VC employees who bill and
- * collect them, and brokers. The page is composition only: it maps the server payload onto the neutral chart
- * shapes and the primitives in `@/components/charts` do the drawing, each with a table
- * twin so no value is locked behind a hover or a color.
+ * collect them, and brokers. The page is composition only: it maps the server payload
+ * onto the neutral chart shapes and the primitives in `@/components/charts` do the
+ * drawing, each with a table twin so no value is locked behind a hover or a color.
  */
 const page = usePage<AppPageProps<DashboardPageProps>>();
 
@@ -286,10 +286,17 @@ const openList = (item: ChartDatum) => {
 
 const scopeToUser = (userId: number | null) => apply({ user_id: userId });
 
-/** Picking a user means "report on them", so their figures are shown right away. */
+/**
+ * Picking a user means "report on them". When invoices are attributed to them, their
+ * figures are on the overview, so it opens; a VC employee who emails and updates invoices
+ * without uploading any has an empty overview, so the Users tab — where their activity
+ * is — stays open instead.
+ */
 const reportOnUser = (userId: number | null) => {
     scopeToUser(userId);
-    if (userId !== null) activeTab.value = 'overview';
+
+    const row = userReports.value.find((report) => report.user_id === userId);
+    if (row && row.invoice_count > 0) activeTab.value = 'overview';
 };
 
 const showAllTime = () =>

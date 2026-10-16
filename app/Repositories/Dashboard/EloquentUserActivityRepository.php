@@ -6,9 +6,11 @@ use App\Contracts\Dashboard\UserActivityRepository;
 use App\Enums\DataScope;
 use App\Enums\Server;
 use App\Enums\SoaStatus;
+use App\Enums\UserType;
 use App\Helpers\SqlDatabase;
 use App\Models\AccountPayment;
 use App\Models\Concern;
+use App\Models\SoaActivity;
 use App\Models\User;
 use App\Repositories\Dashboard\Concerns\BuildsDashboardSoaQueries;
 use App\Support\Dashboard\DashboardContext;
@@ -25,8 +27,10 @@ use Illuminate\Support\Facades\Log;
  * each user in memory: two scans regardless of how many users are reported, plus one HMS
  * lookup covering every broker at once.
  *
- * Concerns and payments stay attributed by ownership: a concern is raised by a person, not
- * by an account.
+ * Concerns, payments and invoice actions (the `soa_activities` trail) stay attributed by
+ * ownership: a concern is raised, an invoice emailed or updated, by a person — not by an
+ * account. The trail is what shows the work of VC employees who bill and collect without
+ * uploading anything themselves.
  */
 class EloquentUserActivityRepository implements UserActivityRepository
 {
@@ -35,10 +39,16 @@ class EloquentUserActivityRepository implements UserActivityRepository
     /** Branch key standing in for "no branch" (invoices billed to the account itself). */
     private const NO_BRANCH = "\0";
 
+    /** `soa_activities.event` written when a client HR POC first opens an invoice. */
+    private const EVENT_VIEWED = 'billing_invoice_viewed';
+
+    /** `soa_activities.event` written when an invoice notification is emailed. */
+    private const EVENT_EMAILED = 'billing_invoice_email_sent';
+
     /**
      * {@inheritDoc}
      */
-    public function breakdown(DashboardContext $context, int $limit): array
+    public function breakdown(DashboardContext $context, int $limitPerScope): array
     {
         // Fail closed: concerns and payments are not account-scoped, so only the staff
         // roles allowed to read across users may ever reach this aggregation.
@@ -56,10 +66,16 @@ class EloquentUserActivityRepository implements UserActivityRepository
         $accounts = $this->invoicesByAccount($context);
         $concerns = $this->relatedActivity($context, Concern::query());
         $payments = $this->relatedActivity($context, AccountPayment::query());
+        $actions = $this->invoiceActions($context);
 
         $users = $this->reportableUsers(
             $context,
-            array_unique(array_merge(array_keys($owned), array_keys($concerns), array_keys($payments))),
+            array_unique(array_merge(
+                array_keys($owned),
+                array_keys($concerns),
+                array_keys($payments),
+                array_keys($actions),
+            )),
         );
 
         $agentAccounts = $this->agentAccountCodes($users);
@@ -78,42 +94,26 @@ class EloquentUserActivityRepository implements UserActivityRepository
                 default => $owned[$user->id] ?? $this->emptyMetrics(),
             };
 
-            $concernCount = $concerns[$user->id]['count'] ?? 0;
-            $paymentCount = $payments[$user->id]['count'] ?? 0;
+            $row = $this->reportRow(
+                $user,
+                $scope,
+                $invoices,
+                $concerns[$user->id] ?? null,
+                $payments[$user->id] ?? null,
+                $actions[$user->id] ?? null,
+            );
 
-            // Idle users are noise in a ranking — except the one being reported on, whose
-            // row must stay visible so an empty result reads as "none" rather than "gone".
-            if (
-                $user->id !== $targetId
-                && $invoices['count'] === 0
-                && $concernCount === 0
-                && $paymentCount === 0
-            ) {
+            // Active users stay listed even when idle — "did nothing this period" is part of
+            // the answer. A deactivated account with nothing in the period is only noise,
+            // unless it is the user being reported on.
+            if ($user->id !== $targetId && !$user->is_active && $this->isIdle($row)) {
                 continue;
             }
 
-            $rows[] = [
-                'user_id' => (int) $user->id,
-                'scope' => $scope,
-                'invoice_count' => $invoices['count'],
-                'billed_amount' => $invoices['billed'],
-                'outstanding_amount' => $invoices['outstanding'],
-                'concern_count' => $concernCount,
-                'payment_count' => $paymentCount,
-                'last_activity_at' => $this->latest(
-                    $this->latest($invoices['last_activity_at'], $concerns[$user->id]['last_activity_at'] ?? null),
-                    $payments[$user->id]['last_activity_at'] ?? null,
-                ),
-                'user' => $user,
-            ];
+            $rows[] = $row;
         }
 
-        usort($rows, static function (array $a, array $b): int {
-            return [$b['invoice_count'], $b['billed_amount'], $b['concern_count'] + $b['payment_count']]
-                <=> [$a['invoice_count'], $a['billed_amount'], $a['concern_count'] + $a['payment_count']];
-        });
-
-        return array_slice($rows, 0, $limit);
+        return $this->rankWithinScopes($rows, $limitPerScope);
     }
 
     /**
@@ -123,6 +123,9 @@ class EloquentUserActivityRepository implements UserActivityRepository
     {
         return User::query()
             ->with('userDetail')
+            // Active accounts first: hundreds of deactivated legacy users would otherwise
+            // crowd current staff out of the capped list.
+            ->orderByDesc('is_active')
             ->orderBy('username')
             ->limit($limit)
             ->get();
@@ -151,30 +154,110 @@ class EloquentUserActivityRepository implements UserActivityRepository
             )
             ->first();
 
-        $invoices = $this->metrics($row);
-        $concerns = $this->relatedActivity($context, Concern::query())[$user->id] ?? null;
-        $payments = $this->relatedActivity($context, AccountPayment::query())[$user->id] ?? null;
+        return [$this->reportRow(
+            $user,
+            DataScope::forUser($user),
+            $this->metrics($row),
+            $this->relatedActivity($context, Concern::query())[$user->id] ?? null,
+            $this->relatedActivity($context, AccountPayment::query())[$user->id] ?? null,
+            $this->invoiceActions($context)[$user->id] ?? null,
+        )];
+    }
 
-        return [[
+    /**
+     * Assemble one report row from the per-user aggregates.
+     *
+     * @param array<string, mixed> $invoices
+     * @param array{count: int, last_activity_at: string|null}|null $concerns
+     * @param array{count: int, last_activity_at: string|null}|null $payments
+     * @param array{viewed: int, emailed: int, updated: int, last_activity_at: string|null}|null $actions
+     * @return array<string, mixed>
+     */
+    private function reportRow(
+        User $user,
+        int $scope,
+        array $invoices,
+        ?array $concerns,
+        ?array $payments,
+        ?array $actions,
+    ): array {
+        $lastActivity = $invoices['last_activity_at'];
+        foreach ([$concerns, $payments, $actions] as $activity) {
+            $lastActivity = $this->latest($lastActivity, $activity['last_activity_at'] ?? null);
+        }
+
+        return [
             'user_id' => (int) $user->id,
-            'scope' => DataScope::forUser($user),
+            'scope' => $scope,
             'invoice_count' => $invoices['count'],
             'billed_amount' => $invoices['billed'],
             'outstanding_amount' => $invoices['outstanding'],
             'concern_count' => $concerns['count'] ?? 0,
             'payment_count' => $payments['count'] ?? 0,
-            'last_activity_at' => $this->latest(
-                $this->latest($invoices['last_activity_at'], $concerns['last_activity_at'] ?? null),
-                $payments['last_activity_at'] ?? null,
-            ),
+            'viewed_count' => $actions['viewed'] ?? 0,
+            'emailed_count' => $actions['emailed'] ?? 0,
+            'updated_count' => $actions['updated'] ?? 0,
+            'last_activity_at' => $lastActivity,
             'user' => $user,
-        ]];
+        ];
     }
 
     /**
-     * Users the report should list: everyone with activity in the slice, plus everyone whose
-     * data is attributed by account (they never appear in an uploader aggregate). Narrowed
-     * to a single person when the dashboard is reporting on one.
+     * Whether a report row has nothing at all in the period.
+     *
+     * @param array<string, mixed> $row
+     */
+    private function isIdle(array $row): bool
+    {
+        return $this->activityWeight($row) === 0 && $row['invoice_count'] === 0;
+    }
+
+    /**
+     * Everything a user did themselves in the period, as one ranking weight.
+     *
+     * @param array<string, mixed> $row
+     */
+    private function activityWeight(array $row): int
+    {
+        return $row['concern_count'] + $row['payment_count']
+            + $row['viewed_count'] + $row['emailed_count'] + $row['updated_count'];
+    }
+
+    /**
+     * Rank and cap the rows per attribution scope.
+     *
+     * One global "top N" let the groups compete for the same slots: account admins carry
+     * thousands of attributed invoices each, so VC employees — whose work is emailing and
+     * updating invoices rather than owning them — were cut off the report entirely. Each
+     * group is now ranked on its own and capped on its own.
+     *
+     * @param array<int, array<string, mixed>> $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function rankWithinScopes(array $rows, int $limitPerScope): array
+    {
+        $byScope = [];
+        foreach ($rows as $row) {
+            $byScope[$row['scope']][] = $row;
+        }
+
+        $ranked = [];
+        foreach ($byScope as $scopeRows) {
+            usort($scopeRows, fn (array $a, array $b): int =>
+                [$b['invoice_count'], $b['billed_amount'], $this->activityWeight($b)]
+                <=> [$a['invoice_count'], $a['billed_amount'], $this->activityWeight($a)]);
+
+            array_push($ranked, ...array_slice($scopeRows, 0, $limitPerScope));
+        }
+
+        return $ranked;
+    }
+
+    /**
+     * Users the report should list: everyone with activity in the slice, plus the active
+     * roster of every group — account admins (attributed by assignment, so they never
+     * appear in an uploader aggregate), brokers, and VC employees — so an idle member is
+     * listed as idle instead of missing. Narrowed to one person when reporting on one.
      *
      * @param array<int, int> $activeUserIds
      * @return Collection<int, User>
@@ -190,10 +273,64 @@ class EloquentUserActivityRepository implements UserActivityRepository
             ->where(function (Builder $query) use ($activeUserIds) {
                 $query
                     ->when($activeUserIds !== [], fn (Builder $q) => $q->whereIn('id', $activeUserIds))
-                    ->orWhereHas('userAccounts')
-                    ->orWhereHas('userDetail', fn ($detail) => $detail->whereNotNull('agent_code'));
+                    ->orWhere(fn (Builder $roster) => $roster
+                        ->where('is_active', true)
+                        ->where(fn (Builder $member) => $member
+                            ->whereHas('userAccounts')
+                            ->orWhereHas('userDetail', fn ($detail) => $detail->where(fn ($kind) => $kind
+                                ->whereNotNull('agent_code')
+                                ->orWhere('type', UserType::VC_EMPLOYEE)))));
             })
             ->get();
+    }
+
+    /**
+     * Invoices each user acted on in the period, from the `soa_activities` trail.
+     *
+     * Distinct invoices rather than events, so re-sending one invoice five times counts once.
+     * Restricted to the viewer's slice (and its account narrowing) through a subquery, which
+     * also leaves out soft-deleted invoices. Views are only written for client HR POCs;
+     * "updated" is every other recorded change (edits, status changes, amount adjustments).
+     *
+     * @return array<int, array{viewed: int, emailed: int, updated: int, last_activity_at: string|null}>
+     */
+    private function invoiceActions(DashboardContext $context): array
+    {
+        $filter = $context->filter;
+
+        $rows = SoaActivity::query()
+            ->whereIn('soa_id', $this->visibleSlice($context)->select('soas.id'))
+            ->when(
+                $filter->hasDateRange(),
+                static fn (Builder $builder) => $builder->whereBetween('created_at', [$filter->from, $filter->to])
+            )
+            ->when(
+                $context->targetUserId(),
+                static fn (Builder $builder, int $userId) => $builder->where('user_id', $userId)
+            )
+            ->toBase()
+            ->selectRaw(
+                'user_id'
+                . ', COUNT(DISTINCT CASE WHEN event = ? THEN soa_id END) AS viewed_count'
+                . ', COUNT(DISTINCT CASE WHEN event = ? THEN soa_id END) AS emailed_count'
+                . ', COUNT(DISTINCT CASE WHEN event NOT IN (?, ?) THEN soa_id END) AS updated_count'
+                . ', MAX(created_at) AS last_activity_at',
+                [self::EVENT_VIEWED, self::EVENT_EMAILED, self::EVENT_VIEWED, self::EVENT_EMAILED]
+            )
+            ->groupBy('user_id')
+            ->get();
+
+        $actions = [];
+        foreach ($rows as $row) {
+            $actions[(int) $row->user_id] = [
+                'viewed' => (int) $row->viewed_count,
+                'emailed' => (int) $row->emailed_count,
+                'updated' => (int) $row->updated_count,
+                'last_activity_at' => $row->last_activity_at ? (string) $row->last_activity_at : null,
+            ];
+        }
+
+        return $actions;
     }
 
     /**

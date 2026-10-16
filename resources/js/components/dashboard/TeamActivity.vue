@@ -10,9 +10,12 @@ import {
     Briefcase,
     Building2,
     ChevronDown,
+    Eye,
     FileCheck2,
     Handshake,
+    Mail,
     MessageSquareWarning,
+    PencilLine,
     Search,
     X,
 } from 'lucide-vue-next';
@@ -25,14 +28,16 @@ import { computed, ref, watch, type Component } from 'vue';
  * with one set of labels misreads all of them:
  *  - client HR POCs (group account admins and account/branch admins) endorse and pay
  *    the invoices billed to their accounts — their balance is what they still owe;
- *  - VC employees bill the invoices and collect against them — their balance is what is
- *    still to be collected;
+ *  - VC employees bill the invoices and collect against them — their work is emailing
+ *    and updating invoices, which is what their cards lead with;
  *  - brokers follow the invoices of the accounts under their agent code.
- * Each group gets its own view, figures and wording. The grouping is the server's
- * attribution scope ({@see App\Enums\DataScope}), the same rule the figures are summed by.
+ * Each group is described by one {@link Audience} entry — its wording, headline figures,
+ * sorts and summary — so the template has no per-group branches. The grouping is the
+ * server's attribution scope ({@see App\Enums\DataScope}), the rule the figures are
+ * summed by.
  *
  * Users whose attributed invoices are identical (every broker on one agent code, POCs on
- * the same accounts) are gathered into one shared card that states the figures once.
+ * the same accounts) are gathered into one shared card that states those figures once.
  * Selecting a user narrows the whole dashboard to them.
  */
 const props = withDefaults(
@@ -46,25 +51,92 @@ const props = withDefaults(
 
 const emit = defineEmits<{ select: [userId: number | null] }>();
 
+/* ── Metrics ───────────────────────────────────────────────────────────────── */
+type MetricKey =
+    | 'invoices'
+    | 'billed'
+    | 'outstanding'
+    | 'viewed'
+    | 'emailed'
+    | 'updated'
+    | 'concerns'
+    | 'payments';
+
+type NumericField = {
+    [K in keyof UserReportRow]: UserReportRow[K] extends number ? K : never;
+}[keyof UserReportRow];
+
+const METRIC_FIELD: Record<MetricKey, NumericField> = {
+    invoices: 'invoice_count',
+    billed: 'billed_amount',
+    outstanding: 'outstanding_amount',
+    viewed: 'viewed_count',
+    emailed: 'emailed_count',
+    updated: 'updated_count',
+    concerns: 'concern_count',
+    payments: 'payment_count',
+};
+
+/**
+ * Figures of the invoices *attributed* to a user. Users sharing a portfolio share these,
+ * so a shared card states them once; every other metric is the person's own and is summed.
+ */
+const PORTFOLIO_METRICS: ReadonlySet<MetricKey> = new Set(['invoices', 'billed', 'outstanding']);
+const MONEY_METRICS: ReadonlySet<MetricKey> = new Set(['billed', 'outstanding']);
+const METRIC_KEYS = Object.keys(METRIC_FIELD) as MetricKey[];
+
+const METRIC_ICON: Partial<Record<MetricKey, Component>> = {
+    viewed: Eye,
+    emailed: Mail,
+    updated: PencilLine,
+    concerns: MessageSquareWarning,
+    payments: FileCheck2,
+};
+
+const valueOf = (row: UserReportRow, key: MetricKey): number => row[METRIC_FIELD[key]];
+
+const exactMoney = (value: number): string =>
+    CURRENCY_SIGN + value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/** Short display value, plus the exact one when the short one is rounded. */
+const display = (key: MetricKey, value: number): { value: string; exact: string | null } =>
+    MONEY_METRICS.has(key)
+        ? { value: compactCurrency(value), exact: exactMoney(value) }
+        : { value: formatNumber(value), exact: null };
+
 /* ── Audiences ─────────────────────────────────────────────────────────────── */
 /** Mirrors App\Enums\DataScope. */
 const SCOPE = { OWNED_RECORDS: 1, ASSIGNED_ACCOUNTS: 2, AGENT_ACCOUNTS: 3 } as const;
 
 type AudienceKey = 'client' | 'vc' | 'broker';
+/** A summary tile: a summed personal metric, or the number of people still owing. */
+type StatKey = MetricKey | 'withBalance';
 
 interface Audience {
     key: AudienceKey;
     scope: number;
     label: string;
-    /** Plural noun for counts, e.g. "3 HR POCs". */
+    /** Plural and singular nouns for counts, e.g. "3 HR POCs". */
     noun: string;
     nounSingular: string;
     icon: Component;
     /** What these users do with an invoice, in one sentence. */
     role: string;
-    figures: { invoices: string; billed: string; outstanding: string; settled: string };
-    concerns: string;
-    payments: string;
+    labels: Record<MetricKey, string>;
+    /** The three figures a card leads with. */
+    headline: MetricKey[];
+    /** Footer counts: what the person did themselves. */
+    activity: MetricKey[];
+    /** Sort options; the first is the default. */
+    sorts: MetricKey[];
+    /**
+     * Summary tiles after the head count. Only metrics that are safe to add up belong
+     * here: personal actions, and uploads (each invoice has one uploader). Attributed
+     * balances of POCs and brokers overlap on shared accounts, so they are never summed.
+     */
+    stats: StatKey[];
+    /** Label of the settled-share meter (paid for the payer, collected for the biller). */
+    settled: string;
     /**
      * Whether identical figures mean a shared portfolio. Never for uploads: every invoice
      * has one uploader, so two VC employees can only match by coincidence.
@@ -72,6 +144,17 @@ interface Audience {
     shares: boolean;
     sharedHeading: (count: number) => string;
 }
+
+const BASE_LABELS: Record<MetricKey, string> = {
+    invoices: 'Invoices',
+    billed: 'Billed',
+    outstanding: 'Unpaid',
+    viewed: 'Invoices viewed',
+    emailed: 'Invoices emailed',
+    updated: 'Invoices updated',
+    concerns: 'Concerns raised',
+    payments: 'Remittances sent',
+};
 
 const AUDIENCES: Audience[] = [
     {
@@ -82,9 +165,12 @@ const AUDIENCES: Audience[] = [
         nounSingular: 'HR POC',
         icon: Building2,
         role: 'Group account admins and account/branch admins on the client side. They endorse and pay the invoices billed to their accounts.',
-        figures: { invoices: 'Invoices', billed: 'Billed to them', outstanding: 'Unpaid', settled: 'Paid' },
-        concerns: 'Concerns raised',
-        payments: 'Remittances sent',
+        labels: { ...BASE_LABELS, billed: 'Billed to them' },
+        headline: ['invoices', 'billed', 'outstanding'],
+        activity: ['viewed', 'updated', 'concerns', 'payments'],
+        sorts: ['outstanding', 'invoices', 'viewed', 'concerns'],
+        stats: ['withBalance', 'concerns', 'payments'],
+        settled: 'Paid',
         shares: true,
         sharedHeading: (count) => `${count} HR POCs handle the same accounts`,
     },
@@ -95,10 +181,20 @@ const AUDIENCES: Audience[] = [
         noun: 'VC employees',
         nounSingular: 'VC employee',
         icon: Briefcase,
-        role: 'Our staff. They bill every invoice and collect the payment against it.',
-        figures: { invoices: 'Invoices billed', billed: 'Amount billed', outstanding: 'To collect', settled: 'Collected' },
-        concerns: 'Concerns logged',
-        payments: 'Remittances recorded',
+        role: 'Our staff. They bill the invoices, email them to the client, and collect the payment against them.',
+        labels: {
+            ...BASE_LABELS,
+            invoices: 'Invoices uploaded',
+            billed: 'Amount billed',
+            outstanding: 'To collect',
+            concerns: 'Concerns logged',
+            payments: 'Remittances recorded',
+        },
+        headline: ['emailed', 'updated', 'invoices'],
+        activity: ['concerns', 'payments'],
+        sorts: ['emailed', 'updated', 'invoices'],
+        stats: ['invoices', 'emailed', 'updated'],
+        settled: 'Collected',
         shares: false,
         sharedHeading: (count) => `${count} VC employees`,
     },
@@ -110,9 +206,12 @@ const AUDIENCES: Audience[] = [
         nounSingular: 'broker',
         icon: Handshake,
         role: 'Agents who follow up the invoices of the accounts under their agent code.',
-        figures: { invoices: 'Invoices', billed: 'Billed', outstanding: 'Unpaid', settled: 'Paid' },
-        concerns: 'Concerns raised',
-        payments: 'Remittances sent',
+        labels: BASE_LABELS,
+        headline: ['invoices', 'billed', 'outstanding'],
+        activity: ['concerns', 'payments'],
+        sorts: ['outstanding', 'invoices', 'concerns'],
+        stats: ['withBalance', 'concerns', 'payments'],
+        settled: 'Paid',
         shares: true,
         sharedHeading: (count) => `${count} brokers share one agent portfolio`,
     },
@@ -123,7 +222,7 @@ const audienceOf = (row: UserReportRow): Audience =>
 
 const rowsByAudience = computed(() => {
     const groups = new Map<AudienceKey, UserReportRow[]>(AUDIENCES.map((a) => [a.key, []]));
-    props.rows.forEach((row) => groups.get(audienceOf(row).key)!.push(row));
+    props.rows.forEach((row) => groups.get(audienceOf(row).key)?.push(row));
 
     return groups;
 });
@@ -152,28 +251,23 @@ const audience = computed(() => AUDIENCES.find((a) => a.key === activeKey.value)
 const audienceRows = computed(() => rowsByAudience.value.get(activeKey.value) ?? []);
 
 /* ── Toolbar state ─────────────────────────────────────────────────────────── */
-type SortKey = 'outstanding' | 'invoices' | 'concerns';
-
-const sorts = computed<Array<{ value: SortKey; label: string }>>(() => [
-    { value: 'outstanding', label: audience.value.figures.outstanding },
-    { value: 'invoices', label: 'Invoices' },
-    { value: 'concerns', label: 'Concerns' },
-]);
-
 /** Individual cards shown before "Show all"; shared portfolios are few and always shown. */
 const SOLO_PAGE = 9;
 /** Avatars drawn in a shared portfolio's stack before folding into "+N". */
 const STACK_SIZE = 5;
+/** Idle lists up to this size start expanded, so a small team is never hidden. */
+const IDLE_OPEN_LIMIT = 12;
 
 const query = ref('');
 const roleFilter = ref<string | null>(null);
-const sort = ref<SortKey>('outstanding');
+const sort = ref<MetricKey>(audience.value.sorts[0]);
 const showAllSolo = ref(false);
-const showIdle = ref(false);
+const idleToggled = ref<boolean | null>(null);
 
 watch(activeKey, () => {
     roleFilter.value = null;
-    showIdle.value = false;
+    sort.value = audience.value.sorts[0];
+    idleToggled.value = null;
 });
 
 watch([query, roleFilter, sort, activeKey], () => {
@@ -187,15 +281,14 @@ const humanize = (role: string): string => {
     return words.charAt(0).toUpperCase() + words.slice(1);
 };
 
-/** The user's own title: their user type, else their first role (e.g. "Billing admin"). */
+/** The user's own title: their user type, else their first role (e.g. "Superadmin"). */
 const roleLabel = (row: UserReportRow): string => {
     if (row.type_label && row.type_label !== '—' && row.type_label !== 'Unknown') return row.type_label;
 
     return row.roles.length ? humanize(row.roles[0]) : 'Staff';
 };
 
-const hasActivity = (row: UserReportRow): boolean =>
-    row.invoice_count > 0 || row.concern_count > 0 || row.payment_count > 0;
+const hasActivity = (row: UserReportRow): boolean => METRIC_KEYS.some((key) => valueOf(row, key) > 0);
 
 /**
  * Users share a portfolio when the same scope yields the same invoices. Users with no
@@ -215,62 +308,47 @@ const roleOptions = computed(() => {
         .map(([label, count]) => ({ label, count }));
 });
 
-/* ── Group figures ─────────────────────────────────────────────────────────── */
-const sumOf = (rows: UserReportRow[], pick: (row: UserReportRow) => number): number =>
-    rows.reduce((total, row) => total + pick(row), 0);
-
-const exactMoney = (value: number): string =>
-    CURRENCY_SIGN + value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-/**
- * The strip above the cards. Amounts are only summed for VC employees: each invoice has
- * exactly one uploader, whereas POCs and brokers overlap on the same accounts, so adding
- * their balances would count one invoice several times.
- */
+/* ── Group summary ─────────────────────────────────────────────────────────── */
 const stats = computed(() => {
     const rows = audienceRows.value;
     const a = audience.value;
-    const people = { key: 'people', label: a.label, value: formatNumber(rows.length), exact: null as string | null };
-    const concerns = { key: 'concerns', label: a.concerns, value: formatNumber(sumOf(rows, (r) => r.concern_count)), exact: null };
-    const payments = { key: 'payments', label: a.payments, value: formatNumber(sumOf(rows, (r) => r.payment_count)), exact: null };
-
-    if (a.key === 'vc') {
-        const toCollect = sumOf(rows, (r) => r.outstanding_amount);
-
-        return [
-            people,
-            { key: 'invoices', label: a.figures.invoices, value: formatNumber(sumOf(rows, (r) => r.invoice_count)), exact: null },
-            { key: 'outstanding', label: 'Still to collect', value: compactCurrency(toCollect), exact: exactMoney(toCollect) },
-            payments,
-        ];
-    }
+    const active = rows.filter(hasActivity).length;
 
     return [
-        people,
         {
-            key: 'unpaid',
-            label: `With unpaid invoices`,
-            value: formatNumber(rows.filter((r) => r.outstanding_amount > 0).length),
-            exact: null,
+            key: 'people',
+            label: a.label,
+            value: formatNumber(rows.length),
+            exact: null as string | null,
+            hint: `${formatNumber(active)} active this period`,
         },
-        concerns,
-        payments,
+        ...a.stats.map((key) => {
+            if (key === 'withBalance') {
+                return {
+                    key,
+                    label: 'With unpaid invoices',
+                    value: formatNumber(rows.filter((r) => r.outstanding_amount > 0).length),
+                    exact: null,
+                    hint: null,
+                };
+            }
+
+            return {
+                key,
+                label: a.labels[key],
+                ...display(key, rows.reduce((total, row) => total + valueOf(row, key), 0)),
+                hint: null,
+            };
+        }),
     ];
 });
 
 /* ── Filtering and grouping ────────────────────────────────────────────────── */
 interface Portfolio {
     key: string;
-    scopeLabel: string;
     scopeDescription: string;
-    invoiceCount: number;
-    billedAmount: number;
-    billedFormatted: string;
-    outstandingAmount: number;
-    outstandingFormatted: string;
-    concernCount: number;
-    paymentCount: number;
     members: UserReportRow[];
+    totals: Record<MetricKey, number>;
 }
 
 const visibleRows = computed(() => {
@@ -284,18 +362,9 @@ const visibleRows = computed(() => {
     });
 });
 
-const memberWeight = (row: UserReportRow): number => row.concern_count + row.payment_count;
-
-const metric = (portfolio: Portfolio): number => {
-    switch (sort.value) {
-        case 'invoices':
-            return portfolio.invoiceCount;
-        case 'concerns':
-            return portfolio.concernCount;
-        default:
-            return portfolio.outstandingAmount;
-    }
-};
+/** Everything a person did themselves, for ordering members inside a shared card. */
+const personalWeight = (row: UserReportRow): number =>
+    METRIC_KEYS.filter((key) => !PORTFOLIO_METRICS.has(key)).reduce((total, key) => total + valueOf(row, key), 0);
 
 const portfolios = computed<Portfolio[]>(() => {
     const groups = new Map<string, Portfolio>();
@@ -307,33 +376,32 @@ const portfolios = computed<Portfolio[]>(() => {
         if (!group) {
             group = {
                 key,
-                scopeLabel: row.scope_label,
                 scopeDescription: row.scope_description,
-                invoiceCount: row.invoice_count,
-                billedAmount: row.billed_amount,
-                billedFormatted: row.billed_formatted,
-                outstandingAmount: row.outstanding_amount,
-                outstandingFormatted: row.outstanding_formatted,
-                concernCount: 0,
-                paymentCount: 0,
                 members: [],
+                totals: Object.fromEntries(
+                    METRIC_KEYS.map((metric) => [metric, PORTFOLIO_METRICS.has(metric) ? valueOf(row, metric) : 0]),
+                ) as Record<MetricKey, number>,
             };
             groups.set(key, group);
         }
 
-        group.concernCount += row.concern_count;
-        group.paymentCount += row.payment_count;
-        group.members.push(row);
+        const target = group;
+        METRIC_KEYS.filter((metric) => !PORTFOLIO_METRICS.has(metric)).forEach((metric) => {
+            target.totals[metric] += valueOf(row, metric);
+        });
+        target.members.push(row);
     });
+
+    const by = sort.value;
 
     return [...groups.values()]
         .map((group) => ({
             ...group,
             members: [...group.members].sort(
-                (a, b) => memberWeight(b) - memberWeight(a) || a.name.localeCompare(b.name),
+                (a, b) => personalWeight(b) - personalWeight(a) || a.name.localeCompare(b.name),
             ),
         }))
-        .sort((a, b) => metric(b) - metric(a) || b.invoiceCount - a.invoiceCount);
+        .sort((a, b) => b.totals[by] - a.totals[by] || b.totals.invoices - a.totals.invoices);
 });
 
 const shared = computed(() => portfolios.value.filter((p) => p.members.length > 1));
@@ -341,29 +409,54 @@ const solo = computed(() => portfolios.value.filter((p) => p.members.length === 
 const soloShown = computed(() =>
     showAllSolo.value ? solo.value : solo.value.slice(0, SOLO_PAGE),
 );
-const idle = computed(() => visibleRows.value.filter((row) => !hasActivity(row)));
+const idle = computed(() =>
+    visibleRows.value.filter((row) => !hasActivity(row)).sort((a, b) => a.name.localeCompare(b.name)),
+);
+const showIdle = computed(() => idleToggled.value ?? idle.value.length <= IDLE_OPEN_LIMIT);
 
 const nothingMatches = computed(() => audienceRows.value.length > 0 && visibleRows.value.length === 0);
 
 /* ── Presentation helpers ──────────────────────────────────────────────────── */
 const initials = (row: UserReportRow): string => getInitials(row.name) || '?';
 
-const plural = (count: number, singular: string, pluralWord = `${singular}s`): string =>
+const plural = (count: number, singular: string, pluralWord: string): string =>
     `${formatNumber(count)} ${count === 1 ? singular : pluralWord}`;
 
-const figures = (portfolio: Portfolio) => [
-    { key: 'invoices', label: audience.value.figures.invoices, value: formatNumber(portfolio.invoiceCount), exact: null },
-    { key: 'billed', label: audience.value.figures.billed, value: compactCurrency(portfolio.billedAmount), exact: portfolio.billedFormatted },
-    { key: 'outstanding', label: audience.value.figures.outstanding, value: compactCurrency(portfolio.outstandingAmount), exact: portfolio.outstandingFormatted },
-];
+const headlineFigures = (portfolio: Portfolio) =>
+    audience.value.headline.map((key) => ({
+        key,
+        label: audience.value.labels[key],
+        ...display(key, portfolio.totals[key]),
+    }));
+
+/** Billed/outstanding beneath the headline, when the headline itself does not show money. */
+const moneyLine = (portfolio: Portfolio): string | null => {
+    if (audience.value.headline.some((key) => MONEY_METRICS.has(key)) || portfolio.totals.invoices === 0) {
+        return null;
+    }
+
+    const { labels } = audience.value;
+
+    return `${compactCurrency(portfolio.totals.billed)} ${labels.billed.toLowerCase()} · ${compactCurrency(portfolio.totals.outstanding)} ${labels.outstanding.toLowerCase()}`;
+};
+
+const activityItems = (totals: Record<MetricKey, number>) =>
+    audience.value.activity.map((key) => ({
+        key,
+        icon: METRIC_ICON[key],
+        label: audience.value.labels[key],
+        value: totals[key],
+    }));
+
+const rowTotals = (row: UserReportRow): Record<MetricKey, number> =>
+    Object.fromEntries(METRIC_KEYS.map((key) => [key, valueOf(row, key)])) as Record<MetricKey, number>;
 
 /** Share of the billed amount no longer outstanding; null when nothing was billed. */
 const settledShare = (portfolio: Portfolio): number | null => {
-    if (portfolio.billedAmount <= 0) return null;
+    const { billed, outstanding } = portfolio.totals;
+    if (billed <= 0) return null;
 
-    const share = ((portfolio.billedAmount - portfolio.outstandingAmount) / portfolio.billedAmount) * 100;
-
-    return Math.min(Math.max(share, 0), 100);
+    return Math.min(Math.max(((billed - outstanding) / billed) * 100, 0), 100);
 };
 
 const settledPercent = (portfolio: Portfolio): number =>
@@ -397,7 +490,7 @@ const chipClass = (active: boolean) =>
 
 const sortClass = (active: boolean) =>
     cn(
-        'inline-flex h-7 items-center rounded-md px-2.5 text-xs font-medium transition-colors',
+        'inline-flex h-7 items-center rounded-md px-2.5 text-xs font-medium whitespace-nowrap transition-colors',
         'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
         active
             ? 'bg-background text-foreground shadow-xs'
@@ -412,6 +505,8 @@ const audienceClass = (active: boolean) =>
             ? 'border-primary bg-primary/5 ring-1 ring-primary dark:bg-primary/10'
             : 'bg-card hover:border-foreground/30',
     );
+
+const AUDIENCE_GRID: Record<number, string> = { 2: 'md:grid-cols-2', 3: 'md:grid-cols-3' };
 
 /** The whole card is the target; the name's button is stretched over it. */
 const STRETCHED_BUTTON =
@@ -433,8 +528,7 @@ const STRETCHED_BUTTON =
         <template v-else>
             <!-- Who is who: each group, what it does with an invoice, and how many there are -->
             <div
-                class="grid gap-3"
-                :class="audienceOptions.length === 3 ? 'md:grid-cols-3' : audienceOptions.length === 2 ? 'md:grid-cols-2' : ''"
+                :class="cn('grid gap-3', AUDIENCE_GRID[audienceOptions.length])"
                 role="group"
                 aria-label="User groups"
             >
@@ -467,11 +561,12 @@ const STRETCHED_BUTTON =
                     >
                         {{ stat.value }}
                     </dd>
+                    <dd v-if="stat.hint" class="mt-0.5 text-xs text-muted-foreground">{{ stat.hint }}</dd>
                 </div>
             </dl>
 
             <!-- Toolbar -->
-            <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
                     <div class="relative sm:w-64">
                         <Search
@@ -481,8 +576,8 @@ const STRETCHED_BUTTON =
                         <Input
                             v-model="query"
                             type="search"
-                            :placeholder="`Search ${audience.noun} by name or email`"
-                            :aria-label="`Search ${audience.noun}`"
+                            :placeholder="`Search ${audience.noun}`"
+                            :aria-label="`Search ${audience.noun} by name or email`"
                             class="h-8 pl-8"
                         />
                     </div>
@@ -516,18 +611,18 @@ const STRETCHED_BUTTON =
                     </div>
                 </div>
 
-                <div class="flex items-center gap-2 self-start lg:self-auto">
-                    <span class="text-xs text-muted-foreground">Sort by</span>
+                <div class="flex items-center gap-2 self-start overflow-x-auto xl:self-auto">
+                    <span class="shrink-0 text-xs text-muted-foreground">Sort by</span>
                     <div class="flex items-center gap-0.5 rounded-lg bg-muted p-0.5" role="group" aria-label="Sort by">
                         <button
-                            v-for="option in sorts"
-                            :key="option.value"
+                            v-for="key in audience.sorts"
+                            :key="key"
                             type="button"
-                            :class="sortClass(sort === option.value)"
-                            :aria-pressed="sort === option.value"
-                            @click="sort = option.value"
+                            :class="sortClass(sort === key)"
+                            :aria-pressed="sort === key"
+                            @click="sort = key"
                         >
-                            {{ option.label }}
+                            {{ audience.labels[key] }}
                         </button>
                     </div>
                 </div>
@@ -548,7 +643,7 @@ const STRETCHED_BUTTON =
                 </button>
             </div>
 
-            <!-- Shared portfolios: figures stated once, members listed under them -->
+            <!-- Shared portfolios: attributed figures stated once, members listed under them -->
             <article
                 v-for="portfolio in shared"
                 :key="portfolio.key"
@@ -585,7 +680,7 @@ const STRETCHED_BUTTON =
 
                     <div class="flex flex-wrap items-end gap-x-8 gap-y-3">
                         <dl class="flex gap-6">
-                            <div v-for="figure in figures(portfolio)" :key="figure.key">
+                            <div v-for="figure in headlineFigures(portfolio)" :key="figure.key">
                                 <dt class="text-xs text-muted-foreground">{{ figure.label }}</dt>
                                 <dd
                                     class="text-base font-semibold text-foreground tabular-nums"
@@ -597,7 +692,7 @@ const STRETCHED_BUTTON =
                         </dl>
                         <div v-if="settledShare(portfolio) !== null" class="w-36">
                             <div class="flex justify-between text-xs text-muted-foreground">
-                                <span>{{ audience.figures.settled }}</span>
+                                <span>{{ audience.settled }}</span>
                                 <span class="tabular-nums">{{ settledPercent(portfolio) }}%</span>
                             </div>
                             <div
@@ -607,7 +702,7 @@ const STRETCHED_BUTTON =
                                 :aria-valuenow="settledPercent(portfolio)"
                                 aria-valuemin="0"
                                 aria-valuemax="100"
-                                :aria-label="`Share of billed amount ${audience.figures.settled.toLowerCase()}`"
+                                :aria-label="`Share of billed amount ${audience.settled.toLowerCase()}`"
                             >
                                 <div
                                     class="h-full rounded-full"
@@ -647,16 +742,18 @@ const STRETCHED_BUTTON =
                         </div>
                         <Badge v-if="isActive(member)" class="shrink-0">Viewing</Badge>
                         <Badge v-else-if="!member.is_active" variant="outline" class="shrink-0">Inactive</Badge>
-                        <div
-                            v-else-if="memberWeight(member) > 0"
-                            class="flex shrink-0 items-center gap-2 text-xs text-muted-foreground tabular-nums"
-                        >
-                            <span v-if="member.concern_count" class="inline-flex items-center gap-1" :title="`${audience.concerns}: ${member.concern_count}`">
-                                <MessageSquareWarning class="size-3.5" aria-hidden="true" />{{ member.concern_count }}
-                            </span>
-                            <span v-if="member.payment_count" class="inline-flex items-center gap-1" :title="`${audience.payments}: ${member.payment_count}`">
-                                <FileCheck2 class="size-3.5" aria-hidden="true" />{{ member.payment_count }}
-                            </span>
+                        <div v-else class="flex shrink-0 items-center gap-2 text-xs text-muted-foreground tabular-nums">
+                            <template v-for="item in activityItems(rowTotals(member))" :key="item.key">
+                                <span
+                                    v-if="item.value"
+                                    class="inline-flex items-center gap-1"
+                                    :title="`${item.label}: ${formatNumber(item.value)}`"
+                                >
+                                    <component :is="item.icon" class="size-3.5" aria-hidden="true" />
+                                    {{ formatNumber(item.value) }}
+                                    <span class="sr-only">{{ item.label }}</span>
+                                </span>
+                            </template>
                         </div>
                     </li>
                 </ul>
@@ -704,7 +801,7 @@ const STRETCHED_BUTTON =
                     </div>
 
                     <dl class="grid grid-cols-3 gap-3">
-                        <div v-for="figure in figures(portfolio)" :key="figure.key" class="min-w-0">
+                        <div v-for="figure in headlineFigures(portfolio)" :key="figure.key" class="min-w-0">
                             <dt class="truncate text-xs text-muted-foreground" :title="figure.label">{{ figure.label }}</dt>
                             <dd
                                 class="truncate text-base font-semibold text-foreground tabular-nums"
@@ -716,9 +813,9 @@ const STRETCHED_BUTTON =
                     </dl>
 
                     <div v-if="settledShare(portfolio) !== null">
-                        <div class="flex justify-between text-xs text-muted-foreground">
-                            <span>{{ audience.figures.settled }}</span>
-                            <span class="tabular-nums">{{ settledPercent(portfolio) }}%</span>
+                        <div class="flex justify-between gap-3 text-xs text-muted-foreground">
+                            <span class="truncate">{{ moneyLine(portfolio) ?? audience.settled }}</span>
+                            <span class="shrink-0 tabular-nums">{{ settledPercent(portfolio) }}% {{ moneyLine(portfolio) ? audience.settled.toLowerCase() : '' }}</span>
                         </div>
                         <div
                             class="mt-1.5 h-1.5 overflow-hidden rounded-full"
@@ -727,7 +824,7 @@ const STRETCHED_BUTTON =
                             :aria-valuenow="settledPercent(portfolio)"
                             aria-valuemin="0"
                             aria-valuemax="100"
-                            :aria-label="`Share of billed amount ${audience.figures.settled.toLowerCase()}`"
+                            :aria-label="`Share of billed amount ${audience.settled.toLowerCase()}`"
                         >
                             <div
                                 class="h-full rounded-full"
@@ -738,15 +835,15 @@ const STRETCHED_BUTTON =
 
                     <div class="mt-auto flex items-center justify-between gap-3 border-t pt-3 text-xs text-muted-foreground">
                         <div class="flex items-center gap-3 tabular-nums">
-                            <span class="inline-flex items-center gap-1" :title="`${audience.concerns}: ${portfolio.concernCount}`">
-                                <MessageSquareWarning class="size-3.5" aria-hidden="true" />
-                                {{ portfolio.concernCount }}
-                                <span class="sr-only">{{ audience.concerns }}</span>
-                            </span>
-                            <span class="inline-flex items-center gap-1" :title="`${audience.payments}: ${portfolio.paymentCount}`">
-                                <FileCheck2 class="size-3.5" aria-hidden="true" />
-                                {{ portfolio.paymentCount }}
-                                <span class="sr-only">{{ audience.payments }}</span>
+                            <span
+                                v-for="item in activityItems(portfolio.totals)"
+                                :key="item.key"
+                                class="inline-flex items-center gap-1"
+                                :title="`${item.label}: ${formatNumber(item.value)}`"
+                            >
+                                <component :is="item.icon" class="size-3.5" aria-hidden="true" />
+                                {{ formatNumber(item.value) }}
+                                <span class="sr-only">{{ item.label }}</span>
                             </span>
                         </div>
                         <span class="truncate" :title="portfolio.members[0].last_activity_at ?? undefined">
@@ -765,16 +862,16 @@ const STRETCHED_BUTTON =
                 {{ showAllSolo ? 'Show fewer' : `Show all ${solo.length} ${audience.noun}` }}
             </button>
 
-            <!-- Users with nothing in the period, folded away -->
+            <!-- Members with nothing in the period: listed, so nobody goes missing -->
             <div v-if="idle.length" class="rounded-xl border border-dashed">
                 <button
                     type="button"
                     class="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                     :aria-expanded="showIdle"
-                    @click="showIdle = !showIdle"
+                    @click="idleToggled = !showIdle"
                 >
                     <span>
-                        {{ plural(idle.length, audience.nounSingular, audience.noun) }} with no invoices, concerns or remittances in this period
+                        {{ plural(idle.length, audience.nounSingular, audience.noun) }} with no activity in this period
                     </span>
                     <ChevronDown
                         :class="cn('size-4 shrink-0 transition-transform', showIdle && 'rotate-180')"

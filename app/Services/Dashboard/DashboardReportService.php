@@ -35,8 +35,11 @@ class DashboardReportService
     /** Bars in the "largest balance" ranking. */
     public const TOP_ACCOUNTS_LIMIT = 8;
 
-    /** Rows in the per-user activity report. */
-    public const USER_REPORT_LIMIT = 25;
+    /**
+     * Rows per user group (attribution scope) in the per-user activity report. Per group,
+     * so one group with large figures can never push another out of the report.
+     */
+    public const USER_REPORT_LIMIT = 250;
 
     /** Users offered in the "viewing" filter. */
     public const USER_OPTIONS_LIMIT = 500;
