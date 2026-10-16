@@ -57,6 +57,10 @@ class UserReportResource extends JsonResource
             'outstanding_formatted' => CommonHelper::formatMoney($outstanding),
             'concern_count' => (int) ($this->resource['concern_count'] ?? 0),
             'payment_count' => (int) ($this->resource['payment_count'] ?? 0),
+            // Distinct invoices the user acted on, from the invoice activity trail.
+            'viewed_count' => (int) ($this->resource['viewed_count'] ?? 0),
+            'emailed_count' => (int) ($this->resource['emailed_count'] ?? 0),
+            'updated_count' => (int) ($this->resource['updated_count'] ?? 0),
             'last_activity_at' => CommonHelper::formatDate($this->resource['last_activity_at'] ?? null, true),
         ];
     }

@@ -258,6 +258,12 @@ export interface UserReportRow {
     outstanding_formatted: string;
     concern_count: number;
     payment_count: number;
+    /** Distinct invoices the user opened (recorded for client HR POCs only). */
+    viewed_count: number;
+    /** Distinct invoices whose notification the user emailed. */
+    emailed_count: number;
+    /** Distinct invoices the user changed (edits, status changes, amount adjustments). */
+    updated_count: number;
     last_activity_at: string | null;
 }
 
