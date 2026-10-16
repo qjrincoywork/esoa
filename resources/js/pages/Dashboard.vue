@@ -16,8 +16,9 @@ import DashboardEmptyNotice from '@/components/dashboard/DashboardEmptyNotice.vu
 import DashboardFilters from '@/components/dashboard/DashboardFilters.vue';
 import DashboardHeader from '@/components/dashboard/DashboardHeader.vue';
 import DashboardKpis from '@/components/dashboard/DashboardKpis.vue';
-import DashboardSection from '@/components/dashboard/DashboardSection.vue';
-import UserReportTable from '@/components/dashboard/UserReportTable.vue';
+import TeamActivity from '@/components/dashboard/TeamActivity.vue';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DEFAULT_PRESET, useDashboardFilters } from '@/composables/dashboard';
 import AppLayout from '@/layouts/AppLayout.vue';
 import { dashboard } from '@/routes';
@@ -29,18 +30,19 @@ import type {
     MetricBucket,
 } from '@/types';
 import { Deferred, Head, router, usePage } from '@inertiajs/vue3';
-import { Building2, Hourglass, TrendingUp, Users } from 'lucide-vue-next';
-import { computed } from 'vue';
+import { Building2, Hourglass, LayoutDashboard, TrendingUp, Users } from 'lucide-vue-next';
+import { computed, onMounted, ref, watch, type Component } from 'vue';
 
 /**
  * The administrator's dashboard.
  *
- * Laid out in the order the questions are asked: what the figures cover (the header and
- * its filters), how much is owed (the headline figures), how old it is and how it is
- * being settled, how billing is moving over time, and who holds it — the accounts and,
- * for staff, the users behind it. The page is composition only: it maps the server
- * payload onto the neutral chart shapes and the primitives in `@/components/charts` do
- * the drawing, each with a table twin so no value is locked behind a hover or a color.
+ * The header and its filters stay on top because they govern everything below; the
+ * content is split into tabs so each question fits on one screen instead of a long
+ * scroll: the overview (headline figures), the billing trend, receivables (how old
+ * and how settled), the accounts holding the balance and, for staff, the team behind
+ * them. The page is composition only: it maps the server payload onto the neutral chart
+ * shapes and the primitives in `@/components/charts` do the drawing, each with a table
+ * twin so no value is locked behind a hover or a color.
  */
 const page = usePage<AppPageProps<DashboardPageProps>>();
 
@@ -89,7 +91,6 @@ const balanceColumns = (first: string): ChartTableColumn[] => [
 ];
 
 const ACCOUNT_COLUMNS = balanceColumns('Account');
-const USER_COLUMNS = balanceColumns('User');
 
 /* ── Buckets: aging and status share one shape, so one mapping serves both ── */
 const bucketTotal = (buckets: MetricBucket[]): number =>
@@ -186,40 +187,7 @@ const accountRows = computed<ChartTableRow[]>(() =>
     })),
 );
 
-/* ── Users (staff only): the leading users as bars, everyone in the report ──── */
-const TOP_USER_BARS = 8;
-
-const userItems = computed<ChartDatum[]>(() =>
-    userReports.value
-        .filter((row) => row.invoice_count > 0)
-        .slice(0, TOP_USER_BARS)
-        .map((row) => ({
-            key: row.key,
-            label: row.name,
-            value: row.invoice_count,
-            valueLabel: formatNumber(row.invoice_count),
-            secondaryLabel: `${row.billed_formatted} billed · ${row.scope_label}`,
-            emphasis: filters.value.user_id === null || filters.value.user_id === row.user_id,
-        })),
-);
-
-const userRows = computed<ChartTableRow[]>(() =>
-    userReports.value.map((row) => ({
-        key: row.key,
-        cells: {
-            label: row.name,
-            count: formatNumber(row.invoice_count),
-            billed: row.billed_formatted,
-            outstanding: row.outstanding_formatted,
-        },
-    })),
-);
-
-/** Bars carry the report row's key; the user it stands for is looked up, never parsed out of it. */
-const userIdByKey = computed(
-    () => new Map(userReports.value.map((row) => [row.key, row.user_id])),
-);
-
+/* ── Team (staff only) ─────────────────────────────────────────────────────── */
 const activeUserName = computed(() => {
     const id = filters.value.user_id;
     if (id === null) return null;
@@ -231,6 +199,85 @@ const activeUserName = computed(() => {
     );
 });
 
+/* ── Tabs ──────────────────────────────────────────────────────────────────── */
+type TabKey = 'overview' | 'trend' | 'receivables' | 'accounts' | 'team';
+
+interface DashboardTab {
+    key: TabKey;
+    label: string;
+    icon: Component;
+    /** Small count beside the label; null hides it. */
+    count: string | null;
+    countTitle?: string;
+    /** Draw the count in the alert tone (e.g. invoices already past due). */
+    alert?: boolean;
+}
+
+const tabs = computed<DashboardTab[]>(() => {
+    const pastDue = summary.value?.past_due.value ?? 0;
+    const list: DashboardTab[] = [
+        { key: 'overview', label: 'Overview', icon: LayoutDashboard, count: null },
+        { key: 'trend', label: 'Trend', icon: TrendingUp, count: null },
+        {
+            key: 'receivables',
+            label: 'Receivables',
+            icon: Hourglass,
+            count: pastDue > 0 ? formatNumber(pastDue) : null,
+            countTitle: 'Invoices past due',
+            alert: true,
+        },
+        {
+            key: 'accounts',
+            label: 'Accounts',
+            icon: Building2,
+            count: topAccounts.value.length ? formatNumber(topAccounts.value.length) : null,
+            countTitle: 'Accounts with an outstanding balance',
+        },
+    ];
+
+    if (canViewUserReports.value) {
+        // Deferred: undefined until it lands, so the count appears once it is known.
+        const users = page.props.user_reports?.length;
+        list.push({
+            key: 'team',
+            label: 'Team',
+            icon: Users,
+            count: users ? formatNumber(users) : null,
+            countTitle: 'Users in the report',
+        });
+    }
+
+    return list;
+});
+
+const activeTab = ref<TabKey>('overview');
+
+/*
+ * The open tab is mirrored in the URL hash so a refresh or a shared link reopens it.
+ * Filter visits preserve component state, so the tab also survives every filter change.
+ */
+const isTabKey = (value: string): value is TabKey =>
+    tabs.value.some((tab) => tab.key === value);
+
+onMounted(() => {
+    const fromHash = window.location.hash.slice(1);
+    if (isTabKey(fromHash)) activeTab.value = fromHash;
+});
+
+watch(activeTab, (tab) => {
+    const { pathname, search } = window.location;
+    const hash = tab === 'overview' ? '' : `#${tab}`;
+    window.history.replaceState(window.history.state, '', `${pathname}${search}${hash}`);
+});
+
+const tabTriggerClass = [
+    'relative h-11 flex-none gap-2 rounded-none border-0 bg-transparent px-3 text-muted-foreground shadow-none',
+    'hover:text-foreground data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none',
+    // Inset ring and bottom-0 bar: the list scrolls sideways on phones, which clips anything outside it.
+    'focus-visible:ring-inset focus-visible:ring-offset-0',
+    'after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-transparent data-[state=active]:after:bg-primary',
+].join(' ');
+
 /* ── Actions ───────────────────────────────────────────────────────────────── */
 const openList = (item: ChartDatum) => {
     if (item.href) router.get(item.href);
@@ -238,7 +285,11 @@ const openList = (item: ChartDatum) => {
 
 const scopeToUser = (userId: number | null) => apply({ user_id: userId });
 
-const selectUserBar = (item: ChartDatum) => scopeToUser(userIdByKey.value.get(item.key) ?? null);
+/** Picking a user means "report on them", so their figures are shown right away. */
+const reportOnUser = (userId: number | null) => {
+    scopeToUser(userId);
+    if (userId !== null) activeTab.value = 'overview';
+};
 
 const showAllTime = () =>
     apply({ preset: DEFAULT_PRESET, date_from: null, date_to: null });
@@ -285,93 +336,114 @@ const isEmptyResult = computed(() => (summary.value?.invoices.value ?? 0) === 0)
                 @clear-user="scopeToUser(null)"
             />
 
-            <!-- The figures that need no chart -->
-            <DashboardKpis
-                v-if="summary"
-                :summary="summary"
-                :status-buckets="statusBuckets"
-                :processing="processing"
-            />
-
-            <DashboardSection
-                title="Receivables"
-                description="How long open invoices have been waiting, and how every invoice has been settled."
-                :icon="Hourglass"
-            >
-                <div class="grid gap-4 lg:grid-cols-2">
-                    <ChartCard
-                        title="Invoice aging"
-                        :description="`${formatNumber(summary?.invoices.value ?? 0)} invoice(s) by age · select a bar to open its list`"
-                        :loading="processing"
-                        :empty="agingTotal === 0"
-                        empty-text="No billing invoices in the selected period."
-                        :table-columns="AGING_COLUMNS"
-                        :table-rows="agingRows"
+            <Tabs v-model="activeTab" class="flex flex-col gap-4">
+                <div class="overflow-x-auto border-b">
+                    <TabsList
+                        class="h-auto justify-start gap-1 rounded-none bg-transparent p-0"
+                        aria-label="Dashboard views"
                     >
-                        <BarChart :items="agingItems" clickable @select="openList" />
+                        <TabsTrigger
+                            v-for="tab in tabs"
+                            :key="tab.key"
+                            :value="tab.key"
+                            :class="tabTriggerClass"
+                        >
+                            <span class="inline-flex items-center gap-2">
+                                <component :is="tab.icon" class="size-4" aria-hidden="true" />
+                                {{ tab.label }}
+                                <span
+                                    v-if="tab.count"
+                                    :class="[
+                                        'rounded-full px-1.5 py-px text-[11px] leading-4 font-semibold tabular-nums',
+                                        tab.alert
+                                            ? 'bg-destructive/10 text-destructive dark:bg-destructive/20'
+                                            : 'bg-muted text-muted-foreground',
+                                    ]"
+                                    :title="tab.countTitle"
+                                >
+                                    {{ tab.count }}
+                                    <span class="sr-only">{{ tab.countTitle }}</span>
+                                </span>
+                            </span>
+                        </TabsTrigger>
+                    </TabsList>
+                </div>
+
+                <!-- Overview: how much is owed -->
+                <TabsContent value="overview" class="mt-0">
+                    <DashboardKpis
+                        v-if="summary"
+                        :summary="summary"
+                        :status-buckets="statusBuckets"
+                        :processing="processing"
+                    />
+                </TabsContent>
+
+                <!-- Trend: how billing is moving -->
+                <TabsContent value="trend" class="mt-0">
+                    <ChartCard
+                        title="Billed vs collected"
+                        :description="`${billingTrend?.granularity_label ?? 'Monthly'} totals across the selected period`"
+                        :loading="processing"
+                        :empty="trendPoints.length === 0 || trendIsEmpty"
+                        empty-text="No billing activity to plot for the selected period."
+                        :table-columns="TREND_COLUMNS"
+                        :table-rows="trendRows"
+                    >
+                        <LineChart
+                            :points="trendPoints"
+                            :series="billingTrend?.series ?? []"
+                            :height="320"
+                            :format-value="(value: number) => compactCurrency(value)"
+                            aria-label="Billed and collected amounts over time"
+                        />
 
                         <template #legend>
-                            <ChartLegend :items="AGING_LEGEND" />
+                            <ChartLegend :items="trendLegend" />
                         </template>
                     </ChartCard>
+                </TabsContent>
 
-                    <ChartCard
-                        title="Invoice status"
-                        description="Share of invoices by settlement state · select one to open its list"
-                        :loading="processing"
-                        :empty="statusTotal === 0"
-                        empty-text="No billing invoices in the selected period."
-                        :table-columns="STATUS_COLUMNS"
-                        :table-rows="statusRows"
-                    >
-                        <DonutChart
-                            :items="statusItems"
-                            center-label="Invoices"
-                            clickable
-                            @select="openList"
-                        />
-                    </ChartCard>
-                </div>
-            </DashboardSection>
+                <!-- Receivables: how old open invoices are, and how every invoice was settled -->
+                <TabsContent value="receivables" class="mt-0">
+                    <div class="grid gap-4 lg:grid-cols-2">
+                        <ChartCard
+                            title="Invoice aging"
+                            :description="`${formatNumber(summary?.invoices.value ?? 0)} invoice(s) by age · select a bar to open its list`"
+                            :loading="processing"
+                            :empty="agingTotal === 0"
+                            empty-text="No billing invoices in the selected period."
+                            :table-columns="AGING_COLUMNS"
+                            :table-rows="agingRows"
+                        >
+                            <BarChart :items="agingItems" clickable @select="openList" />
 
-            <DashboardSection
-                title="Billing trend"
-                description="What was billed against what was collected, period by period."
-                :icon="TrendingUp"
-            >
-                <ChartCard
-                    title="Billed vs collected"
-                    :description="`${billingTrend?.granularity_label ?? 'Monthly'} totals across the selected period`"
-                    :loading="processing"
-                    :empty="trendPoints.length === 0 || trendIsEmpty"
-                    empty-text="No billing activity to plot for the selected period."
-                    :table-columns="TREND_COLUMNS"
-                    :table-rows="trendRows"
-                >
-                    <LineChart
-                        :points="trendPoints"
-                        :series="billingTrend?.series ?? []"
-                        :height="280"
-                        :format-value="(value: number) => compactCurrency(value)"
-                        aria-label="Billed and collected amounts over time"
-                    />
+                            <template #legend>
+                                <ChartLegend :items="AGING_LEGEND" />
+                            </template>
+                        </ChartCard>
 
-                    <template #legend>
-                        <ChartLegend :items="trendLegend" />
-                    </template>
-                </ChartCard>
-            </DashboardSection>
+                        <ChartCard
+                            title="Invoice status"
+                            description="Share of invoices by settlement state · select one to open its list"
+                            :loading="processing"
+                            :empty="statusTotal === 0"
+                            empty-text="No billing invoices in the selected period."
+                            :table-columns="STATUS_COLUMNS"
+                            :table-rows="statusRows"
+                        >
+                            <DonutChart
+                                :items="statusItems"
+                                center-label="Invoices"
+                                clickable
+                                @select="openList"
+                            />
+                        </ChartCard>
+                    </div>
+                </TabsContent>
 
-            <DashboardSection
-                :title="canViewUserReports ? 'Accounts & users' : 'Accounts'"
-                :description="
-                    canViewUserReports
-                        ? 'Where the open balance sits, and who the invoices are attributed to.'
-                        : 'Where the open balance sits.'
-                "
-                :icon="Building2"
-            >
-                <div class="grid gap-4" :class="canViewUserReports && 'lg:grid-cols-2'">
+                <!-- Accounts: where the open balance sits -->
+                <TabsContent value="accounts" class="mt-0">
                     <ChartCard
                         title="Accounts with the largest balance"
                         description="Outstanding value per account · select one to open its invoices"
@@ -383,62 +455,37 @@ const isEmptyResult = computed(() => (summary.value?.invoices.value ?? 0) === 0)
                     >
                         <BarChart :items="accountItems" clickable @select="openList" />
                     </ChartCard>
+                </TabsContent>
+
+                <!-- Team (staff only): who the invoices are attributed to -->
+                <TabsContent v-if="canViewUserReports" value="team" class="mt-0 flex flex-col gap-4">
+                    <p class="text-xs text-muted-foreground">
+                        Who the invoices are attributed to, and the concerns and payments each
+                        user recorded · select a user to report on them.
+                    </p>
 
                     <!-- Deferred server-side: the metric widgets paint first and this holds a
                          placeholder meanwhile, rather than claiming "no data". -->
-                    <Deferred v-if="canViewUserReports" data="user_reports">
+                    <Deferred data="user_reports">
                         <template #fallback>
-                            <ChartCard
-                                title="Invoices per user"
-                                description="Loading user activity…"
-                                loading
-                                empty
-                                empty-text="Loading…"
-                            />
+                            <div class="flex flex-col gap-4" aria-busy="true">
+                                <Skeleton class="h-[4.5rem] w-full rounded-xl" />
+                                <div class="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+                                    <Skeleton v-for="n in 3" :key="n" class="h-52 rounded-xl" />
+                                </div>
+                                <span class="sr-only">Loading team activity…</span>
+                            </div>
                         </template>
 
-                        <ChartCard
-                            title="Invoices per user"
-                            description="Uploaded, or billed to their assigned accounts · select one to report on that user"
-                            :loading="processing"
-                            :empty="userItems.length === 0"
-                            empty-text="No invoices are attributed to any user in the selected period."
-                            :table-columns="USER_COLUMNS"
-                            :table-rows="userRows"
-                        >
-                            <BarChart :items="userItems" clickable @select="selectUserBar" />
-                        </ChartCard>
-                    </Deferred>
-                </div>
-            </DashboardSection>
-
-            <DashboardSection
-                v-if="canViewUserReports"
-                title="Team activity"
-                description="Invoices attributed to each user, plus the concerns and payments they recorded · select a name to report on that user."
-                :icon="Users"
-            >
-                <Deferred data="user_reports">
-                    <template #fallback>
-                        <ChartCard
-                            title="User activity report"
-                            description="Loading user activity…"
-                            loading
-                            empty
-                            empty-text="Loading…"
-                        />
-                    </template>
-
-                    <ChartCard title="User activity report" content-class="px-4">
-                        <UserReportTable
+                        <TeamActivity
                             :rows="userReports"
                             :active-user-id="filters.user_id"
                             :processing="processing"
-                            @select="scopeToUser"
+                            @select="reportOnUser"
                         />
-                    </ChartCard>
-                </Deferred>
-            </DashboardSection>
+                    </Deferred>
+                </TabsContent>
+            </Tabs>
         </div>
     </AppLayout>
 </template>
