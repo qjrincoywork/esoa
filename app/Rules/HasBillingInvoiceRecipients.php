@@ -70,6 +70,6 @@ class HasBillingInvoiceRecipients implements DataAwareRule, ValidationRule
             ? "account {$accountCode}, branch {$branchCode}"
             : "account {$accountCode}";
 
-        $fail("No HR user is mapped to {$target} to receive this billing invoice. Map a Group Account Admin or Account/Branch Admin to it before uploading.");
+        $fail("No HR user is mapped to {$target} to receive this billing invoice. Map an HR user to it before uploading.");
     }
 }
