@@ -63,6 +63,10 @@ return [
             'driver' => 'local',
             'root' => env('ROOT_FOLDER') . DIRECTORY_SEPARATOR . 'payments',
         ],
+        'advisories' => [
+            'driver' => 'local',
+            'root' => env('ROOT_FOLDER') . DIRECTORY_SEPARATOR . 'advisories',
+        ],
         /*
          * Read-only view of the previous eSOA system's chat_attachments tree, which
          * still holds the files attached to the old remarks/concerns thread. Point

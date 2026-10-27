@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Enums\UserType;
 use App\Support\LandingRoute;
+use App\Support\LoginAdvisories;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -91,6 +92,10 @@ class HandleInertiaRequests extends Middleware
             'navigations' => $navigationService->getNavigationsForUser($authUser),
             'sub_modules' => $navigationService->getReferencedModules(),
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
+            // Live advisories, once per sign-in. A closure so it is only evaluated (and the
+            // pending mark only consumed) when a page is actually rendered — never on the
+            // redirects and JSON responses in between, nor on partial reloads.
+            'login_advisories' => fn () => $authUser ? LoginAdvisories::pull($request) : null,
         ];
     }
 }

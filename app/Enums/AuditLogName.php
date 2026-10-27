@@ -25,6 +25,7 @@ final class AuditLogName extends Enum
     public const CONCERN = 'concern';
     public const REMITTANCE_ADVICE = 'remittance_advice';
     public const AUTHENTICATION = 'authentication';
+    public const ADVISORY = 'advisory';
 
     /**
      * Map an audit channel to the module name people know it by.
@@ -38,6 +39,7 @@ final class AuditLogName extends Enum
             self::CONCERN => 'Concern',
             self::REMITTANCE_ADVICE => 'Remittance advice',
             self::AUTHENTICATION => 'Authentication',
+            self::ADVISORY => 'Advisory',
             default => 'Record',
         };
     }

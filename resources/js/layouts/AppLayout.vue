@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/app/AppSidebarLayout.vue';
 import GlobalModal from '@/components/GlobalModal.vue';
+import LoginAdvisoryModal from '@/components/advisories/LoginAdvisoryModal.vue';
 import type { BreadcrumbItemType } from '@/types';
 import { NotificationProvider } from '@/components/notification';
 import { isLoading } from '@/composables/useLoader';
@@ -19,6 +20,7 @@ withDefaults(defineProps<Props>(), {
         <slot />
     </AppLayout>
     <GlobalModal />
+    <LoginAdvisoryModal />
     <NotificationProvider></NotificationProvider>
     <div v-if="isLoading" class="fixed inset-0 loader flex items-center justify-center bg-black/40">
         <Loader />
