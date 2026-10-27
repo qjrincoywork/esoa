@@ -4,6 +4,7 @@ use App\Enums\SoaAging;
 use App\Http\Controllers\{
     AccountPaymentController,
     ActivityLogController,
+    AdvisoryController,
     AdminController,
     ConcernController,
     DashboardController,
@@ -64,6 +65,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('faq', function () {
         return Inertia::render('Faq');
     })->name('faq');
+
+    // The sign-in advisory pop-up's image, read by every signed-in user — so it is not
+    // permission-gated; the controller serves it only while the advisory is live.
+    Route::get('advisories/{id}/image', [AdvisoryController::class, 'image'])
+        ->whereNumber('id')
+        ->name('advisories.image');
+
     // Superadmin-only routes - only admins can access these
     Route::middleware(['role:superadmin'])->group(function () {
         Route::get('dashboard', [DashboardController::class, 'index'])
@@ -181,6 +189,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
                 // "Assign users": the picker (posted — it carries the selected rows) and the save.
                 Route::post('/assignable_users', 'assignableUsers')->name('assignable_users');
                 Route::post('/assign_users', 'assignUsers')->name('assign_users');
+        });
+        // Advisories shown as a pop-up after signing in (service advisories, maintenance notices).
+        // Gated by permission rather than role, so it can be granted to any role or user.
+        Route::prefix('advisories')->name('advisories.')
+            ->controller(AdvisoryController::class)->group(function () {
+                Route::get('/', 'index')->name('index');
+                Route::post('/store', 'store')->name('store');
+                Route::get('/{id}/edit', 'edit')->whereNumber('id')->name('edit');
+                Route::post('/update', 'update')->name('update');
+                Route::post('/toggle_active', 'toggleActive')->name('toggle_active');
+                Route::post('/destroy', 'destroy')->name('destroy');
         });
         // Gated by permission rather than role, so it can be granted to any role or user.
         Route::prefix('users')->name('users.')

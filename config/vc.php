@@ -70,6 +70,8 @@ return [
         'billing' => env('BILLING_DISK', 'billing'),
         'concerns' => env('CONCERNS_DISK', 'concerns'),
         'account_payments' => env('ACCOUNT_PAYMENTS_DISK', 'payments'),
+        // Images of the sign-in advisories (App\Models\Advisory).
+        'advisories' => env('ADVISORIES_DISK', 'advisories'),
         // Files attached to the legacy remarks thread; rooted at the old system's
         // chat_attachments directory (see LEGACY_CHAT_ATTACHMENTS_ROOT).
         'legacy_chat' => env('LEGACY_CHAT_DISK', 'legacy_chat'),
